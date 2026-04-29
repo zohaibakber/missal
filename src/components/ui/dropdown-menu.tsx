@@ -169,14 +169,14 @@ function DropdownMenuCheckboxItem({
       checked={checked}
       {...props}
     >
-      <span
-        className="pointer-events-none absolute end-2 flex items-center justify-center"
-        data-slot="dropdown-menu-checkbox-item-indicator"
-      >
-        <MenuPrimitive.CheckboxItemIndicator>
+      {checked ? (
+        <span
+          className="pointer-events-none absolute end-2 flex items-center justify-center"
+          data-slot="dropdown-menu-checkbox-item-indicator"
+        >
           <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
-        </MenuPrimitive.CheckboxItemIndicator>
-      </span>
+        </span>
+      ) : null}
       {children}
     </MenuPrimitive.CheckboxItem>
   );

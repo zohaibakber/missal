@@ -1,12 +1,15 @@
 import {
   type ColumnDef,
+  type ColumnFiltersState,
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   type PaginationState,
   type SortingState,
   useReactTable,
+  type VisibilityState,
 } from "@tanstack/react-table";
 import {
   ArrowLeft01Icon,
@@ -17,9 +20,10 @@ import {
   ChevronUp,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardFooter } from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import { DataTableToolbar, type DataTableToolbarConfig } from "#/components/data-table-toolbar";
+import { Button } from "#/components/ui/button";
+import { Card, CardFooter } from "#/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -27,7 +31,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "#/components/ui/select";
 import {
   Table,
   TableBody,
@@ -35,14 +39,19 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "#/components/ui/table";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  toolbar?: DataTableToolbarConfig<TData>;
 }
 
-export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData, TValue>) {
+export function DataTable<TData extends Record<string, unknown>, TValue>({
+  columns,
+  data,
+  toolbar,
+}: DataTableProps<TData, TValue>) {
   const pageSize = 10;
 
   const [pagination, setPagination] = useState<PaginationState>({
@@ -57,25 +66,57 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
     },
   ]);
 
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [globalFilter, setGlobalFilter] = useState("");
+
+  const filteredData = useMemo(() => {
+    const searchValue = globalFilter.trim().toLowerCase();
+
+    if (!searchValue || !toolbar?.search?.searchableColumnIds.length) {
+      return data;
+    }
+
+    return data.filter((item) =>
+      toolbar.search?.searchableColumnIds.some((columnId) => {
+        const value = item[columnId as keyof TData];
+
+        if (value === null || value === undefined) {
+          return false;
+        }
+
+        return String(value).toLowerCase().includes(searchValue);
+      }),
+    );
+  }, [data, globalFilter, toolbar]);
+
   const table = useReactTable({
     columns,
-    data,
+    data: filteredData,
     enableSortingRemoval: false,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
+    onGlobalFilterChange: setGlobalFilter,
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     state: {
+      columnFilters,
+      columnVisibility,
+      globalFilter,
       pagination,
       sorting,
     },
   });
 
   return (
-    <Card className="w-full py-0 gap-0">
+    <Card className="w-full gap-0 py-0">
+      {toolbar ? <DataTableToolbar config={toolbar} table={table} /> : null}
       <Table className="table-fixed">
-        <TableHeader className="bg-muted">
+        <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow className="hover:bg-transparent" key={headerGroup.id}>
               {headerGroup.headers.map((header) => {
@@ -148,8 +189,7 @@ export function DataTable<TData, TValue>({ columns, data }: DataTableProps<TData
         </TableBody>
       </Table>
       <CardFooter className="p-2">
-        <div className="flex items-center justify-between gap-2 w-full">
-          {/* Results range selector */}
+        <div className="flex w-full items-center justify-between gap-2">
           <div className="flex items-center gap-2 whitespace-nowrap">
             <p className="text-muted-foreground text-sm">Viewing</p>
             <Select
