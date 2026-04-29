@@ -8,6 +8,7 @@ import {
   ArrowRight01Icon,
   MoreHorizontalCircle01Icon,
 } from "@hugeicons/core-free-icons";
+import { Link } from "@tanstack/react-router";
 
 function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
   return (
@@ -38,7 +39,7 @@ function PaginationItem({ ...props }: React.ComponentProps<"li">) {
 type PaginationLinkProps = {
   isActive?: boolean;
 } & Pick<React.ComponentProps<typeof Button>, "size"> &
-  React.ComponentProps<"a">;
+  React.ComponentProps<typeof Link>;
 
 function PaginationLink({ className, isActive, size = "icon", ...props }: PaginationLinkProps) {
   return (
@@ -48,7 +49,7 @@ function PaginationLink({ className, isActive, size = "icon", ...props }: Pagina
       className={cn(className)}
       nativeButton={false}
       render={
-        <a
+        <Link
           aria-current={isActive ? "page" : undefined}
           data-slot="pagination-link"
           data-active={isActive}

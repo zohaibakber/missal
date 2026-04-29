@@ -12,7 +12,7 @@ import {
 } from "#/components/ui/sidebar";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
-import { useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 
 export function NavMain({
   items,
@@ -37,7 +37,7 @@ export function NavMain({
           <Collapsible key={item.title} defaultOpen={item.isActive} render={<SidebarMenuItem />}>
             <SidebarMenuButton
               tooltip={item.title}
-              render={<a href={item.url} />}
+              render={<Link to={item.url} />}
               className={location.pathname === item.url ? "bg-secondary border" : ""}
             >
               {item.icon}

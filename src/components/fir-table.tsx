@@ -1,5 +1,3 @@
-"use client";
-
 import {
   type ColumnDef,
   flexRender,
@@ -10,20 +8,20 @@ import {
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronDown, ChevronUp, PlaneTakeoff } from "@hugeicons/core-free-icons";
+import {
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+  ChevronDown,
+  ChevronUp,
+  PlaneTakeoff,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardFooter } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
 import {
   Select,
   SelectContent,
@@ -324,39 +322,86 @@ export function FirTable() {
             </p>
           </div>
 
-          {/* Pagination */}
-          <Pagination className="justify-end">
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  aria-disabled={!table.getCanPreviousPage()}
-                  className="sm:*:[svg]:hidden"
-                  href="#"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    if (table.getCanPreviousPage()) {
-                      table.previousPage();
-                    }
-                  }}
-                  tabIndex={table.getCanPreviousPage() ? 0 : -1}
+          <div className="flex items-center gap-2">
+            <Button
+              aria-label="Go to first page"
+              disabled={!table.getCanPreviousPage()}
+              onClick={() => table.setPageIndex(0)}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              <span aria-hidden="true" className="flex items-center gap-0">
+                <HugeiconsIcon
+                  data-icon="inline-start"
+                  icon={ArrowLeft01Icon}
+                  strokeWidth={2}
+                  className="-mr-2 rtl:rotate-180"
                 />
-              </PaginationItem>
-              <PaginationItem>
-                <PaginationNext
-                  aria-disabled={!table.getCanNextPage()}
-                  className="sm:*:[svg]:hidden"
-                  href="#"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    if (table.getCanNextPage()) {
-                      table.nextPage();
-                    }
-                  }}
-                  tabIndex={table.getCanNextPage() ? 0 : -1}
+                <HugeiconsIcon
+                  data-icon="inline-start"
+                  icon={ArrowLeft01Icon}
+                  strokeWidth={2}
+                  className="rtl:rotate-180"
                 />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
+              </span>
+            </Button>
+            <Button
+              aria-label="Go to previous page"
+              disabled={!table.getCanPreviousPage()}
+              onClick={() => table.previousPage()}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              <HugeiconsIcon
+                aria-hidden="true"
+                data-icon="inline-start"
+                icon={ArrowLeft01Icon}
+                strokeWidth={2}
+                className="rtl:rotate-180"
+              />
+            </Button>
+            <Button
+              aria-label="Go to next page"
+              disabled={!table.getCanNextPage()}
+              onClick={() => table.nextPage()}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              <HugeiconsIcon
+                aria-hidden="true"
+                data-icon="inline-end"
+                icon={ArrowRight01Icon}
+                strokeWidth={2}
+                className="rtl:rotate-180"
+              />
+            </Button>
+            <Button
+              aria-label="Go to last page"
+              disabled={!table.getCanNextPage()}
+              onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              <span aria-hidden="true" className="flex items-center gap-0">
+                <HugeiconsIcon
+                  data-icon="inline-end"
+                  icon={ArrowRight01Icon}
+                  strokeWidth={2}
+                  className="-mr-2 rtl:rotate-180"
+                />
+                <HugeiconsIcon
+                  data-icon="inline-end"
+                  icon={ArrowRight01Icon}
+                  strokeWidth={2}
+                  className="rtl:rotate-180"
+                />
+              </span>
+            </Button>
+          </div>
         </div>
       </CardFooter>
     </Card>
