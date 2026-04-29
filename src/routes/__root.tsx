@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 
 import { TooltipProvider } from "#/components/ui/tooltip";
 import { SidebarInset, SidebarProvider } from "#/components/ui/sidebar";
+import { DirectionProvider } from "#/components/ui/direction";
 import { AppSidebar } from "#/components/app-sidebar";
 import { createServerFn } from "@tanstack/react-start";
 import { auth } from "@clerk/tanstack-react-start/server";
@@ -78,13 +79,15 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body>
         <ClerkProvider>
           <TooltipProvider>
-            <SidebarProvider>
-              <Show when={"signed-in"}>
-                <AppSidebar />
-                <SidebarInset>{children}</SidebarInset>
-              </Show>
-              <Show when={"signed-out"}>{children}</Show>
-            </SidebarProvider>
+            <DirectionProvider direction="ltr">
+              <SidebarProvider>
+                <Show when={"signed-in"}>
+                  <AppSidebar />
+                  <SidebarInset>{children}</SidebarInset>
+                </Show>
+                <Show when={"signed-out"}>{children}</Show>
+              </SidebarProvider>
+            </DirectionProvider>
           </TooltipProvider>
         </ClerkProvider>
         <TanStackDevtools

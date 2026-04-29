@@ -44,12 +44,18 @@ import {
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  initialSorting?: SortingState;
+  tableDir?: "ltr" | "rtl";
+  tableLang?: string;
   toolbar?: DataTableToolbarConfig<TData>;
 }
 
 export function DataTable<TData extends Record<string, unknown>, TValue>({
   columns,
   data,
+  initialSorting,
+  tableDir = "ltr",
+  tableLang,
   toolbar,
 }: DataTableProps<TData, TValue>) {
   const pageSize = 10;
@@ -59,12 +65,14 @@ export function DataTable<TData extends Record<string, unknown>, TValue>({
     pageSize: pageSize,
   });
 
-  const [sorting, setSorting] = useState<SortingState>([
-    {
-      desc: false,
-      id: "departureTime",
-    },
-  ]);
+  const [sorting, setSorting] = useState<SortingState>(
+    initialSorting ?? [
+      {
+        desc: false,
+        id: "id",
+      },
+    ],
+  );
 
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -115,81 +123,83 @@ export function DataTable<TData extends Record<string, unknown>, TValue>({
   return (
     <Card className="w-full gap-0 py-0">
       {toolbar ? <DataTableToolbar config={toolbar} table={table} /> : null}
-      <Table className="table-fixed">
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow className="hover:bg-transparent" key={headerGroup.id}>
-              {headerGroup.headers.map((header) => {
-                const columnSize = header.column.getSize();
-                return (
-                  <TableHead
-                    key={header.id}
-                    style={columnSize ? { width: `${columnSize}px` } : undefined}
-                  >
-                    {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                      <div
-                        className="flex h-full cursor-pointer select-none items-center justify-between gap-2"
-                        onClick={header.column.getToggleSortingHandler()}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            header.column.getToggleSortingHandler()?.(e);
-                          }
-                        }}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        {{
-                          asc: (
-                            <HugeiconsIcon
-                              icon={ChevronUp}
-                              aria-hidden="true"
-                              strokeWidth={2}
-                              className="size-4"
-                            />
-                          ),
-                          desc: (
-                            <HugeiconsIcon
-                              icon={ChevronDown}
-                              aria-hidden="true"
-                              strokeWidth={2}
-                              className="size-4"
-                            />
-                          ),
-                        }[header.column.getIsSorted() as string] ?? null}
-                      </div>
-                    ) : (
-                      flexRender(header.column.columnDef.header, header.getContext())
-                    )}
-                  </TableHead>
-                );
-              })}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.length ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow data-state={row.getIsSelected() ? "selected" : undefined} key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
+      <div dir={tableDir} lang={tableLang}>
+        <Table className="table-fixed">
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow className="hover:bg-transparent" key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  const columnSize = header.column.getSize();
+                  return (
+                    <TableHead
+                      key={header.id}
+                      style={columnSize ? { width: `${columnSize}px` } : undefined}
+                    >
+                      {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                        <div
+                          className="flex h-full cursor-pointer select-none items-center justify-between gap-2"
+                          onClick={header.column.getToggleSortingHandler()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              header.column.getToggleSortingHandler()?.(e);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {{
+                            asc: (
+                              <HugeiconsIcon
+                                icon={ChevronUp}
+                                aria-hidden="true"
+                                strokeWidth={2}
+                                className="size-4"
+                              />
+                            ),
+                            desc: (
+                              <HugeiconsIcon
+                                icon={ChevronDown}
+                                aria-hidden="true"
+                                strokeWidth={2}
+                                className="size-4"
+                              />
+                            ),
+                          }[header.column.getIsSorted() as string] ?? null}
+                        </div>
+                      ) : (
+                        flexRender(header.column.columnDef.header, header.getContext())
+                      )}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell className="h-24 text-center" colSpan={columns.length}>
-                No results.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow data-state={row.getIsSelected() ? "selected" : undefined} key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell className="h-24 text-center" colSpan={columns.length}>
+                  No results.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
       <CardFooter className="p-2">
-        <div className="flex w-full items-center justify-between gap-2">
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 whitespace-nowrap">
             <p className="text-muted-foreground text-sm">Viewing</p>
             <Select

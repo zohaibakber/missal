@@ -1,39 +1,59 @@
+import type { SortingState } from "@tanstack/react-table";
+import { useLiveQuery } from "@tanstack/react-db";
 import type { DataTableToolbarConfig } from "#/components/data-table-toolbar";
 import { DataTable } from "./data-table";
 import { firColumns } from "./fir-columns";
-import { flightsData, type Flight } from "#/lib/fir-data";
+import { firCollection } from "#/db-collections";
+import type { FirRecord } from "#/lib/fir";
+import { FIR_STATUS_OPTIONS } from "#/lib/fir";
 
-const flightTableToolbar: DataTableToolbarConfig<Flight> = {
+const firTableToolbar: DataTableToolbarConfig<FirRecord> = {
   search: {
-    label: "Search",
-    placeholder: "Search",
-    searchableColumnIds: ["flightCode", "destination", "status", "terminal", "gate"],
+    label: "Search FIR records",
+    placeholder: "",
+    searchableColumnIds: [
+      "fir_no",
+      "date",
+      "incident_date",
+      "offence",
+      "accused",
+      "witness",
+      "NIC",
+      "mobile",
+      "status",
+    ],
   },
   filters: [
     {
       columnId: "status",
       label: "Status",
       placeholder: "All statuses",
-      options: [
-        { label: "On Time", value: "On Time" },
-        { label: "Delayed", value: "Delayed" },
-        { label: "Boarding", value: "Boarding" },
-        { label: "Cancelled", value: "Cancelled" },
-      ],
-    },
-    {
-      columnId: "terminal",
-      label: "Terminal",
-      placeholder: "All terminals",
-      options: [
-        { label: "Terminal 1", value: "1" },
-        { label: "Terminal 2", value: "2" },
-        { label: "Terminal 3", value: "3" },
-      ],
+      options: FIR_STATUS_OPTIONS.map((status) => ({
+        label: status,
+        value: status,
+      })),
     },
   ],
 };
 
+const initialSorting: SortingState = [
+  {
+    desc: true,
+    id: "fir_no",
+  },
+];
+
 export function FirTable() {
-  return <DataTable columns={firColumns} data={flightsData} toolbar={flightTableToolbar} />;
+  const { data } = useLiveQuery(firCollection);
+
+  return (
+    <DataTable
+      columns={firColumns}
+      data={data}
+      initialSorting={initialSorting}
+      tableDir="rtl"
+      tableLang="ur"
+      toolbar={firTableToolbar}
+    />
+  );
 }

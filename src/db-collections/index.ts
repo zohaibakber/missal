@@ -1,17 +1,33 @@
-import { createCollection, localOnlyCollectionOptions } from "@tanstack/react-db";
-import { z } from "zod";
+import { createCollection, localStorageCollectionOptions } from "@tanstack/react-db";
+import type { FirRecord } from "#/lib/fir";
+import { firSchema } from "#/lib/fir";
 
-const MessageSchema = z.object({
-  id: z.number(),
-  text: z.string(),
-  user: z.string(),
-});
+export const FIR_COLLECTION_ID = "fir-records";
+export const FIR_STORAGE_KEY = "missal-vite.fir-records";
 
-export type Message = z.infer<typeof MessageSchema>;
-
-export const messagesCollection = createCollection(
-  localOnlyCollectionOptions({
-    getKey: (message) => message.id,
-    schema: MessageSchema,
+export const firCollection = createCollection(
+  localStorageCollectionOptions({
+    id: FIR_COLLECTION_ID,
+    storageKey: FIR_STORAGE_KEY,
+    getKey: (fir: FirRecord) => fir.id,
+    schema: firSchema,
   }),
 );
+
+export function getNextFirId(records: FirRecord[]) {
+  if (!records.length) {
+    return 1;
+  }
+
+  return Math.max(...records.map((record) => record.id)) + 1;
+}
+
+export function replaceAllFirRecords(records: FirRecord[]) {
+  for (const record of Array.from(firCollection.state.values())) {
+    firCollection.delete(record.id);
+  }
+
+  for (const record of records) {
+    firCollection.insert(record);
+  }
+}

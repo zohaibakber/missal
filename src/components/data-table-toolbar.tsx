@@ -84,10 +84,10 @@ export function DataTableToolbar<TData>({
     .filter((column) => typeof column.accessorFn !== "undefined" && column.getCanHide());
 
   return (
-    <div className={cn("flex flex-col gap-3 border-b p-2 py-2.5 bg-muted", className)}>
+    <div className={cn("flex flex-col gap-3 border-b bg-muted p-2 py-2.5", className)} dir="rtl">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         {config.search ? (
-          <InputGroup className="w-full lg:max-w-xs bg-background">
+          <InputGroup className="w-full bg-background lg:max-w-64">
             <InputGroupAddon align="inline-start">
               <HugeiconsIcon
                 aria-hidden="true"
@@ -118,7 +118,7 @@ export function DataTableToolbar<TData>({
           <div />
         )}
 
-        <div className="flex flex-1 items-center justify-end gap-2">
+        <div className="flex flex-1 items-center justify-end gap-2 lg:justify-end">
           {config.filters?.length ? (
             <DropdownMenu>
               <DropdownMenuTrigger

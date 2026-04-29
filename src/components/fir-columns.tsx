@@ -1,42 +1,55 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { Checkbox } from "./ui/checkbox";
-import type { Flight } from "#/lib/fir-data";
-import { Badge } from "./ui/badge";
+import {
+  Delete02Icon,
+  Edit02Icon,
+  MoreVerticalIcon,
+  Share08Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { PlaneTakeoff } from "@hugeicons/core-free-icons";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import { cn } from "#/lib/utils";
+import type { FirRecord } from "#/lib/fir";
 
-const getStatusColor = (status: Flight["status"]) => {
+const getStatusColor = (status: FirRecord["status"]) => {
   switch (status) {
-    case "On Time":
-      return "bg-emerald-500";
-    case "Delayed":
+    case "Open":
       return "bg-amber-500";
-    case "Cancelled":
-      return "bg-red-500";
-    case "Boarding":
+    case "Under Investigation":
       return "bg-blue-500";
+    case "Challan Submitted":
+      return "bg-violet-500";
+    case "Closed":
+      return "bg-emerald-500";
     default:
       return "bg-muted-foreground/64";
   }
 };
 
-export const firColumns: ColumnDef<Flight>[] = [
+export const firColumns: ColumnDef<FirRecord>[] = [
   {
     cell: ({ row }) => (
       <Checkbox
-        aria-label="Select row"
+        aria-label="قطار منتخب کریں"
         checked={row.getIsSelected()}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
       />
     ),
+    enableHiding: false,
     enableSorting: false,
     header: ({ table }) => {
       const isAllSelected = table.getIsAllPageRowsSelected();
       const isSomeSelected = table.getIsSomePageRowsSelected();
       return (
         <Checkbox
-          aria-label="Select all rows"
+          aria-label="تمام قطاریں منتخب کریں"
           checked={isAllSelected}
           indeterminate={isSomeSelected && !isAllSelected}
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
@@ -47,58 +60,99 @@ export const firColumns: ColumnDef<Flight>[] = [
     size: 28,
   },
   {
-    accessorKey: "flightCode",
+    accessorKey: "fir_no",
     cell: ({ row }) => (
-      <div className="font-medium font-mono text-muted-foreground">
-        {row.getValue("flightCode")}
+      <div dir="ltr" className="font-medium font-mono text-right">
+        {row.original.fir_no}
       </div>
     ),
-    header: "Flight",
+    header: "ایف آئی آر ",
     size: 80,
   },
   {
-    accessorKey: "departureTime",
-    cell: ({ row }) => {
-      const isCancelled = row.original.status === "Cancelled";
-      const isDelayed = row.original.status === "Delayed";
-      return (
-        <div
-          className={cn(
-            "flex items-center gap-1.5 font-normal tabular-nums",
-            isCancelled && "text-muted-foreground line-through opacity-50",
-          )}
-        >
-          <div className={isDelayed ? "text-warning-foreground" : undefined}>
-            {row.original.departureTime}
-          </div>
-          <div
-            aria-hidden="true"
-            className="flex items-center gap-0.5 opacity-50 before:size-1.5 before:rounded-full before:border before:border-muted-foreground after:h-px after:w-3 after:border-muted-foreground after:border-t after:border-dashed"
-          />
-          <div className={cn("text-muted-foreground", isCancelled && "line-through")}>
-            {row.original.duration}
-          </div>
-          <div
-            aria-hidden="true"
-            className="flex items-center gap-0.5 opacity-50 before:order-1 before:size-1.5 before:rounded-full before:border before:border-muted-foreground after:h-px after:w-3 after:border-muted-foreground after:border-t after:border-dashed"
-          />
-          <div>{row.original.arrivalTime}</div>
-        </div>
-      );
-    },
-    header: "Time",
-    size: 220,
+    accessorKey: "date",
+    cell: ({ row }) => (
+      <div dir="ltr" className="text-right">
+        {row.original.date}
+      </div>
+    ),
+    header: "تاریخ ایف آئی آر",
+    size: 100,
   },
   {
-    accessorKey: "destination",
-    cell: ({ row }) => <div className="font-medium">{row.getValue("destination")}</div>,
-    header: "Destination",
+    accessorKey: "incident_date",
+    cell: ({ row }) => (
+      <div dir="ltr" className="text-right">
+        {row.original.incident_date}
+      </div>
+    ),
+    header: "تاریخ وقوعہ",
+    size: 100,
+  },
+  {
+    accessorKey: "offence",
+    cell: ({ row }) => (
+      <div dir="rtl" lang="ur" className="truncate text-right font-medium">
+        {row.original.offence}
+      </div>
+    ),
+    header: "جرم",
+    size: 70,
+  },
+  {
+    accessorKey: "accused",
+    cell: ({ row }) => (
+      <div
+        dir="rtl"
+        lang="ur"
+        className="line-clamp-1 min-w-0 text-right leading-6"
+        title={row.original.accused}
+      >
+        {row.original.accused}
+      </div>
+    ),
+    header: "ملزم",
+    size: 190,
+  },
+  {
+    accessorKey: "witness",
+    cell: ({ row }) => (
+      <div
+        dir="rtl"
+        lang="ur"
+        className="line-clamp-1 min-w-0 text-right text-muted-foreground leading-6"
+        title={row.original.witness || "—"}
+      >
+        {row.original.witness || "—"}
+      </div>
+    ),
+    header: "گواہ",
     size: 180,
+  },
+  {
+    accessorKey: "NIC",
+    cell: ({ row }) => (
+      <div dir="ltr" className="font-mono text-right">
+        {row.original.NIC || "—"}
+      </div>
+    ),
+    header: "شناختی کارڈ",
+    size: 120,
+  },
+  {
+    accessorKey: "mobile",
+    cell: ({ row }) => (
+      <div dir="ltr" className="font-mono text-right">
+        {row.original.mobile || "—"}
+      </div>
+    ),
+    header: "موبائل",
+    size: 140,
   },
   {
     accessorKey: "status",
     cell: ({ row }) => {
-      const status = row.getValue("status") as Flight["status"];
+      const status = row.original.status;
       return (
         <Badge variant="outline">
           <span
@@ -109,23 +163,34 @@ export const firColumns: ColumnDef<Flight>[] = [
         </Badge>
       );
     },
-    header: "Status",
-    size: 120,
+    header: "اسٹیٹس",
+    size: 70,
   },
   {
-    accessorKey: "terminal",
-    cell: ({ row }) => (
-      <Badge className="font-normal tabular-nums" variant="outline">
-        <HugeiconsIcon icon={PlaneTakeoff} strokeWidth={2} data-icon="inline-start" />
-        <span>{row.getValue("terminal")}</span>
-      </Badge>
+    cell: () => (
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" />}>
+          <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-36">
+          <DropdownMenuItem>
+            <HugeiconsIcon icon={Share08Icon} strokeWidth={2} />
+            Share
+          </DropdownMenuItem>
+          <DropdownMenuItem>
+            <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive">
+            <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     ),
-    header: "Terminal",
-    size: 90,
-  },
-  {
-    accessorKey: "gate",
-    header: "Gate",
-    size: 80,
+    enableHiding: false,
+    enableSorting: false,
+    id: "actions",
+    size: 50,
   },
 ];
