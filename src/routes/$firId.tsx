@@ -9,6 +9,7 @@ import {
   LegalDocument01Icon,
   MoreVerticalIcon,
   PrinterIcon,
+  Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { firCollection, firPlaceholderValueCollection, templateCollection } from "#/db-collections";
@@ -57,6 +58,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "#/components/ui/select";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "#/components/ui/input-group";
 import { Skeleton } from "#/components/ui/skeleton";
 import { buildTemplateValues, extractPlaceholders, renderTemplateHtml } from "#/lib/templates";
 import { getFirStatusLabel } from "#/lib/fir";
@@ -195,6 +197,7 @@ function FirDetail() {
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [documentDraft, setDocumentDraft] = useState("");
+  const [templateSearch, setTemplateSearch] = useState("");
   const [isDocumentDirty, setIsDocumentDirty] = useState(false);
   const [arePlaceholderValuesVisible, setArePlaceholderValuesVisible] = useState(true);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -210,6 +213,15 @@ function FirDetail() {
     selectedTemplateIndex >= 0 && selectedTemplateIndex < sortedTemplates.length - 1
       ? sortedTemplates[selectedTemplateIndex + 1]
       : null;
+  const filteredTemplates = useMemo(() => {
+    const query = templateSearch.trim().toLocaleLowerCase();
+
+    if (!query) {
+      return sortedTemplates;
+    }
+
+    return sortedTemplates.filter((template) => template.name.toLocaleLowerCase().includes(query));
+  }, [sortedTemplates, templateSearch]);
   const placeholders = useMemo(
     () => extractPlaceholders(selectedTemplate?.content ?? ""),
     [selectedTemplate],
@@ -402,13 +414,39 @@ function FirDetail() {
                   {selectedTemplate?.name ?? "Select template"}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent dir="rtl" alignItemWithTrigger={false}>
+              <SelectContent dir="rtl" alignItemWithTrigger={false} className="w-80">
+                <div className="p-1">
+                  <InputGroup>
+                    <InputGroupAddon align="inline-start">
+                      <HugeiconsIcon
+                        aria-hidden="true"
+                        className="text-muted-foreground"
+                        icon={Search01Icon}
+                        strokeWidth={2}
+                      />
+                    </InputGroupAddon>
+                    <InputGroupInput
+                      aria-label="Search templates"
+                      autoComplete="off"
+                      onChange={(event) => setTemplateSearch(event.target.value)}
+                      onKeyDown={(event) => event.stopPropagation()}
+                      placeholder="تلاش کریں"
+                      value={templateSearch}
+                    />
+                  </InputGroup>
+                </div>
                 <SelectGroup>
-                  {sortedTemplates.map((template) => (
-                    <SelectItem key={template.id} value={`${template.id}`}>
-                      {template.name}
-                    </SelectItem>
-                  ))}
+                  {filteredTemplates.length ? (
+                    filteredTemplates.map((template) => (
+                      <SelectItem key={template.id} value={`${template.id}`}>
+                        {template.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="px-2 py-2 text-sm text-muted-foreground">
+                      کوئی ٹیمپلیٹ نہیں ملا
+                    </div>
+                  )}
                 </SelectGroup>
               </SelectContent>
             </Select>

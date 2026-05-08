@@ -1,96 +1,69 @@
 "use client";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "#/components/ui/dropdown-menu";
+import { useMemo } from "react";
+import { useLiveQuery } from "@tanstack/react-db";
+import { ClientOnly, Link, useRouterState } from "@tanstack/react-router";
+import { File01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from "#/components/ui/sidebar";
-import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  MoreHorizontalCircle01Icon,
-  FolderIcon,
-  Share03Icon,
-  Delete02Icon,
-} from "@hugeicons/core-free-icons";
+import { firCollection } from "#/db-collections";
 
-export function NavProjects({
-  projects,
-}: {
-  projects: {
-    name: string;
-    url: string;
-    icon: React.ReactNode;
-  }[];
-}) {
-  const { isMobile } = useSidebar();
+const RECENT_FIR_LIMIT = 5;
+
+function EmptyRecentFirs() {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton disabled>
+        <HugeiconsIcon icon={File01Icon} strokeWidth={2} />
+        <span>No FIRs yet</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+function RecentFirMenuItems() {
+  const { data: firRecords } = useLiveQuery(firCollection);
+  const { location } = useRouterState();
+  const recentFirs = useMemo(
+    () => [...firRecords].sort((first, second) => second.id - first.id).slice(0, RECENT_FIR_LIMIT),
+    [firRecords],
+  );
+
+  if (!recentFirs.length) {
+    return <EmptyRecentFirs />;
+  }
+
+  return recentFirs.map((fir) => {
+    const url = `/${fir.id}`;
+    return (
+      <SidebarMenuItem key={fir.id}>
+        <SidebarMenuButton
+          render={<Link to="/$firId" params={{ firId: `${fir.id}` }} />}
+          className={location.pathname === url ? "bg-secondary border" : ""}
+          tooltip={`FIR ${fir.fir_no}`}
+        >
+          <HugeiconsIcon icon={File01Icon} strokeWidth={2} />
+          <span>FIR {fir.fir_no}</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  });
+}
+
+export function NavProjects() {
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Projects</SidebarGroupLabel>
+      <SidebarGroupLabel>Recent FIRs</SidebarGroupLabel>
       <SidebarMenu>
-        {projects.map((item) => (
-          <SidebarMenuItem key={item.name}>
-            <SidebarMenuButton render={<a href={item.url} />}>
-              {item.icon}
-              <span>{item.name}</span>
-            </SidebarMenuButton>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<SidebarMenuAction showOnHover className="aria-expanded:bg-muted" />}
-              >
-                <HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} />
-                <span className="sr-only">More</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className="w-48"
-                side={isMobile ? "bottom" : "right"}
-                align={isMobile ? "end" : "start"}
-              >
-                <DropdownMenuItem>
-                  <HugeiconsIcon
-                    icon={FolderIcon}
-                    strokeWidth={2}
-                    className="text-muted-foreground"
-                  />
-                  <span>View Project</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <HugeiconsIcon
-                    icon={Share03Icon}
-                    strokeWidth={2}
-                    className="text-muted-foreground"
-                  />
-                  <span>Share Project</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <HugeiconsIcon
-                    icon={Delete02Icon}
-                    strokeWidth={2}
-                    className="text-muted-foreground"
-                  />
-                  <span>Delete Project</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        ))}
-        <SidebarMenuItem>
-          <SidebarMenuButton>
-            <HugeiconsIcon icon={MoreHorizontalCircle01Icon} strokeWidth={2} />
-            <span>More</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+        <ClientOnly fallback={<EmptyRecentFirs />}>
+          <RecentFirMenuItems />
+        </ClientOnly>
       </SidebarMenu>
     </SidebarGroup>
   );
