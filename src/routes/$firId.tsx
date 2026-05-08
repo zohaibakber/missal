@@ -12,7 +12,13 @@ import {
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { firCollection, firPlaceholderValueCollection, templateCollection } from "#/db-collections";
+import {
+  appSettingsCollection,
+  firCollection,
+  firPlaceholderValueCollection,
+  getAppSettings,
+  templateCollection,
+} from "#/db-collections";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,6 +68,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "#/components/ui/in
 import { Skeleton } from "#/components/ui/skeleton";
 import { buildTemplateValues, extractPlaceholders, renderTemplateHtml } from "#/lib/templates";
 import { getFirStatusLabel } from "#/lib/fir";
+import { buildSharedPlaceholderValues } from "#/lib/settings";
 
 export const Route = createFileRoute("/$firId")({
   component: RouteComponent,
@@ -186,7 +193,13 @@ function FirDetail() {
   const { data: firRecords } = useLiveQuery(firCollection);
   const { data: templates } = useLiveQuery(templateCollection);
   const { data: placeholderValues } = useLiveQuery(firPlaceholderValueCollection);
+  const { data: settingsRecords } = useLiveQuery(appSettingsCollection);
   const fir = firRecords.find((record) => record.id === numericFirId) ?? null;
+  const appSettings = getAppSettings(settingsRecords);
+  const sharedPlaceholderValues = useMemo(
+    () => buildSharedPlaceholderValues(appSettings.sharedPlaceholders),
+    [appSettings.sharedPlaceholders],
+  );
   const sortedTemplates = useMemo(
     () => [...templates].sort((first, second) => first.id - second.id),
     [templates],
@@ -235,10 +248,11 @@ function FirDetail() {
       extraValues: firExtraValues,
       fir,
       placeholders,
+      sharedValues: sharedPlaceholderValues,
     });
 
     return nextValues;
-  }, [fir, firExtraValues, placeholders]);
+  }, [fir, firExtraValues, placeholders, sharedPlaceholderValues]);
   const renderedTemplateHtml = selectedTemplate
     ? arePlaceholderValuesVisible
       ? renderTemplateHtml(selectedTemplate.content, values)
@@ -309,6 +323,7 @@ function FirDetail() {
         extraValues: firExtraValues,
         fir: currentFir,
         placeholders: nextPlaceholders,
+        sharedValues: sharedPlaceholderValues,
       });
 
       setDocumentDraft(

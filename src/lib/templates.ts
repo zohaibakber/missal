@@ -81,10 +81,12 @@ export function buildTemplateValues({
   extraValues,
   fir,
   placeholders,
+  sharedValues = {},
 }: {
   extraValues: FirPlaceholderValue[];
   fir: FirRecord;
   placeholders: string[];
+  sharedValues?: Record<string, string>;
 }) {
   const values: Record<string, string> = {};
 
@@ -100,6 +102,13 @@ export function buildTemplateValues({
 
     if (extraValue) {
       values[placeholder] = extraValue.value;
+      continue;
+    }
+
+    const sharedValue = sharedValues[placeholder];
+
+    if (sharedValue) {
+      values[placeholder] = sharedValue;
     }
   }
 

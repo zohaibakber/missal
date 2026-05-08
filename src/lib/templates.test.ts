@@ -7,6 +7,7 @@ import {
   renderTemplateHtml,
   renderTemplate,
 } from "#/lib/templates";
+import { buildSharedPlaceholderValues } from "#/lib/settings";
 
 const fir: FirRecord = {
   id: 1,
@@ -80,6 +81,22 @@ describe("template placeholders", () => {
     });
 
     expect(renderTemplate(content, values)).toBe("FIR 23/26 تھانہ تھانہ شادمان");
+  });
+
+  test("uses shared settings values for unresolved placeholders", () => {
+    const content = "تھانہ «تھانہ_نام_» ضلع «ضلع_نام_»";
+    const placeholders = extractPlaceholders(content);
+    const values = buildTemplateValues({
+      extraValues: [],
+      fir,
+      placeholders,
+      sharedValues: buildSharedPlaceholderValues({
+        policeStation: "تھانہ سٹی",
+        district: "لاہور",
+      }),
+    });
+
+    expect(renderTemplate(content, values)).toBe("تھانہ تھانہ سٹی ضلع لاہور");
   });
 
   test("escapes inserted values when rendering html", () => {

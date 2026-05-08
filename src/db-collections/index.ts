@@ -1,6 +1,12 @@
 import { createCollection, localStorageCollectionOptions } from "@tanstack/react-db";
 import type { FirRecord } from "#/lib/fir";
 import { firSchema } from "#/lib/fir";
+import type { AppSettings } from "#/lib/settings";
+import {
+  appSettingsSchema,
+  createDefaultAppSettings,
+  normalizeSharedPlaceholderSettings,
+} from "#/lib/settings";
 import type { FirPlaceholderValue, TemplateRecord } from "#/lib/templates";
 import {
   firPlaceholderValueSchema,
@@ -14,6 +20,8 @@ export const TEMPLATE_COLLECTION_ID = "templates";
 export const TEMPLATE_STORAGE_KEY = "missal-vite.templates";
 export const FIR_PLACEHOLDER_COLLECTION_ID = "fir-placeholder-values";
 export const FIR_PLACEHOLDER_STORAGE_KEY = "missal-vite.fir-placeholder-values";
+export const APP_SETTINGS_COLLECTION_ID = "app-settings";
+export const APP_SETTINGS_STORAGE_KEY = "missal-vite.app-settings";
 
 export const firCollection = createCollection(
   localStorageCollectionOptions({
@@ -41,6 +49,36 @@ export const firPlaceholderValueCollection = createCollection(
     schema: firPlaceholderValueSchema,
   }),
 );
+
+export const appSettingsCollection = createCollection(
+  localStorageCollectionOptions({
+    id: APP_SETTINGS_COLLECTION_ID,
+    storageKey: APP_SETTINGS_STORAGE_KEY,
+    getKey: (settings: AppSettings) => settings.id,
+    schema: appSettingsSchema,
+  }),
+);
+
+export function getAppSettings(records: AppSettings[]) {
+  const settings = records.find((record) => record.id === "default") ?? createDefaultAppSettings();
+
+  return {
+    ...settings,
+    sharedPlaceholders: normalizeSharedPlaceholderSettings(settings.sharedPlaceholders),
+  };
+}
+
+export function saveAppSettings(settings: AppSettings) {
+  if (appSettingsCollection.state.has(settings.id)) {
+    appSettingsCollection.update(settings.id, (draft) => {
+      draft.sharedPlaceholders = settings.sharedPlaceholders;
+      draft.updatedAt = settings.updatedAt;
+    });
+    return;
+  }
+
+  appSettingsCollection.insert(settings);
+}
 
 export function getNextFirId(records: FirRecord[]) {
   if (!records.length) {

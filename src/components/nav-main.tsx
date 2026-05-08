@@ -19,16 +19,6 @@ import { templateCollection } from "#/db-collections";
 
 const LATEST_TEMPLATE_LIMIT = 5;
 
-function EmptyTemplateSubItem() {
-  return (
-    <SidebarMenuSubItem>
-      <SidebarMenuSubButton aria-disabled="true" className="pointer-events-none opacity-50">
-        <span>No templates yet</span>
-      </SidebarMenuSubButton>
-    </SidebarMenuSubItem>
-  );
-}
-
 function LatestTemplateSubItems() {
   const { data: templates } = useLiveQuery(templateCollection);
   const { location } = useRouterState();
@@ -45,7 +35,7 @@ function LatestTemplateSubItems() {
   );
 
   if (!latestTemplates.length) {
-    return <EmptyTemplateSubItem />;
+    return null;
   }
 
   return latestTemplates.map((template) => {
@@ -61,6 +51,28 @@ function LatestTemplateSubItems() {
       </SidebarMenuSubItem>
     );
   });
+}
+
+function TemplatesNavDropdown() {
+  const { data: templates } = useLiveQuery(templateCollection);
+
+  if (!templates.length) {
+    return null;
+  }
+
+  return (
+    <>
+      <CollapsibleTrigger render={<SidebarMenuAction className="aria-expanded:rotate-90" />}>
+        <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+        <span className="sr-only">Toggle</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent dir="rtl">
+        <SidebarMenuSub>
+          <LatestTemplateSubItems />
+        </SidebarMenuSub>
+      </CollapsibleContent>
+    </>
+  );
 }
 
 export function NavMain({
@@ -92,7 +104,11 @@ export function NavMain({
               {item.icon}
               <span>{item.title}</span>
             </SidebarMenuButton>
-            {item.items?.length || item.url === "/templates" ? (
+            {item.url === "/templates" ? (
+              <ClientOnly fallback={null}>
+                <TemplatesNavDropdown />
+              </ClientOnly>
+            ) : item.items?.length ? (
               <>
                 <CollapsibleTrigger
                   render={<SidebarMenuAction className="aria-expanded:rotate-90" />}
@@ -102,19 +118,13 @@ export function NavMain({
                 </CollapsibleTrigger>
                 <CollapsibleContent dir="rtl">
                   <SidebarMenuSub>
-                    {item.url === "/templates" ? (
-                      <ClientOnly fallback={<EmptyTemplateSubItem />}>
-                        <LatestTemplateSubItems />
-                      </ClientOnly>
-                    ) : (
-                      item.items?.map((subItem) => (
-                        <SidebarMenuSubItem key={subItem.title}>
-                          <SidebarMenuSubButton render={<a href={subItem.url} />}>
-                            <span>{subItem.title}</span>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))
-                    )}
+                    {item.items.map((subItem) => (
+                      <SidebarMenuSubItem key={subItem.title}>
+                        <SidebarMenuSubButton render={<a href={subItem.url} />}>
+                          <span>{subItem.title}</span>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
                   </SidebarMenuSub>
                 </CollapsibleContent>
               </>
