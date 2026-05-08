@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { ClientOnly, createFileRoute } from "@tanstack/react-router";
 import { CreateFirForm } from "#/components/create-fir-form";
-import { FirTable } from "#/components/fir-table";
+import { FirTable, FirTableSkeleton } from "#/components/fir-table";
 import { Button } from "#/components/ui/button";
 import {
   Dialog,
@@ -19,7 +19,7 @@ function RouteComponent() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
   return (
-    <main className="space-y-4 p-4 lg:p-6">
+    <main className="space-y-4 p-4">
       <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-medium">FIR Dataset</h1>
@@ -36,7 +36,9 @@ function RouteComponent() {
         </Dialog>
       </section>
 
-      <FirTable />
+      <ClientOnly fallback={<FirTableSkeleton />}>
+        <FirTable />
+      </ClientOnly>
     </main>
   );
 }

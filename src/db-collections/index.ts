@@ -1,9 +1,19 @@
 import { createCollection, localStorageCollectionOptions } from "@tanstack/react-db";
 import type { FirRecord } from "#/lib/fir";
 import { firSchema } from "#/lib/fir";
+import type { FirPlaceholderValue, TemplateRecord } from "#/lib/templates";
+import {
+  firPlaceholderValueSchema,
+  getPlaceholderValueId,
+  templateRecordSchema,
+} from "#/lib/templates";
 
 export const FIR_COLLECTION_ID = "fir-records";
 export const FIR_STORAGE_KEY = "missal-vite.fir-records";
+export const TEMPLATE_COLLECTION_ID = "templates";
+export const TEMPLATE_STORAGE_KEY = "missal-vite.templates";
+export const FIR_PLACEHOLDER_COLLECTION_ID = "fir-placeholder-values";
+export const FIR_PLACEHOLDER_STORAGE_KEY = "missal-vite.fir-placeholder-values";
 
 export const firCollection = createCollection(
   localStorageCollectionOptions({
@@ -11,6 +21,24 @@ export const firCollection = createCollection(
     storageKey: FIR_STORAGE_KEY,
     getKey: (fir: FirRecord) => fir.id,
     schema: firSchema,
+  }),
+);
+
+export const templateCollection = createCollection(
+  localStorageCollectionOptions({
+    id: TEMPLATE_COLLECTION_ID,
+    storageKey: TEMPLATE_STORAGE_KEY,
+    getKey: (template: TemplateRecord) => template.id,
+    schema: templateRecordSchema,
+  }),
+);
+
+export const firPlaceholderValueCollection = createCollection(
+  localStorageCollectionOptions({
+    id: FIR_PLACEHOLDER_COLLECTION_ID,
+    storageKey: FIR_PLACEHOLDER_STORAGE_KEY,
+    getKey: (value: FirPlaceholderValue) => value.id,
+    schema: firPlaceholderValueSchema,
   }),
 );
 
@@ -30,4 +58,41 @@ export function replaceAllFirRecords(records: FirRecord[]) {
   for (const record of records) {
     firCollection.insert(record);
   }
+}
+
+export function getNextTemplateId(records: TemplateRecord[]) {
+  if (!records.length) {
+    return 1;
+  }
+
+  return Math.max(...records.map((record) => record.id)) + 1;
+}
+
+export function upsertFirPlaceholderValue({
+  firId,
+  placeholder,
+  value,
+}: {
+  firId: number;
+  placeholder: string;
+  value: string;
+}) {
+  const id = getPlaceholderValueId(firId, placeholder);
+  const record: FirPlaceholderValue = {
+    id,
+    firId,
+    placeholder,
+    value,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (firPlaceholderValueCollection.state.has(id)) {
+    firPlaceholderValueCollection.update(id, (draft) => {
+      draft.value = value;
+      draft.updatedAt = record.updatedAt;
+    });
+    return;
+  }
+
+  firPlaceholderValueCollection.insert(record);
 }

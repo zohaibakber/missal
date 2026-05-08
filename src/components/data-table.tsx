@@ -45,15 +45,27 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   initialSorting?: SortingState;
+  onRowClick?: (row: TData) => void;
   tableDir?: "ltr" | "rtl";
   tableLang?: string;
   toolbar?: DataTableToolbarConfig<TData>;
+}
+
+function isInteractiveElement(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(
+    target.closest('a,button,input,select,textarea,[role="button"],[data-no-row-click]'),
+  );
 }
 
 export function DataTable<TData extends Record<string, unknown>, TValue>({
   columns,
   data,
   initialSorting,
+  onRowClick,
   tableDir = "ltr",
   tableLang,
   toolbar,
@@ -180,7 +192,30 @@ export function DataTable<TData extends Record<string, unknown>, TValue>({
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow data-state={row.getIsSelected() ? "selected" : undefined} key={row.id}>
+                <TableRow
+                  data-state={row.getIsSelected() ? "selected" : undefined}
+                  key={row.id}
+                  onClick={(event) => {
+                    if (!onRowClick || isInteractiveElement(event.target)) {
+                      return;
+                    }
+
+                    onRowClick(row.original);
+                  }}
+                  onKeyDown={(event) => {
+                    if (!onRowClick || isInteractiveElement(event.target)) {
+                      return;
+                    }
+
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onRowClick(row.original);
+                    }
+                  }}
+                  role={onRowClick ? "link" : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  className={onRowClick ? "cursor-pointer" : undefined}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

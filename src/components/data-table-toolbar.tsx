@@ -99,7 +99,7 @@ export function DataTableToolbar<TData>({
             <InputGroupInput
               aria-label={config.search.label ?? "Search table data"}
               onChange={(event) => table.setGlobalFilter(event.target.value)}
-              placeholder={config.search.placeholder ?? "Search"}
+              placeholder={config.search.placeholder ?? "تلاش کریں"}
               value={activeSearch}
             />
             {activeSearch ? (
