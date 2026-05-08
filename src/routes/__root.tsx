@@ -17,6 +17,8 @@ import { DirectionProvider } from "#/components/ui/direction";
 import { AppSidebar } from "#/components/app-sidebar";
 import { createServerFn } from "@tanstack/react-start";
 import { auth } from "@clerk/tanstack-react-start/server";
+import { ThemeProvider } from "#/components/theme-provider";
+import { ToastProvider } from "#/components/ui/toast";
 
 function NotFound() {
   return (
@@ -45,7 +47,7 @@ export const Route = createRootRouteWithContext()({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "TanStack Start Starter",
+        title: "Missal Writing",
       },
     ],
     links: [
@@ -78,17 +80,21 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <ClerkProvider>
-          <TooltipProvider>
-            <DirectionProvider direction="ltr">
-              <SidebarProvider>
-                <Show when={"signed-in"}>
-                  <AppSidebar />
-                  <SidebarInset>{children}</SidebarInset>
-                </Show>
-                <Show when={"signed-out"}>{children}</Show>
-              </SidebarProvider>
-            </DirectionProvider>
-          </TooltipProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <TooltipProvider>
+                <DirectionProvider direction="ltr">
+                  <SidebarProvider>
+                    <Show when={"signed-in"}>
+                      <AppSidebar />
+                      <SidebarInset>{children}</SidebarInset>
+                    </Show>
+                    <Show when={"signed-out"}>{children}</Show>
+                  </SidebarProvider>
+                </DirectionProvider>
+              </TooltipProvider>
+            </ToastProvider>
+          </ThemeProvider>
         </ClerkProvider>
         <TanStackDevtools
           config={{

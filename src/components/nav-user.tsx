@@ -19,16 +19,18 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   UnfoldMoreIcon,
   CheckmarkBadgeIcon,
-  CreditCardIcon,
-  NotificationIcon,
   LogoutIcon,
+  Moon02Icon,
+  Sun02Icon,
 } from "@hugeicons/core-free-icons";
 import { useUser, useAuth } from "@clerk/tanstack-react-start";
+import { useTheme } from "#/components/theme-provider";
 
 export function NavUser() {
   const { isMobile } = useSidebar();
   const { user, isLoaded } = useUser();
   const { signOut } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   if (!isLoaded) {
     return (
@@ -57,6 +59,8 @@ export function NavUser() {
   const userEmail =
     user.primaryEmailAddress?.emailAddress || user.emailAddresses?.[0]?.emailAddress;
   const userName = user.firstName || user.username || "User";
+  const nextTheme = theme === "dark" ? "light" : "dark";
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -100,13 +104,9 @@ export function NavUser() {
                 <HugeiconsIcon icon={CheckmarkBadgeIcon} strokeWidth={2} />
                 Account
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <HugeiconsIcon icon={CreditCardIcon} strokeWidth={2} />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <HugeiconsIcon icon={NotificationIcon} strokeWidth={2} />
-                Notifications
+              <DropdownMenuItem onClick={() => setTheme(nextTheme)}>
+                <HugeiconsIcon icon={theme === "dark" ? Sun02Icon : Moon02Icon} strokeWidth={2} />
+                {theme === "dark" ? "Light mode" : "Dark mode"}
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

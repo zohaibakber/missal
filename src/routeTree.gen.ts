@@ -11,13 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as DatasetRouteImport } from './routes/dataset'
+import { Route as NewRouteImport } from './routes/new'
+import { Route as FirIdRouteImport } from './routes/$firId'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TemplatesNewRouteImport } from './routes/templates_.new'
 import { Route as TemplatesTemplateIdRouteImport } from './routes/templates_.$templateId'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
-import { Route as DatasetNewRouteImport } from './routes/dataset_.new'
-import { Route as DatasetFirIdRouteImport } from './routes/dataset_.$firId'
 
 const TemplatesRoute = TemplatesRouteImport.update({
   id: '/templates',
@@ -29,9 +28,14 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DatasetRoute = DatasetRouteImport.update({
-  id: '/dataset',
-  path: '/dataset',
+const NewRoute = NewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FirIdRoute = FirIdRouteImport.update({
+  id: '/$firId',
+  path: '/$firId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -54,35 +58,23 @@ const SignInSplatRoute = SignInSplatRouteImport.update({
   path: '/sign-in/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DatasetNewRoute = DatasetNewRouteImport.update({
-  id: '/dataset_/new',
-  path: '/dataset/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DatasetFirIdRoute = DatasetFirIdRouteImport.update({
-  id: '/dataset_/$firId',
-  path: '/dataset/$firId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/dataset': typeof DatasetRoute
+  '/$firId': typeof FirIdRoute
+  '/new': typeof NewRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
-  '/dataset/$firId': typeof DatasetFirIdRoute
-  '/dataset/new': typeof DatasetNewRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/templates/new': typeof TemplatesNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/dataset': typeof DatasetRoute
+  '/$firId': typeof FirIdRoute
+  '/new': typeof NewRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
-  '/dataset/$firId': typeof DatasetFirIdRoute
-  '/dataset/new': typeof DatasetNewRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/templates/new': typeof TemplatesNewRoute
@@ -90,11 +82,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/dataset': typeof DatasetRoute
+  '/$firId': typeof FirIdRoute
+  '/new': typeof NewRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
-  '/dataset_/$firId': typeof DatasetFirIdRoute
-  '/dataset_/new': typeof DatasetNewRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/templates_/$templateId': typeof TemplatesTemplateIdRoute
   '/templates_/new': typeof TemplatesNewRoute
@@ -103,33 +94,30 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/dataset'
+    | '/$firId'
+    | '/new'
     | '/settings'
     | '/templates'
-    | '/dataset/$firId'
-    | '/dataset/new'
     | '/sign-in/$'
     | '/templates/$templateId'
     | '/templates/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/dataset'
+    | '/$firId'
+    | '/new'
     | '/settings'
     | '/templates'
-    | '/dataset/$firId'
-    | '/dataset/new'
     | '/sign-in/$'
     | '/templates/$templateId'
     | '/templates/new'
   id:
     | '__root__'
     | '/'
-    | '/dataset'
+    | '/$firId'
+    | '/new'
     | '/settings'
     | '/templates'
-    | '/dataset_/$firId'
-    | '/dataset_/new'
     | '/sign-in/$'
     | '/templates_/$templateId'
     | '/templates_/new'
@@ -137,11 +125,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DatasetRoute: typeof DatasetRoute
+  FirIdRoute: typeof FirIdRoute
+  NewRoute: typeof NewRoute
   SettingsRoute: typeof SettingsRoute
   TemplatesRoute: typeof TemplatesRoute
-  DatasetFirIdRoute: typeof DatasetFirIdRoute
-  DatasetNewRoute: typeof DatasetNewRoute
   SignInSplatRoute: typeof SignInSplatRoute
   TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRoute
   TemplatesNewRoute: typeof TemplatesNewRoute
@@ -163,11 +150,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dataset': {
-      id: '/dataset'
-      path: '/dataset'
-      fullPath: '/dataset'
-      preLoaderRoute: typeof DatasetRouteImport
+    '/new': {
+      id: '/new'
+      path: '/new'
+      fullPath: '/new'
+      preLoaderRoute: typeof NewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$firId': {
+      id: '/$firId'
+      path: '/$firId'
+      fullPath: '/$firId'
+      preLoaderRoute: typeof FirIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -198,30 +192,15 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignInSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dataset_/new': {
-      id: '/dataset_/new'
-      path: '/dataset/new'
-      fullPath: '/dataset/new'
-      preLoaderRoute: typeof DatasetNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dataset_/$firId': {
-      id: '/dataset_/$firId'
-      path: '/dataset/$firId'
-      fullPath: '/dataset/$firId'
-      preLoaderRoute: typeof DatasetFirIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DatasetRoute: DatasetRoute,
+  FirIdRoute: FirIdRoute,
+  NewRoute: NewRoute,
   SettingsRoute: SettingsRoute,
   TemplatesRoute: TemplatesRoute,
-  DatasetFirIdRoute: DatasetFirIdRoute,
-  DatasetNewRoute: DatasetNewRoute,
   SignInSplatRoute: SignInSplatRoute,
   TemplatesTemplateIdRoute: TemplatesTemplateIdRoute,
   TemplatesNewRoute: TemplatesNewRoute,

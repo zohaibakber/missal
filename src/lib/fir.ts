@@ -20,6 +20,8 @@ export const firSchema = z.object({
   mobile: z.string().trim(),
   incident_date: z.string().trim().min(1, "Incident date is required."),
   status: firStatusSchema,
+  templateId: z.number().int().positive().optional(),
+  content: z.string().optional(),
 });
 
 export type FirRecord = z.infer<typeof firSchema>;
@@ -34,6 +36,8 @@ export const createEmptyFirRecord = (): Omit<FirRecord, "id"> => ({
   mobile: "",
   incident_date: "",
   status: "Open",
+  content: "",
+  templateId: undefined,
 });
 
 export const normalizeFirText = (value: unknown) => {

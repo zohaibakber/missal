@@ -64,7 +64,7 @@ export function FirTable() {
       initialSorting={initialSorting}
       onRowClick={(fir) => {
         void navigate({
-          to: "/dataset/$firId",
+          to: "/$firId",
           params: { firId: `${fir.id}` },
         });
       }}

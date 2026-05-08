@@ -133,3 +133,31 @@
     cursor: pointer;
   }
 }
+
+@keyframes toast-attention-a {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes toast-attention-b {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.08);
+  }
+}
+
+@utility animate-toast-attention-a {
+  animation: toast-attention-a 240ms ease-out;
+}
+
+@utility animate-toast-attention-b {
+  animation: toast-attention-b 240ms ease-out;
+}

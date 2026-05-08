@@ -1,11 +1,18 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import {
-  Delete02Icon,
-  Edit02Icon,
-  MoreVerticalIcon,
-  Share08Icon,
-} from "@hugeicons/core-free-icons";
+import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { Delete02Icon, Edit02Icon, MoreVerticalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -15,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { firCollection, firPlaceholderValueCollection } from "#/db-collections";
 import { cn } from "#/lib/utils";
 import type { FirRecord } from "#/lib/fir";
 
@@ -32,6 +40,66 @@ const getStatusColor = (status: FirRecord["status"]) => {
       return "bg-muted-foreground/64";
   }
 };
+
+function FirRowActions({ fir }: { fir: FirRecord }) {
+  const navigate = useNavigate();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  function handleDelete() {
+    firCollection.delete(fir.id);
+
+    for (const value of Array.from(firPlaceholderValueCollection.state.values())) {
+      if (value.firId === fir.id) {
+        firPlaceholderValueCollection.delete(value.id);
+      }
+    }
+
+    setIsDeleteDialogOpen(false);
+  }
+
+  return (
+    <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" />}>
+          <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-36">
+          <DropdownMenuItem
+            onClick={() => {
+              void navigate({
+                to: "/$firId",
+                params: { firId: `${fir.id}` },
+              });
+            }}
+          >
+            <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setIsDeleteDialogOpen(true)} variant="destructive">
+            <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete FIR</AlertDialogTitle>
+          <AlertDialogDescription>
+            This removes FIR {fir.fir_no} and its saved template placeholder values from this
+            browser.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDelete} type="button" variant="destructive">
+            <HugeiconsIcon data-icon="inline-start" icon={Delete02Icon} />
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
 
 export const firColumns: ColumnDef<FirRecord>[] = [
   {
@@ -167,26 +235,14 @@ export const firColumns: ColumnDef<FirRecord>[] = [
     size: 70,
   },
   {
-    cell: () => (
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" />}>
-          <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-36">
-          <DropdownMenuItem>
-            <HugeiconsIcon icon={Share08Icon} strokeWidth={2} />
-            Share
-          </DropdownMenuItem>
-          <DropdownMenuItem>
-            <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
-            Edit
-          </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive">
-            <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-            Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+    cell: ({ row }) => (
+      <div
+        data-no-row-click
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
+        <FirRowActions fir={row.original} />
+      </div>
     ),
     enableHiding: false,
     enableSorting: false,

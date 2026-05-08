@@ -133,6 +133,8 @@ export function renderTemplateHtml(content: string, values: Record<string, strin
     const placeholder = normalizePlaceholderName(rawPlaceholder);
     const value = values[placeholder];
 
-    return value?.trim() ? escapeHtml(value).replace(/\n/g, "<br>") : token;
+    return value?.trim()
+      ? escapeHtml(value).replace(/\n/g, "<br>")
+      : `<span data-placeholder="true">${escapeHtml(token)}</span>`;
   });
 }

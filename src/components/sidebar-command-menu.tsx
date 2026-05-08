@@ -1,14 +1,7 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  Add01Icon,
-  Database,
-  Files,
-  Home,
-  Search01Icon,
-  Settings05Icon,
-} from "@hugeicons/core-free-icons";
+import { Add01Icon, Files, Home, Search01Icon, Settings05Icon } from "@hugeicons/core-free-icons";
 
 import {
   Command,
@@ -36,12 +29,6 @@ const commandActions = [
         url: "/",
       },
       {
-        icon: Database,
-        shortcut: "D",
-        title: "Dataset",
-        url: "/dataset",
-      },
-      {
         icon: Files,
         shortcut: "T",
         title: "Templates",
@@ -62,7 +49,7 @@ const commandActions = [
         icon: Add01Icon,
         shortcut: "F",
         title: "New FIR",
-        url: "/dataset/new",
+        url: "/new",
       },
       {
         icon: Add01Icon,
@@ -119,7 +106,7 @@ export function SidebarCommandMenu() {
             <InputGroupInput
               aria-label="Search commands"
               className="pointer-events-none"
-              placeholder="Search actions"
+              placeholder="Search"
               readOnly
             />
             <InputGroupAddon align="inline-end">

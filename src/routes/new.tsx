@@ -3,7 +3,7 @@ import { ClientOnly, createFileRoute, useNavigate } from "@tanstack/react-router
 import { CreateFirForm } from "#/components/create-fir-form";
 import { Skeleton } from "#/components/ui/skeleton";
 
-export const Route = createFileRoute("/dataset_/new")({
+export const Route = createFileRoute("/new")({
   component: RouteComponent,
 });
 
@@ -23,7 +23,7 @@ function CreateFirPage() {
       <CreateFirForm
         onSuccess={(firId) => {
           void navigate({
-            to: "/dataset/$firId",
+            to: "/$firId",
             params: { firId: `${firId}` },
           });
         }}

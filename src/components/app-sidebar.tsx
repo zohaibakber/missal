@@ -25,7 +25,6 @@ import {
   PieChartIcon,
   MapsIcon,
   CommandIcon,
-  Database,
   Files,
   Home,
 } from "@hugeicons/core-free-icons";
@@ -37,11 +36,6 @@ const data = {
       url: "/",
       icon: <HugeiconsIcon icon={Home} strokeWidth={2} />,
       isActive: true,
-    },
-    {
-      title: "Dataset",
-      url: "/dataset",
-      icon: <HugeiconsIcon icon={Database} strokeWidth={2} />,
     },
     {
       title: "Templates",

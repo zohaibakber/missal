@@ -26,8 +26,11 @@ const blockedTags = new Set([
 ]);
 const blockedAttributes = [/^on/i, /^formaction$/i, /^srcdoc$/i];
 const layoutProperties = new Set([
+  "background",
+  "background-color",
   "clear",
   "clip",
+  "color",
   "display",
   "float",
   "font",
@@ -184,8 +187,8 @@ export function TemplateRichEditor({
         ref={editorRef}
         aria-label={ariaLabel}
         className={cn(
-          "min-h-[24rem] w-full min-w-0 max-w-full rounded-lg border border-input bg-background px-3 py-2 font-['Noto_Sans_Arabic_Variable',sans-serif] text-sm leading-7 font-normal break-words caret-foreground outline-none transition-colors [contain:inline-size] [overflow-wrap:anywhere] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
-          "prose prose-sm max-w-none [&_*]:!max-w-full [&_*]:!min-w-0 [&_*]:!whitespace-normal [&_*]:!font-['Noto_Sans_Arabic_Variable',sans-serif] [&_*]:!font-normal [&_*]:box-border [&_b]:!font-semibold [&_img]:!h-auto [&_img]:!max-w-full [&_pre]:!whitespace-pre-wrap [&_strong]:!font-semibold [&_table]:!w-full [&_table]:!max-w-full [&_table]:table-fixed [&_table]:border-collapse [&_td]:min-w-0 [&_td]:border [&_td]:border-border [&_td]:p-1 [&_td]:break-words [&_td]:[overflow-wrap:anywhere] [&_th]:min-w-0 [&_th]:border [&_th]:border-border [&_th]:p-1 [&_th]:break-words [&_th]:[overflow-wrap:anywhere]",
+          "min-h-[24rem] w-full min-w-0 max-w-full rounded-lg border border-input bg-background px-3 py-2 font-['Noto_Sans_Arabic_Variable',sans-serif] text-sm leading-7 font-normal text-foreground caret-foreground outline-none transition-colors [contain:inline-size] [overflow-wrap:anywhere] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+          "prose prose-sm dark:prose-invert max-w-none [&_*]:!max-w-full [&_*]:!min-w-0 [&_*]:!whitespace-normal [&_*]:!font-['Noto_Sans_Arabic_Variable',sans-serif] [&_*]:!font-normal [&_*]:box-border [&_[data-placeholder=true]]:!font-medium [&_[data-placeholder=true]]:!text-blue-600 dark:[&_[data-placeholder=true]]:!text-blue-400 [&_b]:!font-semibold [&_img]:!h-auto [&_img]:!max-w-full [&_pre]:!whitespace-pre-wrap [&_strong]:!font-semibold [&_table]:!w-full [&_table]:!max-w-full [&_table]:table-fixed [&_table]:border-collapse [&_td]:min-w-0 [&_td]:border [&_td]:border-border [&_td]:p-1 [&_td]:break-words [&_th]:min-w-0 [&_th]:border [&_th]:border-border [&_th]:p-1 [&_th]:break-words",
           className,
         )}
         contentEditable

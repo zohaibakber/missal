@@ -5,6 +5,7 @@ import {
   ArrowDown01Icon,
   ArrowUp01Icon,
   Delete02Icon,
+  FileEditIcon,
   LegalDocument01Icon,
   SaveIcon,
 } from "@hugeicons/core-free-icons";
@@ -38,7 +39,8 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "#/components/ui/empty";
-import { Input } from "#/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "#/components/ui/input-group";
+import { useToast } from "#/components/ui/toast";
 import { TemplateRichEditor } from "#/components/template-rich-editor";
 import { extractPlaceholders } from "#/lib/templates";
 
@@ -55,6 +57,7 @@ function createDraft() {
 
 export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
   const navigate = useNavigate();
+  const toast = useToast();
   const { data: templates } = useLiveQuery(templateCollection);
   const selectedTemplate =
     templateId === undefined
@@ -130,6 +133,7 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
         template.name = name;
         template.updatedAt = now;
       });
+      toast.success("Template updated");
       return;
     }
 
@@ -227,19 +231,23 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
 
       <section className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4">
         <div className="ml-auto" dir="rtl">
-          <Input
-            aria-label="ٹیمپلیٹ کا نام"
-            className="min-w-0 max-w-xl border-0 px-0 text-base font-medium shadow-none focus-visible:ring-0"
-            id="template-name"
-            onChange={(event) =>
-              setDraft((value) => ({
-                ...value,
-                name: event.target.value,
-              }))
-            }
-            placeholder="ٹیمپلیٹ کا نام"
-            value={draft.name}
-          />
+          <InputGroup className="max-w-xl">
+            <InputGroupAddon align="inline-start">
+              <HugeiconsIcon icon={FileEditIcon} />
+            </InputGroupAddon>
+            <InputGroupInput
+              aria-label="ٹیمپلیٹ کا نام"
+              id="template-name"
+              onChange={(event) =>
+                setDraft((value) => ({
+                  ...value,
+                  name: event.target.value,
+                }))
+              }
+              placeholder="ٹیمپلیٹ کا نام"
+              value={draft.name}
+            />
+          </InputGroup>
         </div>
 
         <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] [contain:inline-size]">
