@@ -8,7 +8,6 @@ import {
   Delete02Icon,
   FileEditIcon,
   LegalDocument01Icon,
-  SaveIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getNextTemplateId, templateCollection } from "#/db-collections";
@@ -222,8 +221,8 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
               <HugeiconsIcon icon={Delete02Icon} />
             </Button>
           ) : null}
-          <Button disabled={!draft.name.trim()} onClick={handleSave} size="icon-sm" type="button">
-            <HugeiconsIcon data-icon="inline-start" icon={SaveIcon} />
+          <Button disabled={!draft.name.trim()} onClick={handleSave} type="button">
+            Save
           </Button>
         </div>
       </section>

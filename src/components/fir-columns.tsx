@@ -1,6 +1,6 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Delete02Icon, Edit02Icon, MoreVerticalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -16,6 +16,8 @@ import {
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
+import { CreateFirForm } from "./create-fir-form";
+import { Dialog, DialogContent } from "./ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,25 +26,11 @@ import {
 } from "./ui/dropdown-menu";
 import { firCollection, firPlaceholderValueCollection } from "#/db-collections";
 import { cn } from "#/lib/utils";
+import { getFirStatusColor, getFirStatusLabel } from "#/lib/fir";
 import type { FirRecord } from "#/lib/fir";
 
-const getStatusColor = (status: FirRecord["status"]) => {
-  switch (status) {
-    case "Open":
-      return "bg-amber-500";
-    case "Under Investigation":
-      return "bg-blue-500";
-    case "Challan Submitted":
-      return "bg-violet-500";
-    case "Closed":
-      return "bg-emerald-500";
-    default:
-      return "bg-muted-foreground/64";
-  }
-};
-
 function FirRowActions({ fir }: { fir: FirRecord }) {
-  const navigate = useNavigate();
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   function handleDelete() {
@@ -58,20 +46,13 @@ function FirRowActions({ fir }: { fir: FirRecord }) {
   }
 
   return (
-    <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+    <>
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" />}>
           <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-36">
-          <DropdownMenuItem
-            onClick={() => {
-              void navigate({
-                to: "/$firId",
-                params: { firId: `${fir.id}` },
-              });
-            }}
-          >
+          <DropdownMenuItem onClick={() => setIsEditDialogOpen(true)}>
             <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
             Edit
           </DropdownMenuItem>
@@ -81,23 +62,36 @@ function FirRowActions({ fir }: { fir: FirRecord }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <AlertDialogContent size="sm">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete FIR</AlertDialogTitle>
-          <AlertDialogDescription>
-            This removes FIR {fir.fir_no} and its saved template placeholder values from this
-            browser.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDelete} type="button" variant="destructive">
-            <HugeiconsIcon data-icon="inline-start" icon={Delete02Icon} />
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-h-[calc(100dvh-1rem)] overflow-y-auto">
+          <CreateFirForm
+            fir={fir}
+            onSuccess={() => {
+              setIsEditDialogOpen(false);
+              toast.success("FIR updated");
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete FIR</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes FIR {fir.fir_no} and its saved template placeholder values from this
+              browser.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} type="button" variant="destructive">
+              <HugeiconsIcon data-icon="inline-start" icon={Delete02Icon} />
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -225,9 +219,9 @@ export const firColumns: ColumnDef<FirRecord>[] = [
         <Badge variant="outline">
           <span
             aria-hidden="true"
-            className={cn("size-1.5 rounded-full", getStatusColor(status))}
+            className={cn("size-1.5 rounded-full", getFirStatusColor(status))}
           />
-          {status}
+          {getFirStatusLabel(status)}
         </Badge>
       );
     },

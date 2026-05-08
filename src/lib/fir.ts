@@ -26,6 +26,36 @@ export const firSchema = z.object({
 
 export type FirRecord = z.infer<typeof firSchema>;
 
+export const getFirStatusColor = (status: FirRecord["status"]) => {
+  switch (status) {
+    case "Open":
+      return "bg-amber-500";
+    case "Under Investigation":
+      return "bg-blue-500";
+    case "Challan Submitted":
+      return "bg-violet-500";
+    case "Closed":
+      return "bg-emerald-500";
+    default:
+      return "bg-muted-foreground/64";
+  }
+};
+
+export const getFirStatusLabel = (status: FirRecord["status"]) => {
+  switch (status) {
+    case "Open":
+      return "زیر التوا";
+    case "Under Investigation":
+      return "زیر تفتیش";
+    case "Challan Submitted":
+      return "چالان جمع";
+    case "Closed":
+      return "بند";
+    default:
+      return status;
+  }
+};
+
 export const createEmptyFirRecord = (): Omit<FirRecord, "id"> => ({
   fir_no: "",
   date: "",

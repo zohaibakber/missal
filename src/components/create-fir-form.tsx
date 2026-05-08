@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useEffect, useId } from "react";
 import { useForm } from "@tanstack/react-form";
 import { Button } from "#/components/ui/button";
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "#/components/ui/field";
@@ -12,26 +12,54 @@ import {
   SelectTrigger,
   SelectValue,
 } from "#/components/ui/select";
-import { createEmptyFirRecord, firSchema, FIR_STATUS_OPTIONS } from "#/lib/fir";
+import {
+  createEmptyFirRecord,
+  FIR_STATUS_OPTIONS,
+  firSchema,
+  getFirStatusColor,
+  getFirStatusLabel,
+} from "#/lib/fir";
+import type { FirRecord } from "#/lib/fir";
 import { firCollection, getNextFirId } from "#/db-collections";
 import { useLiveQuery } from "@tanstack/react-db";
+import { cn } from "#/lib/utils";
 
 const formSchema = firSchema.omit({ id: true });
+type FirFormValues = Omit<FirRecord, "id">;
 
 type CreateFirFormProps = {
+  fir?: FirRecord;
   onSuccess?: (firId: number) => void;
 };
 
-export function CreateFirForm({ onSuccess }: CreateFirFormProps) {
+function getFirFormValues(fir?: FirRecord): FirFormValues {
+  if (!fir) {
+    return createEmptyFirRecord();
+  }
+
+  const { id: _id, ...values } = fir;
+  return values;
+}
+
+export function CreateFirForm({ fir, onSuccess }: CreateFirFormProps) {
   const formId = useId();
   const { data: records } = useLiveQuery(firCollection);
+  const isEditing = Boolean(fir);
 
   const form = useForm({
-    defaultValues: createEmptyFirRecord(),
+    defaultValues: getFirFormValues(fir),
     validators: {
       onSubmit: formSchema,
     },
     onSubmit: async ({ value }) => {
+      if (fir) {
+        firCollection.update(fir.id, (draft) => {
+          Object.assign(draft, value);
+        });
+        onSuccess?.(fir.id);
+        return;
+      }
+
       const firId = getNextFirId(records);
 
       firCollection.insert({
@@ -43,6 +71,10 @@ export function CreateFirForm({ onSuccess }: CreateFirFormProps) {
       onSuccess?.(firId);
     },
   });
+
+  useEffect(() => {
+    form.reset(getFirFormValues(fir));
+  }, [fir, form]);
 
   return (
     <form
@@ -62,7 +94,9 @@ export function CreateFirForm({ onSuccess }: CreateFirFormProps) {
         void form.handleSubmit();
       }}
     >
-      <h1 className="text-xl font-semibold"> اندراج ایف آئی آر</h1>
+      <h1 className="text-xl font-semibold">
+        {isEditing ? "ترمیم ایف آئی آر" : "اندراج ایف آئی آر"}
+      </h1>
       <FieldGroup className="grid gap-2 lg:grid-cols-2">
         <form.Field
           name="fir_no"
@@ -109,12 +143,27 @@ export function CreateFirForm({ onSuccess }: CreateFirFormProps) {
                     aria-invalid={isInvalid}
                     className="w-full min-w-55"
                   >
-                    <SelectValue placeholder="حالت منتخب کریں" />
+                    <SelectValue placeholder="حالت منتخب کریں">
+                      <span className="flex items-center gap-2">
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "size-1.5 rounded-full",
+                            getFirStatusColor(field.state.value),
+                          )}
+                        />
+                        {getFirStatusLabel(field.state.value)}
+                      </span>
+                    </SelectValue>
                   </SelectTrigger>
-                  <SelectContent align="end">
+                  <SelectContent align="center" alignItemWithTrigger={false} dir="rtl">
                     {FIR_STATUS_OPTIONS.map((status) => (
                       <SelectItem key={status} value={status}>
-                        {status}
+                        <span
+                          aria-hidden="true"
+                          className={cn("size-1.5 rounded-full my-auto", getFirStatusColor(status))}
+                        />
+                        {getFirStatusLabel(status)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -278,11 +327,11 @@ export function CreateFirForm({ onSuccess }: CreateFirFormProps) {
         }}
       />
       <div className="flex items-center justify-end gap-2" dir="ltr">
-        <Button type="button" variant="outline" onClick={() => form.reset()}>
-          Clear
+        <Button type="button" variant="outline" onClick={() => form.reset(getFirFormValues(fir))}>
+          Reset
         </Button>
         <Button type="submit" form={formId}>
-          Save{" "}
+          {isEditing ? "Update" : "Save"}
         </Button>
       </div>
     </form>

@@ -8,7 +8,6 @@ import {
   Delete02Icon,
   LegalDocument01Icon,
   MoreVerticalIcon,
-  Pdf01Icon,
   PrinterIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -60,7 +59,7 @@ import {
 } from "#/components/ui/select";
 import { Skeleton } from "#/components/ui/skeleton";
 import { buildTemplateValues, extractPlaceholders, renderTemplateHtml } from "#/lib/templates";
-import type { FirRecord } from "#/lib/fir";
+import { getFirStatusLabel } from "#/lib/fir";
 
 export const Route = createFileRoute("/$firId")({
   component: RouteComponent,
@@ -74,15 +73,7 @@ function escapeDocumentText(value: string) {
     .replace(/"/g, "&quot;");
 }
 
-function getPrintableFirHtml({
-  content,
-  fir,
-  title,
-}: {
-  content: string;
-  fir: FirRecord;
-  title: string;
-}) {
+function getPrintableFirHtml({ content, title }: { content: string; title: string }) {
   return `<!doctype html>
 <html lang="ur" dir="rtl">
   <head>
@@ -99,28 +90,6 @@ function getPrintableFirHtml({
         font-family: "Noto Sans Arabic", "Noto Nastaliq Urdu", "Arial", sans-serif;
         font-size: 12pt;
         line-height: 1.8;
-      }
-      header {
-        direction: ltr;
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-        border-bottom: 1px solid #d1d5db;
-        padding-bottom: 10px;
-        margin-bottom: 18px;
-        font-family: Arial, sans-serif;
-      }
-      h1 {
-        margin: 0;
-        font-size: 16pt;
-        line-height: 1.2;
-      }
-      .meta {
-        display: grid;
-        gap: 2px;
-        color: #4b5563;
-        font-size: 9pt;
-        text-align: right;
       }
       main {
         direction: rtl;
@@ -154,17 +123,50 @@ function getPrintableFirHtml({
     </style>
   </head>
   <body>
-    <header>
-      <h1>FIR ${escapeDocumentText(fir.fir_no)}</h1>
-      <div class="meta">
-        <span>Date: ${escapeDocumentText(fir.date)}</span>
-        <span>Status: ${escapeDocumentText(fir.status)}</span>
-        <span>Offence: ${escapeDocumentText(fir.offence)}</span>
-      </div>
-    </header>
     <main>${content}</main>
   </body>
 </html>`;
+}
+
+function printHtmlDocument(html: string, title: string) {
+  const existingFrame = document.getElementById("fir-print-frame");
+  existingFrame?.remove();
+
+  const frame = document.createElement("iframe");
+  frame.id = "fir-print-frame";
+  frame.title = title;
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.position = "fixed";
+  frame.style.inset = "0";
+  frame.style.width = "0";
+  frame.style.height = "0";
+  frame.style.border = "0";
+  frame.style.visibility = "hidden";
+
+  document.body.append(frame);
+
+  const frameWindow = frame.contentWindow;
+  const frameDocument = frame.contentDocument ?? frameWindow?.document;
+
+  if (!frameWindow || !frameDocument) {
+    frame.remove();
+    toast.error("Unable to prepare print view");
+    return;
+  }
+
+  const cleanup = () => {
+    window.setTimeout(() => frame.remove(), 500);
+  };
+
+  frameWindow.addEventListener("afterprint", cleanup, { once: true });
+  frameDocument.open();
+  frameDocument.write(html);
+  frameDocument.close();
+
+  window.setTimeout(() => {
+    frameWindow.focus();
+    frameWindow.print();
+  }, 250);
 }
 
 function RouteComponent() {
@@ -347,7 +349,7 @@ function FirDetail() {
     void navigate({ to: "/" });
   }
 
-  function handlePrintDocument(kind: "print" | "pdf") {
+  function handlePrintDocument() {
     if (!fir) {
       return;
     }
@@ -357,27 +359,14 @@ function FirDetail() {
       return;
     }
 
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=1200");
-
-    if (!printWindow) {
-      toast.error("Allow pop-ups to print this FIR");
-      return;
-    }
-
-    const title = kind === "pdf" ? `FIR ${fir.fir_no} PDF` : `FIR ${fir.fir_no}`;
-    printWindow.document.open();
-    printWindow.document.write(
+    const title = `FIR ${fir.fir_no}`;
+    printHtmlDocument(
       getPrintableFirHtml({
         content: documentDraft,
-        fir,
         title,
       }),
+      title,
     );
-    printWindow.document.close();
-    printWindow.focus();
-    window.setTimeout(() => {
-      printWindow.print();
-    }, 250);
   }
 
   return (
@@ -397,7 +386,7 @@ function FirDetail() {
           </Breadcrumb>
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-medium">FIR {fir.fir_no}</h1>
-            <Badge variant="outline">{fir.status}</Badge>
+            <Badge variant="outline">{getFirStatusLabel(fir.status)}</Badge>
           </div>
           <p className="line-clamp-1 text-sm text-muted-foreground">{fir.offence}</p>
         </div>
@@ -413,7 +402,7 @@ function FirDetail() {
                   {selectedTemplate?.name ?? "Select template"}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent dir="rtl">
+              <SelectContent dir="rtl" alignItemWithTrigger={false}>
                 <SelectGroup>
                   {sortedTemplates.map((template) => (
                     <SelectItem key={template.id} value={`${template.id}`}>
@@ -470,19 +459,9 @@ function FirDetail() {
                   <DropdownMenuSeparator />
                 </>
               ) : null}
-              <DropdownMenuItem
-                disabled={!documentDraft.trim()}
-                onClick={() => handlePrintDocument("print")}
-              >
+              <DropdownMenuItem disabled={!documentDraft.trim()} onClick={handlePrintDocument}>
                 <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
                 Print
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!documentDraft.trim()}
-                onClick={() => handlePrintDocument("pdf")}
-              >
-                <HugeiconsIcon icon={Pdf01Icon} strokeWidth={2} />
-                Create PDF
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setIsDeleteDialogOpen(true)} variant="destructive">

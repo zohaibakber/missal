@@ -6,7 +6,7 @@ import { DataTable } from "./data-table";
 import { firColumns } from "./fir-columns";
 import { firCollection } from "#/db-collections";
 import type { FirRecord } from "#/lib/fir";
-import { FIR_STATUS_OPTIONS } from "#/lib/fir";
+import { FIR_STATUS_OPTIONS, getFirStatusLabel } from "#/lib/fir";
 import { Card, CardFooter } from "#/components/ui/card";
 import { Skeleton } from "#/components/ui/skeleton";
 import {
@@ -36,10 +36,10 @@ const firTableToolbar: DataTableToolbarConfig<FirRecord> = {
   filters: [
     {
       columnId: "status",
-      label: "Status",
-      placeholder: "All statuses",
+      label: "حالت",
+      placeholder: "تمام حالتیں",
       options: FIR_STATUS_OPTIONS.map((status) => ({
-        label: status,
+        label: getFirStatusLabel(status),
         value: status,
       })),
     },
