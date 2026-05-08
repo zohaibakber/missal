@@ -13,6 +13,7 @@
   "oxc.fmt.configPath": "./vite.config.ts",
   "editor.formatOnSave": true,
   "editor.formatOnSaveMode": "file",
+  "tailwindCSS.lint.suggestCanonicalClasses": "ignore",
   "editor.codeActionsOnSave": {
     "source.fixAll.oxc": "explicit"
   }

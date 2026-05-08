@@ -4,6 +4,7 @@ import { NavMain } from "#/components/nav-main";
 import { NavProjects } from "#/components/nav-projects";
 import { NavSecondary } from "#/components/nav-secondary";
 import { NavUser } from "#/components/nav-user";
+import { SidebarCommandMenu } from "#/components/sidebar-command-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -101,6 +102,7 @@ const data = {
     },
   ],
 };
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { state } = useSidebar();
   return (
@@ -115,8 +117,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <HugeiconsIcon icon={CommandIcon} strokeWidth={2} className="size-4" />
                   </div>
                   <div className="grid flex-1 text-start text-sm leading-tight">
-                    <span className="truncate font-medium">Acme Inc</span>
-                    <span className="truncate text-xs">Enterprise</span>
+                    <span className="truncate font-medium">Missal</span>
+                    <span className="truncate text-xs">Writing</span>
                   </div>
                 </>
               )}
@@ -126,6 +128,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
+        <SidebarCommandMenu />
         <NavMain items={data.navMain} />
         <NavProjects projects={data.projects} />
         <NavSecondary items={data.navSecondary} className="mt-auto" />

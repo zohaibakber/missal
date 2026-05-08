@@ -106,7 +106,7 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button render={<Link to="/templates" />} variant="outline">
+            <Button nativeButton={false} render={<Link to="/templates" />} variant="outline">
               Back to templates
             </Button>
           </EmptyContent>

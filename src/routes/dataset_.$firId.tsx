@@ -184,7 +184,7 @@ function FirDetail() {
             <EmptyDescription>This FIR may have been removed from this browser.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button render={<Link to="/dataset" />} variant="outline">
+            <Button nativeButton={false} render={<Link to="/dataset" />} variant="outline">
               Back to dataset
             </Button>
           </EmptyContent>
@@ -356,7 +356,7 @@ function FirDetail() {
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
-                  <Button render={<Link to="/templates" />} variant="outline">
+                  <Button nativeButton={false} render={<Link to="/templates" />} variant="outline">
                     Open templates
                   </Button>
                 </EmptyContent>

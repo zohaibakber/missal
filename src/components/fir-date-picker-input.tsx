@@ -34,6 +34,7 @@ function parseDate(value: string) {
 
 type FirDatePickerInputProps = {
   ariaInvalid?: boolean;
+  dir?: React.HTMLAttributes<HTMLDivElement>["dir"];
   id: string;
   name: string;
   onBlur?: React.FocusEventHandler<HTMLInputElement>;
@@ -44,6 +45,7 @@ type FirDatePickerInputProps = {
 
 export function FirDatePickerInput({
   ariaInvalid,
+  dir,
   id,
   name,
   onBlur,
@@ -62,7 +64,7 @@ export function FirDatePickerInput({
   }, [parsedValue]);
 
   return (
-    <InputGroup>
+    <InputGroup dir={dir}>
       <InputGroupInput
         id={id}
         name={name}
@@ -101,17 +103,13 @@ export function FirDatePickerInput({
             <HugeiconsIcon icon={Calendar03Icon} strokeWidth={2} />
             <span className="sr-only">Select date</span>
           </PopoverTrigger>
-          <PopoverContent
-            className="w-auto overflow-hidden p-0"
-            align="end"
-            alignOffset={-8}
-            sideOffset={10}
-          >
+          <PopoverContent className="w-auto overflow-hidden p-0" align="start" sideOffset={10}>
             <Calendar
               mode="single"
               selected={parsedValue}
               month={month}
               onMonthChange={setMonth}
+              captionLayout="dropdown"
               onSelect={(selectedDate) => {
                 onChange(formatDate(selectedDate));
                 setOpen(false);

@@ -68,8 +68,7 @@ function TemplateList() {
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-medium">Templates</h1>
         </div>
-        <Button render={<Link to="/templates/new" />}>
-          <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
+        <Button nativeButton={false} render={<Link to="/templates/new" />}>
           New template
         </Button>
       </section>
@@ -100,7 +99,8 @@ function TemplateList() {
                     <Link to="/templates/$templateId" params={{ templateId: `${template.id}` }} />
                   }
                   dir="rtl"
-                  variant="muted"
+                  variant="outline"
+                  className="bg-muted"
                 >
                   <ItemContent className="min-w-0" lang="ur">
                     <ItemTitle>{template.name}</ItemTitle>
@@ -130,7 +130,7 @@ function TemplateList() {
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Button render={<Link to="/templates/new" />} variant="outline">
+              <Button nativeButton={false} render={<Link to="/templates/new" />} variant="outline">
                 <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
                 New template
               </Button>
