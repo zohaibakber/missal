@@ -84,7 +84,7 @@ describe("template placeholders", () => {
   });
 
   test("uses shared settings values for unresolved placeholders", () => {
-    const content = "تھانہ «تھانہ_نام_» ضلع «ضلع_نام_»";
+    const content = "تھانہ «تھانہ_نام_» ضلع «ضلع_نام_» تفتیشی «تفتیشی_\u200f»";
     const placeholders = extractPlaceholders(content);
     const values = buildTemplateValues({
       extraValues: [],
@@ -93,10 +93,11 @@ describe("template placeholders", () => {
       sharedValues: buildSharedPlaceholderValues({
         policeStation: "تھانہ سٹی",
         district: "لاہور",
+        investigationOfficer: "محمد علی",
       }),
     });
 
-    expect(renderTemplate(content, values)).toBe("تھانہ تھانہ سٹی ضلع لاہور");
+    expect(renderTemplate(content, values)).toBe("تھانہ تھانہ سٹی ضلع لاہور تفتیشی محمد علی");
   });
 
   test("escapes inserted values when rendering html", () => {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizePlaceholderName } from "#/lib/templates";
 
 export const SHARED_PLACEHOLDER_FIELDS = [
   {
@@ -85,7 +86,7 @@ export function buildSharedPlaceholderValues(sharedPlaceholders: Record<string, 
     }
 
     for (const templatePlaceholder of field.templatePlaceholders) {
-      values[templatePlaceholder] = value;
+      values[normalizePlaceholderName(templatePlaceholder)] = value;
     }
   }
 

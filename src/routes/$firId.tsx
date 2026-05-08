@@ -235,10 +235,8 @@ function FirDetail() {
 
     return sortedTemplates.filter((template) => template.name.toLocaleLowerCase().includes(query));
   }, [sortedTemplates, templateSearch]);
-  const placeholders = useMemo(
-    () => extractPlaceholders(selectedTemplate?.content ?? ""),
-    [selectedTemplate],
-  );
+  const documentSourceHtml = fir?.content || selectedTemplate?.content || "";
+  const placeholders = useMemo(() => extractPlaceholders(documentSourceHtml), [documentSourceHtml]);
   const values = useMemo(() => {
     if (!fir) {
       return {};
@@ -253,10 +251,10 @@ function FirDetail() {
 
     return nextValues;
   }, [fir, firExtraValues, placeholders, sharedPlaceholderValues]);
-  const renderedTemplateHtml = selectedTemplate
+  const renderedDocumentHtml = documentSourceHtml
     ? arePlaceholderValuesVisible
-      ? renderTemplateHtml(selectedTemplate.content, values)
-      : selectedTemplate.content
+      ? renderTemplateHtml(documentSourceHtml, values)
+      : documentSourceHtml
     : "";
 
   useEffect(() => {
@@ -280,8 +278,8 @@ function FirDetail() {
       return;
     }
 
-    setDocumentDraft(fir?.content || renderedTemplateHtml);
-  }, [fir?.content, isDocumentDirty, renderedTemplateHtml]);
+    setDocumentDraft(renderedDocumentHtml);
+  }, [isDocumentDirty, renderedDocumentHtml]);
 
   if (!Number.isInteger(numericFirId) || !fir) {
     return (
@@ -338,13 +336,13 @@ function FirDetail() {
   function handleTogglePlaceholderValues(checked: boolean) {
     setArePlaceholderValuesVisible(checked);
 
-    if (!selectedTemplate) {
+    const sourceHtml = fir?.content || selectedTemplate?.content || "";
+
+    if (!sourceHtml) {
       return;
     }
 
-    setDocumentDraft(
-      checked ? renderTemplateHtml(selectedTemplate.content, values) : selectedTemplate.content,
-    );
+    setDocumentDraft(checked ? renderTemplateHtml(sourceHtml, values) : sourceHtml);
     setIsDocumentDirty(true);
   }
 

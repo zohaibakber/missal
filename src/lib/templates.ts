@@ -46,7 +46,10 @@ const placeholderAliases: Record<string, keyof FirRecord> = {
 };
 
 export function normalizePlaceholderName(value: string) {
-  return value.replace(/\s+/g, " ").trim();
+  return value
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function extractPlaceholders(content: string) {
@@ -98,14 +101,17 @@ export function buildTemplateValues({
       continue;
     }
 
-    const extraValue = extraValues.find((value) => value.placeholder === placeholder);
+    const extraValue = extraValues.find(
+      (value) => normalizePlaceholderName(value.placeholder) === placeholder,
+    );
 
     if (extraValue) {
       values[placeholder] = extraValue.value;
       continue;
     }
 
-    const sharedValue = sharedValues[placeholder];
+    const sharedValue =
+      sharedValues[placeholder] ?? sharedValues[normalizePlaceholderName(placeholder)];
 
     if (sharedValue) {
       values[placeholder] = sharedValue;
