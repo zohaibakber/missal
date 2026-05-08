@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "@tanstack/react-db";
 import { ClientOnly, Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import {
   ArrowDown01Icon,
   ArrowUp01Icon,
   Delete02Icon,
   LegalDocument01Icon,
-  SaveIcon,
+  MoreVerticalIcon,
+  Pdf01Icon,
+  PrinterIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { firCollection, firPlaceholderValueCollection, templateCollection } from "#/db-collections";
@@ -32,6 +35,14 @@ import {
 import { Button } from "#/components/ui/button";
 import { TemplateRichEditor } from "#/components/template-rich-editor";
 import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "#/components/ui/dropdown-menu";
+import {
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -48,13 +59,113 @@ import {
   SelectValue,
 } from "#/components/ui/select";
 import { Skeleton } from "#/components/ui/skeleton";
-import { Switch } from "#/components/ui/switch";
-import { useToast } from "#/components/ui/toast";
 import { buildTemplateValues, extractPlaceholders, renderTemplateHtml } from "#/lib/templates";
+import type { FirRecord } from "#/lib/fir";
 
 export const Route = createFileRoute("/$firId")({
   component: RouteComponent,
 });
+
+function escapeDocumentText(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function getPrintableFirHtml({
+  content,
+  fir,
+  title,
+}: {
+  content: string;
+  fir: FirRecord;
+  title: string;
+}) {
+  return `<!doctype html>
+<html lang="ur" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeDocumentText(title)}</title>
+    <style>
+      @page { size: A4; margin: 18mm; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: #111827;
+        background: #ffffff;
+        font-family: "Noto Sans Arabic", "Noto Nastaliq Urdu", "Arial", sans-serif;
+        font-size: 12pt;
+        line-height: 1.8;
+      }
+      header {
+        direction: ltr;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid #d1d5db;
+        padding-bottom: 10px;
+        margin-bottom: 18px;
+        font-family: Arial, sans-serif;
+      }
+      h1 {
+        margin: 0;
+        font-size: 16pt;
+        line-height: 1.2;
+      }
+      .meta {
+        display: grid;
+        gap: 2px;
+        color: #4b5563;
+        font-size: 9pt;
+        text-align: right;
+      }
+      main {
+        direction: rtl;
+        overflow-wrap: anywhere;
+      }
+      table {
+        width: 100%;
+        max-width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      td, th {
+        border: 1px solid #d1d5db;
+        padding: 4px;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        white-space: normal;
+      }
+      img {
+        max-width: 100%;
+        height: auto;
+      }
+      [data-placeholder="true"] {
+        color: #1d4ed8;
+        font-weight: 600;
+      }
+      @media print {
+        body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>FIR ${escapeDocumentText(fir.fir_no)}</h1>
+      <div class="meta">
+        <span>Date: ${escapeDocumentText(fir.date)}</span>
+        <span>Status: ${escapeDocumentText(fir.status)}</span>
+        <span>Offence: ${escapeDocumentText(fir.offence)}</span>
+      </div>
+    </header>
+    <main>${content}</main>
+  </body>
+</html>`;
+}
 
 function RouteComponent() {
   return (
@@ -67,7 +178,6 @@ function RouteComponent() {
 function FirDetail() {
   const { firId } = Route.useParams();
   const navigate = useNavigate();
-  const toast = useToast();
   const numericFirId = Number(firId);
   const { data: firRecords } = useLiveQuery(firCollection);
   const { data: templates } = useLiveQuery(templateCollection);
@@ -237,6 +347,39 @@ function FirDetail() {
     void navigate({ to: "/" });
   }
 
+  function handlePrintDocument(kind: "print" | "pdf") {
+    if (!fir) {
+      return;
+    }
+
+    if (!documentDraft.trim()) {
+      toast.warning("Nothing to print");
+      return;
+    }
+
+    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=1200");
+
+    if (!printWindow) {
+      toast.error("Allow pop-ups to print this FIR");
+      return;
+    }
+
+    const title = kind === "pdf" ? `FIR ${fir.fir_no} PDF` : `FIR ${fir.fir_no}`;
+    printWindow.document.open();
+    printWindow.document.write(
+      getPrintableFirHtml({
+        content: documentDraft,
+        fir,
+        title,
+      }),
+    );
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  }
+
   return (
     <main className="flex flex-col gap-4 p-4">
       <section className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -259,16 +402,6 @@ function FirDetail() {
           <p className="line-clamp-1 text-sm text-muted-foreground">{fir.offence}</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {selectedTemplate ? (
-            <label className="flex h-8 items-center gap-2 px-2.5 text-sm">
-              <span>{arePlaceholderValuesVisible ? "Values" : "Placeholders"}</span>
-              <Switch
-                aria-label="Switch between placeholder values and placeholders"
-                checked={arePlaceholderValuesVisible}
-                onCheckedChange={handleTogglePlaceholderValues}
-              />
-            </label>
-          ) : null}
           {templates.length ? (
             <Select onValueChange={handleSelectTemplate} value={selectedTemplateId}>
               <SelectTrigger
@@ -319,16 +452,47 @@ function FirDetail() {
           >
             <HugeiconsIcon icon={ArrowDown01Icon} />
           </Button>
-          <Button
-            disabled={!documentDraft.trim()}
-            onClick={handleUpdate}
-            type="button"
-            variant="outline"
-          >
-            <HugeiconsIcon data-icon="inline-start" icon={SaveIcon} />
-          </Button>
-          <Button onClick={() => setIsDeleteDialogOpen(true)} type="button" variant="destructive">
-            <HugeiconsIcon data-icon="inline-start" icon={Delete02Icon} />
+
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button type="button" variant="outline" size="icon-sm" />}>
+              <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
+              <span className="sr-only">Open FIR actions</span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {selectedTemplate ? (
+                <>
+                  <DropdownMenuCheckboxItem
+                    checked={arePlaceholderValuesVisible}
+                    onCheckedChange={handleTogglePlaceholderValues}
+                  >
+                    Show values
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
+              <DropdownMenuItem
+                disabled={!documentDraft.trim()}
+                onClick={() => handlePrintDocument("print")}
+              >
+                <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
+                Print
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!documentDraft.trim()}
+                onClick={() => handlePrintDocument("pdf")}
+              >
+                <HugeiconsIcon icon={Pdf01Icon} strokeWidth={2} />
+                Create PDF
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setIsDeleteDialogOpen(true)} variant="destructive">
+                <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button disabled={!documentDraft.trim()} onClick={handleUpdate} type="button">
+            Update
           </Button>
         </div>
       </section>

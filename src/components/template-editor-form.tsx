@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "@tanstack/react-db";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import {
   ArrowDown01Icon,
   ArrowUp01Icon,
@@ -40,7 +41,6 @@ import {
   EmptyTitle,
 } from "#/components/ui/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "#/components/ui/input-group";
-import { useToast } from "#/components/ui/toast";
 import { TemplateRichEditor } from "#/components/template-rich-editor";
 import { extractPlaceholders } from "#/lib/templates";
 
@@ -57,7 +57,6 @@ function createDraft() {
 
 export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
   const navigate = useNavigate();
-  const toast = useToast();
   const { data: templates } = useLiveQuery(templateCollection);
   const selectedTemplate =
     templateId === undefined

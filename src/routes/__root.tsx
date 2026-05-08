@@ -18,7 +18,7 @@ import { AppSidebar } from "#/components/app-sidebar";
 import { createServerFn } from "@tanstack/react-start";
 import { auth } from "@clerk/tanstack-react-start/server";
 import { ThemeProvider } from "#/components/theme-provider";
-import { ToastProvider } from "#/components/ui/toast";
+import { Toaster } from "#/components/ui/sonner";
 
 function NotFound() {
   return (
@@ -74,26 +74,25 @@ export const Route = createRootRouteWithContext()({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
       <body>
         <ClerkProvider>
           <ThemeProvider>
-            <ToastProvider>
-              <TooltipProvider>
-                <DirectionProvider direction="ltr">
-                  <SidebarProvider>
-                    <Show when={"signed-in"}>
-                      <AppSidebar />
-                      <SidebarInset>{children}</SidebarInset>
-                    </Show>
-                    <Show when={"signed-out"}>{children}</Show>
-                  </SidebarProvider>
-                </DirectionProvider>
-              </TooltipProvider>
-            </ToastProvider>
+            <TooltipProvider>
+              <DirectionProvider direction="ltr">
+                <SidebarProvider>
+                  <Show when={"signed-in"}>
+                    <AppSidebar />
+                    <SidebarInset>{children}</SidebarInset>
+                  </Show>
+                  <Show when={"signed-out"}>{children}</Show>
+                </SidebarProvider>
+              </DirectionProvider>
+            </TooltipProvider>
+            <Toaster richColors />
           </ThemeProvider>
         </ClerkProvider>
         <TanStackDevtools
