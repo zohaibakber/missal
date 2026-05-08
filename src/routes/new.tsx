@@ -27,6 +27,7 @@ function CreateFirPage() {
             params: { firId: `${firId}` },
           });
         }}
+        className="mx-auto"
       />
     </main>
   );

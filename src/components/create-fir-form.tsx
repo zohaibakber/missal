@@ -28,6 +28,7 @@ const formSchema = firSchema.omit({ id: true });
 type FirFormValues = Omit<FirRecord, "id">;
 
 type CreateFirFormProps = {
+  className?: string;
   fir?: FirRecord;
   onSuccess?: (firId: number) => void;
 };
@@ -41,7 +42,7 @@ function getFirFormValues(fir?: FirRecord): FirFormValues {
   return values;
 }
 
-export function CreateFirForm({ fir, onSuccess }: CreateFirFormProps) {
+export function CreateFirForm({ className, fir, onSuccess }: CreateFirFormProps) {
   const formId = useId();
   const { data: records } = useLiveQuery(firCollection);
   const isEditing = Boolean(fir);
@@ -79,7 +80,7 @@ export function CreateFirForm({ fir, onSuccess }: CreateFirFormProps) {
   return (
     <form
       id={formId}
-      className="grid gap-4 max-w-5xl mx-auto py-4"
+      className={cn("grid w-full max-w-5xl gap-4 py-4", className)}
       dir="rtl"
       onSubmit={(event) => {
         event.preventDefault();

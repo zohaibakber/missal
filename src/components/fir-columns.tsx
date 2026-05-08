@@ -63,8 +63,12 @@ function FirRowActions({ fir }: { fir: FirRecord }) {
         </DropdownMenuContent>
       </DropdownMenu>
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-h-[calc(100dvh-1rem)] overflow-y-auto">
+        <DialogContent
+          className="max-h-[calc(100dvh-1rem)] max-w-5xl overflow-y-auto p-4"
+          showCloseButton={false}
+        >
           <CreateFirForm
+            className="max-w-none py-0"
             fir={fir}
             onSuccess={() => {
               setIsEditDialogOpen(false);
