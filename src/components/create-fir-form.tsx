@@ -216,6 +216,27 @@ export function CreateFirForm({ className, fir, onSuccess }: CreateFirFormProps)
           }}
         />
         <form.Field
+          name="arrest_date"
+          children={(field) => {
+            const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+            return (
+              <Field data-invalid={isInvalid}>
+                <FieldLabel htmlFor={`${formId}-arrest-date`}>تاریخ گرفتاری</FieldLabel>
+                <FirDatePickerInput
+                  id={`${formId}-arrest-date`}
+                  name={field.name}
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={field.handleChange}
+                  ariaInvalid={isInvalid}
+                  placeholder="June 01, 2025"
+                />
+                <FieldError errors={field.state.meta.errors} />
+              </Field>
+            );
+          }}
+        />
+        <form.Field
           name="offence"
           children={(field) => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
@@ -237,20 +258,20 @@ export function CreateFirForm({ className, fir, onSuccess }: CreateFirFormProps)
           }}
         />
         <form.Field
-          name="mobile"
+          name="investigation_officer"
           children={(field) => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
             return (
               <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={`${formId}-mobile`}>موبائل نمبر</FieldLabel>
+                <FieldLabel htmlFor={`${formId}-investigation-officer`}>تفتیشی افسر</FieldLabel>
                 <Input
-                  id={`${formId}-mobile`}
+                  id={`${formId}-investigation-officer`}
                   name={field.name}
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
                   aria-invalid={isInvalid}
-                  placeholder="03001234567"
+                  placeholder="نام تفتیشی افسر"
                 />
                 <FieldError errors={field.state.meta.errors} />
               </Field>

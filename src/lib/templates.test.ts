@@ -19,12 +19,14 @@ const fir: FirRecord = {
   NIC: "3520288701547",
   mobile: "03001234567",
   incident_date: "12.02.2026",
+  arrest_date: "14.02.2026",
+  investigation_officer: "محمد علی",
   status: "Open",
 };
 
 describe("template placeholders", () => {
   test("extracts mixed Urdu and English placeholders once", () => {
-    expect(extractPlaceholders("«Date_FIR» «جرم_» «Date_FIR» «تھانہ_نام_»")).toEqual([
+    expect(extractPlaceholders("@Date_FIR@ @جرم_@ @Date_FIR@ «تھانہ_نام_»")).toEqual([
       "Date_FIR",
       "جرم_",
       "تھانہ_نام_",
@@ -32,7 +34,7 @@ describe("template placeholders", () => {
   });
 
   test("renders repeated placeholders", () => {
-    const content = "FIR «Date_FIR» / «Date_FIR» جرم «جرم_»";
+    const content = "FIR @Date_FIR@ / @Date_FIR@ جرم @جرم_@";
     const placeholders = extractPlaceholders(content);
     const values = buildTemplateValues({
       extraValues: [],
@@ -44,7 +46,7 @@ describe("template placeholders", () => {
   });
 
   test("leaves unresolved placeholders visible", () => {
-    const content = "تھانہ «تھانہ_نام_»";
+    const content = "تھانہ @تھانہ_نام_@";
     const placeholders = extractPlaceholders(content);
     const values = buildTemplateValues({
       extraValues: [],
@@ -52,12 +54,12 @@ describe("template placeholders", () => {
       placeholders,
     });
 
-    expect(renderTemplate(content, values)).toBe("تھانہ «تھانہ_نام_»");
+    expect(renderTemplate(content, values)).toBe("تھانہ @تھانہ_نام_@");
     expect(getMissingPlaceholders(placeholders, values)).toEqual(["تھانہ_نام_"]);
   });
 
   test("applies FIR core values before extra values", () => {
-    const content = "FIR «مقدمہ_نمبر» تھانہ «تھانہ_نام_»";
+    const content = "FIR @مقدمہ_نمبر@ تھانہ @تھانہ_نام_@";
     const placeholders = extractPlaceholders(content);
     const values = buildTemplateValues({
       extraValues: [
@@ -84,7 +86,7 @@ describe("template placeholders", () => {
   });
 
   test("uses shared settings values for unresolved placeholders", () => {
-    const content = "تھانہ «تھانہ_نام_» ضلع «ضلع_نام_» تفتیشی «تفتیشی_\u200f»";
+    const content = "تھانہ @تھانہ_نام_@ ضلع @ضلع_نام_@ SHO @SHO_نام@";
     const placeholders = extractPlaceholders(content);
     const values = buildTemplateValues({
       extraValues: [],
@@ -93,15 +95,27 @@ describe("template placeholders", () => {
       sharedValues: buildSharedPlaceholderValues({
         policeStation: "تھانہ سٹی",
         district: "لاہور",
-        investigationOfficer: "محمد علی",
+        shoName: "محمد علی",
       }),
     });
 
-    expect(renderTemplate(content, values)).toBe("تھانہ تھانہ سٹی ضلع لاہور تفتیشی محمد علی");
+    expect(renderTemplate(content, values)).toBe("تھانہ تھانہ سٹی ضلع لاہور SHO محمد علی");
+  });
+
+  test("uses FIR values for arrest date and investigation officer", () => {
+    const content = "گرفتاری @تاریخ_گرفتاری@ تفتیشی @تفتیشی_\u200f@";
+    const placeholders = extractPlaceholders(content);
+    const values = buildTemplateValues({
+      extraValues: [],
+      fir,
+      placeholders,
+    });
+
+    expect(renderTemplate(content, values)).toBe("گرفتاری 14.02.2026 تفتیشی محمد علی");
   });
 
   test("escapes inserted values when rendering html", () => {
-    const content = "<p>«تھانہ_نام_»</p>";
+    const content = "<p>@تھانہ_نام_@</p>";
     const values = {
       تھانہ_نام_: "<script>alert(1)</script>\nتھانہ شادمان",
     };
@@ -109,5 +123,17 @@ describe("template placeholders", () => {
     expect(renderTemplateHtml(content, values)).toBe(
       "<p>&lt;script&gt;alert(1)&lt;/script&gt;<br>تھانہ شادمان</p>",
     );
+  });
+
+  test("keeps old angle placeholders working", () => {
+    const content = "FIR «Date_FIR» جرم «جرم_»";
+    const placeholders = extractPlaceholders(content);
+    const values = buildTemplateValues({
+      extraValues: [],
+      fir,
+      placeholders,
+    });
+
+    expect(renderTemplate(content, values)).toBe("FIR 13.01.2026 جرم 411/379");
   });
 });

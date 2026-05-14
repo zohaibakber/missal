@@ -20,7 +20,9 @@ export const firPlaceholderValueSchema = z.object({
 export type TemplateRecord = z.infer<typeof templateRecordSchema>;
 export type FirPlaceholderValue = z.infer<typeof firPlaceholderValueSchema>;
 
-export const PLACEHOLDER_PATTERN = /«([^»]+)»/g;
+export const LEGACY_PLACEHOLDER_PATTERN = /«([^»]+)»/g;
+export const AT_PLACEHOLDER_PATTERN = /@([^@\r\n<>]{1,120})@/g;
+export const PLACEHOLDER_PATTERN = AT_PLACEHOLDER_PATTERN;
 
 const placeholderAliases: Record<string, keyof FirRecord> = {
   مقدمہ_نمبر: "fir_no",
@@ -31,6 +33,8 @@ const placeholderAliases: Record<string, keyof FirRecord> = {
   "تاریخ ایف آئی آر": "date",
   تاریخ_ووقت_وقوعہ: "incident_date",
   "تاریخ ووقت وقوعہ": "incident_date",
+  تاریخ_گرفتاری: "arrest_date",
+  "تاریخ گرفتاری": "arrest_date",
   جرم_: "offence",
   جرم: "offence",
   نام_ملزم_و_سکونت_: "accused",
@@ -43,6 +47,9 @@ const placeholderAliases: Record<string, keyof FirRecord> = {
   NIC: "NIC",
   موبائل: "mobile",
   mobile: "mobile",
+  تفتیشی_: "investigation_officer",
+  تفتیشی: "investigation_officer",
+  "تفتیشی افسر": "investigation_officer",
 };
 
 export function normalizePlaceholderName(value: string) {
@@ -55,11 +62,13 @@ export function normalizePlaceholderName(value: string) {
 export function extractPlaceholders(content: string) {
   const placeholders: string[] = [];
 
-  for (const match of content.matchAll(PLACEHOLDER_PATTERN)) {
-    const placeholder = normalizePlaceholderName(match[1] ?? "");
+  for (const pattern of [AT_PLACEHOLDER_PATTERN, LEGACY_PLACEHOLDER_PATTERN]) {
+    for (const match of content.matchAll(pattern)) {
+      const placeholder = normalizePlaceholderName(match[1] ?? "");
 
-    if (placeholder && !placeholders.includes(placeholder)) {
-      placeholders.push(placeholder);
+      if (placeholder && !placeholders.includes(placeholder)) {
+        placeholders.push(placeholder);
+      }
     }
   }
 
@@ -122,12 +131,15 @@ export function buildTemplateValues({
 }
 
 export function renderTemplate(content: string, values: Record<string, string>) {
-  return content.replace(PLACEHOLDER_PATTERN, (token, rawPlaceholder) => {
-    const placeholder = normalizePlaceholderName(rawPlaceholder);
-    const value = values[placeholder];
+  return content.replace(
+    /@([^@\r\n<>]{1,120})@|«([^»]+)»/g,
+    (token, atPlaceholder, legacyPlaceholder) => {
+      const placeholder = normalizePlaceholderName(atPlaceholder || legacyPlaceholder);
+      const value = values[placeholder];
 
-    return value?.trim() ? value : token;
-  });
+      return value?.trim() ? value : token;
+    },
+  );
 }
 
 export function getMissingPlaceholders(placeholders: string[], values: Record<string, string>) {
@@ -144,12 +156,15 @@ export function escapeHtml(value: string) {
 }
 
 export function renderTemplateHtml(content: string, values: Record<string, string>) {
-  return content.replace(PLACEHOLDER_PATTERN, (token, rawPlaceholder) => {
-    const placeholder = normalizePlaceholderName(rawPlaceholder);
-    const value = values[placeholder];
+  return content.replace(
+    /@([^@\r\n<>]{1,120})@|«([^»]+)»/g,
+    (token, atPlaceholder, legacyPlaceholder) => {
+      const placeholder = normalizePlaceholderName(atPlaceholder || legacyPlaceholder);
+      const value = values[placeholder];
 
-    return value?.trim()
-      ? escapeHtml(value).replace(/\n/g, "<br>")
-      : `<span data-placeholder="true">${escapeHtml(token)}</span>`;
-  });
+      return value?.trim()
+        ? escapeHtml(value).replace(/\n/g, "<br>")
+        : `<span data-placeholder="true">${escapeHtml(token)}</span>`;
+    },
+  );
 }

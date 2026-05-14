@@ -56,6 +56,8 @@ function mapRow(row, index) {
     NIC: extractNic(complaintText),
     mobile: pickFirst(sanitizePhone(row[FIELD_MAP.mobile1]), sanitizePhone(row[FIELD_MAP.mobile2])),
     incident_date: clean(row[FIELD_MAP.incident_date]),
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   };
 }

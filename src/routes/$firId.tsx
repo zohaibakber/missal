@@ -90,49 +90,170 @@ function getPrintableFirHtml({ content, title }: { content: string; title: strin
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeDocumentText(title)}</title>
     <style>
-      @page { size: A4; margin: 18mm; }
+      @font-face {
+        font-family: "Jameel Noori Nastaleeq";
+        src: url("/Jameel%20Noori%20Nastaleeq.ttf") format("truetype");
+        font-display: swap;
+      }
+      @page {
+        size: A4;
+        margin: 18mm;
+      }
       * { box-sizing: border-box; }
       body {
         margin: 0;
         color: #111827;
         background: #ffffff;
-        font-family: "Noto Sans Arabic", "Noto Nastaliq Urdu", "Arial", sans-serif;
-        font-size: 12pt;
-        line-height: 1.8;
+        font-family: "Jameel Noori Nastaleeq", "Noto Sans Arabic", "Noto Nastaliq Urdu", "Arial", sans-serif;
+        font-size: 13pt;
+        line-height: 2;
       }
-      main {
+      .fir-print-document {
         direction: rtl;
+        color: inherit;
+        font-family: inherit;
+        font-size: inherit;
+        line-height: inherit;
+        text-align: right;
+        unicode-bidi: plaintext;
         overflow-wrap: anywhere;
       }
-      table {
-        width: 100%;
+      .fir-print-document > :first-child {
+        margin-top: 0;
+      }
+      .fir-print-document > :last-child {
+        margin-bottom: 0;
+      }
+      .fir-print-document p,
+      .fir-print-document div,
+      .fir-print-document li {
+        text-align: inherit;
+      }
+      .fir-print-document p {
+        margin: 0 0 0.5rem;
+      }
+      .fir-print-document h1,
+      .fir-print-document h2,
+      .fir-print-document h3,
+      .fir-print-document h4,
+      .fir-print-document h5,
+      .fir-print-document h6 {
+        margin: 0.75rem 0 0.35rem;
+        font-weight: 700;
+        line-height: 1.6;
+      }
+      .fir-print-document h1 { font-size: 1.75em; }
+      .fir-print-document h2 { font-size: 1.5em; }
+      .fir-print-document h3 { font-size: 1.25em; }
+      .fir-print-document ul,
+      .fir-print-document ol {
+        margin: 0 1.5rem 0.5rem 0;
+        padding: 0;
+      }
+      .fir-print-document blockquote {
+        margin: 0 1rem 0.75rem 0;
+        padding: 0.25rem 1rem 0.25rem 0;
+        border-right: 4px solid #d1d5db;
+      }
+      .fir-print-document .table,
+      .fir-print-document figure.table {
+        display: table;
+        margin: 0.75rem auto;
+        max-width: 100%;
+      }
+      .fir-print-document figure.table[style*="width"] {
+        display: table;
+      }
+      .fir-print-document table {
         max-width: 100%;
         border-collapse: collapse;
-        table-layout: fixed;
+        border-spacing: 0;
       }
-      td, th {
+      .fir-print-document figure.table table {
+        width: 100%;
+      }
+      .fir-print-document td,
+      .fir-print-document th {
         border: 1px solid #d1d5db;
-        padding: 4px;
+        padding: 0.25rem 0.35rem;
         min-width: 0;
         overflow-wrap: anywhere;
         word-break: break-word;
         white-space: normal;
       }
-      img {
+      .fir-print-document figure.image {
+        display: table;
+        clear: both;
+        margin: 0.75rem auto;
+        text-align: center;
+      }
+      .fir-print-document figure.image.image-style-side {
+        float: left;
+        max-width: 50%;
+        margin-right: 1rem;
+      }
+      .fir-print-document figure.image.image-style-align-left {
+        float: left;
+        margin-right: 1rem;
+      }
+      .fir-print-document figure.image.image-style-align-right {
+        float: right;
+        margin-left: 1rem;
+      }
+      .fir-print-document figure.image.image-style-align-center {
+        margin-right: auto;
+        margin-left: auto;
+      }
+      .fir-print-document img {
+        display: block;
         max-width: 100%;
         height: auto;
       }
-      [data-placeholder="true"] {
+      .fir-print-document figcaption {
+        caption-side: bottom;
+        color: #4b5563;
+        display: table-caption;
+        font-size: 0.85em;
+        outline-offset: -1px;
+        padding: 0.35rem;
+        text-align: center;
+        word-break: break-word;
+      }
+      .fir-print-document .page-break {
+        clear: both;
+        page-break-after: always;
+        break-after: page;
+      }
+      .fir-print-document hr {
+        border: 0;
+        border-top: 1px solid #d1d5db;
+        margin: 1rem 0;
+      }
+      .fir-print-document [data-placeholder="true"] {
         color: #1d4ed8;
         font-weight: 600;
       }
+      .fir-print-document::after {
+        clear: both;
+        content: "";
+        display: block;
+      }
       @media print {
-        body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        body {
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+        .fir-print-document figure,
+        .fir-print-document table,
+        .fir-print-document img {
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
       }
     </style>
   </head>
   <body>
-    <main>${content}</main>
+    <main class="ck-content fir-print-document">${content}</main>
   </body>
 </html>`;
 }

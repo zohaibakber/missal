@@ -156,6 +156,16 @@ export const firColumns: ColumnDef<FirRecord>[] = [
     size: 100,
   },
   {
+    accessorKey: "arrest_date",
+    cell: ({ row }) => (
+      <div dir="ltr" className="text-right">
+        {row.original.arrest_date || "—"}
+      </div>
+    ),
+    header: "تاریخ گرفتاری",
+    size: 100,
+  },
+  {
     accessorKey: "offence",
     cell: ({ row }) => (
       <div dir="rtl" lang="ur" className="truncate text-right font-medium">
@@ -214,6 +224,21 @@ export const firColumns: ColumnDef<FirRecord>[] = [
     ),
     header: "موبائل",
     size: 140,
+  },
+  {
+    accessorKey: "investigation_officer",
+    cell: ({ row }) => (
+      <div
+        dir="rtl"
+        lang="ur"
+        className="line-clamp-1 min-w-0 text-right leading-6"
+        title={row.original.investigation_officer || "—"}
+      >
+        {row.original.investigation_officer || "—"}
+      </div>
+    ),
+    header: "تفتیشی",
+    size: 130,
   },
   {
     accessorKey: "status",

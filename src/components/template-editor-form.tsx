@@ -21,7 +21,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "#/components/ui/alert-dialog";
-import { Badge } from "#/components/ui/badge";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -41,7 +40,6 @@ import {
 } from "#/components/ui/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "#/components/ui/input-group";
 import { TemplateRichEditor } from "#/components/template-rich-editor";
-import { extractPlaceholders } from "#/lib/templates";
 
 type TemplateEditorFormProps = {
   templateId?: number;
@@ -76,7 +74,7 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
       : null;
   const [draft, setDraft] = useState(createDraft);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const placeholders = useMemo(() => extractPlaceholders(draft.content), [draft.content]);
+
   const isEditing = templateId !== undefined;
 
   useEffect(() => {
@@ -160,7 +158,7 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
   }
 
   return (
-    <main className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4 p-4">
+    <main className="grid h-svh w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden p-4">
       <section className="flex min-w-0 max-w-full items-center justify-between gap-3">
         <Breadcrumb>
           <BreadcrumbList>
@@ -227,7 +225,7 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
         </div>
       </section>
 
-      <section className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4">
+      <section className="grid h-full w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden">
         <div className="ml-auto" dir="rtl">
           <InputGroup className="max-w-xl">
             <InputGroupAddon align="inline-start">
@@ -248,30 +246,18 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
           </InputGroup>
         </div>
 
-        <div className="grid w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] [contain:inline-size]">
-          <TemplateRichEditor
-            aria-label="ٹیمپلیٹ کا متن"
-            className="min-h-[42rem] rounded-none border-0 bg-transparent px-1 py-1 shadow-none focus-visible:ring-0"
-            id="template-content"
-            onChange={(content) =>
-              setDraft((value) => ({
-                ...value,
-                content,
-              }))
-            }
-            placeholder="ٹیمپلیٹ کا متن یہاں پیسٹ کریں..."
-            value={draft.content}
-          />
-        </div>
-        {placeholders.length ? (
-          <div className="flex flex-wrap gap-2 py-3">
-            {placeholders.map((placeholder) => (
-              <Badge key={placeholder} variant="outline">
-                {placeholder}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
+        <TemplateRichEditor
+          aria-label="ٹیمپلیٹ کا متن"
+          id="template-content"
+          onChange={(content) =>
+            setDraft((value) => ({
+              ...value,
+              content,
+            }))
+          }
+          placeholder="ٹیمپلیٹ کا متن یہاں پیسٹ کریں..."
+          value={draft.content}
+        />
       </section>
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

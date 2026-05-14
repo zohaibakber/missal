@@ -12,7 +12,9 @@ const config = defineConfig({
   staged: {
     "*": "vp check --fix",
   },
-  fmt: {},
+  fmt: {
+    ignorePatterns: ["src/routeTree.gen.ts"],
+  },
   lint: { options: { typeAware: true, typeCheck: true } },
   resolve: { tsconfigPaths: true },
   plugins: [

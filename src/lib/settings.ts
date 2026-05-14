@@ -26,12 +26,6 @@ export const SHARED_PLACEHOLDER_FIELDS = [
     placeholder: "نام ڈی ایس پی",
     templatePlaceholders: ["DSP_نام", "DSP نام"],
   },
-  {
-    key: "investigationOfficer",
-    label: "تفتیشی افسر",
-    placeholder: "نام تفتیشی افسر",
-    templatePlaceholders: ["تفتیشی_", "تفتیشی"],
-  },
 ] as const;
 
 export type SharedPlaceholderKey = (typeof SHARED_PLACEHOLDER_FIELDS)[number]["key"];
@@ -58,9 +52,10 @@ export function normalizeSharedPlaceholderSettings(sharedPlaceholders: Record<st
     ضلع_نام_: "district",
     SHO_نام: "shoName",
     DSP_نام: "dspName",
-    تفتیشی_: "investigationOfficer",
   };
   const normalized = { ...sharedPlaceholders };
+  delete normalized.investigationOfficer;
+  delete normalized["تفتیشی_"];
 
   for (const [legacyKey, englishKey] of Object.entries(legacyKeys)) {
     if (normalized[englishKey]?.trim() || !normalized[legacyKey]?.trim()) {

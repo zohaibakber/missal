@@ -11,6 +11,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3520288701547",
     mobile: "",
     incident_date: "12.02.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -23,6 +25,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "3314979808",
     incident_date: "21.02.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -35,6 +39,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "3334568820",
     incident_date: "20.02.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -47,6 +53,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "03076159011",
     incident_date: "16.02.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -59,6 +67,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "3234771598",
     incident_date: "15.02.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -71,6 +81,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "08.01.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -84,6 +96,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3520219407007",
     mobile: "",
     incident_date: "16.02.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -97,6 +111,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "07.06.2021",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -110,6 +126,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3520153988857",
     mobile: "",
     incident_date: "25.03.2021",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -123,6 +141,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3520296118471",
     mobile: "",
     incident_date: "06.02.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -135,6 +155,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3520291458151",
     mobile: "",
     incident_date: "28.01.2025",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -149,6 +171,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3840345863013",
     mobile: "",
     incident_date: "08.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -161,6 +185,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "31.10.2022",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -174,6 +200,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3520258692227",
     mobile: "",
     incident_date: "08.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -187,6 +215,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3540121855345",
     mobile: "",
     incident_date: "08.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -200,6 +230,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "07.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -213,6 +245,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3510368273503",
     mobile: "",
     incident_date: "10.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -226,6 +260,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3310684425289",
     mobile: "",
     incident_date: "15.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -239,6 +275,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "15.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -252,6 +290,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3520093871841",
     mobile: "",
     incident_date: "14.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -265,6 +305,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3520295493755",
     mobile: "",
     incident_date: "16.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -278,6 +320,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3440116330345",
     mobile: "",
     incident_date: "11.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -291,6 +335,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "03218499962",
     incident_date: "15.01.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -303,6 +349,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "3314170302",
     incident_date: "11.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -315,6 +363,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "15.01.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -327,6 +377,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "3004409918",
     incident_date: "08.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -339,6 +391,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "03213474952",
     incident_date: "02.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -351,6 +405,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3450244279083",
     mobile: "",
     incident_date: "14.03.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -363,6 +419,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "03221018187",
     incident_date: "24.01.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -375,6 +433,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "28.02.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -388,6 +448,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "03014392909",
     incident_date: "31.07.2025",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -400,6 +462,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "3346315781",
     incident_date: "19.07.2024",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -413,6 +477,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "16.01.2021",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -425,6 +491,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "16.02.2021",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -438,6 +506,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3420280737105",
     mobile: "",
     incident_date: "12.01.2022",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -450,6 +520,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "02.02.2020",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -463,6 +535,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "09.09.2024",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -476,6 +550,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -489,6 +565,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -501,6 +579,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "04.04.2026",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -514,6 +594,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "3520228270419",
     mobile: "",
     incident_date: "21.02.2024",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
   {
@@ -527,6 +609,8 @@ export const firSeedData: FirRecord[] = [
     NIC: "",
     mobile: "",
     incident_date: "22.08.2022",
+    arrest_date: "",
+    investigation_officer: "",
     status: "Open",
   },
 ];
