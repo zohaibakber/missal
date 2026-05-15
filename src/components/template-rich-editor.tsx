@@ -63,6 +63,7 @@ type TemplateRichEditorProps = {
 
 const blockedTags = new Set(["script", "iframe", "object", "embed", "meta", "link", "title"]);
 const blockedAttributes = [/^on/i, /^formaction$/i, /^srcdoc$/i];
+const atPlaceholderPattern = /@([^@\r\n<>]{1,120})@/g;
 
 function sanitizeTemplateHtml(value: string) {
   if (typeof DOMParser === "undefined") {
@@ -94,6 +95,67 @@ function sanitizeTemplateHtml(value: string) {
   }
 
   return document.body.innerHTML.trim();
+}
+
+function unwrapTemplatePlaceholderSpans(document: Document) {
+  for (const element of Array.from(document.body.querySelectorAll('[data-placeholder="true"]'))) {
+    element.replaceWith(document.createTextNode(element.textContent ?? ""));
+  }
+}
+
+function markTemplatePlaceholdersHtml(value: string) {
+  if (typeof DOMParser === "undefined") {
+    return value;
+  }
+
+  const document = new DOMParser().parseFromString(value, "text/html");
+  unwrapTemplatePlaceholderSpans(document);
+
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+
+  while (walker.nextNode()) {
+    textNodes.push(walker.currentNode as Text);
+  }
+
+  for (const textNode of textNodes) {
+    const text = textNode.nodeValue ?? "";
+
+    if (!atPlaceholderPattern.test(text)) {
+      atPlaceholderPattern.lastIndex = 0;
+      continue;
+    }
+
+    atPlaceholderPattern.lastIndex = 0;
+    const fragment = document.createDocumentFragment();
+    let lastIndex = 0;
+
+    for (const match of text.matchAll(atPlaceholderPattern)) {
+      const index = match.index ?? 0;
+
+      if (index > lastIndex) {
+        fragment.append(document.createTextNode(text.slice(lastIndex, index)));
+      }
+
+      const placeholder = document.createElement("span");
+      placeholder.dataset.placeholder = "true";
+      placeholder.textContent = match[0];
+      fragment.append(placeholder);
+      lastIndex = index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      fragment.append(document.createTextNode(text.slice(lastIndex)));
+    }
+
+    textNode.replaceWith(fragment);
+  }
+
+  return document.body.innerHTML.trim();
+}
+
+function normalizeTemplateHtml(value: string) {
+  return markTemplatePlaceholdersHtml(sanitizeTemplateHtml(value));
 }
 
 const editorPlugins = [
@@ -153,7 +215,7 @@ export function TemplateRichEditor({
   value,
 }: TemplateRichEditorProps) {
   const editorId = id ?? "template-rich-editor";
-  const editorValue = useMemo(() => sanitizeTemplateHtml(value), [value]);
+  const editorValue = useMemo(() => normalizeTemplateHtml(value), [value]);
   const editorConfig = useMemo<EditorConfig>(
     () => ({
       alignment: {
@@ -259,7 +321,7 @@ export function TemplateRichEditor({
         editor={ClassicEditor}
         id={editorId}
         onChange={(_, editor) => {
-          onChange(sanitizeTemplateHtml(editor.getData()));
+          onChange(normalizeTemplateHtml(editor.getData()));
         }}
         onReady={(editor) => {
           const editableElement = editor.ui.view.editable.element;

@@ -100,6 +100,9 @@ function getPrintableFirHtml({ content, title }: { content: string; title: strin
         margin: 18mm;
       }
       * { box-sizing: border-box; }
+      html {
+        background: #ffffff;
+      }
       body {
         margin: 0;
         color: #111827;
@@ -110,13 +113,17 @@ function getPrintableFirHtml({ content, title }: { content: string; title: strin
       }
       .fir-print-document {
         direction: rtl;
+        display: block;
+        width: 100%;
+        max-width: 100%;
         color: inherit;
         font-family: inherit;
         font-size: inherit;
         line-height: inherit;
         text-align: right;
-        unicode-bidi: plaintext;
-        overflow-wrap: anywhere;
+        unicode-bidi: isolate;
+        overflow-wrap: break-word;
+        word-break: normal;
       }
       .fir-print-document > :first-child {
         margin-top: 0;
@@ -165,9 +172,11 @@ function getPrintableFirHtml({ content, title }: { content: string; title: strin
         display: table;
       }
       .fir-print-document table {
+        width: 100%;
         max-width: 100%;
         border-collapse: collapse;
         border-spacing: 0;
+        table-layout: fixed;
       }
       .fir-print-document figure.table table {
         width: 100%;
@@ -177,7 +186,7 @@ function getPrintableFirHtml({ content, title }: { content: string; title: strin
         border: 1px solid #d1d5db;
         padding: 0.25rem 0.35rem;
         min-width: 0;
-        overflow-wrap: anywhere;
+        overflow-wrap: break-word;
         word-break: break-word;
         white-space: normal;
       }
@@ -243,6 +252,10 @@ function getPrintableFirHtml({ content, title }: { content: string; title: strin
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;
         }
+        .fir-print-document {
+          width: auto;
+          max-width: none;
+        }
         .fir-print-document figure,
         .fir-print-document table,
         .fir-print-document img {
@@ -267,11 +280,13 @@ function printHtmlDocument(html: string, title: string) {
   frame.title = title;
   frame.setAttribute("aria-hidden", "true");
   frame.style.position = "fixed";
-  frame.style.inset = "0";
-  frame.style.width = "0";
-  frame.style.height = "0";
+  frame.style.insetBlockStart = "0";
+  frame.style.insetInlineStart = "-10000px";
+  frame.style.width = "210mm";
+  frame.style.height = "297mm";
   frame.style.border = "0";
-  frame.style.visibility = "hidden";
+  frame.style.opacity = "0";
+  frame.style.pointerEvents = "none";
 
   document.body.append(frame);
 
@@ -293,10 +308,30 @@ function printHtmlDocument(html: string, title: string) {
   frameDocument.write(html);
   frameDocument.close();
 
-  window.setTimeout(() => {
+  const printFrame = () => {
     frameWindow.focus();
     frameWindow.print();
-  }, 250);
+  };
+
+  const waitForImages = Promise.all(
+    Array.from(frameDocument.images).map((image) => {
+      if (image.complete) {
+        return Promise.resolve();
+      }
+
+      return new Promise<void>((resolve) => {
+        image.addEventListener("load", () => resolve(), { once: true });
+        image.addEventListener("error", () => resolve(), { once: true });
+      });
+    }),
+  );
+  const waitForFonts = "fonts" in frameDocument ? frameDocument.fonts.ready : Promise.resolve();
+
+  Promise.all([waitForFonts, waitForImages])
+    .catch(() => undefined)
+    .finally(() => {
+      window.setTimeout(printFrame, 50);
+    });
 }
 
 function RouteComponent() {
@@ -506,9 +541,17 @@ function FirDetail() {
     }
 
     const title = `FIR ${fir.fir_no}`;
+    const printPlaceholders = extractPlaceholders(documentDraft);
+    const printValues = buildTemplateValues({
+      extraValues: firExtraValues,
+      fir,
+      placeholders: printPlaceholders,
+      sharedValues: sharedPlaceholderValues,
+    });
+
     printHtmlDocument(
       getPrintableFirHtml({
-        content: documentDraft,
+        content: renderTemplateHtml(documentDraft, printValues),
         title,
       }),
       title,

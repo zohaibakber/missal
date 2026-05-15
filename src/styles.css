@@ -293,6 +293,6 @@
 }
 
 .template-rich-editor .ck.ck-content [data-placeholder="true"] {
-  color: var(--primary);
+  color: oklch(0.546 0.245 262.881);
   font-weight: 600;
 }
