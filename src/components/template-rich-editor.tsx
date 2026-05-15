@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { CKEditor } from "@ckeditor/ckeditor5-react";
 import {
   Alignment,
@@ -48,6 +48,7 @@ import {
   Underline,
   Undo,
   type EditorConfig,
+  type Model,
 } from "ckeditor5";
 import "ckeditor5/ckeditor5.css";
 import { cn } from "#/lib/utils";
@@ -98,7 +99,9 @@ function sanitizeTemplateHtml(value: string) {
 }
 
 function unwrapTemplatePlaceholderSpans(document: Document) {
-  for (const element of Array.from(document.body.querySelectorAll('[data-placeholder="true"]'))) {
+  for (const element of Array.from(
+    document.body.querySelectorAll('[data-placeholder="true"], .template-placeholder'),
+  )) {
     element.replaceWith(document.createTextNode(element.textContent ?? ""));
   }
 }
@@ -138,6 +141,7 @@ function markTemplatePlaceholdersHtml(value: string) {
       }
 
       const placeholder = document.createElement("span");
+      placeholder.classList.add("template-placeholder");
       placeholder.dataset.placeholder = "true";
       placeholder.textContent = match[0];
       fragment.append(placeholder);
@@ -156,6 +160,43 @@ function markTemplatePlaceholdersHtml(value: string) {
 
 function normalizeTemplateHtml(value: string) {
   return markTemplatePlaceholdersHtml(sanitizeTemplateHtml(value));
+}
+
+function getSelectedPlainText(model: Model) {
+  const range = model.document.selection.getFirstRange();
+
+  if (!range) {
+    return "";
+  }
+
+  let selectedText = "";
+
+  for (const item of range.getItems()) {
+    if (item.is("$textProxy")) {
+      selectedText += item.data;
+    }
+  }
+
+  return selectedText.trim();
+}
+
+function wrapSelectionWithPlaceholder(model: Model) {
+  const selection = model.document.selection;
+  const range = selection.getFirstRange();
+  const selectedText = getSelectedPlainText(model);
+
+  if (selection.isCollapsed || !range || !selectedText) {
+    return false;
+  }
+
+  model.change((writer) => {
+    const position = range.start;
+
+    model.deleteContent(selection);
+    writer.insertText(`@${selectedText}@`, position);
+  });
+
+  return true;
 }
 
 const editorPlugins = [
@@ -216,6 +257,9 @@ export function TemplateRichEditor({
 }: TemplateRichEditorProps) {
   const editorId = id ?? "template-rich-editor";
   const editorValue = useMemo(() => normalizeTemplateHtml(value), [value]);
+  const initialEditorValueRef = useRef(editorValue);
+  const editorRef = useRef<ClassicEditor | null>(null);
+  const latestEditorValueRef = useRef(editorValue);
   const editorConfig = useMemo<EditorConfig>(
     () => ({
       alignment: {
@@ -309,6 +353,15 @@ export function TemplateRichEditor({
     [placeholder],
   );
 
+  useEffect(() => {
+    if (!editorRef.current || editorValue === latestEditorValueRef.current) {
+      return;
+    }
+
+    latestEditorValueRef.current = editorValue;
+    editorRef.current.setData(editorValue);
+  }, [editorValue]);
+
   return (
     <div
       className={cn("template-rich-editor h-full min-h-[24rem] min-w-0 max-w-full", className)}
@@ -317,20 +370,53 @@ export function TemplateRichEditor({
     >
       <CKEditor
         config={editorConfig}
-        data={editorValue}
+        data={initialEditorValueRef.current}
         editor={ClassicEditor}
         id={editorId}
         onChange={(_, editor) => {
-          onChange(normalizeTemplateHtml(editor.getData()));
+          const nextValue = normalizeTemplateHtml(editor.getData());
+
+          latestEditorValueRef.current = nextValue;
+          onChange(nextValue);
         }}
         onReady={(editor) => {
           const editableElement = editor.ui.view.editable.element;
 
+          editorRef.current = editor;
+          latestEditorValueRef.current = editorValue;
           editableElement?.setAttribute("aria-label", ariaLabel);
           editableElement?.setAttribute("dir", "rtl");
           editableElement?.setAttribute("id", editorId);
           editableElement?.setAttribute("lang", "ur");
           editableElement?.setAttribute("spellcheck", "false");
+
+          editor.keystrokes.set("CTRL+Z", (_keyboardEventData, cancel) => {
+            editor.execute("undo");
+            cancel();
+          });
+          editor.keystrokes.set("CTRL+Y", (_keyboardEventData, cancel) => {
+            editor.execute("redo");
+            cancel();
+          });
+          editor.keystrokes.set("CTRL+SHIFT+Z", (_keyboardEventData, cancel) => {
+            editor.execute("redo");
+            cancel();
+          });
+
+          editor.editing.view.document.on("keydown", (eventInfo, data) => {
+            if (data.domEvent.key !== "@") {
+              return;
+            }
+
+            if (!wrapSelectionWithPlaceholder(editor.model)) {
+              return;
+            }
+
+            data.preventDefault();
+            eventInfo.stop();
+            latestEditorValueRef.current = normalizeTemplateHtml(editor.getData());
+            onChange(latestEditorValueRef.current);
+          });
         }}
       />
     </div>

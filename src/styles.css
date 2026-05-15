@@ -292,7 +292,8 @@
   white-space: pre-wrap;
 }
 
-.template-rich-editor .ck.ck-content [data-placeholder="true"] {
-  color: oklch(0.546 0.245 262.881);
+.template-rich-editor .ck.ck-content [data-placeholder="true"],
+.template-rich-editor .ck.ck-content .template-placeholder {
+  color: #2563eb !important;
   font-weight: 600;
 }
