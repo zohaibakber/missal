@@ -1,11 +1,12 @@
 "use no memo";
 
 import type { Table } from "@tanstack/react-table";
+import { isValidElement } from "react";
 import {
   Cancel01Icon,
   Eraser01Icon,
-  FilterHorizontalIcon,
-  FilterMailIcon,
+  Filter,
+  LayoutThreeColumnIcon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -62,8 +63,18 @@ interface DataTableToolbarProps<TData> {
   table: Table<TData>;
 }
 
-function getColumnLabel(columnId: string) {
-  return columnId
+function getColumnLabel<TData>(column: ReturnType<Table<TData>["getAllColumns"]>[number]) {
+  const { header } = column.columnDef;
+
+  if (typeof header === "string") {
+    return header;
+  }
+
+  if (isValidElement(header)) {
+    return header;
+  }
+
+  return column.id
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/^./, (value) => value.toUpperCase());
 }
@@ -84,10 +95,10 @@ export function DataTableToolbar<TData>({
     .filter((column) => typeof column.accessorFn !== "undefined" && column.getCanHide());
 
   return (
-    <div className={cn("flex flex-col gap-3 border-b bg-muted p-2 py-2.5", className)} dir="rtl">
+    <div className={cn("flex flex-col gap-3 py-4", className)} dir="rtl">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         {config.search ? (
-          <InputGroup className="w-full bg-background lg:max-w-64">
+          <InputGroup className="w-full lg:max-w-64">
             <InputGroupAddon align="inline-start">
               <HugeiconsIcon
                 aria-hidden="true"
@@ -132,13 +143,13 @@ export function DataTableToolbar<TData>({
                   />
                 }
               >
-                <HugeiconsIcon icon={FilterHorizontalIcon} strokeWidth={2} />
+                <HugeiconsIcon icon={Filter} strokeWidth={2} />
                 {hasActiveFilters ? (
                   <span className="absolute -top-0.5 -inset-e-0.5 size-1.5 rounded-full bg-primary" />
                 ) : null}
                 <span className="sr-only">Open filters</span>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="start" className="w-48" dir="rtl" lang="ur">
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>
                     {hasActiveFilters ? `Filters (${activeFilterCount})` : "Filters"}
@@ -157,7 +168,7 @@ export function DataTableToolbar<TData>({
                     return (
                       <DropdownMenuSub key={filter.columnId}>
                         <DropdownMenuSubTrigger>{filter.label}</DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="w-44">
+                        <DropdownMenuSubContent className="w-44" dir="rtl" lang="ur">
                           <DropdownMenuGroup>
                             <DropdownMenuLabel>{filter.label}</DropdownMenuLabel>
                             <DropdownMenuSeparator />
@@ -215,12 +226,12 @@ export function DataTableToolbar<TData>({
                   />
                 }
               >
-                <HugeiconsIcon icon={FilterMailIcon} strokeWidth={2} />
+                <HugeiconsIcon icon={LayoutThreeColumnIcon} strokeWidth={2} />
                 <span className="sr-only">Open view options</span>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="start" className="w-48" dir="rtl" lang="ur">
                 <DropdownMenuGroup>
-                  <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                  <DropdownMenuLabel>کالمز منتخب کریں</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {hideableColumns.map((column) => (
                     <DropdownMenuCheckboxItem
@@ -228,7 +239,7 @@ export function DataTableToolbar<TData>({
                       checked={column.getIsVisible()}
                       onCheckedChange={() => column.toggleVisibility(!column.getIsVisible())}
                     >
-                      {getColumnLabel(column.id)}
+                      {getColumnLabel(column)}
                     </DropdownMenuCheckboxItem>
                   ))}
                 </DropdownMenuGroup>

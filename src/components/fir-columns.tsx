@@ -206,26 +206,6 @@ export const firColumns: ColumnDef<FirRecord>[] = [
     size: 180,
   },
   {
-    accessorKey: "NIC",
-    cell: ({ row }) => (
-      <div dir="ltr" className="font-mono text-right">
-        {row.original.NIC || "—"}
-      </div>
-    ),
-    header: "شناختی کارڈ",
-    size: 120,
-  },
-  {
-    accessorKey: "mobile",
-    cell: ({ row }) => (
-      <div dir="ltr" className="font-mono text-right">
-        {row.original.mobile || "—"}
-      </div>
-    ),
-    header: "موبائل",
-    size: 140,
-  },
-  {
     accessorKey: "investigation_officer",
     cell: ({ row }) => (
       <div

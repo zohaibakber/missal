@@ -39,7 +39,14 @@ function getFirFormValues(fir?: FirRecord): FirFormValues {
   }
 
   const { id: _id, ...values } = fir;
-  return values;
+  return {
+    ...createEmptyFirRecord(),
+    ...values,
+    arrest_date: values.arrest_date ?? "",
+    date: values.date ?? "",
+    incident_date: values.incident_date ?? "",
+    investigation_officer: values.investigation_officer ?? "",
+  };
 }
 
 export function CreateFirForm({ className, fir, onSuccess }: CreateFirFormProps) {

@@ -7,7 +7,6 @@ import { firColumns } from "./fir-columns";
 import { firCollection } from "#/db-collections";
 import type { FirRecord } from "#/lib/fir";
 import { FIR_STATUS_OPTIONS, getFirStatusLabel } from "#/lib/fir";
-import { Card, CardFooter } from "#/components/ui/card";
 import { Skeleton } from "#/components/ui/skeleton";
 import {
   Table,
@@ -29,8 +28,6 @@ const firTableToolbar: DataTableToolbarConfig<FirRecord> = {
       "offence",
       "accused",
       "witness",
-      "NIC",
-      "mobile",
       "investigation_officer",
       "status",
     ],
@@ -81,18 +78,18 @@ const skeletonRows = Array.from({ length: 10 }, (_, index) => index);
 
 export function FirTableSkeleton() {
   return (
-    <Card className="w-full gap-0 py-0" aria-busy="true">
-      <div className="flex flex-col gap-3 border-b bg-muted p-2 py-2.5" dir="rtl">
+    <div className="flex w-full flex-col" aria-busy="true">
+      <div className="flex flex-col gap-3 py-4" dir="rtl">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <Skeleton className="h-8 w-full bg-background lg:max-w-64" />
+          <Skeleton className="h-8 w-full lg:max-w-64" />
           <div className="flex flex-1 items-center justify-end gap-2">
-            <Skeleton className="size-7 bg-background" />
-            <Skeleton className="size-7 bg-background" />
+            <Skeleton className="size-7" />
+            <Skeleton className="size-7" />
           </div>
         </div>
       </div>
 
-      <div dir="rtl" lang="ur">
+      <div className="overflow-hidden rounded-md border" dir="rtl" lang="ur">
         <Table className="table-fixed">
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -120,21 +117,22 @@ export function FirTableSkeleton() {
         </Table>
       </div>
 
-      <CardFooter className="p-2">
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Skeleton className="h-5 w-40" />
           <div className="flex items-center gap-2">
             <Skeleton className="h-5 w-14" />
             <Skeleton className="h-8 w-20" />
             <Skeleton className="h-5 w-24" />
           </div>
-          <div className="flex items-center gap-2">
-            <Skeleton className="size-8" />
-            <Skeleton className="size-8" />
-            <Skeleton className="size-8" />
-            <Skeleton className="size-8" />
-          </div>
         </div>
-      </CardFooter>
-    </Card>
+        <div className="flex items-center gap-2">
+          <Skeleton className="size-8" />
+          <Skeleton className="size-8" />
+          <Skeleton className="size-8" />
+          <Skeleton className="size-8" />
+        </div>
+      </div>
+    </div>
   );
 }

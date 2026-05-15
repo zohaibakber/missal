@@ -23,8 +23,8 @@ function formatDate(date: Date | undefined) {
   });
 }
 
-function parseDate(value: string) {
-  if (!value.trim()) {
+function parseDate(value: string | undefined) {
+  if (!value?.trim()) {
     return undefined;
   }
 
@@ -40,7 +40,7 @@ type FirDatePickerInputProps = {
   onBlur?: React.FocusEventHandler<HTMLInputElement>;
   onChange: (value: string) => void;
   placeholder: string;
-  value: string;
+  value?: string;
 };
 
 export function FirDatePickerInput({
@@ -51,7 +51,7 @@ export function FirDatePickerInput({
   onBlur,
   onChange,
   placeholder,
-  value,
+  value = "",
 }: FirDatePickerInputProps) {
   const [open, setOpen] = React.useState(false);
   const parsedValue = React.useMemo(() => parseDate(value), [value]);

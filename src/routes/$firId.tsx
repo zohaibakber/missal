@@ -104,7 +104,7 @@ function getPrintableFirHtml({ content, title }: { content: string; title: strin
         margin: 0;
         color: #111827;
         background: #ffffff;
-        font-family: "Jameel Noori Nastaleeq", "Noto Sans Arabic", "Noto Nastaliq Urdu", "Arial", sans-serif;
+        font-family: "Jameel Noori Nastaleeq", serif;
         font-size: 13pt;
         line-height: 2;
       }
