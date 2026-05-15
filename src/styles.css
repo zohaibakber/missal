@@ -181,12 +181,12 @@
   overflow: hidden;
   contain: inline-size;
   --ck-border-radius: var(--radius-md);
-  --ck-color-base-border: var(--border);
+  --ck-color-base-border: transparent;
   --ck-color-base-background: var(--background);
   --ck-color-toolbar-background: var(--background);
   --ck-color-button-default-hover-background: var(--muted);
   --ck-color-button-on-background: var(--accent);
-  --ck-color-focus-border: var(--ring);
+  --ck-color-focus-border: transparent;
   --ck-font-face: var(--font-sans);
   --ck-font-size-base: 14px;
 }
@@ -219,7 +219,7 @@
   max-width: 100%;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 0.5rem 0.75rem;
+  padding: 0;
   color: var(--foreground);
   font-family: var(--font-urdu);
   font-size: 1rem;
@@ -227,27 +227,21 @@
   text-align: right;
   unicode-bidi: plaintext;
   overflow-wrap: anywhere;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  border: 0;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .template-rich-editor .ck.ck-content.ck-editor__editable:not(.ck-focused) {
-  border-color: var(--border);
+  border-color: transparent;
 }
 
 .template-rich-editor .ck.ck-content.ck-editor__editable.ck-focused {
-  border-color: var(--ring);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 30%, transparent);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .template-rich-editor .ck.ck-toolbar {
-  display: none;
-}
-
-.template-rich-editor .ck.ck-content.ck-editor__editable::-webkit-scrollbar,
-.template-rich-editor .ck.ck-content.ck-editor__editable *::-webkit-scrollbar {
-  width: 0;
-  height: 0;
   display: none;
 }
 

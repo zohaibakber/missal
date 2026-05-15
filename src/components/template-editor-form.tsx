@@ -158,7 +158,7 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
   }
 
   return (
-    <main className="grid h-svh w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden p-4">
+    <main className="grid min-h-svh w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-y-auto p-4">
       <section className="flex min-w-0 max-w-full items-center justify-between gap-3">
         <Breadcrumb>
           <BreadcrumbList>
