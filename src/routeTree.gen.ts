@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as TemplatesNewRouteImport } from './routes/templates_.new'
 import { Route as TemplatesTemplateIdRouteImport } from './routes/templates_.$templateId'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
+import { Route as FirIdEditRouteImport } from './routes/$firId_.edit'
 
 const TemplatesRoute = TemplatesRouteImport.update({
   id: '/templates',
@@ -58,6 +59,11 @@ const SignInSplatRoute = SignInSplatRouteImport.update({
   path: '/sign-in/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FirIdEditRoute = FirIdEditRouteImport.update({
+  id: '/$firId_/edit',
+  path: '/$firId/edit',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/new': typeof NewRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
+  '/$firId/edit': typeof FirIdEditRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/templates/new': typeof TemplatesNewRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/new': typeof NewRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
+  '/$firId/edit': typeof FirIdEditRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/templates/new': typeof TemplatesNewRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/new': typeof NewRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
+  '/$firId_/edit': typeof FirIdEditRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/templates_/$templateId': typeof TemplatesTemplateIdRoute
   '/templates_/new': typeof TemplatesNewRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/new'
     | '/settings'
     | '/templates'
+    | '/$firId/edit'
     | '/sign-in/$'
     | '/templates/$templateId'
     | '/templates/new'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/new'
     | '/settings'
     | '/templates'
+    | '/$firId/edit'
     | '/sign-in/$'
     | '/templates/$templateId'
     | '/templates/new'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/new'
     | '/settings'
     | '/templates'
+    | '/$firId_/edit'
     | '/sign-in/$'
     | '/templates_/$templateId'
     | '/templates_/new'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   NewRoute: typeof NewRoute
   SettingsRoute: typeof SettingsRoute
   TemplatesRoute: typeof TemplatesRoute
+  FirIdEditRoute: typeof FirIdEditRoute
   SignInSplatRoute: typeof SignInSplatRoute
   TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRoute
   TemplatesNewRoute: typeof TemplatesNewRoute
@@ -192,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignInSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$firId_/edit': {
+      id: '/$firId_/edit'
+      path: '/$firId/edit'
+      fullPath: '/$firId/edit'
+      preLoaderRoute: typeof FirIdEditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -201,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   NewRoute: NewRoute,
   SettingsRoute: SettingsRoute,
   TemplatesRoute: TemplatesRoute,
+  FirIdEditRoute: FirIdEditRoute,
   SignInSplatRoute: SignInSplatRoute,
   TemplatesTemplateIdRoute: TemplatesTemplateIdRoute,
   TemplatesNewRoute: TemplatesNewRoute,
