@@ -1,8 +1,6 @@
-"use client";
-
-import { useMemo } from "react";
-import { useLiveQuery } from "@tanstack/react-db";
-import { ClientOnly, Link, useRouterState } from "@tanstack/react-router";
+import { useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { File01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -12,9 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "#/components/ui/sidebar";
-import { firCollection } from "#/db-collections";
-
-const RECENT_FIR_LIMIT = 5;
+import { atoms } from "#/state/atoms";
 
 function EmptyRecentFirs() {
   return (
@@ -28,12 +24,14 @@ function EmptyRecentFirs() {
 }
 
 function RecentFirMenuItems() {
-  const { data: firRecords } = useLiveQuery(firCollection);
+  const firs = useAtomValue(atoms.latestFirsAtom);
   const { location } = useRouterState();
-  const recentFirs = useMemo(
-    () => [...firRecords].sort((first, second) => second.id - first.id).slice(0, RECENT_FIR_LIMIT),
-    [firRecords],
-  );
+
+  if (AsyncResult.isInitial(firs) || AsyncResult.isWaiting(firs)) {
+    return null;
+  }
+
+  const recentFirs = AsyncResult.isSuccess(firs) ? firs.value : [];
 
   if (!recentFirs.length) {
     return <EmptyRecentFirs />;
@@ -61,9 +59,7 @@ export function NavProjects() {
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
       <SidebarGroupLabel>Recent FIRs</SidebarGroupLabel>
       <SidebarMenu>
-        <ClientOnly fallback={<EmptyRecentFirs />}>
-          <RecentFirMenuItems />
-        </ClientOnly>
+        <RecentFirMenuItems />
       </SidebarMenu>
     </SidebarGroup>
   );

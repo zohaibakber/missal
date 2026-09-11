@@ -1,28 +1,15 @@
-import {
-  HeadContent,
-  Link,
-  Scripts,
-  createRootRouteWithContext,
-  redirect,
-} from "@tanstack/react-router";
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import { TanStackDevtools } from "@tanstack/react-devtools";
-import { ClerkProvider, Show } from "@clerk/tanstack-react-start";
-
-import appCss from "../styles.css?url";
-
-import { TooltipProvider } from "#/components/ui/tooltip";
-import { SidebarInset, SidebarProvider } from "#/components/ui/sidebar";
-import { DirectionProvider } from "#/components/ui/direction";
 import { AppSidebar } from "#/components/app-sidebar";
-import { createServerFn } from "@tanstack/react-start";
-import { auth } from "@clerk/tanstack-react-start/server";
+import { SiteHeader } from "#/components/site-header";
 import { ThemeProvider } from "#/components/theme-provider";
+import { DirectionProvider } from "#/components/ui/direction";
+import { SidebarInset, SidebarProvider } from "#/components/ui/sidebar";
 import { Toaster } from "#/components/ui/sonner";
+import { TooltipProvider } from "#/components/ui/tooltip";
+import { HeadContent, Link, Outlet, createRootRoute } from "@tanstack/react-router";
 
 function NotFound() {
   return (
-    <div className="flex flex-col h-dvh items-center justify-center w-full gap-2">
+    <div className="flex h-dvh w-full flex-col items-center justify-center gap-2">
       <h1>Not Found</h1>
       <Link to="/" className="text-sm underline">
         Go Home
@@ -31,12 +18,7 @@ function NotFound() {
   );
 }
 
-const authStateFn = createServerFn({ method: "GET" }).handler(async () => {
-  const { isAuthenticated, userId } = await auth();
-  return { isAuthenticated, userId };
-});
-
-export const Route = createRootRouteWithContext()({
+export const Route = createRootRoute({
   head: () => ({
     meta: [
       {
@@ -50,64 +32,31 @@ export const Route = createRootRouteWithContext()({
         title: "Missal Writing",
       },
     ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-    ],
   }),
-  beforeLoad: async ({ location }) => {
-    const { isAuthenticated, userId } = await authStateFn();
-    // Only redirect to sign-in if not authenticated AND not already on sign-in page
-    if (!isAuthenticated && !location.pathname.startsWith("/sign-in")) {
-      throw redirect({ to: "/sign-in/$" });
-    }
-    return { userId };
-  },
-  loader: async () => {
-    return {};
-  },
-  shellComponent: RootDocument,
+  component: RootComponent,
   notFoundComponent: NotFound,
 });
 
-function RootDocument({ children }: { children: React.ReactNode }) {
+function RootComponent() {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <ClerkProvider>
-          <ThemeProvider>
-            <TooltipProvider>
-              <DirectionProvider direction="ltr">
-                <SidebarProvider>
-                  <Show when={"signed-in"}>
-                    <AppSidebar />
-                    <SidebarInset>{children}</SidebarInset>
-                  </Show>
-                  <Show when={"signed-out"}>{children}</Show>
-                </SidebarProvider>
-              </DirectionProvider>
-            </TooltipProvider>
-            <Toaster richColors />
-          </ThemeProvider>
-        </ClerkProvider>
-        <TanStackDevtools
-          config={{
-            position: "bottom-right",
-          }}
-          plugins={[
-            {
-              name: "Tanstack Router",
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-          ]}
-        />
-        <Scripts />
-      </body>
-    </html>
+    <>
+      <HeadContent />
+      <ThemeProvider>
+        <TooltipProvider>
+          <DirectionProvider direction="ltr">
+            <SidebarProvider className="h-svh min-h-0 flex-col overflow-hidden [--header-height:calc(var(--spacing)*10)]">
+              <SiteHeader />
+              <div className="flex min-h-0 flex-1">
+                <AppSidebar />
+                <SidebarInset className="min-h-0 overflow-hidden max-w-3xl mx-auto">
+                  <Outlet />
+                </SidebarInset>
+              </div>
+            </SidebarProvider>
+          </DirectionProvider>
+        </TooltipProvider>
+        <Toaster richColors />
+      </ThemeProvider>
+    </>
   );
 }

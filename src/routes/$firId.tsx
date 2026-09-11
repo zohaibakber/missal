@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { useLiveQuery } from "@tanstack/react-db";
-import { ClientOnly, Link, createFileRoute } from "@tanstack/react-router";
+import { useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { LegalDocument01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { firCollection, templateCollection } from "#/db-collections";
 import { Badge } from "#/components/ui/badge";
 import {
   Breadcrumb,
@@ -32,18 +32,46 @@ import {
   ItemTitle,
 } from "#/components/ui/item";
 import { Skeleton } from "#/components/ui/skeleton";
+import { formatDate } from "#/lib/date";
 import { getFirStatusLabel } from "#/lib/fir";
+import { parseFirId, type FirId } from "#/lib/ids";
+import { indexPlaceholders } from "#/lib/placeholder";
 import { extractPlaceholders } from "#/lib/templates";
+import { atoms } from "#/state/atoms";
 
 export const Route = createFileRoute("/$firId")({
   component: RouteComponent,
 });
 
 function RouteComponent() {
+  const { firId } = Route.useParams();
+  const id = parseFirId(firId);
+
+  if (!id) {
+    return <FirNotFound />;
+  }
+
+  return <FirTemplates firId={id} />;
+}
+
+function FirNotFound() {
   return (
-    <ClientOnly fallback={<FirTemplatesSkeleton />}>
-      <FirTemplates />
-    </ClientOnly>
+    <main className="p-4 lg:p-6">
+      <Empty className="min-h-[28rem] border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <HugeiconsIcon icon={LegalDocument01Icon} />
+          </EmptyMedia>
+          <EmptyTitle>FIR not found</EmptyTitle>
+          <EmptyDescription>This FIR may have been removed.</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button nativeButton={false} render={<Link to="/" />} variant="outline">
+            Back to dataset
+          </Button>
+        </EmptyContent>
+      </Empty>
+    </main>
   );
 }
 
@@ -54,13 +82,16 @@ function getTemplateSummary(content: string) {
     .trim();
 }
 
-function FirTemplates() {
-  const { firId } = Route.useParams();
-  const numericFirId = Number(firId);
-  const { data: firRecords } = useLiveQuery(firCollection);
-  const { data: templates } = useLiveQuery(templateCollection);
+function FirTemplates({ firId }: { firId: FirId }) {
+  const firResult = useAtomValue(atoms.firByIdAtom(firId));
+  const templatesResult = useAtomValue(atoms.templatesAtom);
+  const placeholderIndexResult = useAtomValue(atoms.placeholderIndexAtom);
   const [search, setSearch] = useState("");
-  const fir = firRecords.find((record) => record.id === numericFirId) ?? null;
+  const fir = AsyncResult.isSuccess(firResult) ? (firResult.value ?? null) : null;
+  const templates = AsyncResult.isSuccess(templatesResult) ? templatesResult.value : [];
+  const placeholderIndex = AsyncResult.isSuccess(placeholderIndexResult)
+    ? placeholderIndexResult.value
+    : indexPlaceholders([]);
   const sortedTemplates = useMemo(
     () => [...templates].sort((first, second) => first.id - second.id),
     [templates],
@@ -79,25 +110,17 @@ function FirTemplates() {
     });
   }, [search, sortedTemplates]);
 
-  if (!Number.isInteger(numericFirId) || !fir) {
-    return (
-      <main className="p-4 lg:p-6">
-        <Empty className="min-h-[28rem] border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <HugeiconsIcon icon={LegalDocument01Icon} />
-            </EmptyMedia>
-            <EmptyTitle>FIR not found</EmptyTitle>
-            <EmptyDescription>This FIR may have been removed from this browser.</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button nativeButton={false} render={<Link to="/" />} variant="outline">
-              Back to dataset
-            </Button>
-          </EmptyContent>
-        </Empty>
-      </main>
-    );
+  if (
+    AsyncResult.isInitial(firResult) ||
+    AsyncResult.isWaiting(firResult) ||
+    AsyncResult.isInitial(templatesResult) ||
+    AsyncResult.isWaiting(templatesResult)
+  ) {
+    return <FirTemplatesSkeleton />;
+  }
+
+  if (!fir) {
+    return <FirNotFound />;
   }
 
   return (
@@ -146,7 +169,7 @@ function FirTemplates() {
         filteredTemplates.length ? (
           <ItemGroup className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" dir="rtl">
             {filteredTemplates.map((template) => {
-              const placeholders = extractPlaceholders(template.content);
+              const placeholders = extractPlaceholders(template.content, placeholderIndex);
               const summary = getTemplateSummary(template.content);
 
               return (
@@ -166,7 +189,7 @@ function FirTemplates() {
                   <ItemContent className="min-w-0" lang="ur">
                     <ItemTitle>{template.name}</ItemTitle>
                     <ItemDescription className="line-clamp-1 text-xs">
-                      Updated {new Date(template.updatedAt).toLocaleDateString()}
+                      Updated {formatDate(template.updatedAt)}
                     </ItemDescription>
                     <ItemDescription className="line-clamp-3">
                       {summary || "No content yet."}

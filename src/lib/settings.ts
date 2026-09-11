@@ -1,73 +1,51 @@
-import { z } from "zod";
-import { normalizePlaceholderName } from "#/lib/templates";
+import { Schema } from "effect";
+import { IsoDateTimeString } from "#/lib/schema";
 
 export const SHARED_PLACEHOLDER_FIELDS = [
   {
     key: "policeStation",
+    placeholderKey: "police_station",
     label: "تھانہ نام",
     placeholder: "تھانہ سٹی",
-    templatePlaceholders: ["تھانہ_نام_", "تھانہ نام"],
   },
   {
     key: "district",
+    placeholderKey: "district",
     label: "ضلع نام",
     placeholder: "لاہور",
-    templatePlaceholders: ["ضلع_نام_", "ضلع نام"],
   },
   {
     key: "shoName",
+    placeholderKey: "sho_name",
     label: "SHO نام",
     placeholder: "نام ایس ایچ او",
-    templatePlaceholders: ["SHO_نام", "SHO نام"],
   },
   {
     key: "dspName",
+    placeholderKey: "dsp_name",
     label: "DSP نام",
     placeholder: "نام ڈی ایس پی",
-    templatePlaceholders: ["DSP_نام", "DSP نام"],
   },
 ] as const;
 
 export type SharedPlaceholderKey = (typeof SHARED_PLACEHOLDER_FIELDS)[number]["key"];
 
-export const appSettingsSchema = z.object({
-  id: z.literal("default"),
-  sharedPlaceholders: z.record(z.string(), z.string()),
-  updatedAt: z.string(),
-});
+export const SettingsId = Schema.Literal("default");
 
-export type AppSettings = z.infer<typeof appSettingsSchema>;
+export const DEFAULT_SETTINGS_UPDATED_AT = IsoDateTimeString.make("1970-01-01T00:00:00.000Z");
+
+export class AppSettings extends Schema.Class<AppSettings>("AppSettings")({
+  id: SettingsId,
+  sharedPlaceholders: Schema.Record(Schema.String, Schema.String),
+  updatedAt: IsoDateTimeString,
+}) {}
 
 export function createDefaultAppSettings(): AppSettings {
-  return {
+  return new AppSettings({
     id: "default",
     sharedPlaceholders: {},
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-export function normalizeSharedPlaceholderSettings(sharedPlaceholders: Record<string, string>) {
-  const legacyKeys: Record<string, SharedPlaceholderKey> = {
-    تھانہ_نام_: "policeStation",
-    ضلع_نام_: "district",
-    SHO_نام: "shoName",
-    DSP_نام: "dspName",
-  };
-  const normalized = { ...sharedPlaceholders };
-  delete normalized.investigationOfficer;
-  delete normalized["تفتیشی_"];
-
-  for (const [legacyKey, englishKey] of Object.entries(legacyKeys)) {
-    if (normalized[englishKey]?.trim() || !normalized[legacyKey]?.trim()) {
-      delete normalized[legacyKey];
-      continue;
-    }
-
-    normalized[englishKey] = normalized[legacyKey];
-    delete normalized[legacyKey];
-  }
-
-  return normalized;
+    updatedAt: DEFAULT_SETTINGS_UPDATED_AT,
+  });
 }
 
 export function buildSharedPlaceholderValues(sharedPlaceholders: Record<string, string>) {
@@ -80,9 +58,7 @@ export function buildSharedPlaceholderValues(sharedPlaceholders: Record<string, 
       continue;
     }
 
-    for (const templatePlaceholder of field.templatePlaceholders) {
-      values[normalizePlaceholderName(templatePlaceholder)] = value;
-    }
+    values[field.placeholderKey] = value;
   }
 
   return values;

@@ -1,12 +1,13 @@
 import type { SortingState } from "@tanstack/react-table";
-import { useLiveQuery } from "@tanstack/react-db";
+import { useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { useNavigate } from "@tanstack/react-router";
 import type { DataTableToolbarConfig } from "#/components/data-table-toolbar";
 import { DataTable } from "./data-table";
 import { firColumns } from "./fir-columns";
-import { firCollection } from "#/db-collections";
 import type { FirRecord } from "#/lib/fir";
 import { FIR_STATUS_OPTIONS, getFirStatusLabel } from "#/lib/fir";
+import { atoms } from "#/state/atoms";
 import { Skeleton } from "#/components/ui/skeleton";
 import {
   Table,
@@ -20,17 +21,7 @@ import {
 const firTableToolbar: DataTableToolbarConfig<FirRecord> = {
   search: {
     label: "Search FIR records",
-    searchableColumnIds: [
-      "fir_no",
-      "date",
-      "incident_date",
-      "arrest_date",
-      "offence",
-      "accused",
-      "witness",
-      "investigation_officer",
-      "status",
-    ],
+    searchableColumnIds: ["fir_no", "date", "incident_date", "arrest_date", "offence", "status"],
   },
   filters: [
     {
@@ -53,13 +44,19 @@ const initialSorting: SortingState = [
 ];
 
 export function FirTable() {
-  const { data } = useLiveQuery(firCollection);
+  const firs = useAtomValue(atoms.firsAtom);
   const navigate = useNavigate();
+
+  if (AsyncResult.isInitial(firs) || AsyncResult.isWaiting(firs)) {
+    return <FirTableSkeleton />;
+  }
+
+  const data = AsyncResult.isSuccess(firs) ? firs.value : [];
 
   return (
     <DataTable
       columns={firColumns}
-      data={data}
+      data={[...data]}
       initialSorting={initialSorting}
       onRowClick={(fir) => {
         void navigate({

@@ -9,29 +9,19 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TemplatesRouteImport } from './routes/templates'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as NewRouteImport } from './routes/new'
-import { Route as FirIdRouteImport } from './routes/$firId'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as TemplatesNewRouteImport } from './routes/templates_.new'
-import { Route as TemplatesTemplateIdRouteImport } from './routes/templates_.$templateId'
-import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
+import { Route as FirIdRouteImport } from './routes/$firId'
+import { Route as NewRouteImport } from './routes/new'
+import { Route as PlaceholdersRouteImport } from './routes/placeholders'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as FirIdEditRouteImport } from './routes/$firId_.edit'
+import { Route as TemplatesTemplateIdRouteImport } from './routes/templates_.$templateId'
+import { Route as TemplatesNewRouteImport } from './routes/templates_.new'
 
-const TemplatesRoute = TemplatesRouteImport.update({
-  id: '/templates',
-  path: '/templates',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NewRoute = NewRouteImport.update({
-  id: '/new',
-  path: '/new',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FirIdRoute = FirIdRouteImport.update({
@@ -39,24 +29,24 @@ const FirIdRoute = FirIdRouteImport.update({
   path: '/$firId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const NewRoute = NewRouteImport.update({
+  id: '/new',
+  path: '/new',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TemplatesNewRoute = TemplatesNewRouteImport.update({
-  id: '/templates_/new',
-  path: '/templates/new',
+const PlaceholdersRoute = PlaceholdersRouteImport.update({
+  id: '/placeholders',
+  path: '/placeholders',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TemplatesTemplateIdRoute = TemplatesTemplateIdRouteImport.update({
-  id: '/templates_/$templateId',
-  path: '/templates/$templateId',
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SignInSplatRoute = SignInSplatRouteImport.update({
-  id: '/sign-in/$',
-  path: '/sign-in/$',
+const TemplatesRoute = TemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FirIdEditRoute = FirIdEditRouteImport.update({
@@ -64,15 +54,25 @@ const FirIdEditRoute = FirIdEditRouteImport.update({
   path: '/$firId/edit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TemplatesTemplateIdRoute = TemplatesTemplateIdRouteImport.update({
+  id: '/templates_/$templateId',
+  path: '/templates/$templateId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TemplatesNewRoute = TemplatesNewRouteImport.update({
+  id: '/templates_/new',
+  path: '/templates/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$firId': typeof FirIdRoute
   '/new': typeof NewRoute
+  '/placeholders': typeof PlaceholdersRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/$firId/edit': typeof FirIdEditRoute
-  '/sign-in/$': typeof SignInSplatRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/templates/new': typeof TemplatesNewRoute
 }
@@ -80,10 +80,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$firId': typeof FirIdRoute
   '/new': typeof NewRoute
+  '/placeholders': typeof PlaceholdersRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/$firId/edit': typeof FirIdEditRoute
-  '/sign-in/$': typeof SignInSplatRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/templates/new': typeof TemplatesNewRoute
 }
@@ -92,10 +92,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$firId': typeof FirIdRoute
   '/new': typeof NewRoute
+  '/placeholders': typeof PlaceholdersRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRoute
   '/$firId_/edit': typeof FirIdEditRoute
-  '/sign-in/$': typeof SignInSplatRoute
   '/templates_/$templateId': typeof TemplatesTemplateIdRoute
   '/templates_/new': typeof TemplatesNewRoute
 }
@@ -105,10 +105,10 @@ export interface FileRouteTypes {
     | '/'
     | '/$firId'
     | '/new'
+    | '/placeholders'
     | '/settings'
     | '/templates'
     | '/$firId/edit'
-    | '/sign-in/$'
     | '/templates/$templateId'
     | '/templates/new'
   fileRoutesByTo: FileRoutesByTo
@@ -116,10 +116,10 @@ export interface FileRouteTypes {
     | '/'
     | '/$firId'
     | '/new'
+    | '/placeholders'
     | '/settings'
     | '/templates'
     | '/$firId/edit'
-    | '/sign-in/$'
     | '/templates/$templateId'
     | '/templates/new'
   id:
@@ -127,10 +127,10 @@ export interface FileRouteTypes {
     | '/'
     | '/$firId'
     | '/new'
+    | '/placeholders'
     | '/settings'
     | '/templates'
     | '/$firId_/edit'
-    | '/sign-in/$'
     | '/templates_/$templateId'
     | '/templates_/new'
   fileRoutesById: FileRoutesById
@@ -139,35 +139,21 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FirIdRoute: typeof FirIdRoute
   NewRoute: typeof NewRoute
+  PlaceholdersRoute: typeof PlaceholdersRoute
   SettingsRoute: typeof SettingsRoute
   TemplatesRoute: typeof TemplatesRoute
   FirIdEditRoute: typeof FirIdEditRoute
-  SignInSplatRoute: typeof SignInSplatRoute
   TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRoute
   TemplatesNewRoute: typeof TemplatesNewRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/templates': {
-      id: '/templates'
-      path: '/templates'
-      fullPath: '/templates'
-      preLoaderRoute: typeof TemplatesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/new': {
-      id: '/new'
-      path: '/new'
-      fullPath: '/new'
-      preLoaderRoute: typeof NewRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$firId': {
@@ -177,32 +163,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FirIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/new': {
+      id: '/new'
+      path: '/new'
+      fullPath: '/new'
+      preLoaderRoute: typeof NewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/templates_/new': {
-      id: '/templates_/new'
-      path: '/templates/new'
-      fullPath: '/templates/new'
-      preLoaderRoute: typeof TemplatesNewRouteImport
+    '/placeholders': {
+      id: '/placeholders'
+      path: '/placeholders'
+      fullPath: '/placeholders'
+      preLoaderRoute: typeof PlaceholdersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/templates_/$templateId': {
-      id: '/templates_/$templateId'
-      path: '/templates/$templateId'
-      fullPath: '/templates/$templateId'
-      preLoaderRoute: typeof TemplatesTemplateIdRouteImport
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sign-in/$': {
-      id: '/sign-in/$'
-      path: '/sign-in/$'
-      fullPath: '/sign-in/$'
-      preLoaderRoute: typeof SignInSplatRouteImport
+    '/templates': {
+      id: '/templates'
+      path: '/templates'
+      fullPath: '/templates'
+      preLoaderRoute: typeof TemplatesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$firId_/edit': {
@@ -212,6 +198,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FirIdEditRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/templates_/$templateId': {
+      id: '/templates_/$templateId'
+      path: '/templates/$templateId'
+      fullPath: '/templates/$templateId'
+      preLoaderRoute: typeof TemplatesTemplateIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/templates_/new': {
+      id: '/templates_/new'
+      path: '/templates/new'
+      fullPath: '/templates/new'
+      preLoaderRoute: typeof TemplatesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -219,23 +219,13 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FirIdRoute: FirIdRoute,
   NewRoute: NewRoute,
+  PlaceholdersRoute: PlaceholdersRoute,
   SettingsRoute: SettingsRoute,
   TemplatesRoute: TemplatesRoute,
   FirIdEditRoute: FirIdEditRoute,
-  SignInSplatRoute: SignInSplatRoute,
   TemplatesTemplateIdRoute: TemplatesTemplateIdRoute,
   TemplatesNewRoute: TemplatesNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

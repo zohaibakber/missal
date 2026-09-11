@@ -1,34 +1,3 @@
-import { defineConfig } from "vite-plus";
-import { devtools } from "@tanstack/devtools-vite";
-
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-
-import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
-import babel from "@rolldown/plugin-babel";
-import tailwindcss from "@tailwindcss/vite";
-import { nitro } from "nitro/vite";
-
-const config = defineConfig({
-  staged: {
-    "*": "vp check --fix",
-  },
-  fmt: {
-    ignorePatterns: ["src/routeTree.gen.ts"],
-  },
-  lint: { options: { typeAware: true, typeCheck: true } },
-  resolve: { tsconfigPaths: true },
-  plugins: [
-    devtools(),
-    nitro({ rollupConfig: { external: [/^@sentry\//] } }),
-    tailwindcss(),
-    tanstackStart({
-      spa: {
-        enabled: true,
-      },
-    }),
-    viteReact(),
-    babel({ presets: [reactCompilerPreset()] }),
-  ],
-});
-
-export default config;
+// Vite+ reads this file for `vp check`, `vp test`, and `vp fmt`.
+// Electron Forge never loads it — it uses the three Vite configs below.
+export { default } from "./vite.renderer.config.ts";

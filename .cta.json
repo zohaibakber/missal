@@ -1,5 +1,5 @@
 {
-  "projectName": "missal-vite",
+  "projectName": "missal",
   "mode": "file-router",
   "typescript": true,
   "packageManager": "bun",
@@ -12,5 +12,5 @@
   "routerOnly": false,
   "version": 1,
   "framework": "react",
-  "chosenAddOns": ["nitro", "db", "compiler", "form", "tanstack-query"]
+  "chosenAddOns": ["compiler", "form"]
 }

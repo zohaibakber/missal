@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLiveQuery } from "@tanstack/react-db";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { Cause, Exit, Match, Option } from "effect";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
@@ -10,7 +12,6 @@ import {
   LegalDocument01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getNextTemplateId, templateCollection } from "#/db-collections";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,9 +41,14 @@ import {
 } from "#/components/ui/empty";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "#/components/ui/input-group";
 import { TemplateRichEditor } from "#/components/template-rich-editor";
+import { type TemplateId } from "#/lib/ids";
+import { indexPlaceholders, resolvePlaceholderToken } from "#/lib/placeholder";
+import { TemplateCreateInput, TemplateUpdateInput } from "#/lib/templates";
+import { atoms } from "#/state/atoms";
+import { Skeleton } from "#/components/ui/skeleton";
 
 type TemplateEditorFormProps = {
-  templateId?: number;
+  templateId?: TemplateId;
 };
 
 function createDraft() {
@@ -54,7 +60,15 @@ function createDraft() {
 
 export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
   const navigate = useNavigate();
-  const { data: templates } = useLiveQuery(templateCollection);
+  const templatesResult = useAtomValue(atoms.templatesAtom);
+  const placeholderIndexResult = useAtomValue(atoms.placeholderIndexAtom);
+  const createTemplate = useAtomSet(atoms.createTemplateAtom, { mode: "promiseExit" });
+  const updateTemplate = useAtomSet(atoms.updateTemplateAtom, { mode: "promiseExit" });
+  const removeTemplate = useAtomSet(atoms.removeTemplateAtom, { mode: "promiseExit" });
+  const templates = AsyncResult.isSuccess(templatesResult) ? templatesResult.value : [];
+  const placeholderIndex = AsyncResult.isSuccess(placeholderIndexResult)
+    ? placeholderIndexResult.value
+    : indexPlaceholders([]);
   const selectedTemplate =
     templateId === undefined
       ? null
@@ -91,7 +105,19 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
     }
   }, [isEditing, selectedTemplate]);
 
-  if (isEditing && !selectedTemplate) {
+  if (
+    isEditing &&
+    (AsyncResult.isInitial(templatesResult) || AsyncResult.isWaiting(templatesResult))
+  ) {
+    return (
+      <main className="flex flex-col gap-4 p-4">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-[42rem]" />
+      </main>
+    );
+  }
+
+  if (isEditing && AsyncResult.isSuccess(templatesResult) && !selectedTemplate) {
     return (
       <main className="p-4 lg:p-6">
         <Empty className="min-h-[28rem] border">
@@ -100,9 +126,7 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
               <HugeiconsIcon icon={LegalDocument01Icon} />
             </EmptyMedia>
             <EmptyTitle>Template not found</EmptyTitle>
-            <EmptyDescription>
-              This template may have been removed from this browser.
-            </EmptyDescription>
+            <EmptyDescription>This template may have been removed.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button nativeButton={false} render={<Link to="/templates" />} variant="outline">
@@ -114,45 +138,91 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
     );
   }
 
-  function handleSave() {
+  async function handleSave() {
     const name = draft.name.trim();
 
     if (!name) {
       return;
     }
 
-    const now = new Date().toISOString();
-
     if (selectedTemplate) {
-      templateCollection.update(selectedTemplate.id, (template) => {
-        template.content = draft.content;
-        template.name = name;
-        template.updatedAt = now;
-      });
+      const exit = await updateTemplate(
+        new TemplateUpdateInput({
+          id: selectedTemplate.id,
+          name,
+          content: draft.content,
+        }),
+      );
+
+      if (Exit.isFailure(exit)) {
+        toast.error(
+          Option.match(Cause.findErrorOption(exit.cause), {
+            onNone: () => "Something went wrong while saving",
+            onSome: (error) =>
+              Match.valueTags(error, {
+                EntityNotFound: ({ entity }) => `${entity} not found`,
+                EntityConflict: ({ field }) => `${field} is already in use`,
+                StorageError: ({ message }) => message,
+              }),
+          }),
+        );
+        return;
+      }
+
       toast.success("Template updated");
       return;
     }
 
-    const nextId = getNextTemplateId(templates);
-    templateCollection.insert({
-      id: nextId,
-      content: draft.content,
-      createdAt: now,
-      name,
-      updatedAt: now,
-    });
+    const exit = await createTemplate(
+      new TemplateCreateInput({
+        name,
+        content: draft.content,
+      }),
+    );
+
+    if (Exit.isFailure(exit)) {
+      toast.error(
+        Option.match(Cause.findErrorOption(exit.cause), {
+          onNone: () => "Something went wrong while saving",
+          onSome: (error) =>
+            Match.valueTags(error, {
+              EntityNotFound: ({ entity }) => `${entity} not found`,
+              EntityConflict: ({ field }) => `${field} is already in use`,
+              StorageError: ({ message }) => message,
+            }),
+        }),
+      );
+      return;
+    }
+
     void navigate({
       to: "/templates/$templateId",
-      params: { templateId: `${nextId}` },
+      params: { templateId: `${exit.value.id}` },
     });
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!selectedTemplate) {
       return;
     }
 
-    templateCollection.delete(selectedTemplate.id);
+    const exit = await removeTemplate(selectedTemplate.id);
+
+    if (Exit.isFailure(exit)) {
+      toast.error(
+        Option.match(Cause.findErrorOption(exit.cause), {
+          onNone: () => "Something went wrong while saving",
+          onSome: (error) =>
+            Match.valueTags(error, {
+              EntityNotFound: ({ entity }) => `${entity} not found`,
+              EntityConflict: ({ field }) => `${field} is already in use`,
+              StorageError: ({ message }) => message,
+            }),
+        }),
+      );
+      return;
+    }
+
     setIsDeleteDialogOpen(false);
     void navigate({ to: "/templates" });
   }
@@ -256,6 +326,9 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
             }))
           }
           placeholder="ٹیمپلیٹ کا متن یہاں پیسٹ کریں..."
+          resolvePlaceholderToken={(selectedText) =>
+            resolvePlaceholderToken(selectedText, placeholderIndex)
+          }
           value={draft.content}
         />
       </section>
@@ -265,13 +338,19 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete template</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the template from this browser. FIR records and saved placeholder values
-              are not deleted.
+              This removes the template. FIR records and saved placeholder values are not deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} type="button" variant="destructive">
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDelete();
+              }}
+              type="button"
+              variant="destructive"
+            >
               <HugeiconsIcon data-icon="inline-start" icon={Delete02Icon} />
               Delete
             </AlertDialogAction>

@@ -1,139 +1,69 @@
-import { describe, expect, test } from "vite-plus/test";
-import type { FirRecord } from "#/lib/fir";
+import { expect, it } from "@effect/vitest";
+import { FirRecord } from "#/lib/fir";
+import { FirId, PlaceholderId } from "#/lib/ids";
+import { createDefaultPlaceholders, indexPlaceholders } from "#/lib/placeholder";
+import { DEFAULT_SETTINGS_UPDATED_AT } from "#/lib/settings";
 import {
   buildTemplateValues,
   extractPlaceholders,
-  getMissingPlaceholders,
-  renderTemplateHtml,
+  FirPlaceholderValue,
   renderTemplate,
 } from "#/lib/templates";
-import { buildSharedPlaceholderValues } from "#/lib/settings";
 
-const fir: FirRecord = {
-  id: 1,
-  fir_no: "23/26",
-  date: "13.01.2026",
-  offence: "411/379",
-  accused: "آصف عرف کوجی",
-  witness: "علی حسین",
-  NIC: "3520288701547",
-  mobile: "03001234567",
-  incident_date: "12.02.2026",
-  arrest_date: "14.02.2026",
-  investigation_officer: "محمد علی",
+const catalog = createDefaultPlaceholders();
+const index = indexPlaceholders(catalog);
+
+const fir = new FirRecord({
+  id: FirId.make(1),
+  fir_no: "42",
+  date: "02-01-2026",
+  offence: "theft",
+  accused: "accused",
+  witness: "",
+  NIC: "12345-1234567-1",
+  mobile: "",
+  incident_date: "01-01-2026",
+  arrest_date: "",
+  investigation_officer: "",
   status: "Open",
-};
+  content: "",
+});
 
-describe("template placeholders", () => {
-  test("extracts mixed Urdu and English placeholders once", () => {
-    expect(extractPlaceholders("@Date_FIR@ @جرم_@ @Date_FIR@ «تھانہ_نام_»")).toEqual([
-      "Date_FIR",
-      "جرم_",
-      "تھانہ_نام_",
-    ]);
+it("extracts numeric and key tokens", () => {
+  expect(extractPlaceholders("FIR @1@ @nic@ @missing@", index)).toEqual(["fir_no", "nic"]);
+});
+
+it("prefers core fields, then FIR values, then shared settings", () => {
+  const extraValues = [
+    new FirPlaceholderValue({
+      firId: fir.id,
+      placeholderId: PlaceholderId.make(1),
+      updatedAt: DEFAULT_SETTINGS_UPDATED_AT,
+      value: "should-not-win",
+    }),
+    new FirPlaceholderValue({
+      firId: fir.id,
+      placeholderId: PlaceholderId.make(11),
+      updatedAt: DEFAULT_SETTINGS_UPDATED_AT,
+      value: "station-from-fir",
+    }),
+  ];
+  const values = buildTemplateValues({
+    catalog: index,
+    extraValues,
+    fir,
+    placeholders: ["fir_no", "nic", "police_station", "district"],
+    sharedValues: {
+      police_station: "should-not-win",
+      district: "Lahore",
+    },
   });
 
-  test("renders repeated placeholders", () => {
-    const content = "FIR @Date_FIR@ / @Date_FIR@ جرم @جرم_@";
-    const placeholders = extractPlaceholders(content);
-    const values = buildTemplateValues({
-      extraValues: [],
-      fir,
-      placeholders,
-    });
-
-    expect(renderTemplate(content, values)).toBe("FIR 13.01.2026 / 13.01.2026 جرم 411/379");
-  });
-
-  test("leaves unresolved placeholders visible", () => {
-    const content = "تھانہ @تھانہ_نام_@";
-    const placeholders = extractPlaceholders(content);
-    const values = buildTemplateValues({
-      extraValues: [],
-      fir,
-      placeholders,
-    });
-
-    expect(renderTemplate(content, values)).toBe("تھانہ @تھانہ_نام_@");
-    expect(getMissingPlaceholders(placeholders, values)).toEqual(["تھانہ_نام_"]);
-  });
-
-  test("applies FIR core values before extra values", () => {
-    const content = "FIR @مقدمہ_نمبر@ تھانہ @تھانہ_نام_@";
-    const placeholders = extractPlaceholders(content);
-    const values = buildTemplateValues({
-      extraValues: [
-        {
-          id: "1:مقدمہ_نمبر",
-          firId: 1,
-          placeholder: "مقدمہ_نمبر",
-          value: "wrong",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        },
-        {
-          id: "1:تھانہ_نام_",
-          firId: 1,
-          placeholder: "تھانہ_نام_",
-          value: "تھانہ شادمان",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-        },
-      ],
-      fir,
-      placeholders,
-    });
-
-    expect(renderTemplate(content, values)).toBe("FIR 23/26 تھانہ تھانہ شادمان");
-  });
-
-  test("uses shared settings values for unresolved placeholders", () => {
-    const content = "تھانہ @تھانہ_نام_@ ضلع @ضلع_نام_@ SHO @SHO_نام@";
-    const placeholders = extractPlaceholders(content);
-    const values = buildTemplateValues({
-      extraValues: [],
-      fir,
-      placeholders,
-      sharedValues: buildSharedPlaceholderValues({
-        policeStation: "تھانہ سٹی",
-        district: "لاہور",
-        shoName: "محمد علی",
-      }),
-    });
-
-    expect(renderTemplate(content, values)).toBe("تھانہ تھانہ سٹی ضلع لاہور SHO محمد علی");
-  });
-
-  test("uses FIR values for arrest date and investigation officer", () => {
-    const content = "گرفتاری @تاریخ_گرفتاری@ تفتیشی @تفتیشی_\u200f@";
-    const placeholders = extractPlaceholders(content);
-    const values = buildTemplateValues({
-      extraValues: [],
-      fir,
-      placeholders,
-    });
-
-    expect(renderTemplate(content, values)).toBe("گرفتاری 14.02.2026 تفتیشی محمد علی");
-  });
-
-  test("escapes inserted values when rendering html", () => {
-    const content = "<p>@تھانہ_نام_@</p>";
-    const values = {
-      تھانہ_نام_: "<script>alert(1)</script>\nتھانہ شادمان",
-    };
-
-    expect(renderTemplateHtml(content, values)).toBe(
-      "<p>&lt;script&gt;alert(1)&lt;/script&gt;<br>تھانہ شادمان</p>",
-    );
-  });
-
-  test("keeps old angle placeholders working", () => {
-    const content = "FIR «Date_FIR» جرم «جرم_»";
-    const placeholders = extractPlaceholders(content);
-    const values = buildTemplateValues({
-      extraValues: [],
-      fir,
-      placeholders,
-    });
-
-    expect(renderTemplate(content, values)).toBe("FIR 13.01.2026 جرم 411/379");
-  });
+  expect(values.fir_no).toBe("42");
+  expect(values.nic).toBe("12345-1234567-1");
+  expect(values.police_station).toBe("station-from-fir");
+  expect(values.district).toBe("Lahore");
+  expect(renderTemplate("No. @fir_no@ @police_station@ @unknown@", values, index)).toBe(
+    "No. 42 station-from-fir @unknown@",
+  );
 });

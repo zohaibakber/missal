@@ -5,8 +5,8 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import { Button } from "#/components/ui/button";
-import { cn } from "#/lib/utils";
+import { Button } from "#/components/ui/button.tsx";
+import { cn } from "#/lib/utils.ts";
 
 function Dialog(props: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;

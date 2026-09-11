@@ -1,5 +1,5 @@
-import { ClientOnly, Link, createFileRoute } from "@tanstack/react-router";
-import { FirTable, FirTableSkeleton } from "#/components/fir-table";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { FirTable } from "#/components/fir-table";
 import { Button } from "#/components/ui/button";
 
 export const Route = createFileRoute("/")({
@@ -19,9 +19,7 @@ function RouteComponent() {
         </Button>
       </section>
 
-      <ClientOnly fallback={<FirTableSkeleton />}>
-        <FirTable />
-      </ClientOnly>
+      <FirTable />
     </main>
   );
 }

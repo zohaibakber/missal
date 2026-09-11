@@ -5,7 +5,7 @@
 
 @font-face {
   font-family: "Jameel Noori Nastaleeq";
-  src: url("/Jameel%20Noori%20Nastaleeq.ttf") format("truetype");
+  src: url("./Jameel%20Noori%20Nastaleeq.ttf") format("truetype");
   font-display: swap;
 }
 

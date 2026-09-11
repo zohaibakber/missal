@@ -59,6 +59,7 @@ type TemplateRichEditorProps = {
   id?: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  resolvePlaceholderToken?: (selectedText: string) => string;
   value: string;
 };
 
@@ -180,7 +181,10 @@ function getSelectedPlainText(model: Model) {
   return selectedText.trim();
 }
 
-function wrapSelectionWithPlaceholder(model: Model) {
+function wrapSelectionWithPlaceholder(
+  model: Model,
+  resolvePlaceholderToken?: (selectedText: string) => string,
+) {
   const selection = model.document.selection;
   const range = selection.getFirstRange();
   const selectedText = getSelectedPlainText(model);
@@ -189,11 +193,17 @@ function wrapSelectionWithPlaceholder(model: Model) {
     return false;
   }
 
+  const token = resolvePlaceholderToken?.(selectedText) || selectedText;
+
+  if (!token) {
+    return false;
+  }
+
   model.change((writer) => {
     const position = range.start;
 
     model.deleteContent(selection);
-    writer.insertText(`@${selectedText}@`, position);
+    writer.insertText(`@${token}@`, position);
   });
 
   return true;
@@ -253,6 +263,7 @@ export function TemplateRichEditor({
   id,
   onChange,
   placeholder,
+  resolvePlaceholderToken,
   value,
 }: TemplateRichEditorProps) {
   const editorId = id ?? "template-rich-editor";
@@ -260,6 +271,8 @@ export function TemplateRichEditor({
   const initialEditorValueRef = useRef(editorValue);
   const editorRef = useRef<ClassicEditor | null>(null);
   const latestEditorValueRef = useRef(editorValue);
+  const resolvePlaceholderTokenRef = useRef(resolvePlaceholderToken);
+  resolvePlaceholderTokenRef.current = resolvePlaceholderToken;
   const editorConfig = useMemo<EditorConfig>(
     () => ({
       alignment: {
@@ -408,7 +421,7 @@ export function TemplateRichEditor({
               return;
             }
 
-            if (!wrapSelectionWithPlaceholder(editor.model)) {
+            if (!wrapSelectionWithPlaceholder(editor.model, resolvePlaceholderTokenRef.current)) {
               return;
             }
 

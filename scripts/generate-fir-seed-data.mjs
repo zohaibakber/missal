@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { format, isValid, parse } from "date-fns";
 import xlsx from "xlsx";
 
 const projectRoot = process.cwd();
@@ -23,6 +24,20 @@ function clean(value) {
   return String(value ?? "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function formatSeedDate(value) {
+  const trimmed = clean(value);
+
+  for (const dateFormat of ["dd-MM-yyyy", "dd.MM.yyyy"]) {
+    const parsed = parse(trimmed, dateFormat, new Date());
+
+    if (isValid(parsed)) {
+      return format(parsed, "dd-MM-yyyy");
+    }
+  }
+
+  return trimmed;
 }
 
 function sanitizePhone(value) {
@@ -49,13 +64,13 @@ function mapRow(row, index) {
   return {
     id: index + 1,
     fir_no: clean(row[FIELD_MAP.fir_no]),
-    date: clean(row[FIELD_MAP.date]),
+    date: formatSeedDate(row[FIELD_MAP.date]),
     offence: clean(row[FIELD_MAP.offence]),
     accused: clean(row[FIELD_MAP.accused]),
     witness,
     NIC: extractNic(complaintText),
     mobile: pickFirst(sanitizePhone(row[FIELD_MAP.mobile1]), sanitizePhone(row[FIELD_MAP.mobile2])),
-    incident_date: clean(row[FIELD_MAP.incident_date]),
+    incident_date: formatSeedDate(row[FIELD_MAP.incident_date]),
     arrest_date: "",
     investigation_officer: "",
     status: "Open",

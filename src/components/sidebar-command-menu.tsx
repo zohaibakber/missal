@@ -1,7 +1,14 @@
 import * as React from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Add01Icon, Files, Home, Search01Icon, Settings05Icon } from "@hugeicons/core-free-icons";
+import {
+  Add01Icon,
+  Files,
+  Home,
+  Search01Icon,
+  Settings01Icon,
+  TextFontIcon,
+} from "@hugeicons/core-free-icons";
 
 import {
   Command,
@@ -16,7 +23,7 @@ import {
 } from "#/components/ui/command";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "#/components/ui/input-group";
 import { Kbd, KbdGroup } from "#/components/ui/kbd";
-import { SidebarGroup, SidebarGroupContent } from "#/components/ui/sidebar";
+import { cn } from "#/lib/utils";
 
 const commandActions = [
   {
@@ -35,7 +42,13 @@ const commandActions = [
         url: "/templates",
       },
       {
-        icon: Settings05Icon,
+        icon: TextFontIcon,
+        shortcut: "P",
+        title: "Placeholders",
+        url: "/placeholders",
+      },
+      {
+        icon: Settings01Icon,
         shortcut: "S",
         title: "Settings",
         url: "/settings",
@@ -61,7 +74,7 @@ const commandActions = [
   },
 ];
 
-export function SidebarCommandMenu() {
+export function SidebarCommandMenu({ className }: { className?: string }) {
   const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
 
@@ -86,40 +99,35 @@ export function SidebarCommandMenu() {
 
   return (
     <>
-      <SidebarGroup>
-        <SidebarGroupContent>
-          <InputGroup
-            className="cursor-pointer bg-background shadow-none group-data-[collapsible=icon]:hidden"
-            onClick={() => setOpen(true)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                setOpen(true);
-              }
-            }}
-            role="button"
-            tabIndex={0}
-          >
-            <InputGroupAddon align="inline-start">
-              <HugeiconsIcon icon={Search01Icon} />
-            </InputGroupAddon>
-            <InputGroupInput
-              aria-label="Search commands"
-              className="pointer-events-none"
-              placeholder="Search"
-              readOnly
-            />
-            <InputGroupAddon align="inline-end">
-              <KbdGroup>
-                <Kbd>Ctrl</Kbd>
-                <Kbd>K</Kbd>
-              </KbdGroup>
-            </InputGroupAddon>
-          </InputGroup>
-        </SidebarGroupContent>
-      </SidebarGroup>
+      <InputGroup
+        className={cn("w-full cursor-pointer bg-background shadow-none h-7 w-52", className)}
+        onClick={() => setOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setOpen(true);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+      >
+        <InputGroupAddon align="inline-start">
+          <HugeiconsIcon icon={Search01Icon} />
+        </InputGroupAddon>
+        <InputGroupInput
+          aria-label="Search commands"
+          className="pointer-events-none"
+          placeholder="Search"
+          readOnly
+        />
+        <InputGroupAddon align="inline-end">
+          <KbdGroup>
+            <Kbd>Ctrl+K</Kbd>
+          </KbdGroup>
+        </InputGroupAddon>
+      </InputGroup>
 
-      <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandDialog className="max-w-lg" open={open} onOpenChange={setOpen}>
         <Command>
           <CommandInput placeholder="Search actions..." />
           <CommandList>

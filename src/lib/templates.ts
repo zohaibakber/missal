@@ -1,74 +1,91 @@
-import { z } from "zod";
+import { Schema } from "effect";
 import type { FirRecord } from "#/lib/fir";
+import { FirId, PlaceholderId, TemplateId } from "#/lib/ids";
+import {
+  CORE_PLACEHOLDER_FIELDS,
+  type Placeholder,
+  type PlaceholderIndex,
+  indexPlaceholders,
+  isCorePlaceholderKey,
+  isPlaceholderToken,
+  resolvePlaceholder,
+  resolvePlaceholderKey,
+} from "#/lib/placeholder";
+import { IsoDateTimeString, NonEmptyTrimmedString } from "#/lib/schema";
 
-export const templateRecordSchema = z.object({
-  id: z.number().int().positive(),
-  name: z.string().trim().min(1, "Template name is required."),
-  content: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
+export { TemplateId } from "#/lib/ids";
 
-export const firPlaceholderValueSchema = z.object({
-  id: z.string().min(1),
-  firId: z.number().int().positive(),
-  placeholder: z.string().trim().min(1),
-  value: z.string(),
-  updatedAt: z.string(),
-});
+export class TemplateRecord extends Schema.Class<TemplateRecord>("TemplateRecord")({
+  id: TemplateId,
+  name: NonEmptyTrimmedString,
+  content: Schema.String,
+  createdAt: IsoDateTimeString,
+  updatedAt: IsoDateTimeString,
+}) {}
 
-export type TemplateRecord = z.infer<typeof templateRecordSchema>;
-export type FirPlaceholderValue = z.infer<typeof firPlaceholderValueSchema>;
+export class TemplateCreateInput extends Schema.Class<TemplateCreateInput>("TemplateCreateInput")({
+  name: NonEmptyTrimmedString,
+  content: Schema.String,
+}) {}
 
-export const LEGACY_PLACEHOLDER_PATTERN = /«([^»]+)»/g;
-export const AT_PLACEHOLDER_PATTERN = /@([^@\r\n<>]{1,120})@/g;
-export const PLACEHOLDER_PATTERN = AT_PLACEHOLDER_PATTERN;
+export class TemplateUpdateInput extends Schema.Class<TemplateUpdateInput>("TemplateUpdateInput")({
+  id: TemplateId,
+  name: NonEmptyTrimmedString,
+  content: Schema.String,
+}) {}
 
-const placeholderAliases: Record<string, keyof FirRecord> = {
-  مقدمہ_نمبر: "fir_no",
-  "مقدمہ نمبر": "fir_no",
-  fir_no: "fir_no",
-  Date_FIR: "date",
-  "Date FIR": "date",
-  "تاریخ ایف آئی آر": "date",
-  تاریخ_ووقت_وقوعہ: "incident_date",
-  "تاریخ ووقت وقوعہ": "incident_date",
-  تاریخ_گرفتاری: "arrest_date",
-  "تاریخ گرفتاری": "arrest_date",
-  جرم_: "offence",
-  جرم: "offence",
-  نام_ملزم_و_سکونت_: "accused",
-  "نام ملزم و سکونت": "accused",
-  گواہان__1: "witness",
-  "گواہان  1": "witness",
-  گواہان2: "witness",
-  witness: "witness",
-  شناختی_کارڈ: "NIC",
-  NIC: "NIC",
-  موبائل: "mobile",
-  mobile: "mobile",
-  تفتیشی_: "investigation_officer",
-  تفتیشی: "investigation_officer",
-  "تفتیشی افسر": "investigation_officer",
-};
+export class FirPlaceholderValue extends Schema.Class<FirPlaceholderValue>("FirPlaceholderValue")({
+  firId: FirId,
+  placeholderId: PlaceholderId,
+  value: Schema.String,
+  updatedAt: IsoDateTimeString,
+}) {}
 
-export function normalizePlaceholderName(value: string) {
-  return value
-    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+export class FirPlaceholderValueUpsertInput extends Schema.Class<FirPlaceholderValueUpsertInput>(
+  "FirPlaceholderValueUpsertInput",
+)({
+  firId: FirId,
+  placeholderId: PlaceholderId,
+  value: Schema.String,
+}) {}
+
+export class FirPlaceholderValueRemoveInput extends Schema.Class<FirPlaceholderValueRemoveInput>(
+  "FirPlaceholderValueRemoveInput",
+)({
+  firId: FirId,
+  placeholderId: PlaceholderId,
+}) {}
+
+export const PLACEHOLDER_PATTERN = /@([^@\r\n<>]{1,120})@/g;
+
+function getCatalogIndex(
+  catalog: readonly Placeholder[] | PlaceholderIndex = [],
+): PlaceholderIndex {
+  if ("byId" in catalog) {
+    return catalog;
+  }
+
+  return indexPlaceholders(catalog);
 }
 
-export function extractPlaceholders(content: string) {
+export function extractPlaceholders(
+  content: string,
+  catalog: readonly Placeholder[] | PlaceholderIndex = [],
+) {
+  const index = getCatalogIndex(catalog);
   const placeholders: string[] = [];
 
-  for (const pattern of [AT_PLACEHOLDER_PATTERN, LEGACY_PLACEHOLDER_PATTERN]) {
-    for (const match of content.matchAll(pattern)) {
-      const placeholder = normalizePlaceholderName(match[1] ?? "");
+  for (const match of content.matchAll(PLACEHOLDER_PATTERN)) {
+    const token = (match[1] ?? "").trim();
 
-      if (placeholder && !placeholders.includes(placeholder)) {
-        placeholders.push(placeholder);
-      }
+    if (!isPlaceholderToken(token)) {
+      continue;
+    }
+
+    const resolved = resolvePlaceholder(token, index);
+
+    if (resolved && !placeholders.includes(resolved.key)) {
+      placeholders.push(resolved.key);
     }
   }
 
@@ -76,17 +93,11 @@ export function extractPlaceholders(content: string) {
 }
 
 export function getCorePlaceholderValue(placeholder: string, fir: FirRecord) {
-  const field = placeholderAliases[normalizePlaceholderName(placeholder)];
-
-  if (!field) {
+  if (!isCorePlaceholderKey(placeholder)) {
     return undefined;
   }
 
-  return String(fir[field] ?? "");
-}
-
-export function getPlaceholderValueId(firId: number, placeholder: string) {
-  return `${firId}:${normalizePlaceholderName(placeholder)}`;
+  return String(fir[CORE_PLACEHOLDER_FIELDS[placeholder]] ?? "");
 }
 
 export function buildTemplateValues({
@@ -94,56 +105,60 @@ export function buildTemplateValues({
   fir,
   placeholders,
   sharedValues = {},
+  catalog = [],
 }: {
-  extraValues: FirPlaceholderValue[];
+  extraValues: readonly FirPlaceholderValue[];
   fir: FirRecord;
   placeholders: string[];
   sharedValues?: Record<string, string>;
+  catalog?: readonly Placeholder[] | PlaceholderIndex;
 }) {
+  const index = getCatalogIndex(catalog);
+  const extraByPlaceholderId = new Map(
+    extraValues.map((value) => [value.placeholderId, value] as const),
+  );
   const values: Record<string, string> = {};
 
   for (const placeholder of placeholders) {
-    const coreValue = getCorePlaceholderValue(placeholder, fir);
+    const resolved = resolvePlaceholder(placeholder, index);
+    const key = resolved?.key ?? (resolvePlaceholderKey(placeholder, index) || placeholder);
+    const coreValue = getCorePlaceholderValue(key, fir);
 
     if (coreValue !== undefined) {
-      values[placeholder] = coreValue;
+      values[key] = coreValue;
       continue;
     }
 
-    const extraValue = extraValues.find(
-      (value) => normalizePlaceholderName(value.placeholder) === placeholder,
-    );
+    const extraValue = resolved ? extraByPlaceholderId.get(resolved.id) : undefined;
 
     if (extraValue) {
-      values[placeholder] = extraValue.value;
+      values[key] = extraValue.value;
       continue;
     }
 
-    const sharedValue =
-      sharedValues[placeholder] ?? sharedValues[normalizePlaceholderName(placeholder)];
+    const sharedValue = sharedValues[key];
 
     if (sharedValue) {
-      values[placeholder] = sharedValue;
+      values[key] = sharedValue;
     }
   }
 
   return values;
 }
 
-export function renderTemplate(content: string, values: Record<string, string>) {
-  return content.replace(
-    /@([^@\r\n<>]{1,120})@|«([^»]+)»/g,
-    (token, atPlaceholder, legacyPlaceholder) => {
-      const placeholder = normalizePlaceholderName(atPlaceholder || legacyPlaceholder);
-      const value = values[placeholder];
+export function renderTemplate(
+  content: string,
+  values: Record<string, string>,
+  catalog: readonly Placeholder[] | PlaceholderIndex = [],
+) {
+  const index = getCatalogIndex(catalog);
 
-      return value?.trim() ? value : token;
-    },
-  );
-}
+  return content.replace(/@([^@\r\n<>]{1,120})@/g, (token, rawPlaceholder: string) => {
+    const placeholder = resolvePlaceholderKey(rawPlaceholder, index);
+    const value = values[placeholder];
 
-export function getMissingPlaceholders(placeholders: string[], values: Record<string, string>) {
-  return placeholders.filter((placeholder) => !values[placeholder]?.trim());
+    return value?.trim() ? value : token;
+  });
 }
 
 export function escapeHtml(value: string) {
@@ -155,16 +170,19 @@ export function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
-export function renderTemplateHtml(content: string, values: Record<string, string>) {
-  return content.replace(
-    /@([^@\r\n<>]{1,120})@|«([^»]+)»/g,
-    (token, atPlaceholder, legacyPlaceholder) => {
-      const placeholder = normalizePlaceholderName(atPlaceholder || legacyPlaceholder);
-      const value = values[placeholder];
+export function renderTemplateHtml(
+  content: string,
+  values: Record<string, string>,
+  catalog: readonly Placeholder[] | PlaceholderIndex = [],
+) {
+  const index = getCatalogIndex(catalog);
 
-      return value?.trim()
-        ? escapeHtml(value).replace(/\n/g, "<br>")
-        : `<span data-placeholder="true">${escapeHtml(token)}</span>`;
-    },
-  );
+  return content.replace(/@([^@\r\n<>]{1,120})@/g, (token, rawPlaceholder: string) => {
+    const placeholder = resolvePlaceholderKey(rawPlaceholder, index);
+    const value = values[placeholder];
+
+    return value?.trim()
+      ? escapeHtml(value).replace(/\n/g, "<br>")
+      : `<span data-placeholder="true">${escapeHtml(token)}</span>`;
+  });
 }

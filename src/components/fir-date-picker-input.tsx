@@ -1,4 +1,4 @@
-import * as React from "react";
+import { useState, type FocusEventHandler, type HTMLAttributes } from "react";
 import { Calendar03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -10,34 +10,14 @@ import {
   InputGroupInput,
 } from "#/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
-
-function formatDate(date: Date | undefined) {
-  if (!date) {
-    return "";
-  }
-
-  return date.toLocaleDateString("en-US", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function parseDate(value: string | undefined) {
-  if (!value?.trim()) {
-    return undefined;
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-}
+import { formatDate, parseDate } from "#/lib/date";
 
 type FirDatePickerInputProps = {
   ariaInvalid?: boolean;
-  dir?: React.HTMLAttributes<HTMLDivElement>["dir"];
+  dir?: HTMLAttributes<HTMLDivElement>["dir"];
   id: string;
   name: string;
-  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  onBlur?: FocusEventHandler<HTMLInputElement>;
   onChange: (value: string) => void;
   placeholder: string;
   value?: string;
@@ -53,15 +33,10 @@ export function FirDatePickerInput({
   placeholder,
   value = "",
 }: FirDatePickerInputProps) {
-  const [open, setOpen] = React.useState(false);
-  const parsedValue = React.useMemo(() => parseDate(value), [value]);
-  const [month, setMonth] = React.useState<Date | undefined>(parsedValue);
-
-  React.useEffect(() => {
-    if (parsedValue) {
-      setMonth(parsedValue);
-    }
-  }, [parsedValue]);
+  const [open, setOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState<Date | undefined>(undefined);
+  const parsedValue = parseDate(value);
+  const month = calendarMonth ?? parsedValue;
 
   return (
     <InputGroup dir={dir}>
@@ -71,14 +46,21 @@ export function FirDatePickerInput({
         value={value}
         placeholder={placeholder}
         aria-invalid={ariaInvalid}
-        onBlur={onBlur}
+        inputMode="numeric"
+        onBlur={(event) => {
+          if (parsedValue) {
+            onChange(formatDate(parsedValue));
+          }
+
+          onBlur?.(event);
+        }}
         onChange={(event) => {
           const nextValue = event.target.value;
           onChange(nextValue);
 
           const nextDate = parseDate(nextValue);
           if (nextDate) {
-            setMonth(nextDate);
+            setCalendarMonth(nextDate);
           }
         }}
         onKeyDown={(event) => {
@@ -89,7 +71,16 @@ export function FirDatePickerInput({
         }}
       />
       <InputGroupAddon align="inline-end">
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover
+          open={open}
+          onOpenChange={(nextOpen) => {
+            setOpen(nextOpen);
+
+            if (!nextOpen) {
+              setCalendarMonth(undefined);
+            }
+          }}
+        >
           <PopoverTrigger
             render={
               <InputGroupButton
@@ -108,11 +99,12 @@ export function FirDatePickerInput({
               mode="single"
               selected={parsedValue}
               month={month}
-              onMonthChange={setMonth}
+              onMonthChange={setCalendarMonth}
               captionLayout="dropdown"
               onSelect={(selectedDate) => {
-                onChange(formatDate(selectedDate));
+                onChange(selectedDate ? formatDate(selectedDate) : "");
                 setOpen(false);
+                setCalendarMonth(undefined);
               }}
             />
           </PopoverContent>

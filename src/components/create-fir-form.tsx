@@ -1,5 +1,8 @@
 import { useEffect, useId } from "react";
+import { useAtomSet } from "@effect/atom-react";
 import { useForm } from "@tanstack/react-form";
+import { Cause, Exit, Match, Option, Schema } from "effect";
+import { toast } from "sonner";
 import { Button } from "#/components/ui/button";
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "#/components/ui/field";
 import { FirDatePickerInput } from "#/components/fir-date-picker-input";
@@ -15,23 +18,30 @@ import {
 import {
   createEmptyFirRecord,
   FIR_STATUS_OPTIONS,
-  firSchema,
+  FirCreateInput,
+  FirUpdateInput,
   getFirStatusColor,
   getFirStatusLabel,
+  type FirFormValues,
+  type FirRecord,
 } from "#/lib/fir";
-import type { FirRecord } from "#/lib/fir";
-import { firCollection, getNextFirId } from "#/db-collections";
-import { useLiveQuery } from "@tanstack/react-db";
+import { formatDate } from "#/lib/date";
+import { atoms } from "#/state/atoms";
 import { cn } from "#/lib/utils";
 
-const formSchema = firSchema.omit({ id: true });
-type FirFormValues = Omit<FirRecord, "id">;
-
-type CreateFirFormProps = {
+type FirFormSharedProps = {
   className?: string;
-  fir?: FirRecord;
   onSuccess?: (firId: number) => void;
 };
+
+type FirFormProps = FirFormSharedProps &
+  (
+    | { kind: "create" }
+    | {
+        kind: "edit";
+        fir: FirRecord;
+      }
+  );
 
 function getFirFormValues(fir?: FirRecord): FirFormValues {
   if (!fir) {
@@ -42,41 +52,104 @@ function getFirFormValues(fir?: FirRecord): FirFormValues {
   return {
     ...createEmptyFirRecord(),
     ...values,
-    arrest_date: values.arrest_date ?? "",
-    date: values.date ?? "",
-    incident_date: values.incident_date ?? "",
+    arrest_date: formatDate(values.arrest_date ?? ""),
+    date: formatDate(values.date ?? ""),
+    incident_date: formatDate(values.incident_date ?? ""),
     investigation_officer: values.investigation_officer ?? "",
   };
 }
 
-export function CreateFirForm({ className, fir, onSuccess }: CreateFirFormProps) {
+function FirForm(props: FirFormProps) {
+  const { className, onSuccess } = props;
+  const fir = props.kind === "edit" ? props.fir : undefined;
   const formId = useId();
-  const { data: records } = useLiveQuery(firCollection);
   const isEditing = Boolean(fir);
+  const createFir = useAtomSet(atoms.createFirAtom, { mode: "promiseExit" });
+  const updateFir = useAtomSet(atoms.updateFirAtom, { mode: "promiseExit" });
 
   const form = useForm({
     defaultValues: getFirFormValues(fir),
     validators: {
-      onSubmit: formSchema,
+      onSubmit: ({ value }) => {
+        const required = ["fir_no", "date", "offence", "accused", "incident_date"] as const;
+        const fields: Partial<Record<(typeof required)[number], string>> = {};
+
+        for (const key of required) {
+          if (!value[key].trim()) {
+            fields[key] = "Required";
+          }
+        }
+
+        return Object.keys(fields).length ? { fields } : undefined;
+      },
     },
     onSubmit: async ({ value }) => {
       if (fir) {
-        firCollection.update(fir.id, (draft) => {
-          Object.assign(draft, value);
+        const decoded = Schema.decodeUnknownExit(FirUpdateInput)({
+          ...value,
+          id: fir.id,
+          arrest_date: formatDate(value.arrest_date),
+          date: formatDate(value.date),
+          incident_date: formatDate(value.incident_date),
         });
-        onSuccess?.(fir.id);
+
+        if (Exit.isFailure(decoded)) {
+          toast.error("Please fill in the required fields");
+          return;
+        }
+
+        const exit = await updateFir(decoded.value);
+
+        if (Exit.isFailure(exit)) {
+          toast.error(
+            Option.match(Cause.findErrorOption(exit.cause), {
+              onNone: () => "Something went wrong while saving",
+              onSome: (error) =>
+                Match.valueTags(error, {
+                  EntityNotFound: ({ entity }) => `${entity} not found`,
+                  EntityConflict: ({ field }) => `${field} is already in use`,
+                  StorageError: ({ message }) => message,
+                }),
+            }),
+          );
+          return;
+        }
+
+        onSuccess?.(exit.value.id);
         return;
       }
 
-      const firId = getNextFirId(records);
-
-      firCollection.insert({
+      const decoded = Schema.decodeUnknownExit(FirCreateInput)({
         ...value,
-        id: firId,
+        arrest_date: formatDate(value.arrest_date),
+        date: formatDate(value.date),
+        incident_date: formatDate(value.incident_date),
       });
 
+      if (Exit.isFailure(decoded)) {
+        toast.error("Please fill in the required fields");
+        return;
+      }
+
+      const exit = await createFir(decoded.value);
+
+      if (Exit.isFailure(exit)) {
+        toast.error(
+          Option.match(Cause.findErrorOption(exit.cause), {
+            onNone: () => "Something went wrong while saving",
+            onSome: (error) =>
+              Match.valueTags(error, {
+                EntityNotFound: ({ entity }) => `${entity} not found`,
+                EntityConflict: ({ field }) => `${field} is already in use`,
+                StorageError: ({ message }) => message,
+              }),
+          }),
+        );
+        return;
+      }
+
       form.reset();
-      onSuccess?.(firId);
+      onSuccess?.(exit.value.id);
     },
   });
 
@@ -194,7 +267,7 @@ export function CreateFirForm({ className, fir, onSuccess }: CreateFirFormProps)
                   onBlur={field.handleBlur}
                   onChange={field.handleChange}
                   ariaInvalid={isInvalid}
-                  placeholder="June 01, 2025"
+                  placeholder="13-01-2026"
                 />
                 <FieldError errors={field.state.meta.errors} />
               </Field>
@@ -215,7 +288,7 @@ export function CreateFirForm({ className, fir, onSuccess }: CreateFirFormProps)
                   onBlur={field.handleBlur}
                   onChange={field.handleChange}
                   ariaInvalid={isInvalid}
-                  placeholder="June 01, 2025"
+                  placeholder="13-01-2026"
                 />
                 <FieldError errors={field.state.meta.errors} />
               </Field>
@@ -236,7 +309,7 @@ export function CreateFirForm({ className, fir, onSuccess }: CreateFirFormProps)
                   onBlur={field.handleBlur}
                   onChange={field.handleChange}
                   ariaInvalid={isInvalid}
-                  placeholder="June 01, 2025"
+                  placeholder="13-01-2026"
                 />
                 <FieldError errors={field.state.meta.errors} />
               </Field>
@@ -365,4 +438,12 @@ export function CreateFirForm({ className, fir, onSuccess }: CreateFirFormProps)
       </div>
     </form>
   );
+}
+
+export function CreateFirForm(props: FirFormSharedProps) {
+  return <FirForm {...props} kind="create" />;
+}
+
+export function EditFirForm({ fir, ...props }: FirFormSharedProps & { fir: FirRecord }) {
+  return <FirForm {...props} fir={fir} kind="edit" />;
 }

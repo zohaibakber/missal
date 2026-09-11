@@ -1,27 +1,3 @@
-import {
-  type ColumnDef,
-  type ColumnFiltersState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  type PaginationState,
-  type SortingState,
-  useReactTable,
-  type VisibilityState,
-} from "@tanstack/react-table";
-import {
-  ArrowDataTransferVerticalIcon,
-  ArrowLeft01Icon,
-  ArrowLeftDoubleIcon,
-  ArrowRight01Icon,
-  ArrowRightDoubleIcon,
-  ChevronDown,
-  ChevronUp,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { useMemo, useState } from "react";
 import { DataTableToolbar, type DataTableToolbarConfig } from "#/components/data-table-toolbar";
 import { Button } from "#/components/ui/button";
 import {
@@ -40,9 +16,31 @@ import {
   TableHeader,
   TableRow,
 } from "#/components/ui/table";
+import {
+  ArrowDataTransferVerticalIcon,
+  ArrowLeft01Icon,
+  ArrowLeftDoubleIcon,
+  ArrowRight01Icon,
+  ArrowRightDoubleIcon,
+  ChevronDown,
+  ChevronUp,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  type ColumnDef,
+  type ColumnFiltersState,
+  type ColumnVisibilityState,
+  type PaginationState,
+  type RowData,
+  type RowSelectionState,
+  type SortingState,
+  useTable,
+} from "@tanstack/react-table";
+import { useState } from "react";
+import { features, type DataTableFeatures } from "#/components/data-table-features";
 
-interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[];
+interface DataTableProps<TData extends RowData> {
+  columns: ColumnDef<DataTableFeatures, TData>[];
   data: TData[];
   initialSorting?: SortingState;
   onRowClick?: (row: TData) => void;
@@ -61,7 +59,7 @@ function isInteractiveElement(target: EventTarget | null) {
   );
 }
 
-export function DataTable<TData extends Record<string, unknown>, TValue>({
+export function DataTable<TData extends RowData>({
   columns,
   data,
   initialSorting,
@@ -69,14 +67,11 @@ export function DataTable<TData extends Record<string, unknown>, TValue>({
   tableDir = "ltr",
   tableLang,
   toolbar,
-}: DataTableProps<TData, TValue>) {
-  const pageSize = 10;
-
+}: DataTableProps<TData>) {
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
-    pageSize: pageSize,
+    pageSize: 10,
   });
-
   const [sorting, setSorting] = useState<SortingState>(
     initialSorting ?? [
       {
@@ -85,48 +80,28 @@ export function DataTable<TData extends Record<string, unknown>, TValue>({
       },
     ],
   );
-
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({});
   const [globalFilter, setGlobalFilter] = useState("");
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
-  const filteredData = useMemo(() => {
-    const searchValue = globalFilter.trim().toLowerCase();
-
-    if (!searchValue || !toolbar?.search?.searchableColumnIds.length) {
-      return data;
-    }
-
-    return data.filter((item) =>
-      toolbar.search?.searchableColumnIds.some((columnId) => {
-        const value = item[columnId as keyof TData];
-
-        if (value === null || value === undefined) {
-          return false;
-        }
-
-        return String(value).toLowerCase().includes(searchValue);
-      }),
-    );
-  }, [data, globalFilter, toolbar]);
-
-  const table = useReactTable({
+  const table = useTable({
+    features,
     columns,
-    data: filteredData,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    data,
+    globalFilterFn: "includesString",
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onGlobalFilterChange: setGlobalFilter,
     onPaginationChange: setPagination,
+    onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     state: {
       columnFilters,
       columnVisibility,
       globalFilter,
       pagination,
+      rowSelection,
       sorting,
     },
   });
@@ -151,16 +126,16 @@ export function DataTable<TData extends Record<string, unknown>, TValue>({
                         <div
                           className="group/table-sort flex h-full cursor-pointer select-none items-center justify-between gap-2"
                           onClick={header.column.getToggleSortingHandler()}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              header.column.getToggleSortingHandler()?.(e);
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              header.column.getToggleSortingHandler()?.(event);
                             }
                           }}
                           role="button"
                           tabIndex={0}
                         >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          <table.FlexRender header={header} />
                           <HugeiconsIcon
                             icon={
                               sortedDirection === "asc"
@@ -179,7 +154,7 @@ export function DataTable<TData extends Record<string, unknown>, TValue>({
                           />
                         </div>
                       ) : (
-                        flexRender(header.column.columnDef.header, header.getContext())
+                        <table.FlexRender header={header} />
                       )}
                     </TableHead>
                   );
@@ -216,7 +191,7 @@ export function DataTable<TData extends Record<string, unknown>, TValue>({
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      <table.FlexRender cell={cell} />
                     </TableCell>
                   ))}
                 </TableRow>
@@ -243,7 +218,7 @@ export function DataTable<TData extends Record<string, unknown>, TValue>({
               onValueChange={(value) => {
                 table.setPageIndex(Number(value) - 1);
               }}
-              value={`${table.getState().pagination.pageIndex + 1}`}
+              value={`${table.state.pagination.pageIndex + 1}`}
             >
               <SelectTrigger
                 aria-label="Select result range"
@@ -255,9 +230,9 @@ export function DataTable<TData extends Record<string, unknown>, TValue>({
               <SelectContent>
                 <SelectGroup>
                   {Array.from({ length: table.getPageCount() }, (_, i) => {
-                    const start = i * table.getState().pagination.pageSize + 1;
+                    const start = i * table.state.pagination.pageSize + 1;
                     const end = Math.min(
-                      (i + 1) * table.getState().pagination.pageSize,
+                      (i + 1) * table.state.pagination.pageSize,
                       table.getRowCount(),
                     );
                     const pageNum = i + 1;

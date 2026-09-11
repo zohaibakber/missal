@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLiveQuery } from "@tanstack/react-db";
-import { ClientOnly, Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { Cause, Exit, Match, Option } from "effect";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   ArrowDown01Icon,
@@ -12,13 +14,6 @@ import {
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  appSettingsCollection,
-  firCollection,
-  firPlaceholderValueCollection,
-  getAppSettings,
-  templateCollection,
-} from "#/db-collections";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,8 +70,12 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupInput } from "#/components/ui/input-group";
 import { Skeleton } from "#/components/ui/skeleton";
 import { buildTemplateValues, extractPlaceholders, renderTemplateHtml } from "#/lib/templates";
-import { getFirStatusLabel } from "#/lib/fir";
+import { formatDate } from "#/lib/date";
+import { FirDocumentUpdateInput, getFirStatusLabel } from "#/lib/fir";
+import { parseFirId, type FirId } from "#/lib/ids";
+import { indexPlaceholders } from "#/lib/placeholder";
 import { buildSharedPlaceholderValues } from "#/lib/settings";
+import { atoms } from "#/state/atoms";
 
 export const Route = createFileRoute("/$firId_/edit")({
   component: RouteComponent,
@@ -103,7 +102,7 @@ function getPrintableFirHtml({ content, title }: { content: string; title: strin
     <style>
       @font-face {
         font-family: "Jameel Noori Nastaleeq";
-        src: url("/Jameel%20Noori%20Nastaleeq.ttf") format("truetype");
+        src: url("./Jameel%20Noori%20Nastaleeq.ttf") format("truetype");
         font-display: swap;
       }
       @page {
@@ -346,10 +345,34 @@ function printHtmlDocument(html: string, title: string) {
 }
 
 function RouteComponent() {
+  const { firId } = Route.useParams();
+  const id = parseFirId(firId);
+
+  if (!id) {
+    return <FirNotFound />;
+  }
+
+  return <FirDetail firId={id} />;
+}
+
+function FirNotFound() {
   return (
-    <ClientOnly fallback={<FirDetailSkeleton />}>
-      <FirDetail />
-    </ClientOnly>
+    <main className="p-4 lg:p-6">
+      <Empty className="min-h-[28rem] border">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <HugeiconsIcon icon={LegalDocument01Icon} />
+          </EmptyMedia>
+          <EmptyTitle>FIR not found</EmptyTitle>
+          <EmptyDescription>This FIR may have been removed.</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button nativeButton={false} render={<Link to="/" />} variant="outline">
+            Back to dataset
+          </Button>
+        </EmptyContent>
+      </Empty>
+    </main>
   );
 }
 
@@ -360,28 +383,27 @@ function getTemplateSummary(content: string) {
     .trim();
 }
 
-function FirDetail() {
-  const { firId } = Route.useParams();
+function FirDetail({ firId }: { firId: FirId }) {
   const { templateId } = Route.useSearch();
   const navigate = useNavigate();
-  const numericFirId = Number(firId);
-  const { data: firRecords } = useLiveQuery(firCollection);
-  const { data: templates } = useLiveQuery(templateCollection);
-  const { data: placeholderValues } = useLiveQuery(firPlaceholderValueCollection);
-  const { data: settingsRecords } = useLiveQuery(appSettingsCollection);
-  const fir = firRecords.find((record) => record.id === numericFirId) ?? null;
-  const appSettings = getAppSettings(settingsRecords);
+  const editor = useAtomValue(atoms.firEditorAtom(firId));
+  const updateDocument = useAtomSet(atoms.updateFirDocumentAtom, { mode: "promiseExit" });
+  const removeFir = useAtomSet(atoms.removeFirAtom, { mode: "promiseExit" });
+  const editorValue = AsyncResult.isSuccess(editor) ? editor.value : undefined;
+  const fir = editorValue?.fir ?? null;
+  const templates = editorValue?.templates ?? [];
+  const firExtraValues = editorValue?.values ?? [];
+  const placeholderIndex = editorValue
+    ? indexPlaceholders(editorValue.placeholders)
+    : indexPlaceholders([]);
+  const appSettings = editorValue?.settings;
   const sharedPlaceholderValues = useMemo(
-    () => buildSharedPlaceholderValues(appSettings.sharedPlaceholders),
-    [appSettings.sharedPlaceholders],
+    () => buildSharedPlaceholderValues(appSettings?.sharedPlaceholders ?? {}),
+    [appSettings?.sharedPlaceholders],
   );
   const sortedTemplates = useMemo(
     () => [...templates].sort((first, second) => first.id - second.id),
     [templates],
-  );
-  const firExtraValues = useMemo(
-    () => placeholderValues.filter((value) => value.firId === numericFirId),
-    [numericFirId, placeholderValues],
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [documentDraft, setDocumentDraft] = useState("");
@@ -411,13 +433,17 @@ function FirDetail() {
     return sortedTemplates.filter((template) => template.name.toLocaleLowerCase().includes(query));
   }, [sortedTemplates, templateSearch]);
   const documentSourceHtml = fir?.content || selectedTemplate?.content || "";
-  const placeholders = useMemo(() => extractPlaceholders(documentSourceHtml), [documentSourceHtml]);
+  const placeholders = useMemo(
+    () => extractPlaceholders(documentSourceHtml, placeholderIndex),
+    [documentSourceHtml, placeholderIndex],
+  );
   const values = useMemo(() => {
     if (!fir) {
       return {};
     }
 
     const nextValues = buildTemplateValues({
+      catalog: placeholderIndex,
       extraValues: firExtraValues,
       fir,
       placeholders,
@@ -425,10 +451,10 @@ function FirDetail() {
     });
 
     return nextValues;
-  }, [fir, firExtraValues, placeholders, sharedPlaceholderValues]);
+  }, [fir, firExtraValues, placeholderIndex, placeholders, sharedPlaceholderValues]);
   const renderedDocumentHtml = documentSourceHtml
     ? arePlaceholderValuesVisible
-      ? renderTemplateHtml(documentSourceHtml, values)
+      ? renderTemplateHtml(documentSourceHtml, values, placeholderIndex)
       : documentSourceHtml
     : "";
 
@@ -447,7 +473,7 @@ function FirDetail() {
   useEffect(() => {
     setIsDocumentDirty(false);
     setDocumentDraft(fir?.content ?? "");
-  }, [numericFirId, fir?.content]);
+  }, [firId, fir?.content]);
 
   useEffect(() => {
     if (isDocumentDirty) {
@@ -457,25 +483,23 @@ function FirDetail() {
     setDocumentDraft(renderedDocumentHtml);
   }, [isDocumentDirty, renderedDocumentHtml]);
 
-  if (!Number.isInteger(numericFirId) || !fir) {
-    return (
-      <main className="p-4 lg:p-6">
-        <Empty className="min-h-[28rem] border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <HugeiconsIcon icon={LegalDocument01Icon} />
-            </EmptyMedia>
-            <EmptyTitle>FIR not found</EmptyTitle>
-            <EmptyDescription>This FIR may have been removed from this browser.</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button nativeButton={false} render={<Link to="/" />} variant="outline">
-              Back to dataset
-            </Button>
-          </EmptyContent>
-        </Empty>
-      </main>
-    );
+  if (AsyncResult.isInitial(editor) || AsyncResult.isWaiting(editor)) {
+    return <FirDetailSkeleton />;
+  }
+
+  if (AsyncResult.isFailure(editor)) {
+    return Option.match(Cause.findErrorOption(editor.cause), {
+      onNone: () => <FirDetailSkeleton />,
+      onSome: (error) =>
+        Match.value(error).pipe(
+          Match.tag("EntityNotFound", () => <FirNotFound />),
+          Match.orElse(() => <FirDetailSkeleton />),
+        ),
+    });
+  }
+
+  if (!fir) {
+    return <FirNotFound />;
   }
 
   function handleSelectTemplate(value: string | null) {
@@ -498,8 +522,9 @@ function FirDetail() {
     });
 
     if (nextTemplate) {
-      const nextPlaceholders = extractPlaceholders(nextTemplate.content);
+      const nextPlaceholders = extractPlaceholders(nextTemplate.content, placeholderIndex);
       const nextValues = buildTemplateValues({
+        catalog: placeholderIndex,
         extraValues: firExtraValues,
         fir: currentFir,
         placeholders: nextPlaceholders,
@@ -508,7 +533,7 @@ function FirDetail() {
 
       setDocumentDraft(
         arePlaceholderValuesVisible
-          ? renderTemplateHtml(nextTemplate.content, nextValues)
+          ? renderTemplateHtml(nextTemplate.content, nextValues, placeholderIndex)
           : nextTemplate.content,
       );
       setIsDocumentDirty(true);
@@ -524,32 +549,64 @@ function FirDetail() {
       return;
     }
 
-    setDocumentDraft(checked ? renderTemplateHtml(sourceHtml, values) : sourceHtml);
+    setDocumentDraft(
+      checked ? renderTemplateHtml(sourceHtml, values, placeholderIndex) : sourceHtml,
+    );
     setIsDocumentDirty(true);
   }
 
-  function handleUpdate() {
+  async function handleUpdate() {
     if (!fir) {
       return;
     }
 
-    firCollection.update(fir.id, (draft) => {
-      draft.content = documentDraft;
-      draft.templateId = selectedTemplate ? selectedTemplate.id : undefined;
-    });
+    const exit = await updateDocument(
+      new FirDocumentUpdateInput({
+        id: fir.id,
+        content: documentDraft,
+        ...(selectedTemplate ? { templateId: selectedTemplate.id } : {}),
+      }),
+    );
+
+    if (Exit.isFailure(exit)) {
+      toast.error(
+        Option.match(Cause.findErrorOption(exit.cause), {
+          onNone: () => "Something went wrong while saving",
+          onSome: (error) =>
+            Match.valueTags(error, {
+              EntityNotFound: ({ entity }) => `${entity} not found`,
+              EntityConflict: ({ field }) => `${field} is already in use`,
+              StorageError: ({ message }) => message,
+            }),
+        }),
+      );
+      return;
+    }
+
     setIsDocumentDirty(false);
     toast.success("FIR updated");
   }
 
-  function handleDelete() {
-    if (!fir) return;
+  async function handleDelete() {
+    if (!fir) {
+      return;
+    }
 
-    firCollection.delete(fir.id);
+    const exit = await removeFir(fir.id);
 
-    for (const value of Array.from(firPlaceholderValueCollection.state.values())) {
-      if (value.firId === fir.id) {
-        firPlaceholderValueCollection.delete(value.id);
-      }
+    if (Exit.isFailure(exit)) {
+      toast.error(
+        Option.match(Cause.findErrorOption(exit.cause), {
+          onNone: () => "Something went wrong while saving",
+          onSome: (error) =>
+            Match.valueTags(error, {
+              EntityNotFound: ({ entity }) => `${entity} not found`,
+              EntityConflict: ({ field }) => `${field} is already in use`,
+              StorageError: ({ message }) => message,
+            }),
+        }),
+      );
+      return;
     }
 
     setIsDeleteDialogOpen(false);
@@ -567,8 +624,9 @@ function FirDetail() {
     }
 
     const title = `FIR ${fir.fir_no}`;
-    const printPlaceholders = extractPlaceholders(documentDraft);
+    const printPlaceholders = extractPlaceholders(documentDraft, placeholderIndex);
     const printValues = buildTemplateValues({
+      catalog: placeholderIndex,
       extraValues: firExtraValues,
       fir,
       placeholders: printPlaceholders,
@@ -577,7 +635,7 @@ function FirDetail() {
 
     printHtmlDocument(
       getPrintableFirHtml({
-        content: renderTemplateHtml(documentDraft, printValues),
+        content: renderTemplateHtml(documentDraft, printValues, placeholderIndex),
         title,
       }),
       title,
@@ -724,17 +782,19 @@ function FirDetail() {
       </section>
 
       {selectedTemplate || documentDraft ? (
-        <TemplateRichEditor
-          aria-label="FIR content"
-          className="min-h-[calc(100dvh-10rem)] rounded-none border-0 bg-transparent px-1 py-1 shadow-none focus-visible:ring-0"
-          id="fir-content"
-          onChange={(content) => {
-            setDocumentDraft(content);
-            setIsDocumentDirty(true);
-          }}
-          placeholder="FIR content"
-          value={documentDraft}
-        />
+        <>
+          <TemplateRichEditor
+            aria-label="FIR content"
+            className="min-h-[calc(100dvh-10rem)] rounded-none border-0 bg-transparent px-1 py-1 shadow-none focus-visible:ring-0"
+            id="fir-content"
+            onChange={(content) => {
+              setDocumentDraft(content);
+              setIsDocumentDirty(true);
+            }}
+            placeholder="FIR content"
+            value={documentDraft}
+          />
+        </>
       ) : templates.length ? (
         <section className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -768,7 +828,10 @@ function FirDetail() {
           {filteredTemplates.length ? (
             <ItemGroup className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {filteredTemplates.map((template) => {
-                const templatePlaceholders = extractPlaceholders(template.content);
+                const templatePlaceholders = extractPlaceholders(
+                  template.content,
+                  placeholderIndex,
+                );
                 const summary = getTemplateSummary(template.content);
 
                 return (
@@ -783,7 +846,7 @@ function FirDetail() {
                     <ItemContent className="min-w-0" lang="ur">
                       <ItemTitle>{template.name}</ItemTitle>
                       <ItemDescription className="line-clamp-1 text-xs">
-                        Updated {new Date(template.updatedAt).toLocaleDateString()}
+                        Updated {formatDate(template.updatedAt)}
                       </ItemDescription>
                       <ItemDescription className="line-clamp-3">
                         {summary || "No content yet."}
@@ -831,13 +894,19 @@ function FirDetail() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete FIR</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes FIR {fir.fir_no} and its saved template placeholder values from this
-              browser.
+              This removes FIR {fir.fir_no} and its saved template placeholder values.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} type="button" variant="destructive">
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDelete();
+              }}
+              type="button"
+              variant="destructive"
+            >
               <HugeiconsIcon data-icon="inline-start" icon={Delete02Icon} />
               Delete
             </AlertDialogAction>

@@ -1,6 +1,7 @@
 "use no memo";
 
-import type { Table } from "@tanstack/react-table";
+import type { DataTableFeatures } from "#/components/data-table-features";
+import type { ReactTable, RowData } from "@tanstack/react-table";
 import { isValidElement } from "react";
 import {
   Cancel01Icon,
@@ -48,7 +49,7 @@ export type DataTableToolbarFilterConfig = {
   placeholder: string;
 };
 
-export type DataTableToolbarConfig<TData> = {
+export type DataTableToolbarConfig<TData extends RowData> = {
   filters?: DataTableToolbarFilterConfig[];
   search?: {
     label?: string;
@@ -57,13 +58,15 @@ export type DataTableToolbarConfig<TData> = {
   };
 };
 
-interface DataTableToolbarProps<TData> {
+interface DataTableToolbarProps<TData extends RowData> {
   className?: string;
   config: DataTableToolbarConfig<TData>;
-  table: Table<TData>;
+  table: ReactTable<DataTableFeatures, TData>;
 }
 
-function getColumnLabel<TData>(column: ReturnType<Table<TData>["getAllColumns"]>[number]) {
+function getColumnLabel<TData extends RowData>(
+  column: ReturnType<ReactTable<DataTableFeatures, TData>["getAllColumns"]>[number],
+) {
   const { header } = column.columnDef;
 
   if (typeof header === "string") {
@@ -79,15 +82,15 @@ function getColumnLabel<TData>(column: ReturnType<Table<TData>["getAllColumns"]>
     .replace(/^./, (value) => value.toUpperCase());
 }
 
-export function DataTableToolbar<TData>({
+export function DataTableToolbar<TData extends RowData>({
   className,
   config,
   table,
 }: DataTableToolbarProps<TData>) {
-  const activeSearch = (table.getState().globalFilter as string) ?? "";
-  const activeFilterCount = table
-    .getState()
-    .columnFilters.filter((filter) => filter.value !== undefined && filter.value !== "").length;
+  const activeSearch = table.state.globalFilter ?? "";
+  const activeFilterCount = table.state.columnFilters.filter(
+    (filter) => filter.value !== undefined && filter.value !== "",
+  ).length;
   const hasActiveFilters = activeFilterCount > 0;
   const hasActiveToolbarState = activeSearch.length > 0 || activeFilterCount > 0;
   const hideableColumns = table

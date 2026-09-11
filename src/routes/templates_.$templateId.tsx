@@ -1,6 +1,18 @@
-import { ClientOnly, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { TemplateEditorForm } from "#/components/template-editor-form";
-import { Skeleton } from "#/components/ui/skeleton";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "#/components/ui/empty";
+import { Button } from "#/components/ui/button";
+import { Link } from "@tanstack/react-router";
+import { LegalDocument01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { parseTemplateId } from "#/lib/ids";
 
 export const Route = createFileRoute("/templates_/$templateId")({
   component: RouteComponent,
@@ -8,32 +20,28 @@ export const Route = createFileRoute("/templates_/$templateId")({
 
 function RouteComponent() {
   const { templateId } = Route.useParams();
-  const numericTemplateId = Number(templateId);
+  const id = parseTemplateId(templateId);
 
-  return (
-    <ClientOnly fallback={<TemplateEditorSkeleton />}>
-      <TemplateEditorForm
-        templateId={Number.isInteger(numericTemplateId) ? numericTemplateId : 0}
-      />
-    </ClientOnly>
-  );
-}
+  if (!id) {
+    return (
+      <main className="p-4 lg:p-6">
+        <Empty className="min-h-[28rem] border">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <HugeiconsIcon icon={LegalDocument01Icon} />
+            </EmptyMedia>
+            <EmptyTitle>Template not found</EmptyTitle>
+            <EmptyDescription>This template may have been removed.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button nativeButton={false} render={<Link to="/templates" />} variant="outline">
+              Back to templates
+            </Button>
+          </EmptyContent>
+        </Empty>
+      </main>
+    );
+  }
 
-function TemplateEditorSkeleton() {
-  return (
-    <main className="flex flex-col gap-4 p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-8 w-24" />
-          <Skeleton className="h-7 w-40" />
-          <Skeleton className="h-4 w-80" />
-        </div>
-        <div className="flex gap-2">
-          <Skeleton className="size-8" />
-          <Skeleton className="h-8 w-24" />
-        </div>
-      </div>
-      <Skeleton className="h-[42rem]" />
-    </main>
-  );
+  return <TemplateEditorForm templateId={id} />;
 }

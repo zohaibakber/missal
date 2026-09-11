@@ -1,0 +1,470 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "e4b8e561-947f-4966-9e00-c3e7a4086b6e",
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
+  "ddl": [
+    {
+      "name": "app_settings",
+      "entityType": "tables"
+    },
+    {
+      "name": "fir_placeholder_values",
+      "entityType": "tables"
+    },
+    {
+      "name": "fir_records",
+      "entityType": "tables"
+    },
+    {
+      "name": "placeholders",
+      "entityType": "tables"
+    },
+    {
+      "name": "templates",
+      "entityType": "tables"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "app_settings"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shared_placeholders",
+      "entityType": "columns",
+      "table": "app_settings"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "app_settings"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fir_id",
+      "entityType": "columns",
+      "table": "fir_placeholder_values"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "placeholder_id",
+      "entityType": "columns",
+      "table": "fir_placeholder_values"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "value",
+      "entityType": "columns",
+      "table": "fir_placeholder_values"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "fir_placeholder_values"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fir_no",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "date",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "offence",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "accused",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "witness",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "nic",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "mobile",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "incident_date",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "arrest_date",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "investigation_officer",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "template_id",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "content",
+      "entityType": "columns",
+      "table": "fir_records"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "placeholders"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "key",
+      "entityType": "columns",
+      "table": "placeholders"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "label",
+      "entityType": "columns",
+      "table": "placeholders"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "templates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "templates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "content",
+      "entityType": "columns",
+      "table": "templates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "templates"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "table": "templates"
+    },
+    {
+      "columns": ["fir_id"],
+      "tableTo": "fir_records",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_fir_placeholder_values_fir_id_fir_records_id_fk",
+      "entityType": "fks",
+      "table": "fir_placeholder_values"
+    },
+    {
+      "columns": ["placeholder_id"],
+      "tableTo": "placeholders",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_fir_placeholder_values_placeholder_id_placeholders_id_fk",
+      "entityType": "fks",
+      "table": "fir_placeholder_values"
+    },
+    {
+      "columns": ["template_id"],
+      "tableTo": "templates",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "nameExplicit": false,
+      "name": "fk_fir_records_template_id_templates_id_fk",
+      "entityType": "fks",
+      "table": "fir_records"
+    },
+    {
+      "columns": ["fir_id", "placeholder_id"],
+      "nameExplicit": false,
+      "name": "fir_placeholder_values_pk",
+      "entityType": "pks",
+      "table": "fir_placeholder_values"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "app_settings_pk",
+      "table": "app_settings",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "fir_records_pk",
+      "table": "fir_records",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "placeholders_pk",
+      "table": "placeholders",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "templates_pk",
+      "table": "templates",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "fir_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "fir_placeholder_values_fir_id_idx",
+      "entityType": "indexes",
+      "table": "fir_placeholder_values"
+    },
+    {
+      "columns": [
+        {
+          "value": "placeholder_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "fir_placeholder_values_placeholder_id_idx",
+      "entityType": "indexes",
+      "table": "fir_placeholder_values"
+    },
+    {
+      "columns": [
+        {
+          "value": "status",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "fir_records_status_idx",
+      "entityType": "indexes",
+      "table": "fir_records"
+    },
+    {
+      "columns": [
+        {
+          "value": "template_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "fir_records_template_id_idx",
+      "entityType": "indexes",
+      "table": "fir_records"
+    },
+    {
+      "columns": [
+        {
+          "value": "updated_at",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "templates_updated_at_idx",
+      "entityType": "indexes",
+      "table": "templates"
+    },
+    {
+      "columns": ["key"],
+      "nameExplicit": false,
+      "name": "placeholders_key_unique",
+      "entityType": "uniques",
+      "table": "placeholders"
+    },
+    {
+      "value": "\"id\" = 'default'",
+      "name": "app_settings_id_default",
+      "entityType": "checks",
+      "table": "app_settings"
+    }
+  ],
+  "renames": []
+}

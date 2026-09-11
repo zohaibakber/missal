@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { useLiveQuery } from "@tanstack/react-db";
-import { ClientOnly, Link, createFileRoute } from "@tanstack/react-router";
+import { useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { Add01Icon, LegalDocument01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { templateCollection } from "#/db-collections";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import {
@@ -24,18 +24,23 @@ import {
   ItemTitle,
 } from "#/components/ui/item";
 import { Skeleton } from "#/components/ui/skeleton";
+import { indexPlaceholders } from "#/lib/placeholder";
+import { formatDate } from "#/lib/date";
 import { extractPlaceholders } from "#/lib/templates";
+import { atoms } from "#/state/atoms";
 
 export const Route = createFileRoute("/templates")({
   component: RouteComponent,
 });
 
 function RouteComponent() {
-  return (
-    <ClientOnly fallback={<TemplatesSkeleton />}>
-      <TemplateList />
-    </ClientOnly>
-  );
+  const templates = useAtomValue(atoms.templatesAtom);
+
+  if (AsyncResult.isInitial(templates) || AsyncResult.isWaiting(templates)) {
+    return <TemplatesSkeleton />;
+  }
+
+  return <TemplateList />;
 }
 
 function getTemplateSummary(content: string) {
@@ -46,7 +51,12 @@ function getTemplateSummary(content: string) {
 }
 
 function TemplateList() {
-  const { data: templates } = useLiveQuery(templateCollection);
+  const templatesResult = useAtomValue(atoms.templatesAtom);
+  const placeholderIndexResult = useAtomValue(atoms.placeholderIndexAtom);
+  const templates = AsyncResult.isSuccess(templatesResult) ? templatesResult.value : [];
+  const placeholderIndex = AsyncResult.isSuccess(placeholderIndexResult)
+    ? placeholderIndexResult.value
+    : indexPlaceholders([]);
   const [search, setSearch] = useState("");
   const filteredTemplates = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -89,7 +99,7 @@ function TemplateList() {
         {filteredTemplates.length ? (
           <ItemGroup className="gap-2">
             {filteredTemplates.map((template) => {
-              const placeholders = extractPlaceholders(template.content);
+              const placeholders = extractPlaceholders(template.content, placeholderIndex);
               const summary = getTemplateSummary(template.content);
 
               return (
@@ -105,7 +115,7 @@ function TemplateList() {
                   <ItemContent className="min-w-0" lang="ur">
                     <ItemTitle>{template.name}</ItemTitle>
                     <ItemDescription className="line-clamp-1 text-xs">
-                      Updated {new Date(template.updatedAt).toLocaleDateString()}
+                      Updated {formatDate(template.updatedAt)}
                     </ItemDescription>
                     <ItemDescription className="line-clamp-2">
                       {summary || "No content yet."}
