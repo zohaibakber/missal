@@ -1,11 +1,6 @@
 import { Context, type Effect } from "effect";
-import {
-  FirCreateInput,
-  FirDocumentUpdateInput,
-  FirId,
-  FirRecord,
-  FirUpdateInput,
-} from "#/lib/fir";
+import { FirCreateInput, FirId, FirRecord, FirUpdateInput } from "#/lib/fir";
+import { FirValueContext } from "#/lib/fir-document";
 import type { RepositoryError } from "#/lib/storage-errors";
 
 export class FirRepository extends Context.Service<
@@ -15,9 +10,7 @@ export class FirRepository extends Context.Service<
     readonly get: (id: FirId) => Effect.Effect<FirRecord, RepositoryError>;
     readonly create: (input: FirCreateInput) => Effect.Effect<FirRecord, RepositoryError>;
     readonly update: (input: FirUpdateInput) => Effect.Effect<FirRecord, RepositoryError>;
-    readonly updateDocument: (
-      input: FirDocumentUpdateInput,
-    ) => Effect.Effect<FirRecord, RepositoryError>;
     readonly remove: (id: FirId) => Effect.Effect<void, RepositoryError>;
+    readonly getValueContext: (id: FirId) => Effect.Effect<FirValueContext, RepositoryError>;
   }
 >()("missal/FirRepository") {}

@@ -1,18 +1,27 @@
-import { Effect, Exit, Match, Schema } from "effect";
+import { Effect, Match, Schema } from "effect";
 import {
+  GlobalPlaceholderListResult,
+  FirDocumentListResult,
+  FirDocumentRecordResult,
+  FirDocumentSaveAckResult,
   FirListResult,
   FirPlaceholderValueListResult,
+  FirValueContextResult,
   PlaceholderListResult,
   StorageRequest,
-  StorageResponse,
+  type StorageResponse,
+  encodeStorageResponse,
   TemplateListResult,
+  TemplateRecordResult,
+  TemplateSaveAckResult,
 } from "#/electron/storage-contract";
 import { FirRecord } from "#/lib/fir";
 import { Placeholder } from "#/lib/placeholder";
 import { AppSettings } from "#/lib/settings";
-import { RepositoryError, StorageError } from "#/lib/storage-errors";
-import { FirPlaceholderValue, TemplateRecord } from "#/lib/templates";
+import { StorageError } from "#/lib/storage-errors";
+import { FirPlaceholderValue, TemplateSummary } from "#/lib/templates";
 import {
+  FirDocumentRepository,
   FirPlaceholderValueRepository,
   FirRepository,
   PlaceholderRepository,
@@ -22,6 +31,18 @@ import {
 
 const handleStorageRequest = Effect.fnUntraced(function* (request: StorageRequest) {
   return yield* Match.valueTags(request, {
+    "Placeholder.listGlobals": () =>
+      Effect.gen(function* () {
+        const repository = yield* PlaceholderRepository;
+        return Schema.encodeUnknownSync(GlobalPlaceholderListResult)(yield* repository.listGlobals);
+      }),
+    "Placeholder.saveGlobals": ({ input }) =>
+      Effect.gen(function* () {
+        const repository = yield* PlaceholderRepository;
+        return Schema.encodeUnknownSync(GlobalPlaceholderListResult)(
+          yield* repository.saveGlobals(input),
+        );
+      }),
     "Placeholder.list": () =>
       Effect.gen(function* () {
         const repository = yield* PlaceholderRepository;
@@ -48,20 +69,25 @@ const handleStorageRequest = Effect.fnUntraced(function* (request: StorageReques
         const repository = yield* TemplateRepository;
         return Schema.encodeUnknownSync(TemplateListResult)(yield* repository.list);
       }),
+    "Template.search": ({ query }) =>
+      Effect.gen(function* () {
+        const repository = yield* TemplateRepository;
+        return Schema.encodeUnknownSync(TemplateListResult)(yield* repository.search(query));
+      }),
     "Template.get": ({ id }) =>
       Effect.gen(function* () {
         const repository = yield* TemplateRepository;
-        return Schema.encodeUnknownSync(TemplateRecord)(yield* repository.get(id));
+        return Schema.encodeUnknownSync(TemplateRecordResult)(yield* repository.get(id));
       }),
     "Template.create": ({ input }) =>
       Effect.gen(function* () {
         const repository = yield* TemplateRepository;
-        return Schema.encodeUnknownSync(TemplateRecord)(yield* repository.create(input));
+        return Schema.encodeUnknownSync(TemplateSummary)(yield* repository.create(input));
       }),
-    "Template.update": ({ input }) =>
+    "Template.save": ({ input }) =>
       Effect.gen(function* () {
         const repository = yield* TemplateRepository;
-        return Schema.encodeUnknownSync(TemplateRecord)(yield* repository.update(input));
+        return Schema.encodeUnknownSync(TemplateSaveAckResult)(yield* repository.save(input));
       }),
     "Template.remove": ({ id }) =>
       Effect.gen(function* () {
@@ -89,14 +115,49 @@ const handleStorageRequest = Effect.fnUntraced(function* (request: StorageReques
         const repository = yield* FirRepository;
         return Schema.encodeUnknownSync(FirRecord)(yield* repository.update(input));
       }),
-    "Fir.updateDocument": ({ input }) =>
-      Effect.gen(function* () {
-        const repository = yield* FirRepository;
-        return Schema.encodeUnknownSync(FirRecord)(yield* repository.updateDocument(input));
-      }),
     "Fir.remove": ({ id }) =>
       Effect.gen(function* () {
         const repository = yield* FirRepository;
+        yield* repository.remove(id);
+        return undefined;
+      }),
+    "Fir.valueContext": ({ id }) =>
+      Effect.gen(function* () {
+        const repository = yield* FirRepository;
+        return Schema.encodeUnknownSync(FirValueContextResult)(
+          yield* repository.getValueContext(id),
+        );
+      }),
+    "FirDocument.listForFir": ({ firId }) =>
+      Effect.gen(function* () {
+        const repository = yield* FirDocumentRepository;
+        return Schema.encodeUnknownSync(FirDocumentListResult)(yield* repository.listForFir(firId));
+      }),
+    "FirDocument.get": ({ id }) =>
+      Effect.gen(function* () {
+        const repository = yield* FirDocumentRepository;
+        return Schema.encodeUnknownSync(FirDocumentRecordResult)(yield* repository.get(id));
+      }),
+    "FirDocument.addTemplates": ({ input }) =>
+      Effect.gen(function* () {
+        const repository = yield* FirDocumentRepository;
+        return Schema.encodeUnknownSync(FirDocumentListResult)(
+          yield* repository.addTemplates(input),
+        );
+      }),
+    "FirDocument.save": ({ input }) =>
+      Effect.gen(function* () {
+        const repository = yield* FirDocumentRepository;
+        return Schema.encodeUnknownSync(FirDocumentSaveAckResult)(yield* repository.save(input));
+      }),
+    "FirDocument.reorder": ({ input }) =>
+      Effect.gen(function* () {
+        const repository = yield* FirDocumentRepository;
+        return Schema.encodeUnknownSync(FirDocumentListResult)(yield* repository.reorder(input));
+      }),
+    "FirDocument.remove": ({ id }) =>
+      Effect.gen(function* () {
+        const repository = yield* FirDocumentRepository;
         yield* repository.remove(id);
         return undefined;
       }),
@@ -131,8 +192,8 @@ const handleStorageRequest = Effect.fnUntraced(function* (request: StorageReques
   });
 });
 
-function encodeResponse(exit: Exit.Exit<unknown, RepositoryError>) {
-  return Schema.encodeUnknownSync(StorageResponse)(exit);
+function encodeResponse(response: StorageResponse) {
+  return encodeStorageResponse(response);
 }
 
 export const dispatchStorageRequest = (payload: unknown) =>
@@ -149,20 +210,19 @@ export const dispatchStorageRequest = (payload: unknown) =>
     return yield* handleStorageRequest(request);
   }).pipe(
     Effect.match({
-      onFailure: (error) => encodeResponse(Exit.fail(error)),
-      onSuccess: (value) => encodeResponse(Exit.succeed(value)),
+      onFailure: (error) => encodeResponse({ _tag: "Failure", error }),
+      onSuccess: (value) => encodeResponse({ _tag: "Success", value }),
     }),
     Effect.catchDefect((defect) => {
       console.error("Missal storage defect", defect);
       return Effect.succeed(
-        encodeResponse(
-          Exit.fail(
-            new StorageError({
-              message: "Storage operation failed",
-              operation: "storage.request",
-            }),
-          ),
-        ),
+        encodeResponse({
+          _tag: "Failure",
+          error: new StorageError({
+            message: "Storage operation failed",
+            operation: "storage.request",
+          }),
+        }),
       );
     }),
   );

@@ -47,6 +47,8 @@ export function FirDatePickerInput({
         placeholder={placeholder}
         aria-invalid={ariaInvalid}
         inputMode="numeric"
+        dir="ltr"
+        className="text-right"
         onBlur={(event) => {
           if (parsedValue) {
             onChange(formatDate(parsedValue));

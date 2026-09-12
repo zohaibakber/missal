@@ -2,7 +2,7 @@
 
 import type { DataTableFeatures } from "#/components/data-table-features";
 import type { ReactTable, RowData } from "@tanstack/react-table";
-import { isValidElement } from "react";
+import { isValidElement, type ReactNode } from "react";
 import {
   Cancel01Icon,
   Eraser01Icon,
@@ -50,6 +50,7 @@ export type DataTableToolbarFilterConfig = {
 };
 
 export type DataTableToolbarConfig<TData extends RowData> = {
+  action?: ReactNode;
   filters?: DataTableToolbarFilterConfig[];
   search?: {
     label?: string;
@@ -98,8 +99,9 @@ export function DataTableToolbar<TData extends RowData>({
     .filter((column) => typeof column.accessorFn !== "undefined" && column.getCanHide());
 
   return (
-    <div className={cn("flex flex-col gap-3 py-4", className)} dir="rtl">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className={cn("flex flex-col gap-3 pb-4", className)} dir="rtl">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        {config.action}
         {config.search ? (
           <InputGroup className="w-full lg:max-w-64">
             <InputGroupAddon align="inline-start">

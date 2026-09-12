@@ -1,11 +1,12 @@
+import { TemplateLayout } from "#/components/template-layout";
 import { AppSidebar } from "#/components/app-sidebar";
 import { SiteHeader } from "#/components/site-header";
 import { ThemeProvider } from "#/components/theme-provider";
 import { DirectionProvider } from "#/components/ui/direction";
 import { SidebarInset, SidebarProvider } from "#/components/ui/sidebar";
-import { Toaster } from "#/components/ui/sonner";
+import { Toaster } from "#/components/ui/toast";
 import { TooltipProvider } from "#/components/ui/tooltip";
-import { HeadContent, Link, Outlet, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Link, Outlet, createRootRoute, useRouterState } from "@tanstack/react-router";
 
 function NotFound() {
   return (
@@ -38,6 +39,9 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+  const isTemplates = useRouterState({
+    select: (state) => state.location.pathname.startsWith("/templates"),
+  });
   return (
     <>
       <HeadContent />
@@ -48,14 +52,22 @@ function RootComponent() {
               <SiteHeader />
               <div className="flex min-h-0 flex-1">
                 <AppSidebar />
-                <SidebarInset className="min-h-0 overflow-hidden max-w-3xl mx-auto">
-                  <Outlet />
+                <SidebarInset dir="rtl" className="min-h-0 overflow-y-auto">
+                  <DirectionProvider direction="rtl">
+                    {isTemplates ? (
+                      <TemplateLayout>
+                        <Outlet />
+                      </TemplateLayout>
+                    ) : (
+                      <Outlet />
+                    )}
+                  </DirectionProvider>
                 </SidebarInset>
               </div>
             </SidebarProvider>
           </DirectionProvider>
         </TooltipProvider>
-        <Toaster richColors />
+        <Toaster />
       </ThemeProvider>
     </>
   );

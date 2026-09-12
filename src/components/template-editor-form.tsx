@@ -1,16 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { Cause, Exit, Match, Option } from "effect";
+import { Exit } from "effect";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
-import {
-  ArrowDown01Icon,
-  ArrowUp01Icon,
-  Delete02Icon,
-  FileEditIcon,
-  LegalDocument01Icon,
-} from "@hugeicons/core-free-icons";
+import { toast } from "#/components/ui/toast";
+import { Delete02Icon, LegalDocument01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   AlertDialog,
@@ -22,15 +16,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "#/components/ui/alert-dialog";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "#/components/ui/breadcrumb";
+import { UnsavedChanges } from "#/components/unsaved-changes";
 import { Button } from "#/components/ui/button";
+import { DocumentEditor } from "#/components/document-editor";
 import {
   Empty,
   EmptyContent,
@@ -39,85 +27,46 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "#/components/ui/empty";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "#/components/ui/input-group";
-import { TemplateRichEditor } from "#/components/template-rich-editor";
-import { type TemplateId } from "#/lib/ids";
-import { indexPlaceholders, resolvePlaceholderToken } from "#/lib/placeholder";
-import { TemplateCreateInput, TemplateUpdateInput } from "#/lib/templates";
-import { atoms } from "#/state/atoms";
+import { Input } from "#/components/ui/input";
 import { Skeleton } from "#/components/ui/skeleton";
+import { catalogFieldPresentation } from "#/lib/field";
+import { emptyDocumentEnvelope } from "#/lib/document-format";
+import { type TemplateId } from "#/lib/ids";
+import { indexPlaceholders, type PlaceholderIndex } from "#/lib/placeholder";
+import { getRepositoryErrorMessage } from "#/lib/storage-errors";
+import { TemplateCreateInput, TemplateRecord, TemplateUpdateInput } from "#/lib/templates";
+import type { EditorSessionHandle } from "#/editor/session";
+import { atoms } from "#/state/atoms";
 
 type TemplateEditorFormProps = {
   templateId?: TemplateId;
 };
 
-function createDraft() {
-  return {
-    content: "",
-    name: "",
-  };
+export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
+  if (templateId) {
+    return <EditTemplateForm templateId={templateId} />;
+  }
+
+  return <CreateTemplateForm />;
 }
 
-export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
-  const navigate = useNavigate();
-  const templatesResult = useAtomValue(atoms.templatesAtom);
+function CreateTemplateForm() {
   const placeholderIndexResult = useAtomValue(atoms.placeholderIndexAtom);
-  const createTemplate = useAtomSet(atoms.createTemplateAtom, { mode: "promiseExit" });
-  const updateTemplate = useAtomSet(atoms.updateTemplateAtom, { mode: "promiseExit" });
-  const removeTemplate = useAtomSet(atoms.removeTemplateAtom, { mode: "promiseExit" });
-  const templates = AsyncResult.isSuccess(templatesResult) ? templatesResult.value : [];
   const placeholderIndex = AsyncResult.isSuccess(placeholderIndexResult)
     ? placeholderIndexResult.value
     : indexPlaceholders([]);
-  const selectedTemplate =
-    templateId === undefined
-      ? null
-      : (templates.find((template) => template.id === templateId) ?? null);
-  const sortedTemplates = useMemo(
-    () => [...templates].sort((first, second) => first.id - second.id),
-    [templates],
-  );
-  const selectedTemplateIndex = selectedTemplate
-    ? sortedTemplates.findIndex((template) => template.id === selectedTemplate.id)
-    : -1;
-  const previousTemplate =
-    selectedTemplateIndex > 0 ? sortedTemplates[selectedTemplateIndex - 1] : null;
-  const nextTemplate =
-    selectedTemplateIndex >= 0 && selectedTemplateIndex < sortedTemplates.length - 1
-      ? sortedTemplates[selectedTemplateIndex + 1]
-      : null;
-  const [draft, setDraft] = useState(createDraft);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const isEditing = templateId !== undefined;
+  return <TemplateEditorWorkspace placeholderIndex={placeholderIndex} selectedTemplate={null} />;
+}
 
-  useEffect(() => {
-    if (selectedTemplate) {
-      setDraft({
-        content: selectedTemplate.content,
-        name: selectedTemplate.name,
-      });
-      return;
-    }
+function EditTemplateForm({ templateId }: { templateId: TemplateId }) {
+  const placeholderIndexResult = useAtomValue(atoms.placeholderIndexAtom);
+  const templateResult = useAtomValue(atoms.templateByIdAtom(templateId));
+  const placeholderIndex = AsyncResult.isSuccess(placeholderIndexResult)
+    ? placeholderIndexResult.value
+    : indexPlaceholders([]);
 
-    if (!isEditing) {
-      setDraft(createDraft());
-    }
-  }, [isEditing, selectedTemplate]);
-
-  if (
-    isEditing &&
-    (AsyncResult.isInitial(templatesResult) || AsyncResult.isWaiting(templatesResult))
-  ) {
-    return (
-      <main className="flex flex-col gap-4 p-4">
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-[42rem]" />
-      </main>
-    );
-  }
-
-  if (isEditing && AsyncResult.isSuccess(templatesResult) && !selectedTemplate) {
+  if (AsyncResult.isFailure(templateResult)) {
     return (
       <main className="p-4 lg:p-6">
         <Empty className="min-h-[28rem] border">
@@ -138,67 +87,122 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
     );
   }
 
-  async function handleSave() {
-    const name = draft.name.trim();
+  if (AsyncResult.isInitial(templateResult) || AsyncResult.isWaiting(templateResult)) {
+    return (
+      <main className="flex flex-col gap-4 p-4">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-[42rem]" />
+      </main>
+    );
+  }
 
-    if (!name) {
+  return (
+    <TemplateEditorWorkspace
+      placeholderIndex={placeholderIndex}
+      selectedTemplate={templateResult.value}
+    />
+  );
+}
+
+function TemplateEditorWorkspace({
+  placeholderIndex,
+  selectedTemplate,
+}: {
+  placeholderIndex: PlaceholderIndex;
+  selectedTemplate: TemplateRecord | null;
+}) {
+  const navigate = useNavigate();
+  const createTemplate = useAtomSet(atoms.createTemplateAtom, { mode: "promiseExit" });
+  const saveTemplate = useAtomSet(atoms.saveTemplateAtom, { mode: "promiseExit" });
+  const removeTemplate = useAtomSet(atoms.removeTemplateAtom, { mode: "promiseExit" });
+  const [name, setName] = useState("");
+  const [revision, setRevision] = useState(selectedTemplate?.revision);
+  const [contentDirty, setContentDirty] = useState(false);
+  const [savedName, setSavedName] = useState(selectedTemplate?.name ?? "");
+  const dirty = contentDirty || name !== savedName;
+  const [savePending, setSavePending] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const allowNavigationRef = useRef(false);
+  const sessionRef = useRef<EditorSessionHandle | null>(null);
+  const loadedKeyRef = useRef<string | number | null>(null);
+  const presentation = useMemo(
+    () => catalogFieldPresentation(placeholderIndex),
+    [placeholderIndex],
+  );
+  const sessionKey = selectedTemplate?.id ?? "new";
+
+  useEffect(() => {
+    if (loadedKeyRef.current === sessionKey) {
       return;
     }
 
-    if (selectedTemplate) {
-      const exit = await updateTemplate(
-        new TemplateUpdateInput({
-          id: selectedTemplate.id,
-          name,
-          content: draft.content,
+    loadedKeyRef.current = sessionKey;
+    allowNavigationRef.current = false;
+    setName(selectedTemplate?.name ?? "");
+    setRevision(selectedTemplate?.revision);
+    setContentDirty(false);
+    setSavedName(selectedTemplate?.name ?? "");
+  }, [selectedTemplate, sessionKey]);
+
+  async function handleSave() {
+    const trimmed = name.trim();
+    const session = sessionRef.current;
+    if (!trimmed || !session) {
+      return;
+    }
+
+    if (selectedTemplate && revision === undefined) {
+      return;
+    }
+
+    if (!session.tryBeginSave()) {
+      return;
+    }
+
+    const captured = session.captureEnvelope();
+    try {
+      if (selectedTemplate && revision !== undefined) {
+        const exit = await saveTemplate(
+          new TemplateUpdateInput({
+            document: captured.envelope,
+            expectedRevision: revision,
+            id: selectedTemplate.id,
+            name: trimmed,
+          }),
+        );
+
+        if (Exit.isFailure(exit)) {
+          toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
+          return;
+        }
+
+        session.markSaved(captured.contentRevision);
+        setRevision(exit.value.revision);
+        setSavedName(trimmed);
+        toast.add({ title: "Template updated", type: "success" });
+        return;
+      }
+
+      const exit = await createTemplate(
+        new TemplateCreateInput({
+          document: captured.envelope,
+          name: trimmed,
         }),
       );
 
       if (Exit.isFailure(exit)) {
-        toast.error(
-          Option.match(Cause.findErrorOption(exit.cause), {
-            onNone: () => "Something went wrong while saving",
-            onSome: (error) =>
-              Match.valueTags(error, {
-                EntityNotFound: ({ entity }) => `${entity} not found`,
-                EntityConflict: ({ field }) => `${field} is already in use`,
-                StorageError: ({ message }) => message,
-              }),
-          }),
-        );
+        toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
         return;
       }
 
-      toast.success("Template updated");
-      return;
+      allowNavigationRef.current = true;
+      void navigate({
+        params: { templateId: `${exit.value.id}` },
+        to: "/templates/$templateId",
+      });
+    } finally {
+      session.endSave();
     }
-
-    const exit = await createTemplate(
-      new TemplateCreateInput({
-        name,
-        content: draft.content,
-      }),
-    );
-
-    if (Exit.isFailure(exit)) {
-      toast.error(
-        Option.match(Cause.findErrorOption(exit.cause), {
-          onNone: () => "Something went wrong while saving",
-          onSome: (error) =>
-            Match.valueTags(error, {
-              EntityNotFound: ({ entity }) => `${entity} not found`,
-              EntityConflict: ({ field }) => `${field} is already in use`,
-              StorageError: ({ message }) => message,
-            }),
-        }),
-      );
-      return;
-    }
-
-    void navigate({
-      to: "/templates/$templateId",
-      params: { templateId: `${exit.value.id}` },
-    });
   }
 
   async function handleDelete() {
@@ -209,136 +213,68 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
     const exit = await removeTemplate(selectedTemplate.id);
 
     if (Exit.isFailure(exit)) {
-      toast.error(
-        Option.match(Cause.findErrorOption(exit.cause), {
-          onNone: () => "Something went wrong while saving",
-          onSome: (error) =>
-            Match.valueTags(error, {
-              EntityNotFound: ({ entity }) => `${entity} not found`,
-              EntityConflict: ({ field }) => `${field} is already in use`,
-              StorageError: ({ message }) => message,
-            }),
-        }),
-      );
+      toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
       return;
     }
 
+    allowNavigationRef.current = true;
     setIsDeleteDialogOpen(false);
     void navigate({ to: "/templates" });
   }
 
   return (
-    <main className="grid min-h-svh w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-y-auto p-4">
-      <section className="flex min-w-0 max-w-full items-center justify-between gap-3">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink render={<Link to="/templates" />}>Templates</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage>
-                {selectedTemplate?.name || (isEditing ? "Template" : "New")}
-              </BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
-        <div className="flex shrink-0 items-center gap-2">
+    <main className="flex h-full min-h-96 min-w-0 flex-col" dir="rtl">
+      <UnsavedChanges isDirty={() => dirty && !allowNavigationRef.current} />
+      <section className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2">
+        <Input
+          aria-label="Template name"
+          id="template-name"
+          lang="ur"
+          className="min-w-40 flex-1 rounded-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
+          placeholder="ٹیمپلیٹ کا نام"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+        <Button
+          disabled={!name.trim() || savePending || (selectedTemplate !== null && !dirty)}
+          onClick={() => void handleSave()}
+          type="button"
+        >
+          {savePending ? "Saving…" : "Save"}
+        </Button>
+        {selectedTemplate ? (
           <Button
-            aria-label="Previous template"
-            disabled={!previousTemplate}
-            onClick={() => {
-              if (previousTemplate) {
-                void navigate({
-                  to: "/templates/$templateId",
-                  params: { templateId: `${previousTemplate.id}` },
-                });
-              }
-            }}
+            aria-label="Delete template"
+            onClick={() => setIsDeleteDialogOpen(true)}
             size="icon-sm"
             type="button"
-            variant="outline"
+            variant="ghost"
           >
-            <HugeiconsIcon icon={ArrowUp01Icon} />
+            <HugeiconsIcon icon={Delete02Icon} />
           </Button>
-          <Button
-            aria-label="Next template"
-            disabled={!nextTemplate}
-            onClick={() => {
-              if (nextTemplate) {
-                void navigate({
-                  to: "/templates/$templateId",
-                  params: { templateId: `${nextTemplate.id}` },
-                });
-              }
-            }}
-            size="icon-sm"
-            type="button"
-            variant="outline"
-          >
-            <HugeiconsIcon icon={ArrowDown01Icon} />
-          </Button>
-          {selectedTemplate ? (
-            <Button
-              aria-label="Delete template"
-              onClick={() => setIsDeleteDialogOpen(true)}
-              size="icon-sm"
-              type="button"
-              variant="destructive"
-            >
-              <HugeiconsIcon icon={Delete02Icon} />
-            </Button>
-          ) : null}
-          <Button disabled={!draft.name.trim()} onClick={handleSave} type="button">
-            Save
-          </Button>
-        </div>
+        ) : null}
       </section>
-
-      <section className="grid h-full w-full min-w-0 max-w-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden">
-        <div className="ml-auto" dir="rtl">
-          <InputGroup className="max-w-xl">
-            <InputGroupAddon align="inline-start">
-              <HugeiconsIcon icon={FileEditIcon} />
-            </InputGroupAddon>
-            <InputGroupInput
-              aria-label="ٹیمپلیٹ کا نام"
-              id="template-name"
-              onChange={(event) =>
-                setDraft((value) => ({
-                  ...value,
-                  name: event.target.value,
-                }))
-              }
-              placeholder="ٹیمپلیٹ کا نام"
-              value={draft.name}
-            />
-          </InputGroup>
-        </div>
-
-        <TemplateRichEditor
+      <section className="min-h-0 min-w-0 flex-1">
+        <DocumentEditor
           aria-label="ٹیمپلیٹ کا متن"
-          id="template-content"
-          onChange={(content) =>
-            setDraft((value) => ({
-              ...value,
-              content,
-            }))
-          }
-          placeholder="ٹیمپلیٹ کا متن یہاں پیسٹ کریں..."
-          resolvePlaceholderToken={(selectedText) =>
-            resolvePlaceholderToken(selectedText, placeholderIndex)
-          }
-          value={draft.content}
+          document={selectedTemplate?.document ?? emptyDocumentEnvelope()}
+          onDirtyChange={setContentDirty}
+          onSavePendingChange={setSavePending}
+          onSessionReady={(session) => {
+            sessionRef.current = session;
+          }}
+          placeholderIndex={placeholderIndex}
+          presentation={presentation}
+          sessionKey={sessionKey}
         />
       </section>
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog onOpenChange={setIsDeleteDialogOpen} open={isDeleteDialogOpen}>
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete template</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the template. FIR records and saved placeholder values are not deleted.
+              Templates in use by saved FIR documents cannot be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -43,7 +43,7 @@ function RecentFirMenuItems() {
       <SidebarMenuItem key={fir.id}>
         <SidebarMenuButton
           render={<Link to="/$firId" params={{ firId: `${fir.id}` }} />}
-          className={location.pathname === url ? "bg-secondary border" : ""}
+          isActive={location.pathname === url || location.pathname === `${url}/edit`}
           tooltip={`FIR ${fir.fir_no}`}
         >
           <HugeiconsIcon icon={File01Icon} strokeWidth={2} />

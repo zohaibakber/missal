@@ -9,7 +9,7 @@ function RouteComponent() {
   const navigate = useNavigate();
 
   return (
-    <main className="p-4">
+    <main className="p-4 sm:p-6">
       <CreateFirForm
         onSuccess={(firId) => {
           void navigate({

@@ -1,5 +1,11 @@
 import { HashMap, Option, Schema, SchemaTransformation } from "effect";
-import type { FirRecord } from "#/lib/fir";
+import {
+  CatalogFieldReference,
+  FieldSource,
+  UnresolvedTokenReference,
+  fieldSourceForSeedKey,
+  type FieldReference,
+} from "#/lib/field";
 import { PlaceholderId } from "#/lib/ids";
 import { NonEmptyTrimmedString } from "#/lib/schema";
 
@@ -18,12 +24,12 @@ export class Placeholder extends Schema.Class<Placeholder>("Placeholder")({
   id: PlaceholderId,
   key: PlaceholderKey,
   label: NonEmptyTrimmedString,
+  source: FieldSource,
 }) {}
 
 export class PlaceholderCreateInput extends Schema.Class<PlaceholderCreateInput>(
   "PlaceholderCreateInput",
 )({
-  key: PlaceholderKey,
   label: NonEmptyTrimmedString,
 }) {}
 
@@ -41,19 +47,6 @@ export type PlaceholderIndex = {
   byLabel: HashMap.HashMap<string, Placeholder>;
 };
 
-export const CORE_PLACEHOLDER_FIELDS = {
-  fir_no: "fir_no",
-  date: "date",
-  incident_date: "incident_date",
-  arrest_date: "arrest_date",
-  offence: "offence",
-  accused: "accused",
-  witness: "witness",
-  nic: "NIC",
-  mobile: "mobile",
-  investigation_officer: "investigation_officer",
-} as const satisfies Record<string, keyof FirRecord>;
-
 const defaultPlaceholderSeeds = [
   { key: "fir_no", label: "ایف آئی آر نمبر" },
   { key: "date", label: "تاریخ ایف آئی آر" },
@@ -69,6 +62,7 @@ const defaultPlaceholderSeeds = [
   { key: "district", label: "ضلع نام" },
   { key: "sho_name", label: "SHO نام" },
   { key: "dsp_name", label: "DSP نام" },
+  { key: "zimni", label: "ضمنی" },
 ] as const;
 
 export function indexPlaceholders(placeholders: readonly Placeholder[]): PlaceholderIndex {
@@ -90,6 +84,7 @@ export function createDefaultPlaceholders() {
         id: PlaceholderId.make(index + 1),
         key: PlaceholderKey.make(placeholder.key),
         label: placeholder.label,
+        source: fieldSourceForSeedKey(placeholder.key),
       }),
   );
 }
@@ -125,30 +120,15 @@ export function resolvePlaceholder(
   return Option.getOrUndefined(HashMap.get(index.byLabel, value));
 }
 
-export function resolvePlaceholderKey(
+export function resolveFieldReference(
   token: string,
   index: PlaceholderIndex = indexPlaceholders([]),
-) {
+): FieldReference {
   const placeholder = resolvePlaceholder(token, index);
 
   if (placeholder) {
-    return placeholder.key;
+    return CatalogFieldReference.make({ id: placeholder.id });
   }
 
-  const value = token.trim();
-  return isPlaceholderToken(value) ? value : "";
-}
-
-export function resolvePlaceholderToken(token: string, index: PlaceholderIndex) {
-  const placeholder = resolvePlaceholder(token, index);
-
-  if (placeholder) {
-    return String(placeholder.id);
-  }
-
-  return resolvePlaceholderKey(token, index);
-}
-
-export function isCorePlaceholderKey(key: string): key is keyof typeof CORE_PLACEHOLDER_FIELDS {
-  return key in CORE_PLACEHOLDER_FIELDS;
+  return UnresolvedTokenReference.make({ text: token.trim() });
 }

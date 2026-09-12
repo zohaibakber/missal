@@ -5,7 +5,7 @@
 
 @font-face {
   font-family: "Jameel Noori Nastaleeq";
-  src: url("./Jameel%20Noori%20Nastaleeq.ttf") format("truetype");
+  src: url("/Jameel%20Noori%20Nastaleeq.ttf") format("truetype");
   font-display: swap;
 }
 
@@ -13,7 +13,7 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: "Inter Variable", sans-serif;
+  --font-sans: "Inter Variable", "Jameel Noori Nastaleeq", sans-serif;
   --font-urdu: "Jameel Noori Nastaleeq", serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -134,9 +134,7 @@
   html {
     @apply font-sans;
   }
-  :lang(ur),
-  [lang="ur"],
-  [dir="rtl"] {
+  :lang(ur) {
     font-family: var(--font-urdu);
   }
   button:not(:disabled),
@@ -173,127 +171,163 @@
   animation: toast-attention-b 240ms ease-out;
 }
 
-.template-rich-editor {
+.missal-editor {
   position: relative;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  contain: inline-size;
-  --ck-border-radius: var(--radius-md);
-  --ck-color-base-border: transparent;
-  --ck-color-base-background: var(--background);
-  --ck-color-toolbar-background: var(--background);
-  --ck-color-button-default-hover-background: var(--muted);
-  --ck-color-button-on-background: var(--accent);
-  --ck-color-focus-border: transparent;
-  --ck-font-face: var(--font-sans);
-  --ck-font-size-base: 14px;
-}
-
-.template-rich-editor .ck.ck-editor {
-  display: flex;
-  height: 100%;
-  min-height: inherit;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.template-rich-editor .ck.ck-editor__main {
-  display: flex;
   min-height: 0;
-  width: 100%;
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
+  overflow: auto;
+  contain: inline-size;
 }
 
-.template-rich-editor .ck.ck-content.ck-editor__editable {
-  height: 100%;
-  min-height: inherit;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 0;
+.missal-editor-input {
   color: var(--foreground);
   font-family: var(--font-urdu);
-  font-size: 1rem;
-  line-height: 2;
+  font-size: 1.25rem;
+  line-height: 2.4;
   text-align: right;
   unicode-bidi: plaintext;
   overflow-wrap: anywhere;
-  border: 0;
-  border-color: transparent;
-  box-shadow: none;
 }
 
-.template-rich-editor .ck.ck-content.ck-editor__editable:not(.ck-focused) {
-  border-color: transparent;
-}
-
-.template-rich-editor .ck.ck-content.ck-editor__editable.ck-focused {
-  border-color: transparent;
-  box-shadow: none;
-}
-
-.template-rich-editor .ck.ck-toolbar {
-  display: none;
-}
-
-.template-rich-editor .ck.ck-content p,
-.template-rich-editor .ck.ck-content div,
-.template-rich-editor .ck.ck-content li {
+.missal-editor-input p,
+.missal-editor-input li {
   text-align: right;
 }
 
-.template-rich-editor .ck.ck-content p {
+.missal-paragraph {
   margin: 0 0 0.5rem;
 }
 
-.template-rich-editor .ck.ck-content table {
-  width: 100% !important;
+.missal-page-break {
+  display: block;
+  width: 100%;
+  height: 0;
+  margin-block: 1.75rem;
+  border: 0;
+  border-top: 1px dashed var(--border);
+  break-before: page;
+  page-break-before: always;
+}
+
+.missal-table {
+  width: 100%;
   max-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
-.template-rich-editor .ck.ck-content figure,
-.template-rich-editor .ck.ck-content .table,
-.template-rich-editor .ck.ck-content figure.table {
-  width: 100% !important;
-  max-width: 100%;
-  margin-right: 0;
-  margin-left: 0;
-  overflow: hidden;
-}
-
-.template-rich-editor .ck.ck-content td,
-.template-rich-editor .ck.ck-content th {
+.missal-table-cell {
   min-width: 0;
-  max-width: 100%;
   overflow-wrap: anywhere;
-  word-break: break-word;
-  white-space: normal;
+  border: 1px solid var(--border);
+  padding: 0.25rem 0.35rem;
 }
 
-.template-rich-editor .ck.ck-content img {
+.missal-image img {
   max-width: 100%;
   height: auto;
 }
 
-.template-rich-editor .ck.ck-content pre,
-.template-rich-editor .ck.ck-content code {
-  max-width: 100%;
-  overflow-wrap: anywhere;
+.missal-field {
+  color: #2563eb;
+  background: color-mix(in oklab, #2563eb 8%, transparent);
+  unicode-bidi: isolate;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-weight: inherit;
 }
 
-.template-rich-editor .ck.ck-content [data-placeholder="true"],
-.template-rich-editor .ck.ck-content .template-placeholder {
-  color: #2563eb !important;
-  font-weight: 600;
+.missal-field-unresolved {
+  color: #2563eb;
+}
+
+/* Lexical's theme names must have styles for formatting to remain visible. */
+.missal-text-bold {
+  font-weight: 700;
+}
+.missal-text-italic {
+  font-style: italic;
+}
+.missal-text-underline {
+  text-decoration: underline;
+}
+.missal-text-strike {
+  text-decoration: line-through;
+}
+.missal-text-underline.missal-text-strike {
+  text-decoration: underline line-through;
+}
+.missal-ul {
+  list-style: disc;
+  padding-inline-start: 1.5rem;
+}
+.missal-ol {
+  list-style: decimal;
+  padding-inline-start: 1.5rem;
+}
+.missal-h1 {
+  font-size: 2em;
+  font-weight: 700;
+}
+.missal-h2 {
+  font-size: 1.5em;
+  font-weight: 700;
+}
+.missal-h3 {
+  font-size: 1.25em;
+  font-weight: 700;
+}
+.missal-quote {
+  border-inline-start: 3px solid var(--border);
+  padding-inline-start: 1rem;
+}
+.missal-link {
+  text-decoration: underline;
+}
+.missal-rtl {
+  direction: rtl;
+}
+.missal-ltr {
+  direction: ltr;
+}
+
+/* Nastaleeq needs more vertical room than the Latin control font. */
+.missal-fir-form [data-slot="field-label"],
+.missal-fir-form [data-slot="field-legend"] {
+  font-family: var(--font-urdu);
+  font-size: 1.125rem;
+  line-height: 2;
+}
+.missal-fir-form input:lang(ur) {
+  font-size: 1.125rem;
+}
+
+/* Match ScrollArea on native overflow containers, including the editor. */
+*:not([data-slot="scroll-area-viewport"])::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*:not([data-slot="scroll-area-viewport"])::-webkit-scrollbar-track,
+*:not([data-slot="scroll-area-viewport"])::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*:not([data-slot="scroll-area-viewport"])::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-color: var(--border);
+  background-clip: padding-box;
+}
+
+*:not([data-slot="scroll-area-viewport"])::-webkit-scrollbar-button {
+  display: none;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  *:not([data-slot="scroll-area-viewport"]) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
 }

@@ -1,6 +1,19 @@
-import { Cause, Context, Effect, Exit, Layer, Option, Schema } from "effect";
+import { Context, Effect, Layer, Match, Schema } from "effect";
+import { encodeStorageResponse } from "#/electron/storage-contract";
 import {
+  GlobalPlaceholderListRequest,
+  GlobalPlaceholderSaveRequest,
+  GlobalPlaceholderListResult,
   FirCreateRequest,
+  FirDocumentAddTemplatesRequest,
+  FirDocumentGetRequest,
+  FirDocumentListRequest,
+  FirDocumentListResult,
+  FirDocumentRecordResult,
+  FirDocumentRemoveRequest,
+  FirDocumentReorderRequest,
+  FirDocumentSaveAckResult,
+  FirDocumentSaveRequest,
   FirGetRequest,
   FirListRequest,
   FirListResult,
@@ -9,8 +22,9 @@ import {
   FirPlaceholderValueRemoveRequest,
   FirPlaceholderValueUpsertRequest,
   FirRemoveRequest,
-  FirUpdateDocumentRequest,
   FirUpdateRequest,
+  FirValueContextRequest,
+  FirValueContextResult,
   PlaceholderCreateRequest,
   PlaceholderListRequest,
   PlaceholderListResult,
@@ -19,20 +33,24 @@ import {
   SettingsGetRequest,
   SettingsSaveRequest,
   StorageRequest,
-  StorageResponse,
+  decodeStorageResponse,
   TemplateCreateRequest,
   TemplateGetRequest,
   TemplateListRequest,
   TemplateListResult,
+  TemplateRecordResult,
   TemplateRemoveRequest,
-  TemplateUpdateRequest,
+  TemplateSaveAckResult,
+  TemplateSaveRequest,
+  TemplateSearchRequest,
 } from "#/electron/storage-contract";
 import { FirRecord } from "#/lib/fir";
 import { Placeholder } from "#/lib/placeholder";
 import { AppSettings } from "#/lib/settings";
-import { StorageError, type RepositoryError } from "#/lib/storage-errors";
-import { FirPlaceholderValue, TemplateRecord } from "#/lib/templates";
+import { StorageError } from "#/lib/storage-errors";
+import { FirPlaceholderValue, TemplateSummary } from "#/lib/templates";
 import {
+  FirDocumentRepository,
   FirPlaceholderValueRepository,
   FirRepository,
   PlaceholderRepository,
@@ -54,14 +72,13 @@ export const ElectronStorageLive = Layer.sync(ElectronStorage, () =>
 
       if (!api) {
         return Promise.resolve(
-          Schema.encodeUnknownSync(StorageResponse)(
-            Exit.fail(
-              new StorageError({
-                message: "Electron storage is unavailable",
-                operation: "storage.request",
-              }),
-            ),
-          ),
+          encodeStorageResponse({
+            _tag: "Failure",
+            error: new StorageError({
+              message: "Electron storage is unavailable",
+              operation: "storage.request",
+            }),
+          }),
         );
       }
 
@@ -70,56 +87,45 @@ export const ElectronStorageLive = Layer.sync(ElectronStorage, () =>
   }),
 );
 
-function ipcExit<A>(
+const ipcExit = Effect.fn("ipcExit")(function* <A>(
   storage: ElectronStorage["Service"],
   request: StorageRequest,
   success: Schema.ConstraintDecoder<A>,
   operation: string,
-): Effect.Effect<A, RepositoryError> {
-  return Effect.gen(function* () {
-    const payload = Schema.encodeUnknownSync(StorageRequest)(request);
-    const raw = yield* Effect.tryPromise({
-      try: () => storage.request(payload),
-      catch: () =>
+) {
+  const payload = Schema.encodeUnknownSync(StorageRequest)(request);
+  const raw = yield* Effect.tryPromise({
+    try: () => storage.request(payload),
+    catch: () =>
+      new StorageError({
+        message: "Storage request failed",
+        operation,
+      }),
+  });
+  const exit = yield* decodeStorageResponse(raw).pipe(
+    Effect.mapError(
+      () =>
         new StorageError({
-          message: "Storage request failed",
+          message: "Invalid storage response",
           operation,
         }),
-    });
-    const exit = yield* Schema.decodeUnknownEffect(StorageResponse)(raw).pipe(
-      Effect.mapError(
-        () =>
-          new StorageError({
-            message: "Invalid storage response",
-            operation,
-          }),
-      ),
-    );
+    ),
+  );
 
-    if (Exit.isFailure(exit)) {
-      return yield* Effect.fail(
-        Option.getOrElse(
-          Cause.findErrorOption(exit.cause),
+  return yield* Match.valueTags(exit, {
+    Failure: ({ error }) => error,
+    Success: ({ value }) =>
+      Schema.decodeUnknownEffect(success)(value).pipe(
+        Effect.mapError(
           () =>
             new StorageError({
-              message: "Storage request failed",
+              message: "Invalid storage response",
               operation,
             }),
         ),
-      );
-    }
-
-    return yield* Schema.decodeUnknownEffect(success)(exit.value).pipe(
-      Effect.mapError(
-        () =>
-          new StorageError({
-            message: "Invalid storage response",
-            operation,
-          }),
       ),
-    );
   });
-}
+});
 
 export const IpcPlaceholderRepositoryLive = Layer.effect(
   PlaceholderRepository,
@@ -127,6 +133,19 @@ export const IpcPlaceholderRepositoryLive = Layer.effect(
     const storage = yield* ElectronStorage;
 
     return PlaceholderRepository.of({
+      listGlobals: ipcExit(
+        storage,
+        GlobalPlaceholderListRequest.make({}),
+        GlobalPlaceholderListResult,
+        "placeholder.listGlobals",
+      ),
+      saveGlobals: (input) =>
+        ipcExit(
+          storage,
+          GlobalPlaceholderSaveRequest.make({ input }),
+          GlobalPlaceholderListResult,
+          "placeholder.saveGlobals",
+        ),
       list: ipcExit(
         storage,
         PlaceholderListRequest.make({}),
@@ -165,12 +184,24 @@ export const IpcTemplateRepositoryLive = Layer.effect(
 
     return TemplateRepository.of({
       list: ipcExit(storage, TemplateListRequest.make({}), TemplateListResult, "template.list"),
+      search: (query) =>
+        ipcExit(
+          storage,
+          TemplateSearchRequest.make({ query }),
+          TemplateListResult,
+          "template.search",
+        ),
       get: (id) =>
-        ipcExit(storage, TemplateGetRequest.make({ id }), TemplateRecord, "template.get"),
+        ipcExit(storage, TemplateGetRequest.make({ id }), TemplateRecordResult, "template.get"),
       create: (input) =>
-        ipcExit(storage, TemplateCreateRequest.make({ input }), TemplateRecord, "template.create"),
-      update: (input) =>
-        ipcExit(storage, TemplateUpdateRequest.make({ input }), TemplateRecord, "template.update"),
+        ipcExit(storage, TemplateCreateRequest.make({ input }), TemplateSummary, "template.create"),
+      save: (input) =>
+        ipcExit(
+          storage,
+          TemplateSaveRequest.make({ input }),
+          TemplateSaveAckResult,
+          "template.save",
+        ),
       remove: (id) =>
         ipcExit(storage, TemplateRemoveRequest.make({ id }), Schema.Undefined, "template.remove"),
     });
@@ -189,10 +220,67 @@ export const IpcFirRepositoryLive = Layer.effect(
         ipcExit(storage, FirCreateRequest.make({ input }), FirRecord, "fir.create"),
       update: (input) =>
         ipcExit(storage, FirUpdateRequest.make({ input }), FirRecord, "fir.update"),
-      updateDocument: (input) =>
-        ipcExit(storage, FirUpdateDocumentRequest.make({ input }), FirRecord, "fir.updateDocument"),
       remove: (id) =>
         ipcExit(storage, FirRemoveRequest.make({ id }), Schema.Undefined, "fir.remove"),
+      getValueContext: (id) =>
+        ipcExit(
+          storage,
+          FirValueContextRequest.make({ id }),
+          FirValueContextResult,
+          "fir.valueContext",
+        ),
+    });
+  }),
+);
+
+export const IpcFirDocumentRepositoryLive = Layer.effect(
+  FirDocumentRepository,
+  Effect.gen(function* () {
+    const storage = yield* ElectronStorage;
+
+    return FirDocumentRepository.of({
+      listForFir: (firId) =>
+        ipcExit(
+          storage,
+          FirDocumentListRequest.make({ firId }),
+          FirDocumentListResult,
+          "firDocument.listForFir",
+        ),
+      get: (id) =>
+        ipcExit(
+          storage,
+          FirDocumentGetRequest.make({ id }),
+          FirDocumentRecordResult,
+          "firDocument.get",
+        ),
+      addTemplates: (input) =>
+        ipcExit(
+          storage,
+          FirDocumentAddTemplatesRequest.make({ input }),
+          FirDocumentListResult,
+          "firDocument.addTemplates",
+        ),
+      save: (input) =>
+        ipcExit(
+          storage,
+          FirDocumentSaveRequest.make({ input }),
+          FirDocumentSaveAckResult,
+          "firDocument.save",
+        ),
+      reorder: (input) =>
+        ipcExit(
+          storage,
+          FirDocumentReorderRequest.make({ input }),
+          FirDocumentListResult,
+          "firDocument.reorder",
+        ),
+      remove: (id) =>
+        ipcExit(
+          storage,
+          FirDocumentRemoveRequest.make({ id }),
+          Schema.Undefined,
+          "firDocument.remove",
+        ),
     });
   }),
 );
@@ -250,6 +338,7 @@ export const RendererRepositoriesLive = Layer.mergeAll(
   IpcPlaceholderRepositoryLive,
   IpcTemplateRepositoryLive,
   IpcFirRepositoryLive,
+  IpcFirDocumentRepositoryLive,
   IpcFirPlaceholderValueRepositoryLive,
   IpcSettingsRepositoryLive,
 ).pipe(Layer.provide(ElectronStorageLive));

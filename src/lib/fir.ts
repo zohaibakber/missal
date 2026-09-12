@@ -1,5 +1,5 @@
 import { Match, Schema } from "effect";
-import { FirId, TemplateId } from "#/lib/ids";
+import { FirId } from "#/lib/ids";
 import { NonEmptyTrimmedString, TrimmedString } from "#/lib/schema";
 
 export { FirId } from "#/lib/ids";
@@ -20,32 +20,30 @@ export class FirRecord extends Schema.Class<FirRecord>("FirRecord")({
   fir_no: NonEmptyTrimmedString,
   date: NonEmptyTrimmedString,
   offence: NonEmptyTrimmedString,
-  accused: NonEmptyTrimmedString,
-  witness: TrimmedString,
+  accused: Schema.NonEmptyArray(NonEmptyTrimmedString),
+  witness: Schema.Array(NonEmptyTrimmedString),
+  zimni: Schema.Array(NonEmptyTrimmedString),
   NIC: TrimmedString,
   mobile: TrimmedString,
   incident_date: NonEmptyTrimmedString,
   arrest_date: TrimmedString,
   investigation_officer: TrimmedString,
   status: FirStatus,
-  templateId: Schema.optionalKey(TemplateId),
-  content: Schema.optionalKey(Schema.String),
 }) {}
 
 export class FirCreateInput extends Schema.Class<FirCreateInput>("FirCreateInput")({
   fir_no: NonEmptyTrimmedString,
   date: NonEmptyTrimmedString,
   offence: NonEmptyTrimmedString,
-  accused: NonEmptyTrimmedString,
-  witness: TrimmedString,
+  accused: Schema.NonEmptyArray(NonEmptyTrimmedString),
+  witness: Schema.Array(NonEmptyTrimmedString),
+  zimni: Schema.Array(NonEmptyTrimmedString),
   NIC: TrimmedString,
   mobile: TrimmedString,
   incident_date: NonEmptyTrimmedString,
   arrest_date: TrimmedString,
   investigation_officer: TrimmedString,
   status: FirStatus,
-  templateId: Schema.optionalKey(TemplateId),
-  content: Schema.optionalKey(Schema.String),
 }) {}
 
 export class FirUpdateInput extends Schema.Class<FirUpdateInput>("FirUpdateInput")({
@@ -53,24 +51,15 @@ export class FirUpdateInput extends Schema.Class<FirUpdateInput>("FirUpdateInput
   fir_no: NonEmptyTrimmedString,
   date: NonEmptyTrimmedString,
   offence: NonEmptyTrimmedString,
-  accused: NonEmptyTrimmedString,
-  witness: TrimmedString,
+  accused: Schema.NonEmptyArray(NonEmptyTrimmedString),
+  witness: Schema.Array(NonEmptyTrimmedString),
+  zimni: Schema.Array(NonEmptyTrimmedString),
   NIC: TrimmedString,
   mobile: TrimmedString,
   incident_date: NonEmptyTrimmedString,
   arrest_date: TrimmedString,
   investigation_officer: TrimmedString,
   status: FirStatus,
-  templateId: Schema.optionalKey(TemplateId),
-  content: Schema.optionalKey(Schema.String),
-}) {}
-
-export class FirDocumentUpdateInput extends Schema.Class<FirDocumentUpdateInput>(
-  "FirDocumentUpdateInput",
-)({
-  id: FirId,
-  content: Schema.String,
-  templateId: Schema.optionalKey(TemplateId),
 }) {}
 
 export const getFirStatusColor = (status: FirRecord["status"]) =>
@@ -95,31 +84,30 @@ export type FirFormValues = {
   fir_no: string;
   date: string;
   offence: string;
-  accused: string;
-  witness: string;
+  accused: string[];
+  witness: string[];
+  zimni: string[];
   NIC: string;
   mobile: string;
   incident_date: string;
   arrest_date: string;
   investigation_officer: string;
   status: FirStatus;
-  templateId?: TemplateId;
-  content?: string;
 };
 
 export const createEmptyFirRecord = (): FirFormValues => ({
   fir_no: "",
   date: "",
   offence: "",
-  accused: "",
-  witness: "",
+  accused: [""],
+  witness: [],
+  zimni: [],
   NIC: "",
   mobile: "",
   incident_date: "",
   arrest_date: "",
   investigation_officer: "",
   status: "Open",
-  content: "",
 });
 
 export const normalizeFirText = (value: unknown) => {

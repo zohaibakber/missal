@@ -9,19 +9,31 @@ A First Information Report — one police case file with offence, accused, dates
 _Avoid_: case, record, row, document
 
 **Template**:
-Reusable FIR document text that contains placeholder tokens to fill later.
+Reusable Urdu rich text that contains linked fields. Copying a template onto a FIR creates a FIR document; later template edits do not change that copy.
 _Avoid_: form, letter, layout
 
+**FIR document**:
+One independently edited document attached to a FIR, created by copying a template's body. A FIR can have several. Field values stay linked to the FIR, not to the document body.
+_Avoid_: template instance, attachment, file, the FIR itself
+
+**Document envelope**:
+The versioned serialized document body stored for a template or FIR document. Callers treat it as data, never as a live editor.
+_Avoid_: HTML, CKEditor content, editor state
+
+**Field**:
+A catalog token that can appear in a template or FIR document. It has a stable ID, an ASCII key, an Urdu label, and a source binding: a FIR property, a shared setting, or a custom FIR-specific value. Renaming the key does not change the source binding.
+_Avoid_: variable, tag, merge field
+
 **Placeholder**:
-A named token in a template, identified by a stable numeric ID and an ASCII key, shown to officers as an Urdu label.
-_Avoid_: field, variable, tag, merge field
+The stored catalog row for a Field. Storage, IPC, and seeds still use this name.
+_Avoid_: extra value, overlay (those are FIR-specific field values)
 
 **Placeholder value**:
-The text stored for one placeholder on one FIR, used when that FIR does not already have a matching core field.
+The text stored for one custom or shared-setting field on one FIR.
 _Avoid_: extra value, custom field, overlay
 
 **Settings**:
-The single station-wide record of shared placeholder values such as police station and district names.
+The single station-wide record of shared field values such as police station and district names.
 _Avoid_: preferences, config, profile
 
 **Repository**:

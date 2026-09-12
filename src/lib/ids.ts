@@ -36,3 +36,21 @@ export function parseTemplateId(value: string) {
 export function parseFirId(value: string) {
   return parseId(FirId, value);
 }
+
+export const FirDocumentId = Schema.Int.pipe(
+  Schema.check(Schema.isGreaterThanOrEqualTo(1)),
+  Schema.brand("FirDocumentId"),
+);
+
+export type FirDocumentId = typeof FirDocumentId.Type;
+
+export function parseFirDocumentId(value: string) {
+  return parseId(FirDocumentId, value);
+}
+
+export const DocumentRevision = Schema.Int.pipe(
+  Schema.check(Schema.isGreaterThanOrEqualTo(1)),
+  Schema.brand("DocumentRevision"),
+);
+
+export type DocumentRevision = typeof DocumentRevision.Type;

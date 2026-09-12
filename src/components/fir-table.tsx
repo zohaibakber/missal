@@ -1,13 +1,14 @@
 import type { SortingState } from "@tanstack/react-table";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { DataTableToolbarConfig } from "#/components/data-table-toolbar";
 import { DataTable } from "./data-table";
 import { firColumns } from "./fir-columns";
 import type { FirRecord } from "#/lib/fir";
 import { FIR_STATUS_OPTIONS, getFirStatusLabel } from "#/lib/fir";
 import { atoms } from "#/state/atoms";
+import { Button } from "#/components/ui/button";
 import { Skeleton } from "#/components/ui/skeleton";
 import {
   Table,
@@ -19,6 +20,11 @@ import {
 } from "#/components/ui/table";
 
 const firTableToolbar: DataTableToolbarConfig<FirRecord> = {
+  action: (
+    <Button nativeButton={false} render={<Link to="/new" />}>
+      ایف آئی آر درج کریں
+    </Button>
+  ),
   search: {
     label: "Search FIR records",
     searchableColumnIds: ["fir_no", "date", "incident_date", "arrest_date", "offence", "status"],

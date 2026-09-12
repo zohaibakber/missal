@@ -199,7 +199,7 @@ export function DataTable<TData extends RowData>({
             ) : (
               <TableRow>
                 <TableCell className="h-24 text-center" colSpan={columns.length}>
-                  No results.
+                  کوئی نتیجہ نہیں۔
                 </TableCell>
               </TableRow>
             )}
@@ -209,11 +209,11 @@ export function DataTable<TData extends RowData>({
       <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center">
           <p>
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} row(s) selected.
+            {table.getFilteredSelectedRowModel().rows.length} منتخب /{" "}
+            {table.getFilteredRowModel().rows.length} ریکارڈ
           </p>
           <div className="flex items-center gap-2 whitespace-nowrap">
-            <span>Viewing</span>
+            <span>صفحہ</span>
             <Select
               onValueChange={(value) => {
                 table.setPageIndex(Number(value) - 1);
@@ -221,7 +221,8 @@ export function DataTable<TData extends RowData>({
               value={`${table.state.pagination.pageIndex + 1}`}
             >
               <SelectTrigger
-                aria-label="Select result range"
+                aria-label="صفحہ منتخب کریں"
+                disabled={table.getPageCount() === 0}
                 className="w-fit min-w-none"
                 size="sm"
               >
@@ -245,10 +246,7 @@ export function DataTable<TData extends RowData>({
                 </SelectGroup>
               </SelectContent>
             </Select>
-            <span>
-              of <strong className="font-medium text-foreground">{table.getRowCount()}</strong>{" "}
-              results
-            </span>
+            <span>کل {table.getRowCount()} ریکارڈ</span>
           </div>
         </div>
 
@@ -308,7 +306,12 @@ export function DataTable<TData extends RowData>({
             type="button"
             variant="outline"
           >
-            <HugeiconsIcon data-icon="inline-end" icon={ArrowRightDoubleIcon} strokeWidth={2} />
+            <HugeiconsIcon
+              data-icon="inline-end"
+              icon={ArrowRightDoubleIcon}
+              strokeWidth={2}
+              className="rtl:rotate-180"
+            />
           </Button>
         </div>
       </div>

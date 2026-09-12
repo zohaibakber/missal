@@ -1,28 +1,30 @@
+"use client";
+
 import * as React from "react";
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 
-import { useIsMobile } from "#/hooks/use-mobile";
-import { cn } from "#/lib/utils";
-import { Button } from "#/components/ui/button";
-import { Input } from "#/components/ui/input";
-import { Separator } from "#/components/ui/separator";
+import { useIsMobile } from "#/hooks/use-mobile.ts";
+import { Button } from "#/components/ui/button.tsx";
+import { Input } from "#/components/ui/input.tsx";
+import { Separator } from "#/components/ui/separator.tsx";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "#/components/ui/sheet";
-import { Skeleton } from "#/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
+} from "#/components/ui/sheet.tsx";
+import { Skeleton } from "#/components/ui/skeleton.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip.tsx";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { SidebarLeftIcon } from "@hugeicons/core-free-icons";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-const SIDEBAR_WIDTH = "16rem";
+const SIDEBAR_WIDTH = "14rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
@@ -40,7 +42,7 @@ type SidebarContextProps = {
 const SidebarContext = React.createContext<SidebarContextProps | null>(null);
 
 function useSidebar() {
-  const context = React.use(SidebarContext);
+  const context = React.useContext(SidebarContext);
   if (!context) {
     throw new Error("useSidebar must be used within a SidebarProvider.");
   }
@@ -91,7 +93,14 @@ function SidebarProvider({
   // Adds a keyboard shortcut to toggle the sidebar.
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
+      if (
+        event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
+        (event.metaKey || event.ctrlKey) &&
+        !(
+          event.target instanceof HTMLElement &&
+          event.target.closest("input, textarea, [contenteditable=true]")
+        )
+      ) {
         event.preventDefault();
         toggleSidebar();
       }
@@ -130,7 +139,7 @@ function SidebarProvider({
           } as React.CSSProperties
         }
         className={cn(
-          "group/sidebar-wrapper flex min-h-svh w-full min-w-0 max-w-full has-data-[variant=inset]:bg-sidebar",
+          "group/sidebar-wrapper flex min-h-svh w-full has-data-[variant=inset]:bg-sidebar",
           className,
         )}
         {...props}
@@ -160,7 +169,6 @@ function Sidebar({
     return (
       <div
         data-slot="sidebar"
-        dir={dir}
         className={cn(
           "flex h-full w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground",
           className,
@@ -206,7 +214,6 @@ function Sidebar({
       data-variant={variant}
       data-side={side}
       data-slot="sidebar"
-      dir={dir}
     >
       {/* This is what handles the sidebar gap on desktop */}
       <div
@@ -297,7 +304,7 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
     <main
       data-slot="sidebar-inset"
       className={cn(
-        "relative flex w-0 min-w-0 flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
+        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2",
         className,
       )}
       {...props}
@@ -462,7 +469,7 @@ const sidebarMenuButtonVariants = cva(
       variant: {
         default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         outline:
-          "bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]",
+          "bg-background shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_var(--sidebar-accent)]",
       },
       size: {
         default: "h-8 text-sm",

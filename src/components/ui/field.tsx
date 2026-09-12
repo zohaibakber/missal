@@ -1,9 +1,11 @@
+"use client";
+
 import { useMemo } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 
-import { cn } from "#/lib/utils";
-import { Label } from "#/components/ui/label";
-import { Separator } from "#/components/ui/separator";
+import { Label } from "#/components/ui/label.tsx";
+import { Separator } from "#/components/ui/separator.tsx";
 
 function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
   return (
@@ -95,7 +97,7 @@ function FieldLabel({ className, ...props }: React.ComponentProps<typeof Label>)
     <Label
       data-slot="field-label"
       className={cn(
-        "group/field-label peer/field-label flex w-fit gap-2 leading-snug group-data-[disabled=true]/field:opacity-50 has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border *:data-[slot=field]:p-2.5 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10",
+        "group/field-label peer/field-label flex w-fit gap-2 leading-snug group-data-[disabled=true]/field:opacity-50 has-data-checked:border-primary/30 has-data-checked:bg-primary/5 has-[>[data-slot=field]]:rounded-lg has-[>[data-slot=field]]:border has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-muted/50 has-[>[data-slot=field]]:has-[:focus-visible]:border-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-3 has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring/50 *:data-[slot=field]:p-2.5 dark:has-data-checked:border-primary/20 dark:has-data-checked:bg-primary/10",
         "has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col",
         className,
       )}
@@ -162,13 +164,23 @@ function FieldSeparator({
   );
 }
 
+type FieldErrorItem = { message?: string } | string | undefined;
+
+function getErrorMessage(error: FieldErrorItem): string | undefined {
+  if (typeof error === "string") {
+    return error || undefined;
+  }
+
+  return error?.message;
+}
+
 function FieldError({
   className,
   children,
   errors,
   ...props
 }: React.ComponentProps<"div"> & {
-  errors?: Array<{ message?: string } | string | undefined>;
+  errors?: Array<FieldErrorItem>;
 }) {
   const content = useMemo(() => {
     if (children) {
@@ -179,18 +191,28 @@ function FieldError({
       return null;
     }
 
-    const normalized = errors.map((error) =>
-      typeof error === "string" ? { message: error } : error,
-    );
-    const uniqueErrors = [...new Map(normalized.map((error) => [error?.message, error])).values()];
+    const uniqueErrors = [
+      ...new Set(
+        errors.flatMap((error) => {
+          const message = getErrorMessage(error);
+          return message ? [message] : [];
+        }),
+      ),
+    ];
 
-    if (uniqueErrors?.length == 1) {
-      return uniqueErrors[0]?.message;
+    if (uniqueErrors.length === 1) {
+      return uniqueErrors[0];
+    }
+
+    if (!uniqueErrors.length) {
+      return null;
     }
 
     return (
       <ul className="ms-4 flex list-disc flex-col gap-1">
-        {uniqueErrors.map((error, index) => error?.message && <li key={index}>{error.message}</li>)}
+        {uniqueErrors.map((message) => (
+          <li key={message}>{message}</li>
+        ))}
       </ul>
     );
   }, [children, errors]);

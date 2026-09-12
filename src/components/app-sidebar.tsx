@@ -32,7 +32,7 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              className={location.pathname === "/settings" ? "bg-secondary border" : ""}
+              isActive={location.pathname === "/settings"}
               render={<Link to="/settings" />}
               tooltip="Settings"
             >

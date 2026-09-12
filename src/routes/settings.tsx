@@ -10,9 +10,9 @@ export const Route = createFileRoute("/settings")({
 });
 
 const items = [
-  { label: "System", value: "system" },
-  { label: "Light", value: "light" },
-  { label: "Dark", value: "dark" },
+  { label: "سسٹم", value: "system" },
+  { label: "روشن", value: "light" },
+  { label: "تاریک", value: "dark" },
 ] as const;
 
 function RouteComponent() {
@@ -20,11 +20,8 @@ function RouteComponent() {
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
-      <section className="flex flex-col gap-1">
-        <h1 className="text-xl font-medium">Settings</h1>
-      </section>
       <FieldSet className="gap-4">
-        <FieldLegend className="text-sm font-medium">Choose a theme</FieldLegend>
+        <FieldLegend className="text-sm font-medium">ظاہری انداز</FieldLegend>
         <RadioGroup
           className="flex w-auto flex-row gap-4"
           name="theme"

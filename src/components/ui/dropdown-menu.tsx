@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
-
-import { cn } from "#/lib/utils";
+import { cn } from "cn";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 
@@ -169,14 +168,14 @@ function DropdownMenuCheckboxItem({
       checked={checked}
       {...props}
     >
-      {checked ? (
-        <span
-          className="pointer-events-none absolute end-2 flex items-center justify-center"
-          data-slot="dropdown-menu-checkbox-item-indicator"
-        >
+      <span
+        className="pointer-events-none absolute end-2 flex items-center justify-center"
+        data-slot="dropdown-menu-checkbox-item-indicator"
+      >
+        <MenuPrimitive.CheckboxItemIndicator>
           <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
-        </span>
-      ) : null}
+        </MenuPrimitive.CheckboxItemIndicator>
+      </span>
       {children}
     </MenuPrimitive.CheckboxItem>
   );

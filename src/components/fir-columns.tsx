@@ -2,7 +2,7 @@ import { EditFirForm } from "./create-fir-form";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
-import { Dialog, DialogContent } from "./ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "./ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +22,8 @@ import {
 import { type DataTableFeatures } from "#/components/data-table-features";
 import { formatDate } from "#/lib/date";
 import { getFirStatusColor, getFirStatusLabel, type FirRecord } from "#/lib/fir";
-import { Cause, Exit, Match, Option } from "effect";
+import { getRepositoryErrorMessage } from "#/lib/storage-errors";
+import { Exit } from "effect";
 import { atoms } from "#/state/atoms";
 import { cn } from "#/lib/utils";
 import { Delete02Icon, Edit02Icon, MoreVerticalIcon } from "@hugeicons/core-free-icons";
@@ -30,7 +31,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useAtomSet } from "@effect/atom-react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useState } from "react";
-import { toast } from "sonner";
+import { toast } from "#/components/ui/toast";
 
 function FirRowActions({ fir }: { fir: FirRecord }) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -41,17 +42,7 @@ function FirRowActions({ fir }: { fir: FirRecord }) {
     const exit = await removeFir(fir.id);
 
     if (Exit.isFailure(exit)) {
-      toast.error(
-        Option.match(Cause.findErrorOption(exit.cause), {
-          onNone: () => "Something went wrong while saving",
-          onSome: (error) =>
-            Match.valueTags(error, {
-              EntityNotFound: ({ entity }) => `${entity} not found`,
-              EntityConflict: ({ field }) => `${field} is already in use`,
-              StorageError: ({ message }) => message,
-            }),
-        }),
-      );
+      toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
       return;
     }
 
@@ -80,12 +71,13 @@ function FirRowActions({ fir }: { fir: FirRecord }) {
           className="max-h-[calc(100dvh-1rem)] max-w-5xl overflow-y-auto p-4"
           showCloseButton={false}
         >
+          <DialogTitle className="sr-only">ایف آئی آر میں ترمیم</DialogTitle>
           <EditFirForm
             className="max-w-none py-0"
             fir={fir}
             onSuccess={() => {
               setIsEditDialogOpen(false);
-              toast.success("FIR updated");
+              toast.add({ title: "FIR updated", type: "success" });
             }}
           />
         </DialogContent>
