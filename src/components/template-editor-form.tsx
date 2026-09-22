@@ -4,7 +4,12 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { Exit } from "effect";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "#/components/ui/toast";
-import { Delete02Icon, LegalDocument01Icon } from "@hugeicons/core-free-icons";
+import {
+  Delete02Icon,
+  FileImportIcon,
+  LegalDocument01Icon,
+  MoreVerticalIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   AlertDialog,
@@ -16,7 +21,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "#/components/ui/alert-dialog";
+import { IconAction } from "#/components/icon-action";
+import { ShortcutKbd } from "#/components/shortcut-kbd";
 import { UnsavedChanges } from "#/components/unsaved-changes";
+import { SaveStatus, WorkspaceHeader } from "#/components/workspace";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "#/components/ui/dropdown-menu";
 import { Button } from "#/components/ui/button";
 import { DocumentEditor } from "#/components/document-editor";
 import {
@@ -30,12 +44,13 @@ import {
 import { Input } from "#/components/ui/input";
 import { Skeleton } from "#/components/ui/skeleton";
 import { catalogFieldPresentation } from "#/lib/field";
-import { emptyDocumentEnvelope } from "#/lib/document-format";
+import { emptyDocumentEnvelope, projectDocument } from "#/lib/document-format";
 import { type TemplateId } from "#/lib/ids";
 import { indexPlaceholders, type PlaceholderIndex } from "#/lib/placeholder";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
 import { TemplateCreateInput, TemplateRecord, TemplateUpdateInput } from "#/lib/templates";
 import type { EditorSessionHandle } from "#/editor/session";
+import { useShortcut } from "#/hooks/use-shortcut";
 import { atoms } from "#/state/atoms";
 
 type TemplateEditorFormProps = {
@@ -68,8 +83,8 @@ function EditTemplateForm({ templateId }: { templateId: TemplateId }) {
 
   if (AsyncResult.isFailure(templateResult)) {
     return (
-      <main className="p-4 lg:p-6">
-        <Empty className="min-h-[28rem] border">
+      <div className="p-6">
+        <Empty className="min-h-[28rem]" variant="outline">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <HugeiconsIcon icon={LegalDocument01Icon} />
@@ -83,16 +98,16 @@ function EditTemplateForm({ templateId }: { templateId: TemplateId }) {
             </Button>
           </EmptyContent>
         </Empty>
-      </main>
+      </div>
     );
   }
 
   if (AsyncResult.isInitial(templateResult) || AsyncResult.isWaiting(templateResult)) {
     return (
-      <main className="flex flex-col gap-4 p-4">
+      <div className="flex flex-col gap-4 p-6">
         <Skeleton className="h-8 w-40" />
         <Skeleton className="h-[42rem]" />
-      </main>
+      </div>
     );
   }
 
@@ -121,6 +136,9 @@ function TemplateEditorWorkspace({
   const [savedName, setSavedName] = useState(selectedTemplate?.name ?? "");
   const dirty = contentDirty || name !== savedName;
   const [savePending, setSavePending] = useState(false);
+  const [importPending, setImportPending] = useState(false);
+  const [pendingImport, setPendingImport] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const allowNavigationRef = useRef(false);
   const sessionRef = useRef<EditorSessionHandle | null>(null);
@@ -143,6 +161,45 @@ function TemplateEditorWorkspace({
     setContentDirty(false);
     setSavedName(selectedTemplate?.name ?? "");
   }, [selectedTemplate, sessionKey]);
+
+  async function handleImport(file: File) {
+    const session = sessionRef.current;
+    if (!session || importPending || savePending) return;
+    setPendingImport(null);
+    setImportPending(true);
+    try {
+      const notices = await session.importDocx(file);
+      if (sessionRef.current !== session) return;
+      setName((current) => (current.trim() ? current : file.name.replace(/\.docx$/i, "")));
+      toast.add({
+        title: "Word document imported",
+        description: notices.length
+          ? notices.join(" ")
+          : "Review the layout and placeholders, then save the template.",
+        type: notices.length ? "warning" : "success",
+      });
+    } catch (error) {
+      toast.add({
+        title: "Could not import Word document",
+        description:
+          error instanceof Error ? error.message : "Choose a valid .docx file and try again.",
+        type: "error",
+      });
+    } finally {
+      setImportPending(false);
+    }
+  }
+
+  function chooseImport(file: File) {
+    const session = sessionRef.current;
+    if (!session) return;
+    const projection = projectDocument(session.captureEnvelope().envelope);
+    if (contentDirty || selectedTemplate || projection.plainText || projection.fieldCount) {
+      setPendingImport(file);
+      return;
+    }
+    void handleImport(file);
+  }
 
   async function handleSave() {
     const trimmed = name.trim();
@@ -222,41 +279,83 @@ function TemplateEditorWorkspace({
     void navigate({ to: "/templates" });
   }
 
+  const canSave =
+    Boolean(name.trim()) && !savePending && !importPending && (selectedTemplate === null || dirty);
+
   return (
-    <main className="flex h-full min-h-96 min-w-0 flex-col" dir="rtl">
+    <div className="flex h-full min-h-96 min-w-0 flex-col">
+      <TemplateEditorShortcuts
+        templateId={selectedTemplate?.id}
+        canSave={canSave}
+        onSave={() => void handleSave()}
+        onImport={() => fileInputRef.current?.click()}
+      />
       <UnsavedChanges isDirty={() => dirty && !allowNavigationRef.current} />
-      <section className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2">
+      <WorkspaceHeader>
         <Input
           aria-label="Template name"
           id="template-name"
           lang="ur"
-          className="min-w-40 flex-1 rounded-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent"
+          dir="auto"
+          autoFocus={!selectedTemplate}
+          className="min-w-48 flex-1"
           placeholder="ٹیمپلیٹ کا نام"
+          variant="plain"
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
-        <Button
-          disabled={!name.trim() || savePending || (selectedTemplate !== null && !dirty)}
-          onClick={() => void handleSave()}
-          type="button"
-        >
-          {savePending ? "Saving…" : "Save"}
-        </Button>
-        {selectedTemplate ? (
-          <Button
-            aria-label="Delete template"
-            onClick={() => setIsDeleteDialogOpen(true)}
-            size="icon-sm"
-            type="button"
-            variant="ghost"
+        <div className="flex items-center gap-2">
+          <SaveStatus dirty={dirty} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            aria-label="Import Word document"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) chooseImport(file);
+            }}
+          />
+          <IconAction
+            label={importPending ? "Importing…" : "Import Word document"}
+            shortcut="importDocx"
+            disabled={savePending || importPending}
+            onClick={() => fileInputRef.current?.click()}
           >
-            <HugeiconsIcon icon={Delete02Icon} />
+            <HugeiconsIcon icon={FileImportIcon} />
+          </IconAction>
+          {selectedTemplate ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button size="icon-sm" type="button" variant="ghost" aria-label="More actions" />
+                }
+              >
+                <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem
+                  disabled={savePending || importPending}
+                  onClick={() => setIsDeleteDialogOpen(true)}
+                  variant="destructive"
+                >
+                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                  Delete template
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          <Button disabled={!canSave} onClick={() => void handleSave()} size="sm" type="button">
+            {savePending ? "Saving…" : selectedTemplate ? "Save" : "Create template"}
+            <ShortcutKbd id="save" />
           </Button>
-        ) : null}
-      </section>
+        </div>
+      </WorkspaceHeader>
       <section className="min-h-0 min-w-0 flex-1">
         <DocumentEditor
-          aria-label="ٹیمپلیٹ کا متن"
+          aria-label="Template content"
           document={selectedTemplate?.document ?? emptyDocumentEnvelope()}
           onDirtyChange={setContentDirty}
           onSavePendingChange={setSavePending}
@@ -269,6 +368,33 @@ function TemplateEditorWorkspace({
         />
       </section>
 
+      <AlertDialog
+        open={pendingImport !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingImport(null);
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace template content?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Importing replaces all text and formatting in this editor. The saved template stays
+              unchanged until you save.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={() => {
+                if (pendingImport) void handleImport(pendingImport);
+              }}
+            >
+              Import and replace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog onOpenChange={setIsDeleteDialogOpen} open={isDeleteDialogOpen}>
         <AlertDialogContent size="sm">
           <AlertDialogHeader>
@@ -293,6 +419,37 @@ function TemplateEditorWorkspace({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </main>
+    </div>
   );
+}
+
+function TemplateEditorShortcuts({
+  templateId,
+  canSave,
+  onSave,
+  onImport,
+}: {
+  templateId: TemplateId | undefined;
+  canSave: boolean;
+  onSave: () => void;
+  onImport: () => void;
+}) {
+  const navigate = useNavigate();
+  const templates = useAtomValue(atoms.templatesAtom);
+
+  function step(offset: 1 | -1) {
+    if (!AsyncResult.isSuccess(templates)) return;
+    const list = templates.value;
+    const index = list.findIndex((template) => template.id === templateId);
+    const next = list[index === -1 ? 0 : index + offset];
+    if (next) {
+      void navigate({ to: "/templates/$templateId", params: { templateId: `${next.id}` } });
+    }
+  }
+
+  useShortcut("save", onSave, { enabled: canSave });
+  useShortcut("importDocx", onImport);
+  useShortcut("nextTemplate", () => step(1), { ignoreInputs: false });
+  useShortcut("previousTemplate", () => step(-1), { ignoreInputs: false });
+  return null;
 }

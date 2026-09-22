@@ -11,6 +11,13 @@ import {
 } from "lexical";
 import DOMPurify from "isomorphic-dompurify";
 import { materializeClipboardPageBreaks } from "#/editor/import/page-breaks";
+import {
+  measureLineHeightRatio,
+  prepareFontsFor,
+  normalizeWordHtml,
+  readWordPageLayout,
+} from "#/editor/import/word-html";
+import type { PageLayout } from "#/lib/document-format";
 import { $isPageBreakNode } from "#/editor/nodes/page-break-node";
 
 const LARGE_HTML_BYTES = 256 * 1024;
@@ -43,7 +50,9 @@ export function prepareClipboardDom(html: string) {
 
 export function insertSanitizedHtml(editor: LexicalEditor, html: string) {
   const notices: ImportNotice[] = [];
-  const { dom, sanitized } = prepareClipboardDom(html);
+  const { dom, sanitized } = prepareClipboardDom(
+    normalizeWordHtml(html, { lineHeightRatio: measureLineHeightRatio }),
+  );
   if (sanitized.includes("position:absolute") || sanitized.includes("float:")) {
     notices.push({
       category: "layout",
@@ -80,7 +89,14 @@ export function insertSanitizedHtml(editor: LexicalEditor, html: string) {
 
 export function registerClipboardImport(
   editor: LexicalEditor,
-  onNotices?: (notices: ImportNotice[]) => void,
+  {
+    onNotices,
+    onPageLayout,
+  }: {
+    onNotices?: (notices: ImportNotice[]) => void;
+    /** Word clipboard HTML carries the source document's paper size and margins. */
+    onPageLayout?: (pageLayout: PageLayout) => void;
+  } = {},
 ) {
   return editor.registerCommand(
     PASTE_COMMAND,
@@ -95,10 +111,13 @@ export function registerClipboardImport(
       }
 
       event.preventDefault();
-      const notices = insertSanitizedHtml(editor, html);
-      if (notices.length) {
-        onNotices?.(notices);
-      }
+      const pageLayout = readWordPageLayout(html);
+      if (pageLayout) onPageLayout?.(pageLayout);
+      // Word's line spacing is converted from real font metrics, so wait for its fonts first.
+      void prepareFontsFor(html).then(() => {
+        const notices = insertSanitizedHtml(editor, html);
+        if (notices.length) onNotices?.(notices);
+      });
 
       return true;
     },

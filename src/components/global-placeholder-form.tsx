@@ -2,10 +2,20 @@ import { useState } from "react";
 import { useAtomSet, useAtomValue, useAtomRefresh } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Cause, Exit, Option, Schema } from "effect";
-import { Add01Icon, Copy01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "#/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "#/components/ui/field";
+import { Field, FieldLabel } from "#/components/ui/field";
+import { PageFooter } from "#/components/page";
+import {
+  PlaceholderList,
+  PlaceholderListFooter,
+  PlaceholderListCell,
+  PlaceholderListRow,
+  PlaceholderListTable,
+} from "#/components/placeholder-list";
+import { ShortcutKbd } from "#/components/shortcut-kbd";
+import { useShortcut } from "#/hooks/use-shortcut";
 import { Input } from "#/components/ui/input";
 import {
   Empty,
@@ -15,7 +25,6 @@ import {
   EmptyContent,
 } from "#/components/ui/empty";
 import { Skeleton } from "#/components/ui/skeleton";
-import { Tooltip, TooltipTrigger, TooltipContent } from "#/components/ui/tooltip";
 import { UnsavedChanges } from "#/components/unsaved-changes";
 import { toast } from "#/components/ui/toast";
 import {
@@ -36,10 +45,10 @@ function draftsFrom(globals: readonly GlobalPlaceholder[]): Draft[] {
   }));
 }
 
-export function GlobalPlaceholderForm() {
+export function GlobalPlaceholderForm({ active = true }: { active?: boolean }) {
   const result = useAtomValue(atoms.globalPlaceholdersAtom);
   const retry = useAtomRefresh(atoms.globalPlaceholdersAtom);
-  if (AsyncResult.isSuccess(result)) return <GlobalValues globals={result.value} />;
+  if (AsyncResult.isSuccess(result)) return <GlobalValues active={active} globals={result.value} />;
   if (AsyncResult.isFailure(result)) {
     const error = Option.getOrUndefined(Cause.findErrorOption(result.cause));
     const needsRestart = error?._tag === "StorageError" && error.operation === "storage.decode";
@@ -70,7 +79,13 @@ export function GlobalPlaceholderForm() {
   return <Skeleton className="h-64" />;
 }
 
-function GlobalValues({ globals }: { globals: readonly GlobalPlaceholder[] }) {
+function GlobalValues({
+  active,
+  globals,
+}: {
+  active: boolean;
+  globals: readonly GlobalPlaceholder[];
+}) {
   const [saved, setSaved] = useState(() => draftsFrom(globals));
   const [rows, setRows] = useState(() => draftsFrom(globals));
   const [saving, setSaving] = useState(false);
@@ -106,6 +121,8 @@ function GlobalValues({ globals }: { globals: readonly GlobalPlaceholder[] }) {
     }
   }
 
+  useShortcut("save", () => void submit(), { enabled: active && dirty && !saving });
+
   return (
     <form
       className="flex flex-col gap-4"
@@ -116,130 +133,104 @@ function GlobalValues({ globals }: { globals: readonly GlobalPlaceholder[] }) {
     >
       <UnsavedChanges isDirty={() => dirty} />
       <p className="text-sm text-muted-foreground">
-        Set these once for all FIRs. Use the placeholder in a template; documents fill in its saved
-        value.
+        Set these once for all FIRs. Documents use the saved value wherever the placeholder appears
+        in a template.
       </p>
-      <div
-        className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_2rem] gap-3 text-xs text-muted-foreground sm:grid"
-        aria-hidden="true"
-      >
-        <span>Placeholder name</span>
-        <span>Global value</span>
-        <span />
-      </div>
-      <FieldGroup className="gap-3">
-        {rows.map((row, index) => (
-          <div
-            key={row._tag === "Existing" ? row.id : `new-${index}`}
-            className="grid grid-cols-[minmax(0,1fr)_2rem] items-start gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_2rem] sm:gap-3"
-          >
-            <Field className="col-start-1">
-              <FieldLabel className="sm:sr-only" htmlFor={`global-label-${index}`}>
-                Placeholder name
-              </FieldLabel>
-              <Input
-                id={`global-label-${index}`}
-                aria-label={`Placeholder name ${index + 1}`}
-                lang="ur"
-                dir="auto"
-                required
-                disabled={saving}
-                value={row.label}
-                placeholder="Name"
-                onChange={(event) => change(index, "label", event.target.value)}
-              />
-            </Field>
-            <Field className="col-start-1 sm:col-start-2">
-              <FieldLabel className="sm:sr-only" htmlFor={`global-value-${index}`}>
-                Global value
-              </FieldLabel>
-              <Input
-                id={`global-value-${index}`}
-                aria-label={`Global value for ${row.label || "new placeholder"}`}
-                lang="ur"
-                dir="auto"
-                disabled={saving}
-                value={row.value}
-                placeholder="Enter a value"
-                onChange={(event) => change(index, "value", event.target.value)}
-              />
-            </Field>
-            <div className="col-start-2 row-start-1 sm:col-start-3">
-              {row._tag === "Existing" ? (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={`Copy placeholder for ${row.label}`}
-                        onClick={() => {
-                          void navigator.clipboard.writeText(`@${row.id}@`).then(
-                            () =>
-                              toast.add({
-                                title: "Placeholder copied. Paste it into a template.",
-                                type: "success",
-                              }),
-                            () =>
-                              toast.add({
-                                title: `Copy this placeholder: @${row.id}@`,
-                                type: "info",
-                              }),
-                          );
-                        }}
-                      />
-                    }
+      <PlaceholderList>
+        <PlaceholderListTable nameHeading="Name" valueHeading="Value">
+          {rows.map((row, index) => (
+            <PlaceholderListRow key={row._tag === "Existing" ? row.id : `new-${index}`}>
+              <PlaceholderListCell>
+                <Field data-disabled={saving}>
+                  <FieldLabel className="sr-only" htmlFor={`global-label-${index}`}>
+                    Placeholder name {index + 1}
+                  </FieldLabel>
+                  <Input
+                    id={`global-label-${index}`}
+                    aria-label={`Placeholder name ${index + 1}`}
+                    lang="ur"
+                    dir="rtl"
+                    required
+                    disabled={saving}
+                    value={row.label}
+                    placeholder="متغیر کا نام"
+                    onChange={(event) => change(index, "label", event.target.value)}
+                  />
+                </Field>
+              </PlaceholderListCell>
+              <PlaceholderListCell>
+                <Field data-disabled={saving}>
+                  <FieldLabel className="sr-only" htmlFor={`global-value-${index}`}>
+                    Global value for {row.label || "new placeholder"}
+                  </FieldLabel>
+                  <Input
+                    id={`global-value-${index}`}
+                    aria-label={`Global value for ${row.label || "new placeholder"}`}
+                    lang="ur"
+                    dir="rtl"
+                    disabled={saving}
+                    value={row.value}
+                    placeholder="قدر درج کریں"
+                    onChange={(event) => change(index, "value", event.target.value)}
+                  />
+                </Field>
+              </PlaceholderListCell>
+              <PlaceholderListCell>
+                {row._tag === "New" ? (
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    disabled={saving}
+                    aria-label="Remove new global placeholder"
+                    title="Remove"
+                    onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
                   >
-                    <HugeiconsIcon icon={Copy01Icon} />
-                  </TooltipTrigger>
-                  <TooltipContent>Copy placeholder @{row.id}@</TooltipContent>
-                </Tooltip>
-              ) : (
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  disabled={saving}
-                  aria-label="Remove new global placeholder"
-                  onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
-                >
-                  <HugeiconsIcon icon={Cancel01Icon} />
-                </Button>
-              )}
-            </div>
-          </div>
-        ))}
-      </FieldGroup>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        className="self-start"
-        disabled={saving}
-        onClick={() => {
-          const index = rows.length;
-          setRows((current) => [...current, { _tag: "New", label: "", value: "" }]);
-          requestAnimationFrame(() => document.getElementById(`global-label-${index}`)?.focus());
-        }}
-      >
-        <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
-        Add global placeholder
-      </Button>
-      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background py-3">
+                    <HugeiconsIcon icon={Cancel01Icon} />
+                  </Button>
+                ) : (
+                  <span />
+                )}
+              </PlaceholderListCell>
+            </PlaceholderListRow>
+          ))}
+        </PlaceholderListTable>
+        <PlaceholderListFooter>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={saving}
+            onClick={() => {
+              const index = rows.length;
+              setRows((current) => [...current, { _tag: "New", label: "", value: "" }]);
+              requestAnimationFrame(() =>
+                document.getElementById(`global-label-${index}`)?.focus(),
+              );
+            }}
+          >
+            <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
+            Add global placeholder
+          </Button>
+        </PlaceholderListFooter>
+      </PlaceholderList>
+      <PageFooter>
+        <span className="me-auto text-xs text-muted-foreground" role="status">
+          {dirty ? "Unsaved changes" : null}
+        </span>
         <Button
           type="button"
-          size="sm"
           variant="ghost"
           disabled={!dirty || saving}
           onClick={() => setRows(saved)}
         >
           Reset
         </Button>
-        <Button type="submit" size="sm" disabled={!dirty || saving}>
+        <Button type="submit" disabled={!dirty || saving}>
           {saving ? "Saving…" : "Save changes"}
+          <ShortcutKbd id="save" />
         </Button>
-      </div>
+      </PageFooter>
     </form>
   );
 }

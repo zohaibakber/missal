@@ -35,13 +35,31 @@ import {
   LeftToRightListNumberIcon,
 } from "@hugeicons/core-free-icons";
 import { Tooltip, TooltipTrigger, TooltipContent } from "#/components/ui/tooltip";
+import { Kbd, KbdGroup } from "#/components/ui/kbd";
+import { formatForDisplay, type Hotkey } from "@tanstack/react-hotkeys";
 
 type ToolbarIcon = ComponentProps<typeof HugeiconsIcon>["icon"];
 const formats = [
-  { value: "bold", label: "Bold · Ctrl+B", icon: TextBoldIcon },
-  { value: "italic", label: "Italic · Ctrl+I", icon: TextItalicIcon },
-  { value: "underline", label: "Underline · Ctrl+U", icon: TextUnderlineIcon },
-] satisfies { value: TextFormatType; label: string; icon: ToolbarIcon }[];
+  { value: "bold", label: "Bold", keys: "Mod+B", icon: TextBoldIcon },
+  { value: "italic", label: "Italic", keys: "Mod+I", icon: TextItalicIcon },
+  { value: "underline", label: "Underline", keys: "Mod+U", icon: TextUnderlineIcon },
+] satisfies { value: TextFormatType; label: string; keys: Hotkey; icon: ToolbarIcon }[];
+
+/** Lexical owns these bindings; the toolbar only displays them. */
+function TooltipLabel({ label, keys }: { label: string; keys?: Hotkey }) {
+  return (
+    <>
+      {label}
+      {keys ? (
+        <KbdGroup>
+          {formatForDisplay(keys, { parts: true }).map((part) => (
+            <Kbd key={part}>{part}</Kbd>
+          ))}
+        </KbdGroup>
+      ) : null}
+    </>
+  );
+}
 const alignments = [
   { value: "left", label: "Align left", icon: TextAlignLeftIcon },
   { value: "center", label: "Align center", icon: TextAlignCenterIcon },
@@ -51,9 +69,10 @@ const alignments = [
 
 function ToolbarButton({
   label,
+  keys,
   icon,
   ...props
-}: ComponentProps<typeof Button> & { label: string; icon: ToolbarIcon }) {
+}: ComponentProps<typeof Button> & { label: string; keys?: Hotkey; icon: ToolbarIcon }) {
   return (
     <Tooltip>
       <TooltipTrigger
@@ -70,7 +89,9 @@ function ToolbarButton({
       >
         <HugeiconsIcon icon={icon} />
       </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipContent>
+        <TooltipLabel label={label} keys={keys} />
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -129,13 +150,15 @@ export function EditorToolbar() {
       dir="ltr"
     >
       <ToolbarButton
-        label="Undo · Ctrl+Z"
+        label="Undo"
+        keys="Mod+Z"
         icon={UndoIcon}
         disabled={!canUndo}
         onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)}
       />
       <ToolbarButton
-        label="Redo · Ctrl+Shift+Z"
+        label="Redo"
+        keys="Mod+Shift+Z"
         icon={RedoIcon}
         disabled={!canRedo}
         onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)}
@@ -156,7 +179,9 @@ export function EditorToolbar() {
             >
               <HugeiconsIcon icon={format.icon} />
             </TooltipTrigger>
-            <TooltipContent>{format.label}</TooltipContent>
+            <TooltipContent>
+              <TooltipLabel label={format.label} keys={format.keys} />
+            </TooltipContent>
           </Tooltip>
         ))}
       </ToggleGroup>

@@ -1,7 +1,9 @@
-import { useEffect, useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { useAtomSet } from "@effect/atom-react";
 import { useForm } from "@tanstack/react-form";
 import { Exit, Schema } from "effect";
+import { PageFooter } from "#/components/page";
+import { ShortcutKbd } from "#/components/shortcut-kbd";
 import { toast } from "#/components/ui/toast";
 import { UnsavedChanges } from "#/components/unsaved-changes";
 import { Button } from "#/components/ui/button";
@@ -44,6 +46,7 @@ import {
 } from "#/lib/fir";
 import { formatDate } from "#/lib/date";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
+import { useShortcut } from "#/hooks/use-shortcut";
 import { atoms } from "#/state/atoms";
 import { cn } from "#/lib/utils";
 
@@ -84,6 +87,7 @@ function FirForm(props: FirFormProps) {
   const { className, onSuccess } = props;
   const fir = props.kind === "edit" ? props.fir : undefined;
   const formId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
   const isEditing = Boolean(fir);
   const createFir = useAtomSet(atoms.createFirAtom, { mode: "promiseExit" });
   const updateFir = useAtomSet(atoms.updateFirAtom, { mode: "promiseExit" });
@@ -97,7 +101,7 @@ function FirForm(props: FirFormProps) {
 
         for (const key of required) {
           if (!value[key].trim()) {
-            fields[key] = "یہ خانہ پُر کریں";
+            fields[key] = "Required";
           }
         }
 
@@ -159,339 +163,346 @@ function FirForm(props: FirFormProps) {
     form.reset(getFirFormValues(fir));
   }, [fir, form]);
 
+  useShortcut("save", () => void form.handleSubmit(), {
+    target: formRef,
+    allowInOverlay: true,
+  });
+
   return (
     <form
+      ref={formRef}
       id={formId}
-      className={cn("missal-fir-form flex w-full max-w-3xl flex-col gap-6 py-2", className)}
+      className={cn("missal-fir-form flex flex-col", className)}
       dir="rtl"
       onSubmit={(event) => {
         event.preventDefault();
         event.stopPropagation();
         void form.handleSubmit();
       }}
-      onKeyDown={(event) => {
-        if (event.key.toLowerCase() !== "s" || (!event.ctrlKey && !event.metaKey)) {
-          return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-        void form.handleSubmit();
-      }}
     >
       <UnsavedChanges isDirty={() => form.state.isDirty} />
-      <FieldGroup className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
-        <form.Field
-          name="fir_no"
-          children={(field) => {
-            const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
-            return (
-              <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={`${formId}-fir-no`}>ایف آئی آر نمبر</FieldLabel>
-                <Input
-                  dir="ltr"
-                  className="text-right"
-                  id={`${formId}-fir-no`}
-                  name={field.name}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  aria-invalid={isInvalid}
-                  placeholder="23/26"
-                />
-                <FieldError errors={field.state.meta.errors} />
-              </Field>
-            );
-          }}
-        />
-        <form.Field
-          name="status"
-          children={(field) => {
-            const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
-            return (
-              <Field data-invalid={isInvalid}>
-                <FieldContent>
-                  <FieldLabel htmlFor={`${formId}-status`}>حالت</FieldLabel>
-                  <FieldError errors={field.state.meta.errors} />
-                </FieldContent>
-                <Select
-                  name={field.name}
-                  value={field.state.value}
-                  onValueChange={(value) => {
-                    if (value) {
-                      field.handleChange(value);
-                    }
-                  }}
-                >
-                  <SelectTrigger
-                    id={`${formId}-status`}
+      <div className="flex flex-col gap-8 px-6 py-6">
+        <FieldGroup className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+          <form.Field
+            name="fir_no"
+            children={(field) => {
+              const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+              return (
+                <Field data-invalid={isInvalid}>
+                  <FieldLabel htmlFor={`${formId}-fir-no`}>ایف آئی آر نمبر</FieldLabel>
+                  <Input
+                    autoFocus={!isEditing}
+                    dir="ltr"
+                    className="text-right"
+                    id={`${formId}-fir-no`}
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
                     aria-invalid={isInvalid}
-                    className="w-full min-w-55"
+                    placeholder="23/26"
+                  />
+                  <FieldError errors={field.state.meta.errors} />
+                </Field>
+              );
+            }}
+          />
+          <form.Field
+            name="status"
+            children={(field) => {
+              const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+              return (
+                <Field data-invalid={isInvalid}>
+                  <FieldContent>
+                    <FieldLabel htmlFor={`${formId}-status`}>حالت</FieldLabel>
+                    <FieldError errors={field.state.meta.errors} />
+                  </FieldContent>
+                  <Select
+                    name={field.name}
+                    value={field.state.value}
+                    onValueChange={(value) => {
+                      if (value) {
+                        field.handleChange(value);
+                      }
+                    }}
                   >
-                    <SelectValue placeholder="حالت منتخب کریں">
-                      <span className="flex items-center gap-2">
-                        <span
-                          aria-hidden="true"
-                          className={cn(
-                            "size-1.5 rounded-full",
-                            getFirStatusColor(field.state.value),
-                          )}
-                        />
-                        {getFirStatusLabel(field.state.value)}
-                      </span>
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent align="start" alignItemWithTrigger={false} dir="rtl">
-                    <SelectGroup>
-                      {FIR_STATUS_OPTIONS.map((status) => (
-                        <SelectItem key={status} value={status}>
+                    <SelectTrigger
+                      id={`${formId}-status`}
+                      aria-invalid={isInvalid}
+                      className="w-full min-w-55"
+                    >
+                      <SelectValue placeholder="حالت منتخب کریں">
+                        <span className="flex items-center gap-2">
                           <span
                             aria-hidden="true"
                             className={cn(
-                              "size-1.5 rounded-full my-auto",
-                              getFirStatusColor(status),
+                              "size-1.5 rounded-full",
+                              getFirStatusColor(field.state.value),
                             )}
                           />
-                          {getFirStatusLabel(status)}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-            );
-          }}
-        />
-        <form.Field
-          name="date"
-          children={(field) => {
-            const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
-            return (
-              <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={`${formId}-date`}>ایف آئی آر کی تاریخ</FieldLabel>
-                <FirDatePickerInput
-                  id={`${formId}-date`}
-                  name={field.name}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={field.handleChange}
-                  ariaInvalid={isInvalid}
-                  placeholder="13-01-2026"
-                />
-                <FieldError errors={field.state.meta.errors} />
-              </Field>
-            );
-          }}
-        />
-        <form.Field
-          name="incident_date"
-          children={(field) => {
-            const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
-            return (
-              <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={`${formId}-incident-date`}>تاریخ وقوعہ</FieldLabel>
-                <FirDatePickerInput
-                  id={`${formId}-incident-date`}
-                  name={field.name}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={field.handleChange}
-                  ariaInvalid={isInvalid}
-                  placeholder="13-01-2026"
-                />
-                <FieldError errors={field.state.meta.errors} />
-              </Field>
-            );
-          }}
-        />
-        <form.Field
-          name="arrest_date"
-          children={(field) => {
-            const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
-            return (
-              <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={`${formId}-arrest-date`}>تاریخ گرفتاری</FieldLabel>
-                <FirDatePickerInput
-                  id={`${formId}-arrest-date`}
-                  name={field.name}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={field.handleChange}
-                  ariaInvalid={isInvalid}
-                  placeholder="13-01-2026"
-                />
-                <FieldError errors={field.state.meta.errors} />
-              </Field>
-            );
-          }}
-        />
-        <form.Field
-          name="offence"
-          children={(field) => {
-            const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
-            return (
-              <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={`${formId}-offence`}>جرم</FieldLabel>
-                <Input
-                  id={`${formId}-offence`}
-                  name={field.name}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  aria-invalid={isInvalid}
-                  placeholder="411/379"
-                />
-                <FieldError errors={field.state.meta.errors} />
-              </Field>
-            );
-          }}
-        />
-        <form.Field
-          name="NIC"
-          children={(field) => {
-            const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
-            return (
-              <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={`${formId}-nic`}>شناختی کارڈ نمبر</FieldLabel>
-                <Input
-                  dir="ltr"
-                  className="text-right"
-                  id={`${formId}-nic`}
-                  name={field.name}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  aria-invalid={isInvalid}
-                  placeholder="3520288701547"
-                />
-                <FieldError errors={field.state.meta.errors} />
-              </Field>
-            );
-          }}
-        />
-      </FieldGroup>
-
-      {(
-        [
-          {
-            name: "accused",
-            label: "ملزمان",
-            entry: "ملزم",
-            placeholder: "نام، ولدیت اور سکونت",
-            required: true,
-          },
-          {
-            name: "witness",
-            label: "گواہان",
-            entry: "گواہ",
-            placeholder: "نام اور تفصیل",
-            required: false,
-          },
-          {
-            name: "zimni",
-            label: "ضمنی",
-            entry: "ضمنی",
-            placeholder: "ضمنی کی تفصیل",
-            required: false,
-          },
-        ] as const
-      ).map((section) => (
-        <form.Field
-          key={section.name}
-          name={section.name}
-          mode="array"
-          validators={{
-            onSubmit: ({ value }) =>
-              (section.required && value.length === 0) || value.some((text) => !text.trim())
-                ? "ہر اندراج مکمل کریں یا خالی اندراج ہٹا دیں"
-                : undefined,
-          }}
-        >
-          {(arrayField) => (
-            <FieldSet className="gap-3">
-              <FieldLegend variant="label">{section.label}</FieldLegend>
-              <FieldGroup className="gap-3">
-                {arrayField.state.value.map((_, index) => (
-                  <form.Field key={index} name={`${section.name}[${index}]`}>
-                    {(field) => {
-                      const invalid =
-                        !field.state.value.trim() && arrayField.state.meta.errors.length > 0;
-                      return (
-                        <Field data-invalid={invalid}>
-                          <FieldLabel
-                            className="sr-only"
-                            htmlFor={`${formId}-${section.name}-${index}`}
-                          >
-                            {section.entry} {index + 1}
-                          </FieldLabel>
-                          <InputGroup>
-                            <InputGroupInput
-                              id={`${formId}-${section.name}-${index}`}
-                              name={field.name}
-                              aria-invalid={invalid}
-                              value={field.state.value}
-                              onBlur={field.handleBlur}
-                              onChange={(event) => field.handleChange(event.target.value)}
-                              placeholder={`${section.entry} ${index + 1} — ${section.placeholder}`}
+                          {getFirStatusLabel(field.state.value)}
+                        </span>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent align="start" alignItemWithTrigger={false} dir="rtl">
+                      <SelectGroup>
+                        {FIR_STATUS_OPTIONS.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "size-1.5 rounded-full my-auto",
+                                getFirStatusColor(status),
+                              )}
                             />
-                            <InputGroupAddon align="inline-end">
-                              <InputGroupButton
-                                size="icon-xs"
-                                variant="ghost"
-                                type="button"
-                                disabled={section.required && arrayField.state.value.length === 1}
-                                aria-label={`${section.entry} ${index + 1} ہٹائیں`}
-                                onClick={() => arrayField.removeValue(index)}
-                              >
-                                <HugeiconsIcon icon={Cancel01Icon} />
-                              </InputGroupButton>
-                            </InputGroupAddon>
-                          </InputGroup>
-                        </Field>
-                      );
-                    }}
-                  </form.Field>
-                ))}
-              </FieldGroup>
-              <FieldError errors={arrayField.state.meta.errors} />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="self-start"
-                onClick={() => {
-                  const index = arrayField.state.value.length;
-                  arrayField.pushValue("");
-                  requestAnimationFrame(() =>
-                    document.getElementById(`${formId}-${section.name}-${index}`)?.focus(),
-                  );
-                }}
-              >
-                <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
-                {section.entry} شامل کریں
-              </Button>
-            </FieldSet>
-          )}
-        </form.Field>
-      ))}
-      <form.Subscribe selector={(state) => state.isSubmitting}>
-        {(isSubmitting) => (
-          <div
-            dir="ltr"
-            className="sticky bottom-0 flex justify-end items-center gap-2 border-t bg-background py-3"
+                            {getFirStatusLabel(status)}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </Field>
+              );
+            }}
+          />
+          <form.Field
+            name="date"
+            children={(field) => {
+              const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+              return (
+                <Field data-invalid={isInvalid}>
+                  <FieldLabel htmlFor={`${formId}-date`}>ایف آئی آر کی تاریخ</FieldLabel>
+                  <FirDatePickerInput
+                    id={`${formId}-date`}
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={field.handleChange}
+                    ariaInvalid={isInvalid}
+                    placeholder="13-01-2026"
+                  />
+                  <FieldError errors={field.state.meta.errors} />
+                </Field>
+              );
+            }}
+          />
+          <form.Field
+            name="incident_date"
+            children={(field) => {
+              const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+              return (
+                <Field data-invalid={isInvalid}>
+                  <FieldLabel htmlFor={`${formId}-incident-date`}>تاریخ وقوعہ</FieldLabel>
+                  <FirDatePickerInput
+                    id={`${formId}-incident-date`}
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={field.handleChange}
+                    ariaInvalid={isInvalid}
+                    placeholder="13-01-2026"
+                  />
+                  <FieldError errors={field.state.meta.errors} />
+                </Field>
+              );
+            }}
+          />
+          <form.Field
+            name="arrest_date"
+            children={(field) => {
+              const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+              return (
+                <Field data-invalid={isInvalid}>
+                  <FieldLabel htmlFor={`${formId}-arrest-date`}>تاریخ گرفتاری</FieldLabel>
+                  <FirDatePickerInput
+                    id={`${formId}-arrest-date`}
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={field.handleChange}
+                    ariaInvalid={isInvalid}
+                    placeholder="13-01-2026"
+                  />
+                  <FieldError errors={field.state.meta.errors} />
+                </Field>
+              );
+            }}
+          />
+          <form.Field
+            name="offence"
+            children={(field) => {
+              const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+              return (
+                <Field data-invalid={isInvalid}>
+                  <FieldLabel htmlFor={`${formId}-offence`}>جرم</FieldLabel>
+                  <Input
+                    id={`${formId}-offence`}
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    aria-invalid={isInvalid}
+                    placeholder="411/379"
+                  />
+                  <FieldError errors={field.state.meta.errors} />
+                </Field>
+              );
+            }}
+          />
+          <form.Field
+            name="NIC"
+            children={(field) => {
+              const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+              return (
+                <Field data-invalid={isInvalid}>
+                  <FieldLabel htmlFor={`${formId}-nic`}>شناختی کارڈ نمبر</FieldLabel>
+                  <Input
+                    dir="ltr"
+                    className="text-right"
+                    id={`${formId}-nic`}
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                    aria-invalid={isInvalid}
+                    placeholder="3520288701547"
+                  />
+                  <FieldError errors={field.state.meta.errors} />
+                </Field>
+              );
+            }}
+          />
+        </FieldGroup>
+
+        {(
+          [
+            {
+              name: "accused",
+              label: "ملزمان",
+              entry: "ملزم",
+              add: "Add accused",
+              placeholder: "نام، ولدیت اور سکونت",
+              required: true,
+            },
+            {
+              name: "witness",
+              label: "گواہان",
+              entry: "گواہ",
+              add: "Add witness",
+              placeholder: "نام اور تفصیل",
+              required: false,
+            },
+            {
+              name: "zimni",
+              label: "ضمنی",
+              entry: "ضمنی",
+              add: "Add zimni",
+              placeholder: "ضمنی کی تفصیل",
+              required: false,
+            },
+          ] as const
+        ).map((section) => (
+          <form.Field
+            key={section.name}
+            name={section.name}
+            mode="array"
+            validators={{
+              onSubmit: ({ value }) =>
+                (section.required && value.length === 0) || value.some((text) => !text.trim())
+                  ? "Fill in or remove empty entries"
+                  : undefined,
+            }}
           >
-            <Button type="submit" form={formId} disabled={isSubmitting}>
-              {isSubmitting ? "Saving…" : isEditing ? "Save changes" : "Create FIR"}
-            </Button>
+            {(arrayField) => (
+              <FieldSet className="gap-3">
+                <FieldLegend variant="label">{section.label}</FieldLegend>
+                <FieldGroup className="gap-3">
+                  {arrayField.state.value.map((_, index) => (
+                    <form.Field key={index} name={`${section.name}[${index}]`}>
+                      {(field) => {
+                        const invalid =
+                          !field.state.value.trim() && arrayField.state.meta.errors.length > 0;
+                        return (
+                          <Field data-invalid={invalid}>
+                            <FieldLabel
+                              className="sr-only"
+                              htmlFor={`${formId}-${section.name}-${index}`}
+                            >
+                              {section.entry} {index + 1}
+                            </FieldLabel>
+                            <InputGroup>
+                              <InputGroupInput
+                                id={`${formId}-${section.name}-${index}`}
+                                name={field.name}
+                                aria-invalid={invalid}
+                                value={field.state.value}
+                                onBlur={field.handleBlur}
+                                onChange={(event) => field.handleChange(event.target.value)}
+                                placeholder={`${section.entry} ${index + 1} — ${section.placeholder}`}
+                              />
+                              {section.required && arrayField.state.value.length === 1 ? null : (
+                                <InputGroupAddon align="inline-end">
+                                  <InputGroupButton
+                                    size="icon-xs"
+                                    variant="ghost"
+                                    type="button"
+                                    aria-label={`Remove ${section.entry} ${index + 1}`}
+                                    onClick={() => arrayField.removeValue(index)}
+                                  >
+                                    <HugeiconsIcon icon={Cancel01Icon} />
+                                  </InputGroupButton>
+                                </InputGroupAddon>
+                              )}
+                            </InputGroup>
+                          </Field>
+                        );
+                      }}
+                    </form.Field>
+                  ))}
+                </FieldGroup>
+                <FieldError errors={arrayField.state.meta.errors} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => {
+                    const index = arrayField.state.value.length;
+                    arrayField.pushValue("");
+                    requestAnimationFrame(() =>
+                      document.getElementById(`${formId}-${section.name}-${index}`)?.focus(),
+                    );
+                  }}
+                >
+                  <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
+                  <span lang="en">{section.add}</span>
+                </Button>
+              </FieldSet>
+            )}
+          </form.Field>
+        ))}
+      </div>
+      <form.Subscribe
+        selector={(state) => ({ isDirty: state.isDirty, isSubmitting: state.isSubmitting })}
+      >
+        {({ isDirty, isSubmitting }) => (
+          <PageFooter className="px-6">
+            <span className="me-auto text-xs text-muted-foreground" role="status">
+              {isDirty ? "Unsaved changes" : null}
+            </span>
             <Button
               type="button"
               variant="ghost"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !isDirty}
               onClick={() => form.reset(getFirFormValues(fir))}
             >
-              Reset changes
+              Reset
             </Button>
-          </div>
+            <Button type="submit" form={formId} disabled={isSubmitting}>
+              {isSubmitting ? "Saving…" : isEditing ? "Save changes" : "Create FIR"}
+              <ShortcutKbd id="save" />
+            </Button>
+          </PageFooter>
         )}
       </form.Subscribe>
     </form>

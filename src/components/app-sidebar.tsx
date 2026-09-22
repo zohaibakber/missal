@@ -1,21 +1,25 @@
 import type { ComponentProps } from "react";
 
+import { useKeyboardShortcuts } from "#/components/keyboard-shortcuts";
 import { NavMain } from "#/components/nav-main";
 import { NavProjects } from "#/components/nav-projects";
+import { ShortcutKbd, shortcutLabel } from "#/components/shortcut-kbd";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "#/components/ui/sidebar";
-import { Settings01Icon } from "@hugeicons/core-free-icons";
+import { KeyboardIcon, Settings01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useRouterState } from "@tanstack/react-router";
 
 export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
-  const { location } = useRouterState();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const { openShortcuts } = useKeyboardShortcuts();
 
   return (
     <Sidebar
@@ -31,10 +35,20 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
+            <SidebarMenuButton onClick={openShortcuts} tooltip="Keyboard shortcuts">
+              <HugeiconsIcon icon={KeyboardIcon} strokeWidth={2} />
+              <span>Keyboard shortcuts</span>
+            </SidebarMenuButton>
+            <SidebarMenuBadge>
+              <ShortcutKbd id="cheatsheet" />
+            </SidebarMenuBadge>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
             <SidebarMenuButton
-              isActive={location.pathname === "/settings"}
+              isActive={pathname === "/settings"}
               render={<Link to="/settings" />}
               tooltip="Settings"
+              title={shortcutLabel("goSettings", "Settings")}
             >
               <HugeiconsIcon icon={Settings01Icon} strokeWidth={2} />
               <span>Settings</span>

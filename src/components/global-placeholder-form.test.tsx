@@ -13,7 +13,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { GlobalPlaceholderForm } from "#/components/global-placeholder-form";
-import { TooltipProvider } from "#/components/ui/tooltip";
 import { makeElectronMainRuntime } from "#/electron/main-runtime";
 import { dispatchStorageRequest } from "#/electron/storage-dispatch";
 import { PlaceholderRepository } from "#/repositories/index";
@@ -41,9 +40,7 @@ it("adds and saves a global name and value through the real storage bridge", asy
     await router.load();
     render(
       <RegistryProvider>
-        <TooltipProvider>
-          <RouterProvider router={router} />
-        </TooltipProvider>
+        <RouterProvider router={router} />
       </RegistryProvider>,
     );
     await screen.findByLabelText("Global value for تفتیشی افسر");
@@ -64,7 +61,7 @@ it("adds and saves a global name and value through the real storage bridge", asy
       Effect.flatMap(PlaceholderRepository, (repo) => repo.listGlobals),
     );
     expect(saved.find((row) => row.label === "دفتر کا پتہ")?.value).toBe("لاہور");
-    expect(screen.getByRole("button", { name: "Copy placeholder for دفتر کا پتہ" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Copy placeholder/ })).toBeNull();
   } finally {
     cleanup();
     await runtime.dispose();

@@ -1,6 +1,7 @@
 import { $generateHtmlFromNodes } from "@lexical/html";
 import { createEditor } from "lexical";
 import { Match } from "effect";
+import { EDITOR_HTML_CONFIG } from "#/editor/html-config";
 import { EDITOR_NODES, EDITOR_THEME } from "#/editor/nodes/registry";
 import { loadEnvelopeIntoEditor } from "#/editor/envelope";
 import { setEditorPresentation } from "#/editor/presentation-context";
@@ -22,6 +23,7 @@ export function envelopeToHtml(
 ) {
   const editor = createEditor({
     namespace: "missal-html-export",
+    html: EDITOR_HTML_CONFIG,
     nodes: [...EDITOR_NODES],
     onError: () => undefined,
     theme: EDITOR_THEME,
@@ -80,7 +82,9 @@ export function printHtmlDocument(html: string, title: string) {
           }),
     ),
   );
-  const waitForFonts = "fonts" in frameDocument ? frameDocument.fonts.ready : Promise.resolve();
+  // Request fonts after the written document has layout, including fonts in imported runs.
+  frameDocument.body.getBoundingClientRect();
+  const waitForFonts = frameDocument.fonts.ready;
 
   Promise.all([waitForFonts, waitForImages])
     .catch(() => undefined)
@@ -100,6 +104,7 @@ function htmlSectionsFrom(sections: readonly EnvelopePrintSection[]): PrintPacke
       Envelope: ({ envelope, presentation }) => ({
         _tag: "Html" as const,
         html: envelopeToHtml(envelope, presentation),
+        pageLayout: envelope.pageLayout,
       }),
       Preview: ({ previewText }) => ({ _tag: "Preview" as const, previewText }),
     }),
