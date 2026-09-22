@@ -1,15 +1,20 @@
 import { createEmptyHistoryState, registerHistory } from "@lexical/history";
 import {
+  $getRoot,
+  $insertNodes,
+  CLEAR_HISTORY_COMMAND,
   CAN_REDO_COMMAND,
   CAN_UNDO_COMMAND,
   COMMAND_PRIORITY_LOW,
   type LexicalEditor,
 } from "lexical";
-import type { DocumentEnvelope } from "#/lib/document-format";
+import type { DocumentEnvelope, PageLayout } from "#/lib/document-format";
 import type { FieldPresentationContext } from "#/lib/field";
 import type { PlaceholderIndex } from "#/lib/placeholder";
 import { captureEditorEnvelope, loadEnvelopeIntoEditor } from "#/editor/envelope";
-import { registerClipboardImport } from "#/editor/import/convert";
+import { $generateNodesFromDOM } from "@lexical/html";
+import { registerImportedStyleRendering } from "#/editor/html-config";
+import { prepareClipboardDom, registerClipboardImport } from "#/editor/import/convert";
 import { FieldPresentationController } from "#/editor/presentation";
 import { registerCompletedTokenConversion, registerFieldRecognition } from "#/editor/recognition";
 
@@ -22,6 +27,7 @@ export type EditorPhase =
 
 export type EditorUiState = {
   phase: EditorPhase;
+  pageLayout?: PageLayout;
   dirty: boolean;
   empty: boolean;
   canUndo: boolean;
@@ -36,6 +42,7 @@ export type CapturedEnvelope = {
 
 export type EditorSessionHandle = {
   captureEnvelope(): CapturedEnvelope;
+  importDocx(file: File): Promise<string[]>;
   loadEnvelope(envelope: DocumentEnvelope): void;
   setPresentation(context: FieldPresentationContext): void;
   markSaved(contentRevision: number): void;
@@ -71,11 +78,19 @@ export function attachEditorSession(
   const history = createEmptyHistoryState();
   const presentation = new FieldPresentationController(editor, options.presentation);
   const unregisters = [
+    registerImportedStyleRendering(editor),
     registerHistory(editor, history, 300, Date.now, undefined, HISTORY_MAX_DEPTH),
     presentation.attach(),
     registerFieldRecognition(editor, options.getPlaceholderIndex),
     registerCompletedTokenConversion(editor, options.getPlaceholderIndex),
-    registerClipboardImport(editor),
+    registerClipboardImport(editor, {
+      onPageLayout: (pageLayout) => {
+        // The first Word paste defines the page; later pastes don't reflow an existing layout.
+        if (ui.pageLayout) return;
+        ui.pageLayout = pageLayout;
+        notify();
+      },
+    }),
     editor.registerCommand(
       CAN_UNDO_COMMAND,
       (payload) => {
@@ -122,11 +137,48 @@ export function attachEditorSession(
     captureEnvelope() {
       return {
         contentRevision,
-        envelope: captureEditorEnvelope(editor),
+        envelope: captureEditorEnvelope(editor, ui.pageLayout),
       };
+    },
+    async importDocx(file) {
+      if (disposed || ui.phase._tag !== "Ready" || ui.savePending) {
+        throw new Error("Wait for the current operation before importing a document.");
+      }
+      const wasEditable = editor.isEditable();
+      editor.setEditable(false);
+      setPhase({ _tag: "Importing", progress: 0 });
+      try {
+        const { importDocx } = await import("#/editor/import/docx");
+        const imported = await importDocx(file);
+        if (disposed) {
+          throw new Error("The template was closed before the import finished.");
+        }
+        const { dom } = prepareClipboardDom(imported.html);
+        editor.update(
+          () => {
+            const nodes = $generateNodesFromDOM(editor, dom);
+            const root = $getRoot();
+            root.clear();
+            root.selectStart();
+            $insertNodes(nodes);
+          },
+          { discrete: true },
+        );
+        ui.pageLayout = imported.pageLayout;
+        ui.dirty = true;
+        ui.empty = false;
+        editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
+        return imported.notices;
+      } finally {
+        if (!disposed) {
+          editor.setEditable(wasEditable);
+          setPhase({ _tag: "Ready" });
+        }
+      }
     },
     loadEnvelope(envelope) {
       ui.phase = { _tag: "Loading" };
+      ui.pageLayout = envelope.pageLayout;
       loadEnvelopeIntoEditor(editor, envelope);
       contentRevision = 0;
       ui.dirty = false;

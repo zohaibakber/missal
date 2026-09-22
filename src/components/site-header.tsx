@@ -1,4 +1,7 @@
-import { SidebarCommandMenu } from "#/components/sidebar-command-menu";
+import { Fragment } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { CommandMenu } from "#/components/command-menu";
+import { shortcutLabel } from "#/components/shortcut-kbd";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -9,55 +12,52 @@ import {
 } from "#/components/ui/breadcrumb";
 import { Separator } from "#/components/ui/separator";
 import { SidebarTrigger } from "#/components/ui/sidebar";
-import { Link, useRouterState } from "@tanstack/react-router";
 
-function getPageLabel(pathname: string) {
-  if (pathname === "/") return "FIR Dataset";
-  if (pathname === "/new") return "New FIR";
-  if (pathname === "/templates") return "Templates";
-  if (pathname === "/templates/new") return "New template";
-  if (pathname === "/placeholders") return "Placeholders";
-  if (pathname === "/settings") return "Settings";
-  if (pathname.endsWith("/edit")) return "Edit FIR";
-  if (pathname.startsWith("/templates/")) return "Edit template";
-  return "FIR details";
+type Crumb = { label: string; to?: "/" | "/templates" };
+
+function getCrumbs(pathname: string): Crumb[] {
+  if (pathname === "/") return [{ label: "FIRs" }];
+  if (pathname === "/new") return [{ label: "FIRs", to: "/" }, { label: "New FIR" }];
+  if (pathname === "/templates") return [{ label: "Templates" }];
+  if (pathname === "/templates/new")
+    return [{ label: "Templates", to: "/templates" }, { label: "New template" }];
+  if (pathname.startsWith("/templates/"))
+    return [{ label: "Templates", to: "/templates" }, { label: "Edit template" }];
+  if (pathname === "/placeholders") return [{ label: "Placeholders" }];
+  if (pathname === "/settings") return [{ label: "Settings" }];
+  return [{ label: "FIRs", to: "/" }, { label: "FIR workspace" }];
 }
 
 export function SiteHeader() {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-  const isNestedTemplateRoute = pathname.startsWith("/templates/");
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const crumbs = getCrumbs(pathname);
 
   return (
     <header className="sticky top-0 z-50 flex w-full shrink-0 items-center border-b bg-background [-webkit-app-region:drag] [&_a]:[-webkit-app-region:no-drag] [&_button]:[-webkit-app-region:no-drag]">
-      <div className="flex h-(--header-height) w-full items-center gap-2 px-4 pr-[calc(100vw-env(titlebar-area-width,100vw)-env(titlebar-area-x,0px)+1rem)]">
-        <SidebarTrigger className="-ml-1 size-8" />
+      <div className="titlebar-padding flex h-(--header-height) w-full items-center gap-2 ps-3">
+        <SidebarTrigger title={shortcutLabel("toggleSidebar")} />
         <Separator
-          className="mr-2 data-vertical:h-4 data-vertical:self-auto"
           orientation="vertical"
+          className="me-1 data-vertical:h-4 data-vertical:self-auto"
         />
-        <Breadcrumb className="hidden min-w-0 sm:block">
+        <Breadcrumb className="min-w-0">
           <BreadcrumbList className="flex-nowrap">
-            <BreadcrumbItem>
-              <BreadcrumbLink render={<Link to="/" />}>Missal</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            {isNestedTemplateRoute ? (
-              <>
-                <BreadcrumbItem>
-                  <BreadcrumbLink render={<Link to="/templates" />}>Templates</BreadcrumbLink>
+            {crumbs.map((crumb, index) => (
+              <Fragment key={crumb.label}>
+                {index > 0 ? <BreadcrumbSeparator /> : null}
+                <BreadcrumbItem className="min-w-0">
+                  {crumb.to ? (
+                    <BreadcrumbLink render={<Link to={crumb.to} />}>{crumb.label}</BreadcrumbLink>
+                  ) : (
+                    <BreadcrumbPage className="truncate">{crumb.label}</BreadcrumbPage>
+                  )}
                 </BreadcrumbItem>
-                <BreadcrumbSeparator />
-              </>
-            ) : null}
-            <BreadcrumbItem className="min-w-0">
-              <BreadcrumbPage className="truncate">{getPageLabel(pathname)}</BreadcrumbPage>
-            </BreadcrumbItem>
+              </Fragment>
+            ))}
           </BreadcrumbList>
         </Breadcrumb>
-        <div className="ml-auto [-webkit-app-region:no-drag]">
-          <SidebarCommandMenu />
+        <div className="ms-auto">
+          <CommandMenu />
         </div>
       </div>
     </header>

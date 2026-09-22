@@ -10,10 +10,23 @@ export const DocumentFormatVersion = Schema.Literal(DOCUMENT_FORMAT_VERSION);
 
 export const SerializedLexicalState = Schema.Unknown;
 
+const PageDimension = Schema.Number.pipe(Schema.check(Schema.isGreaterThan(0)));
+const PageMargin = Schema.Number.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)));
+
+export class PageLayout extends Schema.Class<PageLayout>("PageLayout")({
+  widthMm: PageDimension,
+  heightMm: PageDimension,
+  marginTopMm: PageMargin,
+  marginRightMm: PageMargin,
+  marginBottomMm: PageMargin,
+  marginLeftMm: PageMargin,
+}) {}
+
 export class DocumentEnvelope extends Schema.Class<DocumentEnvelope>("DocumentEnvelope")({
   format: DocumentFormat,
   version: DocumentFormatVersion,
   state: SerializedLexicalState,
+  pageLayout: Schema.optionalKey(PageLayout),
 }) {}
 
 export type SerializedLexicalNode = {

@@ -19,9 +19,11 @@ import { atoms } from "#/state/atoms";
 
 export function FirTemplatePicker({
   firId,
+  searchId,
   onAdded,
 }: {
   firId: FirId;
+  searchId?: string;
   onAdded: (id: FirDocumentId) => void;
 }) {
   const result = useAtomValue(atoms.templatesAtom);
@@ -61,10 +63,17 @@ export function FirTemplatePicker({
       <SidebarGroupContent className="flex flex-col gap-2">
         <div className="flex items-center gap-1">
           <Input
+            id={searchId}
             aria-label="Search templates"
             placeholder="Search templates…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && selected.size) {
+                event.preventDefault();
+                void addSelected();
+              }
+            }}
           />
           <Button
             variant="ghost"
@@ -81,12 +90,12 @@ export function FirTemplatePicker({
           {AsyncResult.isInitial(result) ? (
             <Skeleton className="h-24" />
           ) : AsyncResult.isFailure(result) ? (
-            <p className="text-sm text-destructive">Could not load templates.</p>
+            <p className="px-2 text-sm text-destructive">Could not load templates.</p>
           ) : filtered.length ? (
             filtered.map((template) => (
               <label
                 key={template.id}
-                className="flex h-8 cursor-pointer items-center gap-2 rounded-md px-2 hover:bg-sidebar-accent"
+                className="flex min-h-8 cursor-pointer items-center gap-2 rounded-md px-2 hover:bg-sidebar-accent has-focus-visible:bg-sidebar-accent has-disabled:cursor-default has-disabled:opacity-60"
                 title={
                   attached.has(template.id) ? `${template.name} · Already added` : template.name
                 }
@@ -112,7 +121,7 @@ export function FirTemplatePicker({
               </label>
             ))
           ) : (
-            <Empty className="p-3">
+            <Empty size="compact">
               <EmptyHeader>
                 <EmptyTitle>No templates found</EmptyTitle>
                 <EmptyDescription>
@@ -126,7 +135,7 @@ export function FirTemplatePicker({
           <Button
             type="button"
             size="sm"
-            className="self-end"
+            className="w-full"
             disabled={adding}
             onClick={() => void addSelected()}
           >

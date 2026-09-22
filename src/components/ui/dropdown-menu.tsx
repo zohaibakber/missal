@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { cn } from "cn";
+import { Switch } from "#/components/ui/switch";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 
@@ -181,6 +182,37 @@ function DropdownMenuCheckboxItem({
   );
 }
 
+/** A checkbox item that stays open and shows a switch, for on/off view settings. */
+function DropdownMenuSwitchItem({
+  className,
+  children,
+  checked,
+  closeOnClick = false,
+  ...props
+}: MenuPrimitive.CheckboxItem.Props) {
+  return (
+    <MenuPrimitive.CheckboxItem
+      data-slot="dropdown-menu-switch-item"
+      className={cn(
+        "relative flex cursor-default items-center gap-1.5 rounded-md px-1.5 py-1 text-sm outline-hidden select-none focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        className,
+      )}
+      checked={checked}
+      closeOnClick={closeOnClick}
+      {...props}
+    >
+      {children}
+      <Switch
+        aria-hidden="true"
+        tabIndex={-1}
+        size="sm"
+        checked={Boolean(checked)}
+        className="pointer-events-none ms-auto"
+      />
+    </MenuPrimitive.CheckboxItem>
+  );
+}
+
 function DropdownMenuRadioGroup({ ...props }: MenuPrimitive.RadioGroup.Props) {
   return <MenuPrimitive.RadioGroup data-slot="dropdown-menu-radio-group" {...props} />;
 }
@@ -252,6 +284,7 @@ export {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
+  DropdownMenuSwitchItem,
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,

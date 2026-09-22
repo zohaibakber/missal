@@ -6,6 +6,7 @@ import {
   DecoratorNode,
   type DOMConversionMap,
   type DOMConversionOutput,
+  type DOMExportOutput,
   type EditorConfig,
   type LexicalNode,
 } from "lexical";
@@ -85,6 +86,10 @@ export class ImageNode extends DecoratorNode<null> {
 
   updateDOM(): false {
     return false;
+  }
+
+  exportDOM(): DOMExportOutput {
+    return { element: this.createDOM({} as EditorConfig) };
   }
 
   decorate(): null {

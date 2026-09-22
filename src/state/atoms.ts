@@ -145,10 +145,10 @@ export function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     { reactivityKeys: ["firs"] },
   );
 
-  const updateFirAtom = runtime.fn(
-    (input: FirUpdateInput) =>
-      Effect.flatMap(FirRepository, (repository) => repository.update(input)),
-    { reactivityKeys: ["firs"] },
+  const updateFirAtom = runtime.fn((input: FirUpdateInput) =>
+    Effect.flatMap(FirRepository, (repository) => repository.update(input)).pipe(
+      Reactivity.mutation(["firs", `fir:${input.id}`]),
+    ),
   );
 
   const removeFirAtom = runtime.fn(

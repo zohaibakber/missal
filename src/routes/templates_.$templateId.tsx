@@ -24,8 +24,8 @@ function RouteComponent() {
 
   if (!id) {
     return (
-      <main className="p-4 lg:p-6">
-        <Empty className="min-h-[28rem] border">
+      <div className="p-6">
+        <Empty className="min-h-[28rem]" variant="outline">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <HugeiconsIcon icon={LegalDocument01Icon} />
@@ -39,7 +39,7 @@ function RouteComponent() {
             </Button>
           </EmptyContent>
         </Empty>
-      </main>
+      </div>
     );
   }
 

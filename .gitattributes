@@ -1,0 +1,5 @@
+# Keep LF everywhere (including Windows CI checkouts) so `vp check` formatting is stable.
+* text=auto eol=lf
+*.ttf binary
+*.png binary
+*.ico binary

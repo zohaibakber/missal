@@ -3,10 +3,13 @@ import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Cause, Exit, Match, Option } from "effect";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { EditFirForm } from "#/components/create-fir-form";
+import { EditFirSheet } from "#/components/edit-fir-sheet";
+import { FirStatusBadge } from "#/components/fir-status-badge";
 import { FirTemplatePicker } from "#/components/fir-template-picker";
 import { UnsavedChanges } from "#/components/unsaved-changes";
-import { DirectionProvider } from "#/components/ui/direction";
+import { IconAction } from "#/components/icon-action";
+import { ShortcutKbd, shortcutLabel } from "#/components/shortcut-kbd";
+import { SaveStatus, WorkspaceHeader } from "#/components/workspace";
 import {
   Sidebar,
   SidebarHeader,
@@ -16,22 +19,18 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "#/components/ui/sidebar";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "#/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "#/components/ui/tabs";
 import { toast } from "#/components/ui/toast";
 import {
+  Add01Icon,
   ArrowDown01Icon,
   ArrowUp01Icon,
   Delete02Icon,
+  Edit02Icon,
   LegalDocument01Icon,
   MoreVerticalIcon,
   PrinterIcon,
+  TextFontIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -51,10 +50,10 @@ import { DocumentEditor } from "#/components/document-editor";
 import {
   DropdownMenu,
   DropdownMenuGroup,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSwitchItem,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import {
@@ -77,6 +76,7 @@ import {
 import { parseFirDocumentId, type FirDocumentId, type FirId } from "#/lib/ids";
 import { indexPlaceholders } from "#/lib/placeholder";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
+import { useShortcut } from "#/hooks/use-shortcut";
 import { atoms } from "#/state/atoms";
 
 const EMPTY_DOCUMENTS: readonly FirDocumentSummary[] = [];
@@ -328,105 +328,130 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
     }
   }
 
-  return (
-    <DirectionProvider direction="ltr">
-      <main
-        dir="ltr"
-        className="flex h-full min-h-0 flex-col"
-        onKeyDown={(event) => {
-          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-            event.preventDefault();
-            if (dirty && !savePending) void handleSave();
-          }
-        }}
-      >
-        <UnsavedChanges isDirty={() => dirty && pendingId === null} />
-        <section className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-          <div className="flex min-w-0 flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-base font-medium">FIR {fir.fir_no}</h1>
-              <Badge variant="outline">{fir.status}</Badge>
-            </div>
-            <p
-              lang="ur"
-              dir="rtl"
-              className="line-clamp-1 text-base leading-loose text-muted-foreground"
-            >
-              {activeDocument?.title ?? fir.offence}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={() => setDetailsOpen(true)}>
-              Edit FIR details
-            </Button>
-            <Button variant="outline" disabled={!outputIds.size} onClick={() => void handlePrint()}>
-              <HugeiconsIcon icon={PrinterIcon} data-icon="inline-start" />
-              Print ({outputIds.size})
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button size="icon-sm" type="button" variant="outline" />}
-              >
-                <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
-                <span className="sr-only">Open FIR actions</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuGroup>
-                  <DropdownMenuCheckboxItem
-                    checked={displayMode === "labels"}
-                    onCheckedChange={(checked) => setDisplayMode(checked ? "labels" : "values")}
-                  >
-                    Show field names
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setIsDeleteFirOpen(true)} variant="destructive">
-                    <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                    Delete FIR
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {activeDocument && (
-              <span role="status" className="text-xs text-muted-foreground">
-                {dirty ? "Unsaved" : "Saved"}
-              </span>
-            )}
-            <Button
-              disabled={!dirty || savePending}
-              onClick={() => void handleSave()}
-              type="button"
-            >
-              {savePending ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </section>
+  function stepDocument(offset: 1 | -1) {
+    const index = documents.findIndex((document) => document.id === activeId);
+    const next = documents[index + offset];
+    if (next) selectDocument(next.id);
+  }
 
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
-          <Sidebar
-            collapsible="none"
-            className="max-h-64 w-full shrink-0 border-b md:h-full md:max-h-none md:order-last md:w-64 md:border-b-0 md:border-l"
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <WorkspaceShortcuts
+        canSave={dirty && !savePending}
+        onSave={() => void handleSave()}
+        onPrint={() => void handlePrint()}
+        onEditDetails={() => setDetailsOpen(true)}
+        onAddTemplates={() => {
+          setSidebarView("templates");
+          requestAnimationFrame(() => document.getElementById(TEMPLATE_SEARCH_ID)?.focus());
+        }}
+        onStepDocument={stepDocument}
+        onToggleFieldNames={() =>
+          setDisplayMode((mode) => (mode === "labels" ? "values" : "labels"))
+        }
+      />
+      <UnsavedChanges isDirty={() => dirty && pendingId === null} />
+      <WorkspaceHeader>
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className="font-mono text-base font-semibold">FIR {fir.fir_no}</h1>
+          <FirStatusBadge status={fir.status} />
+          <span
+            lang="ur"
+            dir="rtl"
+            className="hidden min-w-0 truncate text-base text-muted-foreground md:block"
           >
-            <Tabs
-              className="min-h-0 flex-1 gap-0"
-              value={visibleSidebar}
-              onValueChange={(view) => {
-                if (view === "documents" || view === "templates") setSidebarView(view);
-              }}
+            {fir.offence}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {activeDocument ? <SaveStatus dirty={dirty} /> : null}
+          <IconAction
+            label="Edit FIR details"
+            shortcut="editFir"
+            onClick={() => setDetailsOpen(true)}
+          >
+            <HugeiconsIcon icon={Edit02Icon} />
+          </IconAction>
+          <IconAction
+            label={`Print ${outputIds.size} ${outputIds.size === 1 ? "document" : "documents"}`}
+            shortcut="print"
+            disabled={!outputIds.size}
+            onClick={() => void handlePrint()}
+          >
+            <HugeiconsIcon icon={PrinterIcon} />
+          </IconAction>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button size="icon-sm" type="button" variant="ghost" aria-label="More actions" />
+              }
             >
-              <SidebarHeader className="px-2 py-1">
-                <TabsList variant="line" aria-label="Sidebar view">
-                  <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
-                  <TabsTrigger value="templates">Templates</TabsTrigger>
-                </TabsList>
-              </SidebarHeader>
-              <SidebarContent>
-                <TabsContent value="documents">
-                  <SidebarGroup>
+              <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuGroup>
+                <DropdownMenuSwitchItem
+                  checked={displayMode === "labels"}
+                  onCheckedChange={(checked) => setDisplayMode(checked ? "labels" : "values")}
+                >
+                  <HugeiconsIcon icon={TextFontIcon} strokeWidth={2} />
+                  Show field names
+                  <ShortcutKbd id="toggleFieldNames" className="ms-auto" />
+                </DropdownMenuSwitchItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setIsDeleteFirOpen(true)} variant="destructive">
+                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                  Delete FIR
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            size="sm"
+            disabled={!dirty || savePending}
+            onClick={() => void handleSave()}
+            type="button"
+          >
+            {savePending ? "Saving…" : "Save"}
+            <ShortcutKbd id="save" />
+          </Button>
+        </div>
+      </WorkspaceHeader>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+        <Sidebar
+          collapsible="none"
+          className="max-h-64 w-full shrink-0 border-b md:h-full md:max-h-none md:w-64 md:border-e md:border-b-0"
+        >
+          <Tabs
+            className="min-h-0 flex-1 gap-0"
+            value={visibleSidebar}
+            onValueChange={(view) => {
+              if (view === "documents" || view === "templates") setSidebarView(view);
+            }}
+          >
+            <SidebarHeader>
+              <TabsList className="w-full" aria-label="Sidebar view">
+                <TabsTrigger value="documents">
+                  Documents
+                  <Badge variant="secondary">{documents.length}</Badge>
+                </TabsTrigger>
+                <TabsTrigger value="templates" title={shortcutLabel("addTemplates")}>
+                  <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
+                  Add
+                </TabsTrigger>
+              </TabsList>
+            </SidebarHeader>
+            <SidebarContent>
+              <TabsContent value="documents">
+                <SidebarGroup>
+                  {documents.length ? (
                     <SidebarMenu>
                       {documents.map((document, index) => (
-                        <SidebarMenuItem key={document.id} className="flex items-center gap-1">
+                        <SidebarMenuItem key={document.id} className="flex items-center gap-1.5">
                           <Checkbox
                             aria-label={`Include ${document.title} in print`}
+                            className="ms-1"
                             checked={outputIds.has(document.id)}
                             onCheckedChange={(checked) =>
                               setOutputIds((current) => {
@@ -450,178 +475,198 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
                               {document.title}
                             </span>
                           </SidebarMenuButton>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger
-                              render={
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  aria-label={`Actions for ${document.title}`}
-                                />
-                              }
-                            >
-                              <HugeiconsIcon icon={MoreVerticalIcon} />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuGroup>
-                                <DropdownMenuItem
-                                  disabled={index === 0}
-                                  onClick={() => void handleReorder(index, index - 1)}
-                                >
-                                  <HugeiconsIcon icon={ArrowUp01Icon} />
-                                  Move up
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  disabled={index === documents.length - 1}
-                                  onClick={() => void handleReorder(index, index + 1)}
-                                >
-                                  <HugeiconsIcon icon={ArrowDown01Icon} />
-                                  Move down
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  disabled={dirty && document.id === activeId}
-                                  variant="destructive"
-                                  onClick={() => void handleRemoveDocument(document.id)}
-                                >
-                                  <HugeiconsIcon icon={Delete02Icon} />
-                                  Remove document
-                                </DropdownMenuItem>
-                              </DropdownMenuGroup>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <DocumentActions
+                            title={document.title}
+                            canMoveUp={index > 0}
+                            canMoveDown={index < documents.length - 1}
+                            canRemove={!(dirty && document.id === activeId)}
+                            onMove={(offset) => void handleReorder(index, index + offset)}
+                            onRemove={() => void handleRemoveDocument(document.id)}
+                          />
                         </SidebarMenuItem>
                       ))}
                     </SidebarMenu>
-                    {!documents.length && (
-                      <p className="px-2 py-3 text-xs text-muted-foreground">
-                        Your documents will appear here.
-                      </p>
-                    )}
-                  </SidebarGroup>
-                </TabsContent>
-                <TabsContent value="templates">
-                  <FirTemplatePicker
-                    firId={firId}
-                    onAdded={(id) => {
-                      setSidebarView("documents");
-                      selectDocument(id);
-                    }}
-                  />
-                </TabsContent>
-              </SidebarContent>
-            </Tabs>
-          </Sidebar>
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="min-h-0 flex-1">
-              {activeDocument && revision !== undefined ? (
-                <DocumentEditor
-                  aria-label={activeDocument.title}
-                  document={activeDocument.document}
-                  onDirtyChange={setDirty}
-                  onSavePendingChange={setSavePending}
-                  onSessionReady={(session) => {
-                    sessionRef.current = session;
+                  ) : (
+                    <Empty size="compact">
+                      <EmptyHeader>
+                        <EmptyTitle>No documents yet</EmptyTitle>
+                        <EmptyDescription>Add templates to start writing.</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  )}
+                </SidebarGroup>
+              </TabsContent>
+              <TabsContent value="templates">
+                <FirTemplatePicker
+                  firId={firId}
+                  searchId={TEMPLATE_SEARCH_ID}
+                  onAdded={(id) => {
+                    setSidebarView("documents");
+                    selectDocument(id);
                   }}
-                  placeholderIndex={presentation.catalog}
-                  presentation={presentation}
-                  sessionKey={`${activeDocument.id}:${editorEpoch}`}
                 />
-              ) : documents.length ? (
-                <Skeleton className="h-full min-h-64" />
-              ) : (
-                <Empty className="h-full min-h-64">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <HugeiconsIcon icon={LegalDocument01Icon} />
-                    </EmptyMedia>
-                    <EmptyTitle>Start with a template</EmptyTitle>
-                    <EmptyDescription>
-                      Choose a template from the sidebar to start writing.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
-              )}
-            </div>
-          </div>
-        </section>
-        <Sheet open={detailsOpen} onOpenChange={setDetailsOpen}>
-          <SheetContent className="data-[side=right]:sm:max-w-2xl" dir="ltr">
-            <SheetHeader>
-              <SheetTitle>Edit FIR {fir.fir_no}</SheetTitle>
-              <SheetDescription>
-                Update case details used by the documents in this FIR.
-              </SheetDescription>
-            </SheetHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4" dir="rtl">
-              <EditFirForm
-                fir={fir}
-                onSuccess={() => {
-                  setDetailsOpen(false);
-                  toast.add({ title: "FIR details saved", type: "success" });
-                }}
-              />
-            </div>
-          </SheetContent>
-        </Sheet>
+              </TabsContent>
+            </SidebarContent>
+          </Tabs>
+        </Sidebar>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {activeDocument && revision !== undefined ? (
+            <DocumentEditor
+              aria-label={activeDocument.title}
+              document={activeDocument.document}
+              onDirtyChange={setDirty}
+              onSavePendingChange={setSavePending}
+              onSessionReady={(session) => {
+                sessionRef.current = session;
+              }}
+              placeholderIndex={presentation.catalog}
+              presentation={presentation}
+              sessionKey={`${activeDocument.id}:${editorEpoch}`}
+            />
+          ) : documents.length ? (
+            <Skeleton className="m-6 flex-1" />
+          ) : (
+            <Empty className="h-full">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HugeiconsIcon icon={LegalDocument01Icon} />
+                </EmptyMedia>
+                <EmptyTitle>Start with a template</EmptyTitle>
+                <EmptyDescription>
+                  Pick templates from the Add tab, or press <ShortcutKbd id="addTemplates" />.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </div>
+      </div>
 
-        <AlertDialog onOpenChange={setIsDeleteFirOpen} open={isDeleteFirOpen}>
-          <AlertDialogContent size="sm">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete FIR</AlertDialogTitle>
-              <AlertDialogDescription>
-                This removes FIR {fir.fir_no} and every document copied from templates.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={(event) => {
-                  event.preventDefault();
-                  void handleDeleteFir();
-                }}
-                type="button"
-                variant="destructive"
-              >
-                <HugeiconsIcon data-icon="inline-start" icon={Delete02Icon} />
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+      <EditFirSheet fir={fir} open={detailsOpen} onOpenChange={setDetailsOpen} />
 
-        <AlertDialog onOpenChange={(open) => !open && setPendingId(null)} open={pendingId !== null}>
-          <AlertDialogContent size="sm">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
-              <AlertDialogDescription>
-                Save this document, discard the draft, or stay on the current document.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <Button
-                onClick={() => void confirmPending("discard")}
-                type="button"
-                variant="outline"
-              >
-                Discard
-              </Button>
-              <Button onClick={() => void confirmPending("save")} type="button">
-                Save
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </main>
-    </DirectionProvider>
+      <AlertDialog onOpenChange={setIsDeleteFirOpen} open={isDeleteFirOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete FIR {fir.fir_no}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the FIR and every document created for it. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDeleteFir();
+              }}
+              type="button"
+              variant="destructive"
+            >
+              <HugeiconsIcon data-icon="inline-start" icon={Delete02Icon} />
+              Delete FIR
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog onOpenChange={(open) => !open && setPendingId(null)} open={pendingId !== null}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              Save this document, discard the draft, or stay on the current document.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button onClick={() => void confirmPending("discard")} type="button" variant="outline">
+              Discard
+            </Button>
+            <Button onClick={() => void confirmPending("save")} type="button">
+              Save
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+const TEMPLATE_SEARCH_ID = "fir-template-search";
+
+function WorkspaceShortcuts({
+  canSave,
+  onSave,
+  onPrint,
+  onEditDetails,
+  onAddTemplates,
+  onStepDocument,
+  onToggleFieldNames,
+}: {
+  canSave: boolean;
+  onSave: () => void;
+  onPrint: () => void;
+  onEditDetails: () => void;
+  onAddTemplates: () => void;
+  onStepDocument: (offset: 1 | -1) => void;
+  onToggleFieldNames: () => void;
+}) {
+  useShortcut("save", onSave, { enabled: canSave });
+  useShortcut("print", onPrint);
+  useShortcut("editFir", onEditDetails);
+  useShortcut("addTemplates", onAddTemplates);
+  useShortcut("nextDocument", () => onStepDocument(1), { ignoreInputs: false });
+  useShortcut("previousDocument", () => onStepDocument(-1), { ignoreInputs: false });
+  useShortcut("toggleFieldNames", onToggleFieldNames);
+  return null;
+}
+
+function DocumentActions({
+  title,
+  canMoveUp,
+  canMoveDown,
+  canRemove,
+  onMove,
+  onRemove,
+}: {
+  title: string;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  canRemove: boolean;
+  onMove: (offset: 1 | -1) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={<Button variant="ghost" size="icon-sm" aria-label={`Actions for ${title}`} />}
+      >
+        <HugeiconsIcon icon={MoreVerticalIcon} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuGroup>
+          <DropdownMenuItem disabled={!canMoveUp} onClick={() => onMove(-1)}>
+            <HugeiconsIcon icon={ArrowUp01Icon} />
+            Move up
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={!canMoveDown} onClick={() => onMove(1)}>
+            <HugeiconsIcon icon={ArrowDown01Icon} />
+            Move down
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled={!canRemove} variant="destructive" onClick={onRemove}>
+            <HugeiconsIcon icon={Delete02Icon} />
+            Remove document
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 export function FirNotFound() {
   return (
-    <main className="p-4 lg:p-6">
-      <Empty className="min-h-[28rem] border">
+    <div className="p-6">
+      <Empty className="min-h-[28rem]" variant="outline">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <HugeiconsIcon icon={LegalDocument01Icon} />
@@ -631,30 +676,29 @@ export function FirNotFound() {
         </EmptyHeader>
         <EmptyContent>
           <Button nativeButton={false} render={<Link to="/" />} variant="outline">
-            Back to dataset
+            Back to FIRs
           </Button>
         </EmptyContent>
       </Empty>
-    </main>
+    </div>
   );
 }
 
 function FirWorkspaceSkeleton() {
   return (
-    <main className="flex flex-col gap-4 p-4 lg:p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-8 w-24" />
-          <Skeleton className="h-7 w-40" />
-          <Skeleton className="h-4 w-64" />
+    <div className="flex h-full flex-col" aria-busy="true">
+      <div className="flex h-12 items-center justify-between gap-4 border-b px-4">
+        <Skeleton className="h-6 w-56" />
+        <Skeleton className="h-7 w-72" />
+      </div>
+      <div className="flex min-h-0 flex-1">
+        <div className="flex w-64 flex-col gap-2 border-e p-2">
+          <Skeleton className="h-8" />
+          <Skeleton className="h-9" />
         </div>
-        <Skeleton className="h-8 w-24" />
+        <Skeleton className="m-6 flex-1" />
       </div>
-      <div className="grid gap-4 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
-        <Skeleton className="h-[42rem]" />
-        <Skeleton className="h-[42rem]" />
-      </div>
-    </main>
+    </div>
   );
 }
 

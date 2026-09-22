@@ -42,7 +42,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        "border-b transition-colors outline-none hover:bg-muted/50 focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
         className,
       )}
       {...props}
@@ -50,14 +50,18 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   );
 }
 
-function TableHead({ className, ...props }: React.ComponentProps<"th">) {
+type TableHeadProps = React.ComponentProps<"th"> & { columnWidth?: number };
+
+function TableHead({ className, columnWidth, ...props }: TableHeadProps) {
   return (
     <th
       data-slot="table-head"
       className={cn(
         "h-10 px-2 text-start align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pe-0",
+        columnWidth && "w-(--column-width)",
         className,
       )}
+      style={columnWidth ? { "--column-width": `${columnWidth}px` } : undefined}
       {...props}
     />
   );
