@@ -15,6 +15,11 @@
   --font-heading: var(--font-sans);
   --font-sans: "Inter Variable", "Jameel Noori Nastaleeq", sans-serif;
   --font-urdu: "Jameel Noori Nastaleeq", serif;
+  /* UI text in Urdu: Latin letters and digits stay in Inter, Urdu script falls through to Nastaleeq. */
+  --font-urdu-ui: "Inter Variable", "Jameel Noori Nastaleeq", sans-serif;
+  /* Nastaleeq reads small; UI labels in Urdu sit one step above text-sm with a tall line. */
+  --text-ur: 0.9375rem;
+  --text-ur--line-height: 2rem;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -46,6 +51,14 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-canvas: var(--canvas);
+  --color-paper: var(--paper);
+  --color-paper-foreground: var(--paper-foreground);
+  --color-field: var(--field);
+  --color-status-open: var(--status-open);
+  --color-status-investigating: var(--status-investigating);
+  --color-status-challan: var(--status-challan);
+  --color-status-closed: var(--status-closed);
   --color-theme-preview-200: oklch(92.2% 0 0);
   --color-theme-preview-300: oklch(87% 0 0);
   --color-theme-preview-600: oklch(43.9% 0 0);
@@ -62,90 +75,133 @@
 }
 
 :root {
+  /* Matches TITLEBAR_HEIGHT in main.ts (the native caption button overlay). */
+  --titlebar-height: 2.5rem;
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.17 0 0);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.17 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.17 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
+  --secondary: oklch(0.965 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
+  --muted: oklch(0.965 0 0);
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.955 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.915 0 0);
+  --input: oklch(0.9 0 0);
+  --ring: oklch(0.65 0 0);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
+  --radius: 0.5rem;
+  --sidebar: oklch(0.97 0 0);
+  --sidebar-foreground: oklch(0.3 0 0);
   --sidebar-primary: oklch(0.205 0 0);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: oklch(0.925 0 0);
+  --sidebar-accent-foreground: oklch(0.17 0 0);
+  --sidebar-border: oklch(0.9 0 0);
+  --sidebar-ring: oklch(0.65 0 0);
+  --canvas: oklch(0.962 0 0);
+  --paper: oklch(1 0 0);
+  --paper-foreground: oklch(0.17 0 0);
+  --paper-shadow:
+    0 0 0 1px oklch(0 0 0 / 6%), 0 1px 2px oklch(0 0 0 / 4%), 0 12px 32px -12px oklch(0 0 0 / 12%);
+  --field: oklch(0.52 0.19 262);
+  --status-open: oklch(0.75 0.16 70);
+  --status-investigating: oklch(0.62 0.17 255);
+  --status-challan: oklch(0.58 0.19 295);
+  --status-closed: oklch(0.65 0.14 160);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.195 0 0);
+  --foreground: oklch(0.96 0 0);
+  --card: oklch(0.225 0 0);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.225 0 0);
+  --popover-foreground: oklch(0.96 0 0);
+  --primary: oklch(0.93 0 0);
+  --primary-foreground: oklch(0.2 0 0);
+  --secondary: oklch(0.26 0 0);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.255 0 0);
+  --muted-foreground: oklch(0.68 0 0);
+  --accent: oklch(0.27 0 0);
+  --accent-foreground: oklch(0.96 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.55 0 0);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: oklch(0.155 0 0);
+  --sidebar-foreground: oklch(0.8 0 0);
+  --sidebar-primary: oklch(0.93 0 0);
+  --sidebar-primary-foreground: oklch(0.2 0 0);
+  --sidebar-accent: oklch(1 0 0 / 7%);
+  --sidebar-accent-foreground: oklch(0.97 0 0);
+  --sidebar-border: oklch(1 0 0 / 7%);
+  --sidebar-ring: oklch(0.55 0 0);
+  --canvas: oklch(0.165 0 0);
+  --paper: oklch(0.225 0 0);
+  --paper-foreground: oklch(0.94 0 0);
+  --paper-shadow:
+    0 0 0 1px oklch(1 0 0 / 7%), 0 1px 2px oklch(0 0 0 / 30%), 0 16px 40px -16px oklch(0 0 0 / 60%);
+  --field: oklch(0.76 0.12 255);
+  --status-open: oklch(0.8 0.15 75);
+  --status-investigating: oklch(0.7 0.14 255);
+  --status-challan: oklch(0.7 0.15 295);
+  --status-closed: oklch(0.74 0.13 160);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+    font-feature-settings: "cv11";
+    overscroll-behavior: none;
   }
-  :lang(ur) {
-    font-family: var(--font-urdu);
+  body {
+    @apply bg-sidebar text-foreground antialiased;
+    /* Desktop chrome: text is not selectable and the pointer stays an arrow. */
+    cursor: default;
+    user-select: none;
   }
-  button:not(:disabled),
-  [role="button"]:not(:disabled) {
-    cursor: pointer;
+  input,
+  textarea,
+  [contenteditable="true"],
+  .select-text,
+  .select-text * {
+    user-select: text;
+  }
+  a,
+  img {
+    -webkit-user-drag: none;
+  }
+  /* Attribute (not :lang) so the rule sets the font where Urdu UI begins and children inherit;
+     the document editor declares its own print-matching font. */
+  [lang="ur"]:not(.missal-editor-input *) {
+    font-family: var(--font-urdu-ui);
+    /* Scale the Nastaleeq fallback to Inter's x-height so mixed Urdu/Latin labels balance. */
+    font-size-adjust: from-font;
+  }
+  /* Synthetic bold smears Nastaleeq; keep Urdu labels at their natural weight in UI chrome. */
+  [data-slot="sidebar-menu-button"] :lang(ur),
+  [data-slot="badge"]:lang(ur) {
+    font-weight: 400;
   }
   @media (prefers-reduced-motion: reduce) {
     *:not(.animate-spin),
@@ -186,9 +242,17 @@
   animation: toast-attention-b 240ms ease-out;
 }
 
+@utility app-drag {
+  -webkit-app-region: drag;
+}
+
+@utility app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
 @utility titlebar-padding {
   padding-inline-end: calc(
-    100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 1rem
+    100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px) + 0.5rem
   );
 }
 
@@ -202,7 +266,9 @@
 }
 
 .missal-editor-input {
-  color: var(--foreground);
+  font-size-adjust: none;
+  color: var(--paper-foreground);
+  caret-color: var(--paper-foreground);
   font-family: var(--font-urdu);
   font-size: 1.25rem;
   line-height: 2.4;
@@ -226,7 +292,7 @@
   height: 0;
   margin-block: 1.75rem;
   border: 0;
-  border-top: 1px dashed var(--border);
+  border-top: 1px dashed color-mix(in oklch, var(--paper-foreground) 20%, transparent);
   break-before: page;
   page-break-before: always;
 }
@@ -241,7 +307,7 @@
 .missal-table-cell {
   min-width: 0;
   overflow-wrap: anywhere;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in oklch, var(--paper-foreground) 22%, transparent);
   padding: 0.25rem 0.35rem;
 }
 
@@ -251,7 +317,7 @@
 }
 
 .missal-field {
-  color: #2563eb;
+  color: var(--field);
   unicode-bidi: isolate;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -259,7 +325,10 @@
 }
 
 .missal-field-unresolved {
-  color: #2563eb;
+  color: var(--field);
+  text-decoration: underline dashed color-mix(in oklch, var(--field) 55%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.35em;
 }
 
 .missal-text-bold {
@@ -313,17 +382,18 @@
 
 .missal-fir-form [data-slot="field-label"],
 .missal-fir-form [data-slot="field-legend"] {
-  font-family: var(--font-urdu);
-  font-size: 1.125rem;
-  line-height: 2;
+  font-size: var(--text-ur);
+  font-weight: 400;
+  line-height: 1.75rem;
+  color: var(--muted-foreground);
 }
-.missal-fir-form input:lang(ur) {
-  font-size: 1.125rem;
+.missal-fir-form input:not([dir="ltr"]) {
+  font-size: 1rem;
 }
 
 *:not([data-slot="scroll-area-viewport"])::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
 }
 
 *:not([data-slot="scroll-area-viewport"])::-webkit-scrollbar-track,
@@ -332,24 +402,21 @@
 }
 
 *:not([data-slot="scroll-area-viewport"])::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
+  border: 3px solid transparent;
   border-radius: 999px;
-  background-color: var(--border);
+  background-color: color-mix(in oklch, var(--foreground) 16%, transparent);
   background-clip: padding-box;
+}
+
+*:not([data-slot="scroll-area-viewport"])::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklch, var(--foreground) 28%, transparent);
 }
 
 *:not([data-slot="scroll-area-viewport"])::-webkit-scrollbar-button {
   display: none;
 }
 
-@supports not selector(::-webkit-scrollbar) {
-  *:not([data-slot="scroll-area-viewport"]) {
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-}
-
-[data-slot="table-head"]:lang(ur) {
+[data-slot="table-head"]:lang(ur):not(.missal-editor-input *) {
   font-size: 0.9375rem;
 }
 
@@ -358,8 +425,11 @@
   min-height: var(--page-height, 297mm);
   padding: var(--page-top, 18mm) var(--page-right, 18mm) var(--page-bottom, 18mm)
     var(--page-left, 18mm);
-  margin-block: 1.5rem;
-  box-shadow: 0 0 0 1px var(--border);
+  margin-block: 2rem 3rem;
+  zoom: var(--page-zoom, 1);
+  border-radius: 2px;
+  background: var(--paper);
+  box-shadow: var(--paper-shadow);
 }
 
 .missal-h1,

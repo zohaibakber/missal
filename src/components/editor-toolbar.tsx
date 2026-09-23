@@ -87,9 +87,9 @@ function ToolbarButton({
           />
         }
       >
-        <HugeiconsIcon icon={icon} />
+        <HugeiconsIcon icon={icon} strokeWidth={2} />
       </TooltipTrigger>
-      <TooltipContent>
+      <TooltipContent side="bottom">
         <TooltipLabel label={label} keys={keys} />
       </TooltipContent>
     </Tooltip>
@@ -144,7 +144,8 @@ export function EditorToolbar() {
   return (
     <div
       aria-label="Document formatting"
-      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-background px-4 py-2"
+      role="toolbar"
+      className="flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto border-b px-2"
       dir="ltr"
     >
       <ToolbarButton
@@ -161,7 +162,10 @@ export function EditorToolbar() {
         disabled={!canRedo}
         onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)}
       />
-      <Separator orientation="vertical" className="mx-2 h-4" />
+      <Separator
+        orientation="vertical"
+        className="mx-1.5 data-vertical:h-4 data-vertical:self-auto"
+      />
       <ToggleGroup
         multiple
         value={formats
@@ -183,15 +187,18 @@ export function EditorToolbar() {
                 />
               }
             >
-              <HugeiconsIcon icon={format.icon} />
+              <HugeiconsIcon icon={format.icon} strokeWidth={2} />
             </TooltipTrigger>
-            <TooltipContent>
+            <TooltipContent side="bottom">
               <TooltipLabel label={format.label} keys={format.keys} />
             </TooltipContent>
           </Tooltip>
         ))}
       </ToggleGroup>
-      <Separator orientation="vertical" className="mx-2 h-4" />
+      <Separator
+        orientation="vertical"
+        className="mx-1.5 data-vertical:h-4 data-vertical:self-auto"
+      />
       <ToggleGroup value={[alignment]} aria-label="Paragraph alignment" size="sm" spacing={0}>
         {alignments.map((align) => (
           <Tooltip key={align.value}>
@@ -205,13 +212,16 @@ export function EditorToolbar() {
                 />
               }
             >
-              <HugeiconsIcon icon={align.icon} />
+              <HugeiconsIcon icon={align.icon} strokeWidth={2} />
             </TooltipTrigger>
-            <TooltipContent>{align.label}</TooltipContent>
+            <TooltipContent side="bottom">{align.label}</TooltipContent>
           </Tooltip>
         ))}
       </ToggleGroup>
-      <Separator orientation="vertical" className="mx-2 h-4" />
+      <Separator
+        orientation="vertical"
+        className="mx-1.5 data-vertical:h-4 data-vertical:self-auto"
+      />
       <ToolbarButton
         label="Bulleted list"
         icon={LeftToRightListBulletIcon}

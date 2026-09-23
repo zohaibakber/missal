@@ -8,7 +8,7 @@ import {
   Delete02Icon,
   FileImportIcon,
   LegalDocument01Icon,
-  MoreVerticalIcon,
+  MoreHorizontalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -21,16 +21,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "#/components/ui/alert-dialog";
+import { Hint } from "#/components/hint";
 import { IconAction } from "#/components/icon-action";
-import { ShortcutKbd } from "#/components/shortcut-kbd";
+import { Pane, PaneActions, PaneBody, PaneHeader, SaveStatus } from "#/components/pane";
 import { UnsavedChanges } from "#/components/unsaved-changes";
-import { SaveStatus, WorkspaceHeader } from "#/components/workspace";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import { Spinner } from "#/components/ui/spinner";
 import { Button } from "#/components/ui/button";
 import { DocumentEditor } from "#/components/document-editor";
 import {
@@ -82,32 +85,21 @@ function EditTemplateForm({ templateId }: { templateId: TemplateId }) {
     : indexPlaceholders([]);
 
   if (AsyncResult.isFailure(templateResult)) {
-    return (
-      <div className="p-6">
-        <Empty className="min-h-[28rem]" variant="outline">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <HugeiconsIcon icon={LegalDocument01Icon} />
-            </EmptyMedia>
-            <EmptyTitle>Template not found</EmptyTitle>
-            <EmptyDescription>This template may have been removed.</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button nativeButton={false} render={<Link to="/templates" />} variant="outline">
-              Back to templates
-            </Button>
-          </EmptyContent>
-        </Empty>
-      </div>
-    );
+    return <TemplateNotFound />;
   }
 
   if (AsyncResult.isInitial(templateResult)) {
     return (
-      <div className="flex flex-col gap-4 p-6">
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-[42rem]" />
-      </div>
+      <Pane aria-busy="true">
+        <PaneHeader>
+          <Skeleton className="h-5 w-48" />
+          <PaneActions>
+            <Skeleton className="h-7 w-16" />
+          </PaneActions>
+        </PaneHeader>
+        <div className="h-10 border-b" />
+        <div className="flex-1 bg-canvas" />
+      </Pane>
     );
   }
 
@@ -116,6 +108,35 @@ function EditTemplateForm({ templateId }: { templateId: TemplateId }) {
       placeholderIndex={placeholderIndex}
       selectedTemplate={templateResult.value}
     />
+  );
+}
+
+export function TemplateNotFound() {
+  return (
+    <Pane>
+      <PaneHeader />
+      <PaneBody className="flex">
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <HugeiconsIcon icon={LegalDocument01Icon} strokeWidth={2} />
+            </EmptyMedia>
+            <EmptyTitle>Template not found</EmptyTitle>
+            <EmptyDescription>It may have been deleted.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button
+              nativeButton={false}
+              render={<Link to="/templates" />}
+              variant="outline"
+              size="sm"
+            >
+              Back to templates
+            </Button>
+          </EmptyContent>
+        </Empty>
+      </PaneBody>
+    </Pane>
   );
 }
 
@@ -283,7 +304,7 @@ function TemplateEditorWorkspace({
     Boolean(name.trim()) && !savePending && !importPending && (selectedTemplate === null || dirty);
 
   return (
-    <div className="flex h-full min-h-96 min-w-0 flex-col">
+    <Pane>
       <TemplateEditorShortcuts
         templateId={selectedTemplate?.id}
         canSave={canSave}
@@ -291,20 +312,19 @@ function TemplateEditorWorkspace({
         onImport={() => fileInputRef.current?.click()}
       />
       <UnsavedChanges isDirty={() => dirty && !allowNavigationRef.current} />
-      <WorkspaceHeader>
+      <PaneHeader>
         <Input
           aria-label="Template name"
           id="template-name"
           lang="ur"
           dir="auto"
           autoFocus={!selectedTemplate}
-          className="min-w-48 flex-1"
           placeholder="ٹیمپلیٹ کا نام"
-          variant="plain"
+          variant="title"
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
-        <div className="flex items-center gap-2">
+        <PaneActions>
           <SaveStatus dirty={dirty} />
           <input
             ref={fileInputRef}
@@ -324,49 +344,72 @@ function TemplateEditorWorkspace({
             disabled={savePending || importPending}
             onClick={() => fileInputRef.current?.click()}
           >
-            <HugeiconsIcon icon={FileImportIcon} />
+            {importPending ? <Spinner /> : <HugeiconsIcon icon={FileImportIcon} strokeWidth={2} />}
           </IconAction>
           {selectedTemplate ? (
             <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button size="icon-sm" type="button" variant="ghost" aria-label="More actions" />
-                }
-              >
-                <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem
-                  disabled={savePending || importPending}
-                  onClick={() => setIsDeleteDialogOpen(true)}
-                  variant="destructive"
+              <Hint label="More actions">
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      size="icon-sm"
+                      type="button"
+                      variant="ghost"
+                      aria-label="More actions"
+                    />
+                  }
                 >
-                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                  Delete template
-                </DropdownMenuItem>
+                  <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+                </DropdownMenuTrigger>
+              </Hint>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    disabled={savePending || importPending}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <HugeiconsIcon icon={FileImportIcon} strokeWidth={2} />
+                    Import Word document
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={savePending || importPending}
+                    onClick={() => setIsDeleteDialogOpen(true)}
+                    variant="destructive"
+                  >
+                    <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                    Delete template
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
-          <Button disabled={!canSave} onClick={() => void handleSave()} size="sm" type="button">
-            {savePending ? "Saving…" : selectedTemplate ? "Save" : "Create template"}
-            <ShortcutKbd id="save" />
-          </Button>
-        </div>
-      </WorkspaceHeader>
-      <section className="min-h-0 min-w-0 flex-1">
-        <DocumentEditor
-          aria-label="Template content"
-          document={selectedTemplate?.document ?? emptyDocumentEnvelope()}
-          onDirtyChange={setContentDirty}
-          onSavePendingChange={setSavePending}
-          onSessionReady={(session) => {
-            sessionRef.current = session;
-          }}
-          placeholderIndex={placeholderIndex}
-          presentation={presentation}
-          sessionKey={sessionKey}
-        />
-      </section>
+          <Hint label={selectedTemplate ? "Save template" : "Create template"} shortcut="save">
+            <Button
+              className="ms-1"
+              disabled={!canSave}
+              onClick={() => void handleSave()}
+              size="sm"
+              type="button"
+            >
+              {savePending ? <Spinner data-icon="inline-start" /> : null}
+              {selectedTemplate ? "Save" : "Create"}
+            </Button>
+          </Hint>
+        </PaneActions>
+      </PaneHeader>
+      <DocumentEditor
+        aria-label="Template content"
+        document={selectedTemplate?.document ?? emptyDocumentEnvelope()}
+        onDirtyChange={setContentDirty}
+        onSavePendingChange={setSavePending}
+        onSessionReady={(session) => {
+          sessionRef.current = session;
+        }}
+        placeholderIndex={placeholderIndex}
+        presentation={presentation}
+        sessionKey={sessionKey}
+      />
 
       <AlertDialog
         open={pendingImport !== null}
@@ -413,13 +456,12 @@ function TemplateEditorWorkspace({
               type="button"
               variant="destructive"
             >
-              <HugeiconsIcon data-icon="inline-start" icon={Delete02Icon} />
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Pane>
   );
 }
 

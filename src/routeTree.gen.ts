@@ -16,8 +16,9 @@ import { Route as PlaceholdersRouteImport } from './routes/placeholders'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as FirIdEditRouteImport } from './routes/$firId_.edit'
-import { Route as TemplatesTemplateIdRouteImport } from './routes/templates_.$templateId'
-import { Route as TemplatesNewRouteImport } from './routes/templates_.new'
+import { Route as TemplatesIndexRouteImport } from './routes/templates.index'
+import { Route as TemplatesTemplateIdRouteImport } from './routes/templates.$templateId'
+import { Route as TemplatesNewRouteImport } from './routes/templates.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -54,15 +55,20 @@ const FirIdEditRoute = FirIdEditRouteImport.update({
   path: '/$firId/edit',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TemplatesIndexRoute = TemplatesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => TemplatesRoute,
+} as any)
 const TemplatesTemplateIdRoute = TemplatesTemplateIdRouteImport.update({
-  id: '/templates_/$templateId',
-  path: '/templates/$templateId',
-  getParentRoute: () => rootRouteImport,
+  id: '/$templateId',
+  path: '/$templateId',
+  getParentRoute: () => TemplatesRoute,
 } as any)
 const TemplatesNewRoute = TemplatesNewRouteImport.update({
-  id: '/templates_/new',
-  path: '/templates/new',
-  getParentRoute: () => rootRouteImport,
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => TemplatesRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -71,10 +77,11 @@ export interface FileRoutesByFullPath {
   '/new': typeof NewRoute
   '/placeholders': typeof PlaceholdersRoute
   '/settings': typeof SettingsRoute
-  '/templates': typeof TemplatesRoute
+  '/templates': typeof TemplatesRouteWithChildren
   '/$firId/edit': typeof FirIdEditRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/templates/new': typeof TemplatesNewRoute
+  '/templates/': typeof TemplatesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -82,10 +89,10 @@ export interface FileRoutesByTo {
   '/new': typeof NewRoute
   '/placeholders': typeof PlaceholdersRoute
   '/settings': typeof SettingsRoute
-  '/templates': typeof TemplatesRoute
   '/$firId/edit': typeof FirIdEditRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
   '/templates/new': typeof TemplatesNewRoute
+  '/templates': typeof TemplatesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -94,10 +101,11 @@ export interface FileRoutesById {
   '/new': typeof NewRoute
   '/placeholders': typeof PlaceholdersRoute
   '/settings': typeof SettingsRoute
-  '/templates': typeof TemplatesRoute
+  '/templates': typeof TemplatesRouteWithChildren
   '/$firId_/edit': typeof FirIdEditRoute
-  '/templates_/$templateId': typeof TemplatesTemplateIdRoute
-  '/templates_/new': typeof TemplatesNewRoute
+  '/templates/$templateId': typeof TemplatesTemplateIdRoute
+  '/templates/new': typeof TemplatesNewRoute
+  '/templates/': typeof TemplatesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +119,7 @@ export interface FileRouteTypes {
     | '/$firId/edit'
     | '/templates/$templateId'
     | '/templates/new'
+    | '/templates/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -118,10 +127,10 @@ export interface FileRouteTypes {
     | '/new'
     | '/placeholders'
     | '/settings'
-    | '/templates'
     | '/$firId/edit'
     | '/templates/$templateId'
     | '/templates/new'
+    | '/templates'
   id:
     | '__root__'
     | '/'
@@ -131,8 +140,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/templates'
     | '/$firId_/edit'
-    | '/templates_/$templateId'
-    | '/templates_/new'
+    | '/templates/$templateId'
+    | '/templates/new'
+    | '/templates/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -141,10 +151,8 @@ export interface RootRouteChildren {
   NewRoute: typeof NewRoute
   PlaceholdersRoute: typeof PlaceholdersRoute
   SettingsRoute: typeof SettingsRoute
-  TemplatesRoute: typeof TemplatesRoute
+  TemplatesRoute: typeof TemplatesRouteWithChildren
   FirIdEditRoute: typeof FirIdEditRoute
-  TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRoute
-  TemplatesNewRoute: typeof TemplatesNewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -198,22 +206,45 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FirIdEditRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/templates_/$templateId': {
-      id: '/templates_/$templateId'
-      path: '/templates/$templateId'
+    '/templates/': {
+      id: '/templates/'
+      path: '/'
+      fullPath: '/templates/'
+      preLoaderRoute: typeof TemplatesIndexRouteImport
+      parentRoute: typeof TemplatesRoute
+    }
+    '/templates/$templateId': {
+      id: '/templates/$templateId'
+      path: '/$templateId'
       fullPath: '/templates/$templateId'
       preLoaderRoute: typeof TemplatesTemplateIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof TemplatesRoute
     }
-    '/templates_/new': {
-      id: '/templates_/new'
-      path: '/templates/new'
+    '/templates/new': {
+      id: '/templates/new'
+      path: '/new'
       fullPath: '/templates/new'
       preLoaderRoute: typeof TemplatesNewRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof TemplatesRoute
     }
   }
 }
+
+interface TemplatesRouteChildren {
+  TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRoute
+  TemplatesNewRoute: typeof TemplatesNewRoute
+  TemplatesIndexRoute: typeof TemplatesIndexRoute
+}
+
+const TemplatesRouteChildren: TemplatesRouteChildren = {
+  TemplatesTemplateIdRoute: TemplatesTemplateIdRoute,
+  TemplatesNewRoute: TemplatesNewRoute,
+  TemplatesIndexRoute: TemplatesIndexRoute,
+}
+
+const TemplatesRouteWithChildren = TemplatesRoute._addFileChildren(
+  TemplatesRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -221,10 +252,8 @@ const rootRouteChildren: RootRouteChildren = {
   NewRoute: NewRoute,
   PlaceholdersRoute: PlaceholdersRoute,
   SettingsRoute: SettingsRoute,
-  TemplatesRoute: TemplatesRoute,
+  TemplatesRoute: TemplatesRouteWithChildren,
   FirIdEditRoute: FirIdEditRoute,
-  TemplatesTemplateIdRoute: TemplatesTemplateIdRoute,
-  TemplatesNewRoute: TemplatesNewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -24,14 +24,15 @@ export function CommandMenu() {
   return (
     <>
       <Button
-        variant="outline"
+        variant="input"
         size="sm"
-        className="w-56 justify-start"
+        aria-label="Search or run a command"
+        className="w-full"
         onPointerEnter={() => void loadDialog()}
         onClick={() => toggle(() => true)}
       >
-        <HugeiconsIcon icon={Search01Icon} data-icon="inline-start" />
-        Search or jump to…
+        <HugeiconsIcon icon={Search01Icon} strokeWidth={2} data-icon="inline-start" />
+        <span className="truncate">Search FIRs, templates and commands</span>
         <ShortcutKbd id="commandMenu" className="ms-auto" />
       </Button>
 

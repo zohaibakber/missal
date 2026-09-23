@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import {
   Table,
   TableBody,
@@ -9,10 +9,13 @@ import {
 } from "#/components/ui/table";
 import { cn } from "#/lib/utils";
 
+/** An editable two-column list of placeholders, used on the Placeholders screen. */
 function PlaceholderList({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="placeholder-list"
+      dir="rtl"
+      lang="ur"
       className={cn("overflow-hidden rounded-lg border", className)}
       {...props}
     />
@@ -26,12 +29,12 @@ function PlaceholderListTable({
 }: {
   nameHeading: string;
   valueHeading: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <Table className="table-fixed">
       <TableHeader>
-        <TableRow className="hover:bg-transparent">
+        <TableRow>
           <TableHead>{nameHeading}</TableHead>
           <TableHead>{valueHeading}</TableHead>
           <TableHead columnWidth={48}>
@@ -44,14 +47,31 @@ function PlaceholderListTable({
   );
 }
 
+function PlaceholderListRow(props: ComponentProps<typeof TableRow>) {
+  return <TableRow className="hover:bg-transparent" {...props} />;
+}
+
 function PlaceholderListFooter({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("border-t p-2", className)} {...props} />;
+  return (
+    <div
+      dir="ltr"
+      lang="en"
+      className={cn("flex justify-end border-t p-1.5", className)}
+      {...props}
+    />
+  );
+}
+
+/** Description line shown above a placeholder list. */
+function PlaceholderListIntro({ className, ...props }: ComponentProps<"p">) {
+  return <p className={cn("mb-4 text-sm text-muted-foreground", className)} {...props} />;
 }
 
 export {
   PlaceholderList,
   PlaceholderListFooter,
+  PlaceholderListIntro,
+  PlaceholderListRow,
   PlaceholderListTable,
   TableCell as PlaceholderListCell,
-  TableRow as PlaceholderListRow,
 };

@@ -1,13 +1,14 @@
-import { useRef, type ComponentProps, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import type { RowData } from "@tanstack/react-table";
 import {
-  Add01Icon,
   Cancel01Icon,
+  FilterHorizontalIcon,
   LayoutThreeColumnIcon,
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { DataTableInstance } from "#/components/data-table";
+import { Hint } from "#/components/hint";
 import { ShortcutKbd } from "#/components/shortcut-kbd";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
@@ -26,7 +27,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import {
@@ -36,22 +36,10 @@ import {
   InputGroupInput,
 } from "#/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
-import { Separator } from "#/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import { useShortcut } from "#/hooks/use-shortcut";
 import { cn } from "#/lib/utils";
 
 type TableProp<TData extends RowData> = { table: DataTableInstance<TData> };
-
-export function DataTableToolbar({ className, ...props }: ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="data-table-toolbar"
-      className={cn("flex flex-wrap items-center gap-2", className)}
-      {...props}
-    />
-  );
-}
 
 export function DataTableSearch<TData extends RowData>({
   table,
@@ -67,7 +55,7 @@ export function DataTableSearch<TData extends RowData>({
   });
 
   return (
-    <InputGroup className={cn("h-8 w-full sm:w-72", className)}>
+    <InputGroup className={cn("h-7 w-56", className)}>
       <InputGroupAddon align="inline-start">
         <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
       </InputGroupAddon>
@@ -132,17 +120,12 @@ export function DataTableFacetedFilter<TData extends RowData>({
 
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="outline" size="sm" type="button" />}>
-        <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
+      <PopoverTrigger render={<Button variant="subtle" size="sm" type="button" />}>
+        <HugeiconsIcon icon={FilterHorizontalIcon} strokeWidth={2} data-icon="inline-start" />
         {title}
-        {selected.size ? (
-          <>
-            <Separator orientation="vertical" className="mx-0.5 data-vertical:h-4" />
-            <Badge variant="secondary">{selected.size} selected</Badge>
-          </>
-        ) : null}
+        {selected.size ? <Badge variant="secondary">{selected.size}</Badge> : null}
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-0" align="start">
+      <PopoverContent className="w-56" align="start">
         <Command>
           <CommandInput placeholder={title} />
           <CommandList>
@@ -190,7 +173,7 @@ export function DataTableResetFilters<TData extends RowData>({ table }: TablePro
 
   return (
     <Button
-      variant="ghost"
+      variant="subtle"
       size="sm"
       type="button"
       onClick={() => {
@@ -198,8 +181,7 @@ export function DataTableResetFilters<TData extends RowData>({ table }: TablePro
         table.setGlobalFilter("");
       }}
     >
-      Reset
-      <HugeiconsIcon icon={Cancel01Icon} data-icon="inline-end" />
+      Clear
     </Button>
   );
 }
@@ -212,24 +194,16 @@ export function DataTableViewOptions<TData extends RowData>({ table }: TableProp
 
   return (
     <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <DropdownMenuTrigger
-              render={
-                <Button variant="outline" size="icon-sm" type="button" aria-label="Columns" />
-              }
-            />
-          }
+      <Hint label="Columns">
+        <DropdownMenuTrigger
+          render={<Button variant="subtle" size="icon-sm" type="button" aria-label="Columns" />}
         >
-          <HugeiconsIcon icon={LayoutThreeColumnIcon} />
-        </TooltipTrigger>
-        <TooltipContent>Columns</TooltipContent>
-      </Tooltip>
+          <HugeiconsIcon icon={LayoutThreeColumnIcon} strokeWidth={2} />
+        </DropdownMenuTrigger>
+      </Hint>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Show columns</DropdownMenuLabel>
           {columns.map((column) => (
             <DropdownMenuCheckboxItem
               key={column.id}

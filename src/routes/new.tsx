@@ -1,6 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { CreateFirForm } from "#/components/create-fir-form";
-import { PageDescription, PageHeader, PageHeading, PageTitle } from "#/components/page";
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
+import { FirForm, FirFormFields, FirFormStatus, FirFormSubmit } from "#/components/fir-form";
+import { Pane, PaneActions, PaneBody, PaneHeader, PaneTitle } from "#/components/pane";
+import { Button } from "#/components/ui/button";
 
 export const Route = createFileRoute("/new")({
   component: RouteComponent,
@@ -8,25 +9,32 @@ export const Route = createFileRoute("/new")({
 
 function RouteComponent() {
   const navigate = useNavigate();
+  const router = useRouter();
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col">
-      <PageHeader className="px-6 pt-6">
-        <PageHeading>
-          <PageTitle>New FIR</PageTitle>
-          <PageDescription>
-            Case details fill the placeholders in every document you create for this FIR.
-          </PageDescription>
-        </PageHeading>
-      </PageHeader>
-      <CreateFirForm
-        onSuccess={(firId) => {
-          void navigate({
-            to: "/$firId",
-            params: { firId: `${firId}` },
-          });
-        }}
-      />
-    </div>
+    <FirForm
+      className="flex h-full min-h-0 flex-col"
+      onSuccess={(firId) => {
+        void navigate({ to: "/$firId", params: { firId: `${firId}` }, replace: true });
+      }}
+    >
+      <Pane>
+        <PaneHeader>
+          <PaneTitle>New FIR</PaneTitle>
+          <PaneActions>
+            <FirFormStatus />
+            <Button type="button" variant="subtle" size="sm" onClick={() => router.history.back()}>
+              Cancel
+            </Button>
+            <FirFormSubmit>Create FIR</FirFormSubmit>
+          </PaneActions>
+        </PaneHeader>
+        <PaneBody>
+          <div className="mx-auto w-full max-w-2xl px-6 py-10">
+            <FirFormFields />
+          </div>
+        </PaneBody>
+      </Pane>
+    </FirForm>
   );
 }

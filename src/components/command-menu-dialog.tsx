@@ -7,9 +7,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
   ComputerIcon,
-  File01Icon,
-  Files,
-  Home,
+  Folder01Icon,
   KeyboardIcon,
   LegalDocument01Icon,
   Moon02Icon,
@@ -48,8 +46,8 @@ type CommandLink = {
 };
 
 const navigationCommands: readonly CommandLink[] = [
-  { icon: Home, shortcut: "goHome", title: "FIRs", to: "/" },
-  { icon: Files, shortcut: "goTemplates", title: "Templates", to: "/templates" },
+  { icon: Folder01Icon, shortcut: "goHome", title: "FIRs", to: "/" },
+  { icon: LegalDocument01Icon, shortcut: "goTemplates", title: "Templates", to: "/templates" },
   { icon: TextFontIcon, shortcut: "goPlaceholders", title: "Placeholders", to: "/placeholders" },
   { icon: Settings01Icon, shortcut: "goSettings", title: "Settings", to: "/settings" },
 ];
@@ -135,7 +133,7 @@ function CommandMenuContent({ close }: { close: () => void }) {
                   key={item.to}
                   onSelect={() => run(() => void navigate({ to: item.to }))}
                 >
-                  <HugeiconsIcon icon={item.icon} />
+                  <HugeiconsIcon icon={item.icon} strokeWidth={2} />
                   <span>{item.title}</span>
                   <CommandShortcut>
                     <ShortcutKbd id={item.shortcut} />
@@ -158,8 +156,8 @@ function CommandMenuContent({ close }: { close: () => void }) {
                     run(() => void navigate({ to: "/$firId", params: { firId: `${fir.id}` } }))
                   }
                 >
-                  <HugeiconsIcon icon={File01Icon} />
-                  <span className="font-mono">FIR {fir.fir_no}</span>
+                  <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} />
+                  <span>FIR {fir.fir_no}</span>
                   <span lang="ur" dir="rtl" className="ms-auto truncate text-muted-foreground">
                     {fir.offence}
                   </span>
@@ -187,7 +185,7 @@ function CommandMenuContent({ close }: { close: () => void }) {
                     )
                   }
                 >
-                  <HugeiconsIcon icon={LegalDocument01Icon} />
+                  <HugeiconsIcon icon={LegalDocument01Icon} strokeWidth={2} />
                   <span lang="ur" dir="rtl" className="truncate">
                     {template.name}
                   </span>
@@ -205,19 +203,19 @@ function CommandMenuContent({ close }: { close: () => void }) {
               data-checked={theme === item.value}
               onSelect={() => run(() => setTheme(item.value))}
             >
-              <HugeiconsIcon icon={item.icon} />
+              <HugeiconsIcon icon={item.icon} strokeWidth={2} />
               <span>{item.title}</span>
             </CommandItem>
           ))}
           <CommandItem onSelect={() => run(toggleSidebar)}>
-            <HugeiconsIcon icon={SidebarLeftIcon} />
+            <HugeiconsIcon icon={SidebarLeftIcon} strokeWidth={2} />
             <span>Toggle sidebar</span>
             <CommandShortcut>
               <ShortcutKbd id="toggleSidebar" />
             </CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => run(openShortcuts)}>
-            <HugeiconsIcon icon={KeyboardIcon} />
+            <HugeiconsIcon icon={KeyboardIcon} strokeWidth={2} />
             <span>Keyboard shortcuts</span>
             <CommandShortcut>
               <ShortcutKbd id="cheatsheet" />

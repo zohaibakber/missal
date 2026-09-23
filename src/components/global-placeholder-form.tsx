@@ -6,15 +6,17 @@ import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "#/components/ui/button";
 import { Field, FieldLabel } from "#/components/ui/field";
-import { PageFooter } from "#/components/page";
+import { Hint } from "#/components/hint";
+import { PaneActionsPortal, SaveStatus } from "#/components/pane";
 import {
   PlaceholderList,
-  PlaceholderListFooter,
   PlaceholderListCell,
+  PlaceholderListFooter,
+  PlaceholderListIntro,
   PlaceholderListRow,
   PlaceholderListTable,
 } from "#/components/placeholder-list";
-import { ShortcutKbd } from "#/components/shortcut-kbd";
+import { Spinner } from "#/components/ui/spinner";
 import { useShortcut } from "#/hooks/use-shortcut";
 import { Input } from "#/components/ui/input";
 import {
@@ -36,6 +38,8 @@ import { getRepositoryErrorMessage } from "#/lib/storage-errors";
 import { atoms } from "#/state/atoms";
 
 type Draft = typeof GlobalPlaceholderDraft.Type;
+
+const GLOBAL_VALUES_FORM_ID = "global-values-form";
 function draftsFrom(globals: readonly GlobalPlaceholder[]): Draft[] {
   return globals.map((item) => ({
     _tag: "Existing",
@@ -76,7 +80,12 @@ export function GlobalPlaceholderForm({ active = true }: { active?: boolean }) {
       </Empty>
     );
   }
-  return <Skeleton className="h-64" />;
+  return (
+    <div className="flex flex-col gap-3">
+      <Skeleton className="h-4 w-80" />
+      <Skeleton className="h-64" />
+    </div>
+  );
 }
 
 function GlobalValues({
@@ -125,19 +134,43 @@ function GlobalValues({
 
   return (
     <form
-      className="flex flex-col gap-4"
+      id={GLOBAL_VALUES_FORM_ID}
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
       }}
     >
       <UnsavedChanges isDirty={() => dirty} />
-      <p className="text-sm text-muted-foreground">
-        Set these once for all FIRs. Documents use the saved value wherever the placeholder appears
-        in a template.
-      </p>
+      {active ? (
+        <PaneActionsPortal>
+          {dirty ? <SaveStatus dirty /> : null}
+          <Button
+            type="button"
+            variant="subtle"
+            size="sm"
+            disabled={!dirty || saving}
+            onClick={() => setRows(saved)}
+          >
+            Reset
+          </Button>
+          <Hint label="Save" shortcut="save">
+            <Button
+              type="submit"
+              form={GLOBAL_VALUES_FORM_ID}
+              size="sm"
+              disabled={!dirty || saving}
+            >
+              {saving ? <Spinner data-icon="inline-start" /> : null}
+              Save
+            </Button>
+          </Hint>
+        </PaneActionsPortal>
+      ) : null}
+      <PlaceholderListIntro>
+        Set once and used by every FIR wherever the placeholder appears in a template.
+      </PlaceholderListIntro>
       <PlaceholderList>
-        <PlaceholderListTable nameHeading="Name" valueHeading="Value">
+        <PlaceholderListTable nameHeading="نام" valueHeading="قدر">
           {rows.map((row, index) => (
             <PlaceholderListRow key={row._tag === "Existing" ? row.id : `new-${index}`}>
               <PlaceholderListCell>
@@ -147,9 +180,8 @@ function GlobalValues({
                   </FieldLabel>
                   <Input
                     id={`global-label-${index}`}
-                    aria-label={`Placeholder name ${index + 1}`}
-                    lang="ur"
-                    dir="rtl"
+                    variant="cell"
+                    className="-ms-2.25"
                     required
                     disabled={saving}
                     value={row.label}
@@ -161,13 +193,12 @@ function GlobalValues({
               <PlaceholderListCell>
                 <Field data-disabled={saving}>
                   <FieldLabel className="sr-only" htmlFor={`global-value-${index}`}>
-                    Global value for {row.label || "new placeholder"}
+                    Value for {row.label || "new placeholder"}
                   </FieldLabel>
                   <Input
                     id={`global-value-${index}`}
-                    aria-label={`Global value for ${row.label || "new placeholder"}`}
-                    lang="ur"
-                    dir="rtl"
+                    variant="cell"
+                    className="-ms-2.25"
                     disabled={saving}
                     value={row.value}
                     placeholder="قدر درج کریں"
@@ -179,18 +210,15 @@ function GlobalValues({
                 {row._tag === "New" ? (
                   <Button
                     type="button"
-                    size="icon-sm"
-                    variant="ghost"
+                    size="icon-xs"
+                    variant="subtle"
                     disabled={saving}
                     aria-label="Remove new global placeholder"
-                    title="Remove"
                     onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
                   >
-                    <HugeiconsIcon icon={Cancel01Icon} />
+                    <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
                   </Button>
-                ) : (
-                  <span />
-                )}
+                ) : null}
               </PlaceholderListCell>
             </PlaceholderListRow>
           ))}
@@ -199,7 +227,7 @@ function GlobalValues({
           <Button
             type="button"
             size="sm"
-            variant="ghost"
+            variant="subtle"
             disabled={saving}
             onClick={() => {
               const index = rows.length;
@@ -209,28 +237,11 @@ function GlobalValues({
               );
             }}
           >
-            <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
-            Add global placeholder
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+            Add global value
           </Button>
         </PlaceholderListFooter>
       </PlaceholderList>
-      <PageFooter>
-        <span className="me-auto text-xs text-muted-foreground" role="status">
-          {dirty ? "Unsaved changes" : null}
-        </span>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={!dirty || saving}
-          onClick={() => setRows(saved)}
-        >
-          Reset
-        </Button>
-        <Button type="submit" disabled={!dirty || saving}>
-          {saving ? "Saving…" : "Save changes"}
-          <ShortcutKbd id="save" />
-        </Button>
-      </PageFooter>
     </form>
   );
 }

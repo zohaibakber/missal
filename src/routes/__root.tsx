@@ -1,7 +1,6 @@
-import { TemplateLayout } from "#/components/template-layout";
 import { AppSidebar } from "#/components/app-sidebar";
 import { KeyboardShortcutsProvider } from "#/components/keyboard-shortcuts";
-import { SiteHeader } from "#/components/site-header";
+import { TitleBar } from "#/components/title-bar";
 import { ThemeProvider } from "#/components/theme-provider";
 import { Button } from "#/components/ui/button";
 import { DirectionProvider } from "#/components/ui/direction";
@@ -16,7 +15,7 @@ import { SidebarInset, SidebarProvider } from "#/components/ui/sidebar";
 import { Toaster } from "#/components/ui/toast";
 import { TooltipProvider } from "#/components/ui/tooltip";
 import { useAppShortcuts } from "#/hooks/use-app-shortcuts";
-import { HeadContent, Link, Outlet, createRootRoute, useRouterState } from "@tanstack/react-router";
+import { HeadContent, Link, Outlet, createRootRoute } from "@tanstack/react-router";
 
 function NotFound() {
   return (
@@ -54,9 +53,6 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
-  const isTemplates = useRouterState({
-    select: (state) => state.location.pathname.startsWith("/templates"),
-  });
   useAppShortcuts();
 
   return (
@@ -66,18 +62,12 @@ function RootComponent() {
         <TooltipProvider>
           <DirectionProvider direction="ltr">
             <KeyboardShortcutsProvider>
-              <SidebarProvider className="h-svh min-h-0 flex-col overflow-hidden [--header-height:calc(var(--spacing)*10)]">
-                <SiteHeader />
+              <SidebarProvider className="h-svh min-h-0 flex-col overflow-hidden">
+                <TitleBar />
                 <div className="flex min-h-0 flex-1">
                   <AppSidebar />
-                  <SidebarInset className="min-h-0 overflow-y-auto">
-                    {isTemplates ? (
-                      <TemplateLayout>
-                        <Outlet />
-                      </TemplateLayout>
-                    ) : (
-                      <Outlet />
-                    )}
+                  <SidebarInset className="min-h-0 overflow-hidden">
+                    <Outlet />
                   </SidebarInset>
                 </div>
               </SidebarProvider>

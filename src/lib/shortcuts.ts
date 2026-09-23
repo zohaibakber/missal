@@ -23,11 +23,14 @@ export const shortcuts = {
   search: { keys: "/", label: "Search this page", group: "General" },
   save: { keys: "Mod+S", label: "Save", group: "General" },
   blurEditor: { keys: "Escape", label: "Leave the editor or field", group: "General" },
+  confirm: { keys: "Mod+Enter", label: "Confirm a selection", group: "General" },
 
   goHome: { keys: ["G", "H"], label: "Go to FIRs", group: "Navigation" },
   goTemplates: { keys: ["G", "T"], label: "Go to templates", group: "Navigation" },
   goPlaceholders: { keys: ["G", "P"], label: "Go to placeholders", group: "Navigation" },
   goSettings: { keys: ["G", "S"], label: "Go to settings", group: "Navigation" },
+  goBack: { keys: "Alt+ArrowLeft", label: "Back", group: "Navigation" },
+  goForward: { keys: "Alt+ArrowRight", label: "Forward", group: "Navigation" },
 
   newFir: { keys: "N", label: "New FIR", group: "FIRs" },
   nextRow: { keys: "J", label: "Next row", group: "FIRs" },

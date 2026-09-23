@@ -12,6 +12,9 @@ const inputVariants = cva(
           "rounded-lg border border-input bg-transparent px-2.5 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30",
         plain:
           "rounded-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent",
+        title:
+          "h-9 w-auto max-w-full min-w-48 rounded-none border-0 bg-transparent px-0 text-ur shadow-none field-sizing-content focus-visible:ring-0 md:text-ur dark:bg-transparent",
+        cell: "h-8 rounded-md border border-transparent bg-transparent px-2 hover:border-input focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive dark:bg-transparent dark:hover:bg-input/20",
       },
     },
     defaultVariants: {
