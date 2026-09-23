@@ -1,16 +1,17 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, protocol } from "electron";
 import squirrelStartup from "electron-squirrel-startup";
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { DESKTOP_THEME_CHANNEL, type DesktopTheme } from "./desktop-window";
-import { initializeDatabase } from "./electron/database";
+import { Effect } from "effect";
+import { registerStorageIpc } from "./electron/storage-ipc-main";
 import {
-  makeElectronMainRuntime,
+  makeStorageWorkerRuntime,
   resolveDatabasePath,
   resolveMigrationsFolder,
-} from "./electron/main-runtime";
-import { registerStorageIpc } from "./electron/storage-ipc-main";
+  StorageWorker,
+} from "./electron/storage-worker-client";
 
 const RENDERER_SCHEME = "missal";
 const RENDERER_HOST = "renderer";
@@ -46,6 +47,7 @@ protocol.registerSchemesAsPrivileged([
       supportFetchAPI: true,
       corsEnabled: true,
       stream: true,
+      codeCache: true,
     },
   },
 ]);
@@ -78,6 +80,7 @@ const createWindow = () => {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      v8CacheOptions: "bypassHeatCheck",
     },
   });
 
@@ -93,7 +96,13 @@ const createWindow = () => {
   void mainWindow.loadURL(`${RENDERER_SCHEME}://${RENDERER_HOST}/`);
 };
 
-const handleRendererProtocol = (request: Request) => {
+const isFile = (filePath: string) =>
+  fs.stat(filePath).then(
+    (stats) => stats.isFile(),
+    () => false,
+  );
+
+const handleRendererProtocol = async (request: Request) => {
   const url = new URL(request.url);
   const rendererRoot = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
   const requestedPath = url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname);
@@ -102,11 +111,11 @@ const handleRendererProtocol = (request: Request) => {
     filePath === rendererRoot || filePath.startsWith(`${rendererRoot}${path.sep}`);
 
   if (!isInsideRenderer) {
-    return Promise.resolve(new Response("Forbidden", { status: 403 }));
+    return new Response("Forbidden", { status: 403 });
   }
 
   const fallback = path.join(rendererRoot, "index.html");
-  const resolved = fs.existsSync(filePath) && fs.statSync(filePath).isFile() ? filePath : fallback;
+  const resolved = (await isFile(filePath)) ? filePath : fallback;
 
   return net.fetch(pathToFileURL(resolved).toString());
 };
@@ -122,35 +131,37 @@ const registerDesktopIntegration = () => {
 };
 
 const startApp = () => {
-  let storageRuntime: ReturnType<typeof makeElectronMainRuntime> | undefined;
+  let storageRuntime: ReturnType<typeof makeStorageWorkerRuntime> | undefined;
   let disposingStorage = false;
 
-  void app.whenReady().then(async () => {
+  void app.whenReady().then(() => {
     protocol.handle(RENDERER_SCHEME, handleRendererProtocol);
     registerDesktopIntegration();
 
-    storageRuntime = makeElectronMainRuntime({
-      databasePath: resolveDatabasePath(app.getPath("userData")),
-      migrationsFolder: resolveMigrationsFolder({
-        packaged: app.isPackaged,
-        resourcesPath: process.resourcesPath,
-        cwd: process.cwd(),
-      }),
+    storageRuntime = makeStorageWorkerRuntime({
+      workerPath: path.join(__dirname, "storage-worker.cjs"),
+      config: {
+        databasePath: resolveDatabasePath(app.getPath("userData")),
+        migrationsFolder: resolveMigrationsFolder({
+          packaged: app.isPackaged,
+          resourcesPath: process.resourcesPath,
+          cwd: process.cwd(),
+        }),
+      },
     });
 
-    try {
-      await storageRuntime.runPromise(initializeDatabase);
-    } catch (error) {
+    createWindow();
+    const storageReady = storageRuntime.runPromise(
+      Effect.flatMap(StorageWorker, (worker) => worker["Storage.open"]()),
+    );
+    registerStorageIpc(storageRuntime, storageReady);
+    storageReady.catch((error: unknown) => {
       dialog.showErrorBox(
         "Missal could not open the database",
         error instanceof Error ? error.message : "Storage operation failed",
       );
       app.quit();
-      return;
-    }
-
-    registerStorageIpc(storageRuntime);
-    createWindow();
+    });
   });
 
   nativeTheme.on("updated", () => {
@@ -184,7 +195,6 @@ const startApp = () => {
   });
 };
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (squirrelStartup) {
   app.quit();
 } else {

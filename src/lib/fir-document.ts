@@ -11,8 +11,6 @@ import { indexPlaceholders, Placeholder } from "#/lib/placeholder";
 import { IsoDateTimeString, NonEmptyTrimmedString } from "#/lib/schema";
 import { FirPlaceholderValue } from "#/lib/templates";
 
-export { FirDocumentId } from "#/lib/ids";
-
 export class FirDocumentSummary extends Schema.Class<FirDocumentSummary>("FirDocumentSummary")({
   id: FirDocumentId,
   firId: FirId,

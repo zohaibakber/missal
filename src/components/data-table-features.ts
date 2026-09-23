@@ -19,7 +19,6 @@ import {
   type TableFeatures,
 } from "@tanstack/react-table";
 
-/** Keeps rows whose value is one of the selected options (used by faceted filters). */
 const filterFn_oneOf = constructFilterFn({
   filter: (dataValue: unknown, filterValue: readonly unknown[]) => filterValue.includes(dataValue),
   autoRemove: (value: readonly unknown[] | undefined) => !value?.length,
@@ -55,7 +54,6 @@ declare module "@tanstack/react-table" {
     TData extends RowData,
     TValue extends CellData,
   > {
-    /** Plain-text column name for menus such as column visibility. */
     label?: string;
   }
 }

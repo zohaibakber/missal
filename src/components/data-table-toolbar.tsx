@@ -53,7 +53,6 @@ export function DataTableToolbar({ className, ...props }: ComponentProps<"div">)
   );
 }
 
-/** Global search; press `/` anywhere on the page to focus it. */
 export function DataTableSearch<TData extends RowData>({
   table,
   placeholder = "Search…",
@@ -108,7 +107,6 @@ export type FacetedFilterOption = {
   icon?: ReactNode;
 };
 
-/** Multi-select column filter in a popover, following the shadcn data-table faceted filter pattern. */
 export function DataTableFacetedFilter<TData extends RowData>({
   table,
   columnId,

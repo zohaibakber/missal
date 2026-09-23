@@ -24,26 +24,18 @@ export const MissalDrizzleLive = Layer.effect(
   MissalDrizzle,
   Effect.gen(function* () {
     const db = yield* SQLiteNodeDrizzle.makeWithDefaults();
-    yield* db.run(sql`PRAGMA foreign_keys = ON`).pipe(
-      Effect.catchTag("EffectDrizzleQueryError", () =>
-        Effect.fail(
-          new StorageError({
-            message: "Storage operation failed",
-            operation: "database.init",
-          }),
-        ),
-      ),
+    const initFailed = Effect.mapError(
+      () =>
+        new StorageError({
+          message: "Storage operation failed",
+          operation: "database.init",
+        }),
     );
-    const enabled = yield* db.get<{ foreign_keys: number }>(sql`PRAGMA foreign_keys`).pipe(
-      Effect.catchTag("EffectDrizzleQueryError", () =>
-        Effect.fail(
-          new StorageError({
-            message: "Storage operation failed",
-            operation: "database.init",
-          }),
-        ),
-      ),
-    );
+    yield* db.run(sql`PRAGMA foreign_keys = ON`).pipe(initFailed);
+    yield* db.run(sql`PRAGMA synchronous = NORMAL`).pipe(initFailed);
+    const enabled = yield* db
+      .get<{ foreign_keys: number }>(sql`PRAGMA foreign_keys`)
+      .pipe(initFailed);
 
     if (enabled?.foreign_keys !== 1) {
       return yield* new StorageError({
@@ -80,5 +72,3 @@ export const MissalDrizzleLive = Layer.effect(
     return db;
   }),
 ).pipe(Layer.provide(SqliteClientFromPathLive));
-
-export const initializeDatabase = Effect.asVoid(MissalDrizzle);

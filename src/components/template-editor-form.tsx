@@ -102,7 +102,7 @@ function EditTemplateForm({ templateId }: { templateId: TemplateId }) {
     );
   }
 
-  if (AsyncResult.isInitial(templateResult) || AsyncResult.isWaiting(templateResult)) {
+  if (AsyncResult.isInitial(templateResult)) {
     return (
       <div className="flex flex-col gap-4 p-6">
         <Skeleton className="h-8 w-40" />

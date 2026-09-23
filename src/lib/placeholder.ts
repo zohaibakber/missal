@@ -89,10 +89,6 @@ export function createDefaultPlaceholders() {
   );
 }
 
-export function isPlaceholderToken(token: string) {
-  return /^\d+$/.test(token) || /^[A-Za-z][A-Za-z0-9_]*$/.test(token);
-}
-
 export function resolvePlaceholder(
   token: string,
   index: PlaceholderIndex = indexPlaceholders([]),

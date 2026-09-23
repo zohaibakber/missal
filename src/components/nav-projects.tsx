@@ -25,9 +25,9 @@ function EmptyRecentFirs() {
 
 function RecentFirMenuItems() {
   const firs = useAtomValue(atoms.latestFirsAtom);
-  const { location } = useRouterState();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
 
-  if (AsyncResult.isInitial(firs) || AsyncResult.isWaiting(firs)) {
+  if (AsyncResult.isInitial(firs)) {
     return null;
   }
 
@@ -43,7 +43,7 @@ function RecentFirMenuItems() {
       <SidebarMenuItem key={fir.id}>
         <SidebarMenuButton
           render={<Link to="/$firId" params={{ firId: `${fir.id}` }} />}
-          isActive={location.pathname === url || location.pathname === `${url}/edit`}
+          isActive={pathname === url || pathname === `${url}/edit`}
           tooltip={`FIR ${fir.fir_no}`}
         >
           <HugeiconsIcon icon={File01Icon} strokeWidth={2} />

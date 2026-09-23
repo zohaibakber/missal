@@ -65,7 +65,7 @@ export class ElectronStorage extends Context.Service<
   }
 >()("missal/ElectronStorage") {}
 
-export const ElectronStorageLive = Layer.sync(ElectronStorage, () =>
+const ElectronStorageLive = Layer.sync(ElectronStorage, () =>
   ElectronStorage.of({
     request: (payload) => {
       const api = globalThis.window?.electronStorage;
@@ -127,7 +127,7 @@ const ipcExit = Effect.fn("ipcExit")(function* <A>(
   });
 });
 
-export const IpcPlaceholderRepositoryLive = Layer.effect(
+const IpcPlaceholderRepositoryLive = Layer.effect(
   PlaceholderRepository,
   Effect.gen(function* () {
     const storage = yield* ElectronStorage;
@@ -177,7 +177,7 @@ export const IpcPlaceholderRepositoryLive = Layer.effect(
   }),
 );
 
-export const IpcTemplateRepositoryLive = Layer.effect(
+const IpcTemplateRepositoryLive = Layer.effect(
   TemplateRepository,
   Effect.gen(function* () {
     const storage = yield* ElectronStorage;
@@ -208,7 +208,7 @@ export const IpcTemplateRepositoryLive = Layer.effect(
   }),
 );
 
-export const IpcFirRepositoryLive = Layer.effect(
+const IpcFirRepositoryLive = Layer.effect(
   FirRepository,
   Effect.gen(function* () {
     const storage = yield* ElectronStorage;
@@ -233,7 +233,7 @@ export const IpcFirRepositoryLive = Layer.effect(
   }),
 );
 
-export const IpcFirDocumentRepositoryLive = Layer.effect(
+const IpcFirDocumentRepositoryLive = Layer.effect(
   FirDocumentRepository,
   Effect.gen(function* () {
     const storage = yield* ElectronStorage;
@@ -285,7 +285,7 @@ export const IpcFirDocumentRepositoryLive = Layer.effect(
   }),
 );
 
-export const IpcFirPlaceholderValueRepositoryLive = Layer.effect(
+const IpcFirPlaceholderValueRepositoryLive = Layer.effect(
   FirPlaceholderValueRepository,
   Effect.gen(function* () {
     const storage = yield* ElectronStorage;
@@ -316,7 +316,7 @@ export const IpcFirPlaceholderValueRepositoryLive = Layer.effect(
   }),
 );
 
-export const IpcSettingsRepositoryLive = Layer.effect(
+const IpcSettingsRepositoryLive = Layer.effect(
   SettingsRepository,
   Effect.gen(function* () {
     const storage = yield* ElectronStorage;

@@ -14,11 +14,11 @@ import type { PlaceholderIndex } from "#/lib/placeholder";
 import { captureEditorEnvelope, loadEnvelopeIntoEditor } from "#/editor/envelope";
 import { $generateNodesFromDOM } from "@lexical/html";
 import { registerImportedStyleRendering } from "#/editor/html-config";
-import { prepareClipboardDom, registerClipboardImport } from "#/editor/import/convert";
+import { registerClipboardImport } from "#/editor/import/clipboard";
 import { FieldPresentationController } from "#/editor/presentation";
 import { registerCompletedTokenConversion, registerFieldRecognition } from "#/editor/recognition";
 
-export type EditorPhase =
+type EditorPhase =
   | { readonly _tag: "Loading" }
   | { readonly _tag: "Ready" }
   | { readonly _tag: "Importing"; readonly progress: number }
@@ -35,7 +35,7 @@ export type EditorUiState = {
   savePending: boolean;
 };
 
-export type CapturedEnvelope = {
+type CapturedEnvelope = {
   readonly envelope: DocumentEnvelope;
   readonly contentRevision: number;
 };
@@ -51,9 +51,9 @@ export type EditorSessionHandle = {
   dispose(): void;
 };
 
-export const HISTORY_MAX_DEPTH = 100;
+const HISTORY_MAX_DEPTH = 100;
 
-export function editorUiDefaults(): EditorUiState {
+function editorUiDefaults(): EditorUiState {
   return {
     canRedo: false,
     canUndo: false,
@@ -148,7 +148,10 @@ export function attachEditorSession(
       editor.setEditable(false);
       setPhase({ _tag: "Importing", progress: 0 });
       try {
-        const { importDocx } = await import("#/editor/import/docx");
+        const [{ importDocx }, { prepareClipboardDom }] = await Promise.all([
+          import("#/editor/import/docx"),
+          import("#/editor/import/convert"),
+        ]);
         const imported = await importDocx(file);
         if (disposed) {
           throw new Error("The template was closed before the import finished.");

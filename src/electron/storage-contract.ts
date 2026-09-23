@@ -24,8 +24,6 @@ import {
   TemplateUpdateInput,
 } from "#/lib/templates";
 
-export const STORAGE_CHANNEL = "app-storage:request";
-
 export const GlobalPlaceholderListRequest = Schema.TaggedStruct("Placeholder.listGlobals", {});
 export const GlobalPlaceholderSaveRequest = Schema.TaggedStruct("Placeholder.saveGlobals", {
   input: SaveGlobalPlaceholdersInput,
@@ -148,10 +146,10 @@ export const StorageRequest = Schema.Union([
 
 export type StorageRequest = typeof StorageRequest.Type;
 
-export const StorageSuccessResponse = Schema.TaggedStruct("Success", {
+const StorageSuccessResponse = Schema.TaggedStruct("Success", {
   value: Schema.Unknown,
 });
-export const StorageFailureResponse = Schema.TaggedStruct("Failure", {
+const StorageFailureResponse = Schema.TaggedStruct("Failure", {
   error: RepositoryError,
 });
 export const StorageResponse = Schema.Union([StorageSuccessResponse, StorageFailureResponse]);
@@ -171,4 +169,3 @@ export const FirDocumentRecordResult = FirDocumentRecord;
 export const FirDocumentSaveAckResult = FirDocumentSaveAck;
 export const FirPlaceholderValueListResult = Schema.Array(FirPlaceholderValue);
 export const FirValueContextResult = FirValueContext;
-export const VoidResult = Schema.Undefined;

@@ -62,8 +62,6 @@ export function registerCompletedTokenConversion(
       return;
     }
 
-    // Transform every dirty text node, including earlier paragraphs and table cells in a paste.
-    // Splitting preserves formatting and lets Lexical transform any remaining tokens in the tail.
     const start = match.index;
     const parts = node.splitText(start, start + match[0].length);
     const tokenNode = parts[start === 0 ? 0 : 1];

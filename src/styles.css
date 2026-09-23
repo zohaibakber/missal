@@ -147,6 +147,15 @@
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+  @media (prefers-reduced-motion: reduce) {
+    *:not(.animate-spin),
+    *:not(.animate-spin)::before,
+    *:not(.animate-spin)::after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 @keyframes toast-attention-a {
@@ -253,7 +262,6 @@
   color: #2563eb;
 }
 
-/* Lexical's theme names must have styles for formatting to remain visible. */
 .missal-text-bold {
   font-weight: 700;
 }
@@ -303,7 +311,6 @@
   direction: ltr;
 }
 
-/* Nastaleeq needs more vertical room than the Latin control font. */
 .missal-fir-form [data-slot="field-label"],
 .missal-fir-form [data-slot="field-legend"] {
   font-family: var(--font-urdu);
@@ -314,7 +321,6 @@
   font-size: 1.125rem;
 }
 
-/* Match ScrollArea on native overflow containers, including the editor. */
 *:not([data-slot="scroll-area-viewport"])::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -343,13 +349,10 @@
   }
 }
 
-/* Nastaleeq column headings are unreadable at the Latin UI size. */
 [data-slot="table-head"]:lang(ur) {
   font-size: 0.9375rem;
 }
 
-/* Page geometry comes from the imported document's layout; defaults suit a blank template. */
-/* Defaults mirror the print packet's `@page { size: A4; margin: 18mm }` so the editor shows what prints. */
 .missal-page {
   width: var(--page-width, 210mm);
   min-height: var(--page-height, 297mm);
@@ -359,7 +362,6 @@
   box-shadow: 0 0 0 1px var(--border);
 }
 
-/* Match print: block spacing comes from the document (e.g. Word margins), not browser defaults. */
 .missal-h1,
 .missal-h2,
 .missal-h3,

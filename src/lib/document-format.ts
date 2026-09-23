@@ -3,12 +3,12 @@ import { FieldReference } from "#/lib/field";
 
 export const DOCUMENT_FORMAT = "missal-lexical" as const;
 export const DOCUMENT_FORMAT_VERSION = 1 as const;
-export const PREVIEW_TEXT_LIMIT = 280;
+const PREVIEW_TEXT_LIMIT = 280;
 
-export const DocumentFormat = Schema.Literal(DOCUMENT_FORMAT);
-export const DocumentFormatVersion = Schema.Literal(DOCUMENT_FORMAT_VERSION);
+const DocumentFormat = Schema.Literal(DOCUMENT_FORMAT);
+const DocumentFormatVersion = Schema.Literal(DOCUMENT_FORMAT_VERSION);
 
-export const SerializedLexicalState = Schema.Unknown;
+const SerializedLexicalState = Schema.Unknown;
 
 const PageDimension = Schema.Number.pipe(Schema.check(Schema.isGreaterThan(0)));
 const PageMargin = Schema.Number.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)));
@@ -29,14 +29,14 @@ export class DocumentEnvelope extends Schema.Class<DocumentEnvelope>("DocumentEn
   pageLayout: Schema.optionalKey(PageLayout),
 }) {}
 
-export type SerializedLexicalNode = {
+type SerializedLexicalNode = {
   readonly type?: string;
   readonly text?: string;
   readonly children?: readonly unknown[];
   readonly reference?: unknown;
 };
 
-export const EMPTY_LEXICAL_STATE = {
+const EMPTY_LEXICAL_STATE = {
   root: {
     children: [
       {

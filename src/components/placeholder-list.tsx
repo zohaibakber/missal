@@ -9,7 +9,6 @@ import {
 } from "#/components/ui/table";
 import { cn } from "#/lib/utils";
 
-/** Editable name/value rows shared by both placeholder tabs, rendered as a shadcn table. */
 function PlaceholderList({ className, ...props }: ComponentProps<"div">) {
   return (
     <div

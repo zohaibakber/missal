@@ -1,4 +1,4 @@
-import { EditFirForm } from "#/components/create-fir-form";
+import { lazy, Suspense } from "react";
 import {
   Sheet,
   SheetContent,
@@ -9,7 +9,10 @@ import {
 import { toast } from "#/components/ui/toast";
 import type { FirRecord } from "#/lib/fir";
 
-/** The one place FIR details are edited, from both the FIR list and the FIR workspace. */
+const EditFirForm = lazy(() =>
+  import("#/components/create-fir-form").then((module) => ({ default: module.EditFirForm })),
+);
+
 export function EditFirSheet({
   fir,
   open,
@@ -26,14 +29,16 @@ export function EditFirSheet({
           <SheetTitle>Edit FIR {fir.fir_no}</SheetTitle>
           <SheetDescription>Case details are used by every document in this FIR.</SheetDescription>
         </SheetHeader>
-        <EditFirForm
-          className="min-h-0 flex-1"
-          fir={fir}
-          onSuccess={() => {
-            onOpenChange(false);
-            toast.add({ title: "FIR details saved", type: "success" });
-          }}
-        />
+        <Suspense fallback={null}>
+          <EditFirForm
+            className="min-h-0 flex-1"
+            fir={fir}
+            onSuccess={() => {
+              onOpenChange(false);
+              toast.add({ title: "FIR details saved", type: "success" });
+            }}
+          />
+        </Suspense>
       </SheetContent>
     </Sheet>
   );

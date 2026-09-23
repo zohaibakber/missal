@@ -25,10 +25,6 @@ function parseId<A>(schema: Schema.ConstraintDecoder<A>, value: string): A | und
   return Option.getOrUndefined(Schema.decodeUnknownOption(schema)(Number(value)));
 }
 
-export function parsePlaceholderId(value: string) {
-  return parseId(PlaceholderId, value);
-}
-
 export function parseTemplateId(value: string) {
   return parseId(TemplateId, value);
 }

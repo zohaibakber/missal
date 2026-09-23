@@ -39,7 +39,7 @@ export function printEnvelopePacket(sections: readonly EnvelopePrintSection[], t
   return printHtmlDocument(printPacketFromSections(htmlSectionsFrom(sections), title), title);
 }
 
-export function printHtmlDocument(html: string, title: string) {
+function printHtmlDocument(html: string, title: string) {
   const existingFrame = document.getElementById("fir-print-frame");
   existingFrame?.remove();
 

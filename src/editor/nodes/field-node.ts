@@ -21,7 +21,7 @@ const parseFieldReference = (value: unknown): FieldReference => {
   return Option.getOrElse(decoded, () => UnresolvedTokenReference.make({ text: "" }));
 };
 
-export const fieldReferenceState = createState("reference", {
+const fieldReferenceState = createState("reference", {
   parse: parseFieldReference,
 });
 

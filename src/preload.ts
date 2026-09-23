@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { DESKTOP_THEME_CHANNEL, type ElectronThemeApi } from "./desktop-window";
-import { STORAGE_CHANNEL } from "./electron/storage-contract";
+import { STORAGE_CHANNEL } from "./electron/storage-channel";
 
 const electronTheme: ElectronThemeApi = {
   setSource: (source) => ipcRenderer.send(DESKTOP_THEME_CHANNEL, source),

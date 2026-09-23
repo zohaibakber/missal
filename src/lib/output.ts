@@ -1,49 +1,10 @@
+import { Match } from "effect";
+import type { PageLayout } from "#/lib/document-format";
+
 export const URDU_FONT_FAMILY = "Jameel Noori Nastaleeq";
 export const URDU_FONT_URL = "/Jameel%20Noori%20Nastaleeq.ttf";
-import { Match, Schema } from "effect";
-import { DocumentEnvelope, type PageLayout } from "#/lib/document-format";
-import { FirDocumentId } from "#/lib/ids";
 
-export const OutputJobStatus = Schema.Literals([
-  "success",
-  "cancelled",
-  "emptySelection",
-  "unresolvedFields",
-  "preparationFailed",
-  "rendererFailed",
-  "fileWriteFailed",
-  "dialogDismissed",
-]);
-
-export type OutputJobStatus = typeof OutputJobStatus.Type;
-
-export class UnresolvedFieldNotice extends Schema.Class<UnresolvedFieldNotice>(
-  "UnresolvedFieldNotice",
-)({
-  documentId: FirDocumentId,
-  label: Schema.String,
-  token: Schema.String,
-}) {}
-
-export class OutputDocumentOverride extends Schema.Class<OutputDocumentOverride>(
-  "OutputDocumentOverride",
-)({
-  documentId: FirDocumentId,
-  document: DocumentEnvelope,
-}) {}
-
-export class OutputSelection extends Schema.Class<OutputSelection>("OutputSelection")({
-  documentIds: Schema.Array(FirDocumentId).pipe(Schema.check(Schema.isMinLength(1))),
-  activeOverride: Schema.optionalKey(OutputDocumentOverride),
-}) {}
-
-export class OutputJobResult extends Schema.Class<OutputJobResult>("OutputJobResult")({
-  status: OutputJobStatus,
-  message: Schema.optionalKey(Schema.String),
-  unresolved: Schema.optionalKey(Schema.Array(UnresolvedFieldNotice)),
-}) {}
-
-export function escapeOutputHtml(value: string) {
+function escapeOutputHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -53,7 +14,7 @@ export function escapeOutputHtml(value: string) {
 
 type SectionPage = { readonly name: string; readonly layout: PageLayout };
 
-export function documentSectionHtml(html: string, startOnNewPage: boolean, page?: SectionPage) {
+function documentSectionHtml(html: string, startOnNewPage: boolean, page?: SectionPage) {
   const pageClass = startOnNewPage ? " missal-print-break" : "";
   // Side margins are padding, not @page margins: Chromium clips anything drawn in the page margin,
   // and Word documents often indent text and tables into it.
@@ -63,11 +24,11 @@ export function documentSectionHtml(html: string, startOnNewPage: boolean, page?
   return `<section class="missal-print-document${pageClass}"${pageStyle}>${html}</section>`;
 }
 
-export function previewSectionHtml(previewText: string, startOnNewPage: boolean) {
+function previewSectionHtml(previewText: string, startOnNewPage: boolean) {
   return documentSectionHtml(`<p>${escapeOutputHtml(previewText)}</p>`, startOnNewPage);
 }
 
-export function printablePacketHtml(content: string, title: string, pageRules = "") {
+function printablePacketHtml(content: string, title: string, pageRules = "") {
   return `<!doctype html>
 <html lang="ur" dir="rtl">
   <head>

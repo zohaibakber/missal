@@ -109,20 +109,3 @@ export const createEmptyFirRecord = (): FirFormValues => ({
   investigation_officer: "",
   status: "Open",
 });
-
-export const normalizeFirText = (value: unknown) => {
-  if (typeof value === "string") {
-    return value.replace(/\s+/g, " ").trim();
-  }
-
-  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
-    return `${value}`.replace(/\s+/g, " ").trim();
-  }
-
-  return "";
-};
-
-export const sanitizePhoneLikeValue = (value: unknown) =>
-  normalizeFirText(value)
-    .replace(/[^\d+\-\s]/g, "")
-    .trim();

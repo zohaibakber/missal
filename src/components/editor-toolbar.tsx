@@ -11,6 +11,7 @@ import {
   UNDO_COMMAND,
   REDO_COMMAND,
   SELECTION_CHANGE_COMMAND,
+  TEXT_TYPE_TO_FORMAT,
   type TextFormatType,
   type ElementFormatType,
 } from "lexical";
@@ -45,7 +46,6 @@ const formats = [
   { value: "underline", label: "Underline", keys: "Mod+U", icon: TextUnderlineIcon },
 ] satisfies { value: TextFormatType; label: string; keys: Hotkey; icon: ToolbarIcon }[];
 
-/** Lexical owns these bindings; the toolbar only displays them. */
 function TooltipLabel({ label, keys }: { label: string; keys?: Hotkey }) {
   return (
     <>
@@ -98,7 +98,7 @@ function ToolbarButton({
 
 export function EditorToolbar() {
   const [editor] = useLexicalComposerContext();
-  const [activeFormats, setActiveFormats] = useState<string[]>([]);
+  const [format, setFormat] = useState(0);
   const [alignment, setAlignment] = useState<string>("right");
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -107,9 +107,7 @@ export function EditorToolbar() {
     function updateSelection() {
       const selection = $getSelection();
       if (!$isRangeSelection(selection)) return;
-      setActiveFormats(
-        formats.filter((format) => selection.hasFormat(format.value)).map((format) => format.value),
-      );
+      setFormat(selection.format);
       const node = selection.anchor.getNode();
       const element = node.getTopLevelElement();
       setAlignment(element?.getFormatType() || "right");
@@ -164,7 +162,15 @@ export function EditorToolbar() {
         onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)}
       />
       <Separator orientation="vertical" className="mx-2 h-4" />
-      <ToggleGroup multiple value={activeFormats} aria-label="Text style" size="sm" spacing={0}>
+      <ToggleGroup
+        multiple
+        value={formats
+          .filter((item) => format & TEXT_TYPE_TO_FORMAT[item.value])
+          .map((item) => item.value)}
+        aria-label="Text style"
+        size="sm"
+        spacing={0}
+      >
         {formats.map((format) => (
           <Tooltip key={format.value}>
             <TooltipTrigger

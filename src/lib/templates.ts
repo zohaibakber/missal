@@ -45,10 +45,6 @@ export class TemplateSaveAck extends Schema.Class<TemplateSaveAck>("TemplateSave
   fieldCount: Schema.Int,
 }) {}
 
-export class TemplateSearchInput extends Schema.Class<TemplateSearchInput>("TemplateSearchInput")({
-  query: Schema.String,
-}) {}
-
 export class FirPlaceholderValue extends Schema.Class<FirPlaceholderValue>("FirPlaceholderValue")({
   firId: FirId,
   placeholderId: PlaceholderId,

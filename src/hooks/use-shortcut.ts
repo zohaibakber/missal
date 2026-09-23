@@ -16,19 +16,15 @@ const OVERLAY_SELECTOR = ["dialog", "alertdialog", "menu", "listbox"]
   .map((role) => `[role="${role}"][data-open]`)
   .join(",");
 
-/** True while a modal, menu or listbox is open, so page shortcuts don't fire behind it. */
-export function isOverlayOpen() {
+function isOverlayOpen() {
   return document.querySelector(OVERLAY_SELECTOR) !== null;
 }
 
 type UseShortcutOptions = Pick<UseHotkeyOptions, "enabled" | "ignoreInputs" | "target"> & {
-  /** Fire even while a dialog or menu is open. */
   allowInOverlay?: boolean;
 };
 
-// Several handlers may share a key: pages briefly overlap during route transitions, and the
-// Placeholders tabs stay mounted with only the active tab's Save enabled. `enabled` and mounting
-// decide which one acts, so keep every registration instead of warning or replacing.
+// Handlers can share a key (overlapping route transitions, tabs that stay mounted); `enabled` decides.
 const CONFLICT_BEHAVIOR = "allow";
 
 function guard(callback: HotkeyCallback, allowInOverlay: boolean): HotkeyCallback {
@@ -38,7 +34,6 @@ function guard(callback: HotkeyCallback, allowInOverlay: boolean): HotkeyCallbac
   };
 }
 
-/** Binds a chord from the shared registry, so its keys always match what the UI displays. */
 export function useShortcut(
   id: ChordShortcutId,
   callback: HotkeyCallback,
@@ -50,7 +45,6 @@ export function useShortcut(
   });
 }
 
-/** Binds a Vim-style key sequence (e.g. `G` then `H`) from the shared registry. */
 export function useSequenceShortcut(
   id: SequenceShortcutId,
   callback: HotkeyCallback,

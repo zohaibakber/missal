@@ -5,12 +5,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip
 import type { ShortcutId } from "#/lib/shortcuts";
 
 type IconActionProps = Omit<ComponentProps<typeof Button>, "size" | "aria-label"> & {
-  /** Accessible name and tooltip text. */
   label: string;
   shortcut?: ShortcutId;
 };
 
-/** Icon-only secondary action; the label and key hint live in its tooltip. */
 export function IconAction({ label, shortcut, variant = "ghost", ...props }: IconActionProps) {
   return (
     <Tooltip>

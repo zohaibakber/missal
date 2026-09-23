@@ -22,8 +22,6 @@ import type { PlaceholderIndex } from "#/lib/placeholder";
 import { EditorToolbar } from "#/components/editor-toolbar";
 import { cn } from "#/lib/utils";
 
-export type DocumentEditorHandle = EditorSessionHandle;
-
 function EditableToolbar() {
   const editable = useLexicalEditable();
   return editable ? <EditorToolbar /> : null;

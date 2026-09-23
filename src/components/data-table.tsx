@@ -41,7 +41,6 @@ export type DataTableInstance<TData extends RowData> = ReactTable<DataTableFeatu
 
 const PAGE_SIZES = [10, 20, 50, 100] as const;
 
-/** Table state lives in the v9 table store, so toolbar, body and pagination compose around one instance. */
 export function useDataTable<TData extends RowData>({
   columns,
   data,
@@ -72,16 +71,11 @@ function isInteractiveElement(target: EventTarget | null) {
 
 type DataTableProps<TData extends RowData> = {
   table: DataTableInstance<TData>;
-  /** Called on click, Enter or Space on a row. */
   onRowActivate?: (row: TData) => void;
   dir?: "ltr" | "rtl";
   lang?: string;
 };
 
-/**
- * Rows use a roving tab stop: Tab enters the table once, then J/K (or ↓/↑) move between rows,
- * X toggles selection and Enter opens the row.
- */
 export function DataTable<TData extends RowData>({
   table,
   onRowActivate,

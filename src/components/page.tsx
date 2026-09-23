@@ -14,7 +14,6 @@ const pageVariants = cva("mx-auto flex w-full flex-col gap-6 p-6", {
   },
 });
 
-/** Scrolling content page (lists, forms, settings). Editors use full-bleed workspaces instead. */
 function Page({
   className,
   width,
@@ -69,14 +68,13 @@ function PageActions({ className, ...props }: ComponentProps<"div">) {
   );
 }
 
-/** Sticky action bar for forms: secondary actions first, primary action last (right-most). */
 function PageFooter({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="page-footer"
       dir="ltr"
       className={cn(
-        "sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t bg-background/95 py-3 backdrop-blur supports-backdrop-filter:bg-background/80",
+        "sticky bottom-0 z-10 flex items-center justify-end gap-2 border-t bg-background py-3",
         className,
       )}
       {...props}

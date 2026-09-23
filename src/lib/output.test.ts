@@ -37,7 +37,6 @@ it("prints mixed paper sizes with each document's imported margins", () => {
     "@page missalDocument0 { size: 215.9mm 355.6mm; margin: 12.7mm 0 15mm 0; }",
   );
   expect(html).toContain("@page missalDocument1 { size: 210mm 297mm; margin: 18mm 0 18mm 0; }");
-  // Side margins are section padding so content indented into the margin isn't clipped.
   expect(html).toContain(
     'class="missal-print-document" style="page: missalDocument0; padding: 0 20mm 0 25.4mm"',
   );

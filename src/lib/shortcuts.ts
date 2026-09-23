@@ -1,7 +1,6 @@
 import type { Hotkey } from "@tanstack/react-hotkeys";
 
 export type Shortcut = {
-  /** A single chord, or a Vim-style sequence of chords pressed one after another. */
   keys: Hotkey | readonly Hotkey[];
   label: string;
   group: ShortcutGroup;
@@ -17,7 +16,6 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   "Templates",
 ];
 
-/** Single source of truth for every keyboard shortcut: bindings, command menu hints and the cheatsheet. */
 export const shortcuts = {
   commandMenu: { keys: "Mod+K", label: "Open command menu", group: "General" },
   cheatsheet: { keys: "?", label: "Show keyboard shortcuts", group: "General" },

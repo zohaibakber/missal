@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { makeElectronMainRuntime } from "#/electron/main-runtime";
+import { makeStorageRuntime } from "#/electron/storage-runtime";
 import { dispatchStorageRequest } from "#/electron/storage-dispatch";
 import { GlobalPlaceholder, SaveGlobalPlaceholdersInput } from "#/lib/global-placeholder";
 import { PlaceholderRepository, FirRepository } from "#/repositories/index";
@@ -17,7 +17,7 @@ it("saves arbitrary global placeholders atomically and resolves the same values 
     databasePath: join(directory, "test.sqlite"),
     migrationsFolder: resolve("drizzle"),
   };
-  let runtime = makeElectronMainRuntime(options);
+  let runtime = makeStorageRuntime(options);
   try {
     const initial = await runtime.runPromise(
       Effect.flatMap(PlaceholderRepository, (repo) => repo.listGlobals),
@@ -79,7 +79,6 @@ it("saves arbitrary global placeholders atomically and resolves the same values 
         ),
       ).toEqual({ text: "علی", unresolved: false });
     }
-    // A bad row must roll back an earlier valid rename and newly inserted field.
     const failed = await runtime.runPromiseExit(
       Effect.flatMap(PlaceholderRepository, (repo) =>
         repo.saveGlobals(
@@ -95,12 +94,11 @@ it("saves arbitrary global placeholders atomically and resolves the same values 
     );
     expect(failed._tag).toBe("Failure");
     await runtime.dispose();
-    runtime = makeElectronMainRuntime(options);
+    runtime = makeStorageRuntime(options);
     const reopened = await runtime.runPromise(
       Effect.flatMap(PlaceholderRepository, (repo) => repo.listGlobals),
     );
     expect(reopened).toEqual(saved);
-    // Exercise the actual IPC encode/decode boundary as well as repository writes.
     const response = await runtime.runPromise(
       dispatchStorageRequest({
         _tag: "Placeholder.saveGlobals",

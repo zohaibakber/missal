@@ -65,7 +65,7 @@ export class PageBreakNode extends DecoratorNode<null> {
   }
 }
 
-export function $createPageBreakNode() {
+function $createPageBreakNode() {
   return $applyNodeReplacement(new PageBreakNode());
 }
 

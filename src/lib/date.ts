@@ -1,6 +1,6 @@
 import { format, isValid, parse, parseISO } from "date-fns";
 
-export const DATE_FORMAT = "dd-MM-yyyy";
+const DATE_FORMAT = "dd-MM-yyyy";
 
 const PARSE_FORMATS = [DATE_FORMAT, "dd.MM.yyyy", "MMMM d, yyyy"] as const;
 

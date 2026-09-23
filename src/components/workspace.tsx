@@ -1,7 +1,6 @@
 import type { ComponentProps } from "react";
 import { cn } from "#/lib/utils";
 
-/** Top bar of a full-bleed editor workspace (FIR and template editors): identity left, actions right. */
 export function WorkspaceHeader({ className, ...props }: ComponentProps<"header">) {
   return (
     <header
