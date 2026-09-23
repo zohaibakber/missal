@@ -17,10 +17,11 @@ const RENDERER_SCHEME = "missal";
 const RENDERER_HOST = "renderer";
 const TITLEBAR_HEIGHT = 40;
 const TITLEBAR_COLOR = "#01000000";
-const TITLEBAR_LIGHT_SYMBOL_COLOR = "#1f2937";
-const TITLEBAR_DARK_SYMBOL_COLOR = "#f8fafc";
+const TITLEBAR_LIGHT_SYMBOL_COLOR = "#404040";
+const TITLEBAR_DARK_SYMBOL_COLOR = "#d4d4d4";
 
-const windowBackground = () => (nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff");
+// Matches --sidebar in styles.css so the window never flashes a different shade behind the chrome.
+const windowBackground = () => (nativeTheme.shouldUseDarkColors ? "#0c0c0c" : "#f5f5f5");
 
 const titleBarOptions = (): Pick<
   Electron.BrowserWindowConstructorOptions,

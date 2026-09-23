@@ -33,17 +33,6 @@ function PaneTitle({ className, ...props }: ComponentProps<"h1">) {
   );
 }
 
-/** Quiet secondary text next to the title, e.g. a count. */
-function PaneMeta({ className, ...props }: ComponentProps<"span">) {
-  return (
-    <span
-      data-slot="pane-meta"
-      className={cn("text-sm text-muted-foreground tabular-nums", className)}
-      {...props}
-    />
-  );
-}
-
 function PaneActions({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
@@ -131,7 +120,6 @@ export {
   PaneActionsProvider,
   PaneBody,
   PaneHeader,
-  PaneMeta,
   PaneStatusBar,
   PaneTitle,
   SaveStatus,

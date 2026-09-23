@@ -325,7 +325,7 @@ function TemplateEditorWorkspace({
           onChange={(event) => setName(event.target.value)}
         />
         <PaneActions>
-          <SaveStatus dirty={dirty} />
+          {selectedTemplate || dirty ? <SaveStatus dirty={dirty} /> : null}
           <input
             ref={fileInputRef}
             type="file"
@@ -417,7 +417,7 @@ function TemplateEditorWorkspace({
           if (!open) setPendingImport(null);
         }}
       >
-        <AlertDialogContent size="sm">
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Replace template content?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -439,11 +439,11 @@ function TemplateEditorWorkspace({
         </AlertDialogContent>
       </AlertDialog>
       <AlertDialog onOpenChange={setIsDeleteDialogOpen} open={isDeleteDialogOpen}>
-        <AlertDialogContent size="sm">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete template</AlertDialogTitle>
+            <AlertDialogTitle>Delete this template?</AlertDialogTitle>
             <AlertDialogDescription>
-              Templates in use by saved FIR documents cannot be deleted.
+              This can't be undone. Templates that an FIR's documents use can't be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

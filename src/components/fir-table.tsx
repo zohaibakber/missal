@@ -131,11 +131,23 @@ export function FirsPane() {
 function FirBrowser({ data }: { data: readonly FirRecord[] }) {
   const navigate = useNavigate();
   const table = useDataTable({ columns: firColumns, data: [...data], initialSorting });
+  // Targets outlive their `open` flags so the sheet and dialog keep their content while closing.
   const [editing, setEditing] = useState<FirRecord | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
   const [deleting, setDeleting] = useState<readonly FirRecord[]>([]);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const selected = table.getSelectedRowModel().rows.map((row) => row.original);
   const visibleCount = table.getRowModel().rows.length;
-  const actions: FirRowActions = { edit: setEditing, remove: setDeleting };
+  const actions: FirRowActions = {
+    edit: (fir) => {
+      setEditing(fir);
+      setEditOpen(true);
+    },
+    remove: (firs) => {
+      setDeleting(firs);
+      setDeleteOpen(true);
+    },
+  };
   const open = (fir: FirRecord) => void navigate({ to: "/$firId", params: { firId: `${fir.id}` } });
 
   return (
@@ -170,14 +182,14 @@ function FirBrowser({ data }: { data: readonly FirRecord[] }) {
                   <HugeiconsIcon icon={ArrowUpRight01Icon} strokeWidth={2} />
                   Open
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => setEditing(fir)}>
+                <ContextMenuItem onClick={() => actions.edit(fir)}>
                   <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
                   Edit details
                 </ContextMenuItem>
               </ContextMenuGroup>
               <ContextMenuSeparator />
               <ContextMenuGroup>
-                <ContextMenuItem variant="destructive" onClick={() => setDeleting([fir])}>
+                <ContextMenuItem variant="destructive" onClick={() => actions.remove([fir])}>
                   <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
                   Delete
                 </ContextMenuItem>
@@ -197,7 +209,7 @@ function FirBrowser({ data }: { data: readonly FirRecord[] }) {
                 variant="destructive"
                 size="xs"
                 className="ms-auto"
-                onClick={() => setDeleting(selected)}
+                onClick={() => actions.remove(selected)}
               >
                 Delete {selected.length === 1 ? "FIR" : `${selected.length} FIRs`}
               </Button>
@@ -209,18 +221,11 @@ function FirBrowser({ data }: { data: readonly FirRecord[] }) {
           )}
         </PaneStatusBar>
       </Pane>
-      {editing ? (
-        <EditFirSheet
-          fir={editing}
-          open
-          onOpenChange={(isOpen) => {
-            if (!isOpen) setEditing(null);
-          }}
-        />
-      ) : null}
+      {editing ? <EditFirSheet fir={editing} open={editOpen} onOpenChange={setEditOpen} /> : null}
       <DeleteFirsDialog
         firs={deleting}
-        onClose={() => setDeleting([])}
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
         onDeleted={() => table.resetRowSelection()}
       />
     </FirRowActionsContext>
@@ -229,10 +234,12 @@ function FirBrowser({ data }: { data: readonly FirRecord[] }) {
 
 function DeleteFirsDialog({
   firs,
+  open,
   onClose,
   onDeleted,
 }: {
   firs: readonly FirRecord[];
+  open: boolean;
   onClose: () => void;
   onDeleted: () => void;
 }) {
@@ -258,8 +265,8 @@ function DeleteFirsDialog({
   }
 
   return (
-    <AlertDialog open={firs.length > 0} onOpenChange={(open) => !open && onClose()}>
-      <AlertDialogContent size="sm">
+    <AlertDialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
             {firs.length === 1 && first

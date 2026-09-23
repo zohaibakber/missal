@@ -324,8 +324,10 @@ function FirFormFields({ className }: { className?: string }) {
                   <SelectGroup>
                     {FIR_STATUS_OPTIONS.map((status) => (
                       <SelectItem key={status} value={status}>
-                        <FirStatusDot status={status} />
-                        <span className="text-ur">{getFirStatusLabel(status)}</span>
+                        <span className="flex items-center gap-2 text-ur">
+                          <FirStatusDot status={status} />
+                          {getFirStatusLabel(status)}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectGroup>

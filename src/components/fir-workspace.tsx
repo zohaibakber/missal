@@ -412,7 +412,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
                 <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
               </DropdownMenuTrigger>
             </Hint>
-            <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuContent align="end" className="w-72">
               <DropdownMenuGroup>
                 <DropdownMenuSwitchItem
                   checked={displayMode === "labels"}
@@ -424,13 +424,6 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
                     <ShortcutKbd id="toggleFieldNames" />
                   </DropdownMenuShortcut>
                 </DropdownMenuSwitchItem>
-                <DropdownMenuItem onClick={() => setDetailsOpen(true)}>
-                  <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
-                  Edit FIR details
-                  <DropdownMenuShortcut>
-                    <ShortcutKbd id="editFir" />
-                  </DropdownMenuShortcut>
-                </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
@@ -441,18 +434,20 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Hint label="Save document" shortcut="save">
-            <Button
-              className="ms-1"
-              size="sm"
-              disabled={!dirty || savePending}
-              onClick={() => void handleSave()}
-              type="button"
-            >
-              {savePending ? <Spinner data-icon="inline-start" /> : null}
-              Save
-            </Button>
-          </Hint>
+          {activeDocument ? (
+            <Hint label="Save document" shortcut="save">
+              <Button
+                className="ms-1"
+                size="sm"
+                disabled={!dirty || savePending}
+                onClick={() => void handleSave()}
+                type="button"
+              >
+                {savePending ? <Spinner data-icon="inline-start" /> : null}
+                Save
+              </Button>
+            </Hint>
+          ) : null}
         </PaneActions>
       </PaneHeader>
 
@@ -499,14 +494,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
                 ))}
               </SidebarMenu>
             ) : (
-              <Empty size="sm">
-                <EmptyHeader>
-                  <EmptyTitle>No documents</EmptyTitle>
-                  <EmptyDescription>
-                    Press <ShortcutKbd id="addTemplates" /> to add templates.
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
+              <p className="px-4 py-3 text-xs text-muted-foreground">No documents yet</p>
             )}
           </div>
           {documents.length ? (
@@ -562,7 +550,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
       <EditFirSheet fir={fir} open={detailsOpen} onOpenChange={setDetailsOpen} />
 
       <AlertDialog onOpenChange={setIsDeleteFirOpen} open={isDeleteFirOpen}>
-        <AlertDialogContent size="sm">
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete FIR {fir.fir_no}?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -586,7 +574,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
       </AlertDialog>
 
       <AlertDialog onOpenChange={(open) => !open && setPendingId(null)} open={pendingId !== null}>
-        <AlertDialogContent size="sm">
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Save changes first?</AlertDialogTitle>
             <AlertDialogDescription>

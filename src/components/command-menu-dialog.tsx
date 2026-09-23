@@ -116,7 +116,7 @@ function CommandMenuContent({ close }: { close: () => void }) {
   return (
     <Command>
       <CommandInput
-        placeholder="Search FIRs, templates and actions…"
+        placeholder="Search FIRs, templates and commands…"
         value={search}
         onValueChange={setSearch}
       />
