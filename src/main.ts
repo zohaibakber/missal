@@ -3,7 +3,12 @@ import squirrelStartup from "electron-squirrel-startup";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { DESKTOP_THEME_CHANNEL, type DesktopTheme } from "./desktop-window";
+import {
+  DESKTOP_PRINT_PDF_CHANNEL,
+  DESKTOP_THEME_CHANNEL,
+  type DesktopTheme,
+} from "./desktop-window";
+import { renderPrintPdf } from "./electron/print-pdf";
 import { Effect } from "effect";
 import { registerStorageIpc } from "./electron/storage-ipc-main";
 import {
@@ -125,9 +130,23 @@ const isDesktopTheme = (theme: unknown): theme is DesktopTheme => {
   return theme === "dark" || theme === "light" || theme === "system";
 };
 
+const rendererOrigin = () =>
+  MAIN_WINDOW_VITE_DEV_SERVER_URL
+    ? new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL).origin
+    : `${RENDERER_SCHEME}://${RENDERER_HOST}`;
+
 const registerDesktopIntegration = () => {
   ipcMain.on(DESKTOP_THEME_CHANNEL, (_event, theme: unknown) => {
     if (isDesktopTheme(theme)) nativeTheme.themeSource = theme;
+  });
+
+  ipcMain.handle(DESKTOP_PRINT_PDF_CHANNEL, (event, html: unknown) => {
+    const origin = rendererOrigin();
+    const senderUrl = event.senderFrame?.url;
+    if (typeof html !== "string" || !senderUrl || new URL(senderUrl).origin !== origin) {
+      throw new Error("Print preview request rejected");
+    }
+    return renderPrintPdf(origin, html);
   });
 };
 

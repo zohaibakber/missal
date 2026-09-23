@@ -22,6 +22,7 @@ import { EditFirSheet } from "#/components/edit-fir-sheet";
 import { FirStatusBadge } from "#/components/fir-status-badge";
 import { Hint } from "#/components/hint";
 import { IconAction } from "#/components/icon-action";
+import { PrintPreview } from "#/components/print-preview";
 import {
   Pane,
   PaneActions,
@@ -88,7 +89,7 @@ import {
 import { Skeleton } from "#/components/ui/skeleton";
 import { Spinner } from "#/components/ui/spinner";
 import { toast } from "#/components/ui/toast";
-import { printEnvelopePacket } from "#/editor/html-export";
+import { envelopePrintPacket, printPacket, type PrintPacket } from "#/editor/html-export";
 import type { EditorSessionHandle } from "#/editor/session";
 import { useShortcut } from "#/hooks/use-shortcut";
 import { catalogFieldPresentation, type FieldDisplayMode } from "#/lib/field";
@@ -136,6 +137,8 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
   const activeDocument =
     activeId && AsyncResult.isSuccess(activeDocumentResult) ? activeDocumentResult.value : null;
   const [addTemplatesOpen, setAddTemplatesOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewPacket, setPreviewPacket] = useState<PrintPacket | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [savePending, setSavePending] = useState(false);
@@ -196,6 +199,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
   if (AsyncResult.isFailure(documentsResult)) return <FirWorkspaceError />;
 
   const fir = firResult.value;
+  const printTitle = `FIR ${fir.fir_no}`;
 
   function selectDocument(id: FirDocumentId) {
     if (id === activeId) {
@@ -320,11 +324,12 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
     void navigate({ to: "/" });
   }
 
-  async function handlePrint() {
+  /** Gathers the documents marked for printing, using the live editor state for the open one. */
+  async function buildPrintPacket(): Promise<PrintPacket | null> {
     const selected = documents.filter((document) => outputIds.has(document.id));
     if (!selected.length) {
       toast.add({ title: "Select at least one document to print", type: "warning" });
-      return;
+      return null;
     }
 
     const captured =
@@ -332,20 +337,34 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
     const result = await loadPrintDocuments(selected.map((document) => document.id));
     if (Exit.isFailure(result)) {
       toast.add({ title: getRepositoryErrorMessage(result), type: "error" });
+      return null;
+    }
+    return envelopePrintPacket(
+      result.value.map((document) => ({
+        _tag: "Envelope",
+        envelope:
+          document.id === activeDocument?.id && captured ? captured.envelope : document.document,
+        presentation,
+      })),
+      printTitle,
+    );
+  }
+
+  async function openPrintPreview() {
+    if (!outputIds.size) {
+      toast.add({ title: "Select at least one document to print", type: "warning" });
       return;
     }
-    const title = `FIR ${fir.fir_no}`;
-    if (
-      !printEnvelopePacket(
-        result.value.map((document) => ({
-          _tag: "Envelope",
-          envelope:
-            document.id === activeDocument?.id && captured ? captured.envelope : document.document,
-          presentation,
-        })),
-        title,
-      )
-    ) {
+    setPreviewPacket(null);
+    setPreviewOpen(true);
+    const packet = await buildPrintPacket();
+    if (packet) setPreviewPacket(packet);
+    else setPreviewOpen(false);
+  }
+
+  function handlePrint(packet: PrintPacket) {
+    setPreviewOpen(false);
+    if (!printPacket(packet)) {
       toast.add({ title: "Unable to prepare print view", type: "error" });
     }
   }
@@ -363,7 +382,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
       <WorkspaceShortcuts
         canSave={dirty && !savePending}
         onSave={() => void handleSave()}
-        onPrint={() => void handlePrint()}
+        onPrint={() => void openPrintPreview()}
         onEditDetails={() => setDetailsOpen(true)}
         onStepDocument={stepDocument}
         onToggleFieldNames={() =>
@@ -393,12 +412,12 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
           <IconAction
             label={
               printCount
-                ? `Print ${printCount} ${printCount === 1 ? "document" : "documents"}`
-                : "Print"
+                ? `Print ${printCount} ${printCount === 1 ? "document" : "documents"}…`
+                : "Print…"
             }
             shortcut="print"
             disabled={!printCount}
-            onClick={() => void handlePrint()}
+            onClick={() => void openPrintPreview()}
           >
             <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
           </IconAction>
@@ -548,6 +567,17 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
       </SplitView>
 
       <EditFirSheet fir={fir} open={detailsOpen} onOpenChange={setDetailsOpen} />
+
+      <PrintPreview
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        title={printTitle}
+        packet={previewPacket}
+        description={`${printCount} ${printCount === 1 ? "document" : "documents"}`}
+        onPrint={() => {
+          if (previewPacket) handlePrint(previewPacket);
+        }}
+      />
 
       <AlertDialog onOpenChange={setIsDeleteFirOpen} open={isDeleteFirOpen}>
         <AlertDialogContent>

@@ -7,6 +7,7 @@ import { toast } from "#/components/ui/toast";
 import {
   Delete02Icon,
   FileImportIcon,
+  PrinterIcon,
   LegalDocument01Icon,
   MoreHorizontalIcon,
 } from "@hugeicons/core-free-icons";
@@ -23,6 +24,7 @@ import {
 } from "#/components/ui/alert-dialog";
 import { Hint } from "#/components/hint";
 import { IconAction } from "#/components/icon-action";
+import { PrintPreview } from "#/components/print-preview";
 import { Pane, PaneActions, PaneBody, PaneHeader, SaveStatus } from "#/components/pane";
 import { UnsavedChanges } from "#/components/unsaved-changes";
 import {
@@ -52,6 +54,7 @@ import { type TemplateId } from "#/lib/ids";
 import { indexPlaceholders, type PlaceholderIndex } from "#/lib/placeholder";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
 import { TemplateCreateInput, TemplateRecord, TemplateUpdateInput } from "#/lib/templates";
+import { envelopePrintPacket, printPacket, type PrintPacket } from "#/editor/html-export";
 import type { EditorSessionHandle } from "#/editor/session";
 import { useShortcut } from "#/hooks/use-shortcut";
 import { atoms } from "#/state/atoms";
@@ -161,6 +164,8 @@ function TemplateEditorWorkspace({
   const [pendingImport, setPendingImport] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewPacket, setPreviewPacket] = useState<PrintPacket | null>(null);
   const allowNavigationRef = useRef(false);
   const sessionRef = useRef<EditorSessionHandle | null>(null);
   const loadedKeyRef = useRef<string | number | null>(null);
@@ -300,6 +305,20 @@ function TemplateEditorWorkspace({
     void navigate({ to: "/templates" });
   }
 
+  const printTitle = name.trim() || "Untitled template";
+
+  function openPrintPreview() {
+    const session = sessionRef.current;
+    if (!session) return;
+    setPreviewPacket(
+      envelopePrintPacket(
+        [{ _tag: "Envelope", envelope: session.captureEnvelope().envelope, presentation }],
+        printTitle,
+      ),
+    );
+    setPreviewOpen(true);
+  }
+
   const canSave =
     Boolean(name.trim()) && !savePending && !importPending && (selectedTemplate === null || dirty);
 
@@ -310,6 +329,7 @@ function TemplateEditorWorkspace({
         canSave={canSave}
         onSave={() => void handleSave()}
         onImport={() => fileInputRef.current?.click()}
+        onPrint={openPrintPreview}
       />
       <UnsavedChanges isDirty={() => dirty && !allowNavigationRef.current} />
       <PaneHeader>
@@ -345,6 +365,9 @@ function TemplateEditorWorkspace({
             onClick={() => fileInputRef.current?.click()}
           >
             {importPending ? <Spinner /> : <HugeiconsIcon icon={FileImportIcon} strokeWidth={2} />}
+          </IconAction>
+          <IconAction label="Print preview…" shortcut="print" onClick={openPrintPreview}>
+            <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
           </IconAction>
           {selectedTemplate ? (
             <DropdownMenu>
@@ -411,6 +434,20 @@ function TemplateEditorWorkspace({
         sessionKey={sessionKey}
       />
 
+      <PrintPreview
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        title={printTitle}
+        packet={previewPacket}
+        description="Placeholders show their names"
+        onPrint={() => {
+          setPreviewOpen(false);
+          if (previewPacket && !printPacket(previewPacket)) {
+            toast.add({ title: "Unable to prepare print view", type: "error" });
+          }
+        }}
+      />
+
       <AlertDialog
         open={pendingImport !== null}
         onOpenChange={(open) => {
@@ -470,11 +507,13 @@ function TemplateEditorShortcuts({
   canSave,
   onSave,
   onImport,
+  onPrint,
 }: {
   templateId: TemplateId | undefined;
   canSave: boolean;
   onSave: () => void;
   onImport: () => void;
+  onPrint: () => void;
 }) {
   const navigate = useNavigate();
   const templates = useAtomValue(atoms.templatesAtom);
@@ -491,6 +530,7 @@ function TemplateEditorShortcuts({
 
   useShortcut("save", onSave, { enabled: canSave });
   useShortcut("importDocx", onImport);
+  useShortcut("print", onPrint);
   useShortcut("nextTemplate", () => step(1), { ignoreInputs: false });
   useShortcut("previousTemplate", () => step(-1), { ignoreInputs: false });
   return null;

@@ -54,6 +54,7 @@
     "isomorphic-dompurify": "^4.3.0",
     "jszip": "^3.10.2",
     "lexical": "^0.51.0",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.3.0",
     "react-day-picker": "^10.0.1",
     "react-dom": "^19.3.0",

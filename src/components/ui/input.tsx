@@ -14,6 +14,8 @@ const inputVariants = cva(
           "rounded-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 dark:bg-transparent",
         title:
           "h-9 w-auto max-w-full min-w-48 rounded-none border-0 bg-transparent px-0 text-ur shadow-none field-sizing-content focus-visible:ring-0 md:text-ur dark:bg-transparent",
+        numeric:
+          "h-6 w-10 rounded-md border border-input bg-transparent px-1 text-center text-xs tabular-nums focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-xs dark:bg-input/30",
         cell: "h-8 rounded-md border border-transparent bg-transparent px-2 hover:border-input focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive dark:bg-transparent dark:hover:bg-input/20",
       },
     },

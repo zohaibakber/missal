@@ -39,7 +39,7 @@ export const shortcuts = {
   openRow: { keys: "Enter", label: "Open FIR", group: "FIRs" },
   editFir: { keys: "E", label: "Edit FIR details", group: "FIRs" },
 
-  print: { keys: "Mod+P", label: "Print selected documents", group: "Documents" },
+  print: { keys: "Mod+P", label: "Print preview", group: "Documents" },
   nextDocument: { keys: "Alt+ArrowDown", label: "Next document", group: "Documents" },
   previousDocument: { keys: "Alt+ArrowUp", label: "Previous document", group: "Documents" },
   addTemplates: { keys: "A", label: "Add templates to FIR", group: "Documents" },
