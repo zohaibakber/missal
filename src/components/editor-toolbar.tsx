@@ -11,6 +11,7 @@ import {
   UNDO_COMMAND,
   REDO_COMMAND,
   SELECTION_CHANGE_COMMAND,
+  TEXT_TYPE_TO_FORMAT,
   type TextFormatType,
   type ElementFormatType,
 } from "lexical";
@@ -45,7 +46,6 @@ const formats = [
   { value: "underline", label: "Underline", keys: "Mod+U", icon: TextUnderlineIcon },
 ] satisfies { value: TextFormatType; label: string; keys: Hotkey; icon: ToolbarIcon }[];
 
-/** Lexical owns these bindings; the toolbar only displays them. */
 function TooltipLabel({ label, keys }: { label: string; keys?: Hotkey }) {
   return (
     <>
@@ -87,9 +87,9 @@ function ToolbarButton({
           />
         }
       >
-        <HugeiconsIcon icon={icon} />
+        <HugeiconsIcon icon={icon} strokeWidth={2} />
       </TooltipTrigger>
-      <TooltipContent>
+      <TooltipContent side="bottom">
         <TooltipLabel label={label} keys={keys} />
       </TooltipContent>
     </Tooltip>
@@ -98,7 +98,7 @@ function ToolbarButton({
 
 export function EditorToolbar() {
   const [editor] = useLexicalComposerContext();
-  const [activeFormats, setActiveFormats] = useState<string[]>([]);
+  const [format, setFormat] = useState(0);
   const [alignment, setAlignment] = useState<string>("right");
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -107,9 +107,7 @@ export function EditorToolbar() {
     function updateSelection() {
       const selection = $getSelection();
       if (!$isRangeSelection(selection)) return;
-      setActiveFormats(
-        formats.filter((format) => selection.hasFormat(format.value)).map((format) => format.value),
-      );
+      setFormat(selection.format);
       const node = selection.anchor.getNode();
       const element = node.getTopLevelElement();
       setAlignment(element?.getFormatType() || "right");
@@ -146,7 +144,8 @@ export function EditorToolbar() {
   return (
     <div
       aria-label="Document formatting"
-      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-background px-4 py-2"
+      role="toolbar"
+      className="flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto border-b px-2"
       dir="ltr"
     >
       <ToolbarButton
@@ -163,8 +162,19 @@ export function EditorToolbar() {
         disabled={!canRedo}
         onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)}
       />
-      <Separator orientation="vertical" className="mx-2 h-4" />
-      <ToggleGroup multiple value={activeFormats} aria-label="Text style" size="sm" spacing={0}>
+      <Separator
+        orientation="vertical"
+        className="mx-1.5 data-vertical:h-4 data-vertical:self-auto"
+      />
+      <ToggleGroup
+        multiple
+        value={formats
+          .filter((item) => format & TEXT_TYPE_TO_FORMAT[item.value])
+          .map((item) => item.value)}
+        aria-label="Text style"
+        size="sm"
+        spacing={0}
+      >
         {formats.map((format) => (
           <Tooltip key={format.value}>
             <TooltipTrigger
@@ -177,15 +187,18 @@ export function EditorToolbar() {
                 />
               }
             >
-              <HugeiconsIcon icon={format.icon} />
+              <HugeiconsIcon icon={format.icon} strokeWidth={2} />
             </TooltipTrigger>
-            <TooltipContent>
+            <TooltipContent side="bottom">
               <TooltipLabel label={format.label} keys={format.keys} />
             </TooltipContent>
           </Tooltip>
         ))}
       </ToggleGroup>
-      <Separator orientation="vertical" className="mx-2 h-4" />
+      <Separator
+        orientation="vertical"
+        className="mx-1.5 data-vertical:h-4 data-vertical:self-auto"
+      />
       <ToggleGroup value={[alignment]} aria-label="Paragraph alignment" size="sm" spacing={0}>
         {alignments.map((align) => (
           <Tooltip key={align.value}>
@@ -199,13 +212,16 @@ export function EditorToolbar() {
                 />
               }
             >
-              <HugeiconsIcon icon={align.icon} />
+              <HugeiconsIcon icon={align.icon} strokeWidth={2} />
             </TooltipTrigger>
-            <TooltipContent>{align.label}</TooltipContent>
+            <TooltipContent side="bottom">{align.label}</TooltipContent>
           </Tooltip>
         ))}
       </ToggleGroup>
-      <Separator orientation="vertical" className="mx-2 h-4" />
+      <Separator
+        orientation="vertical"
+        className="mx-1.5 data-vertical:h-4 data-vertical:self-auto"
+      />
       <ToolbarButton
         label="Bulleted list"
         icon={LeftToRightListBulletIcon}

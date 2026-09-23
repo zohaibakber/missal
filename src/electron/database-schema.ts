@@ -42,10 +42,7 @@ export const templates = sqliteTable(
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
-  (table) => [
-    index("templates_updated_at_idx").on(table.updatedAt),
-    index("templates_plain_text_idx").on(table.plainText),
-  ],
+  (table) => [index("templates_updated_at_idx").on(table.updatedAt)],
 );
 
 export const firRecords = sqliteTable(
@@ -114,7 +111,6 @@ export const firPlaceholderValues = sqliteTable(
   },
   (table) => [
     primaryKey({ columns: [table.firId, table.placeholderId] }),
-    index("fir_placeholder_values_fir_id_idx").on(table.firId),
     index("fir_placeholder_values_placeholder_id_idx").on(table.placeholderId),
   ],
 );

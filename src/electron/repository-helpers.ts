@@ -6,16 +6,15 @@ import {
   EntityNotFound,
   StorageError,
   type EntityKind,
-  type RepositoryError,
 } from "#/lib/storage-errors";
 
-export const sqlReason = (error: EffectDrizzleQueryError) =>
+const sqlReason = (error: EffectDrizzleQueryError) =>
   Option.flatMap(
     Cause.isCause(error.cause) ? Cause.findErrorOption(error.cause) : Option.none(),
     (found) => (isSqlError(found) ? Option.some(found.reason) : Option.none()),
   );
 
-export const failStorage = (operation: string) =>
+const failStorage = (operation: string) =>
   new StorageError({
     message: "Storage operation failed",
     operation,
@@ -126,5 +125,3 @@ export const constraintKind = (error: EffectDrizzleQueryError) =>
         Match.orElse(() => undefined),
       ),
   });
-
-export type { RepositoryError };

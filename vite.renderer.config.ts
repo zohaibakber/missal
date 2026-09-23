@@ -1,11 +1,12 @@
 import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
-import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
+  // Absolute asset URLs so reloading a nested route on the missal:// scheme still finds them.
+  base: "/",
   staged: {
     "*": "vp check --fix",
   },
@@ -59,7 +60,6 @@ export default defineConfig({
   },
   resolve: { tsconfigPaths: true },
   plugins: [
-    devtools(),
     tailwindcss(),
     tanstackRouter({
       target: "react",

@@ -3,7 +3,6 @@ import { collectStyles, cssLengthMm } from "#/editor/import/computed-style";
 import { createPageBreakMarker } from "#/editor/import/page-breaks";
 
 const WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-/** Read the original archive without modifying the user's file. */
 export async function importDocx(file: File): Promise<{
   html: string;
   pageLayout: PageLayout;
@@ -118,7 +117,6 @@ function samePageLayout(left: PageLayout, right: PageLayout): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-/** docx-preview reads Latin run properties; mirror the complex-script properties for RTL runs. */
 export function normalizeComplexScriptFormatting(xml: string): string {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.querySelector("parsererror")) throw new Error("This DOCX contains invalid document XML.");

@@ -14,13 +14,10 @@ const config: ForgeConfig = {
     extraResource: ["drizzle"],
   },
   rebuildConfig: {},
-  // Windows only: a Squirrel.Windows installer (Setup.exe + update feed) and a portable ZIP.
   makers: [
     new MakerSquirrel({ name: "missal", setupIcon: "assets/icon.ico" }),
     new MakerZIP({}, ["win32"]),
   ],
-  // `electron-forge publish` (run by CI on version tags) uploads the makers' output to a draft
-  // GitHub Release, authenticated with the workflow's GITHUB_TOKEN.
   publishers: [
     new PublisherGithub({
       repository: { owner: "zohaibakber", name: "missal" },

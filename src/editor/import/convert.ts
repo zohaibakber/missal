@@ -4,41 +4,26 @@ import {
   $insertNodes,
   $isElementNode,
   $isRangeSelection,
-  COMMAND_PRIORITY_HIGH,
-  PASTE_COMMAND,
   type LexicalEditor,
   type LexicalNode,
 } from "lexical";
 import DOMPurify from "isomorphic-dompurify";
 import { materializeClipboardPageBreaks } from "#/editor/import/page-breaks";
-import {
-  measureLineHeightRatio,
-  prepareFontsFor,
-  normalizeWordHtml,
-  readWordPageLayout,
-} from "#/editor/import/word-html";
-import type { PageLayout } from "#/lib/document-format";
+import { measureLineHeightRatio, normalizeWordHtml } from "#/editor/import/word-html";
 import { $isPageBreakNode } from "#/editor/nodes/page-break-node";
-
-const LARGE_HTML_BYTES = 256 * 1024;
-const LARGE_TEXT_CHARS = 100_000;
 
 export type ImportNotice = {
   readonly category: string;
   readonly message: string;
 };
 
-export function sanitizeClipboardHtml(html: string) {
+function sanitizeClipboardHtml(html: string) {
   return DOMPurify.sanitize(html, {
     ADD_ATTR: ["data-field", "data-field-reference", "data-page-break"],
     FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "link", "meta"],
     FORBID_ATTR: ["srcset"],
     ALLOW_UNKNOWN_PROTOCOLS: false,
   });
-}
-
-export function isLargeImport(html: string, plainText: string) {
-  return new Blob([html]).size > LARGE_HTML_BYTES || plainText.length > LARGE_TEXT_CHARS;
 }
 
 export function prepareClipboardDom(html: string) {
@@ -85,44 +70,6 @@ export function insertSanitizedHtml(editor: LexicalEditor, html: string) {
   );
 
   return notices;
-}
-
-export function registerClipboardImport(
-  editor: LexicalEditor,
-  {
-    onNotices,
-    onPageLayout,
-  }: {
-    onNotices?: (notices: ImportNotice[]) => void;
-    /** Word clipboard HTML carries the source document's paper size and margins. */
-    onPageLayout?: (pageLayout: PageLayout) => void;
-  } = {},
-) {
-  return editor.registerCommand(
-    PASTE_COMMAND,
-    (event) => {
-      if (!(event instanceof ClipboardEvent) || !event.clipboardData) {
-        return false;
-      }
-
-      const html = event.clipboardData.getData("text/html");
-      if (!html) {
-        return false;
-      }
-
-      event.preventDefault();
-      const pageLayout = readWordPageLayout(html);
-      if (pageLayout) onPageLayout?.(pageLayout);
-      // Word's line spacing is converted from real font metrics, so wait for its fonts first.
-      void prepareFontsFor(html).then(() => {
-        const notices = insertSanitizedHtml(editor, html);
-        if (notices.length) onNotices?.(notices);
-      });
-
-      return true;
-    },
-    COMMAND_PRIORITY_HIGH,
-  );
 }
 
 function $unwrapImportedPageBreaks(nodes: LexicalNode[]): LexicalNode[] {

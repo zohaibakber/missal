@@ -14,7 +14,16 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  return <thead data-slot="table-header" className={cn("[&_tr]:border-b", className)} {...props} />;
+  return (
+    <thead
+      data-slot="table-header"
+      className={cn(
+        "sticky top-0 z-10 bg-background shadow-[inset_0_-1px_0_var(--color-border)] [&_tr]:border-0 [&_tr]:hover:bg-transparent",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
@@ -42,7 +51,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors outline-none hover:bg-muted/50 focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        "group/row border-b transition-colors outline-none hover:bg-muted/50 focus-visible:bg-muted/70 focus-visible:shadow-[inset_2px_0_0_var(--color-ring)] rtl:focus-visible:shadow-[inset_-2px_0_0_var(--color-ring)] has-aria-expanded:bg-muted/50 data-popup-open:bg-muted/70 data-[state=selected]:bg-muted/70",
         className,
       )}
       {...props}
@@ -57,7 +66,7 @@ function TableHead({ className, columnWidth, ...props }: TableHeadProps) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-10 px-2 text-start align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pe-0",
+        "h-9 px-2 text-start align-middle text-xs font-medium whitespace-nowrap text-muted-foreground first:ps-4 last:pe-4 [&:has([role=checkbox])]:pe-0",
         columnWidth && "w-(--column-width)",
         className,
       )}
@@ -71,7 +80,10 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   return (
     <td
       data-slot="table-cell"
-      className={cn("p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pe-0", className)}
+      className={cn(
+        "h-10 px-2 align-middle whitespace-nowrap first:ps-4 last:pe-4 [&:has([role=checkbox])]:pe-0",
+        className,
+      )}
       {...props}
     />
   );

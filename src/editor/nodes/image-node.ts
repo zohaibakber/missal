@@ -8,7 +8,6 @@ import {
   type DOMConversionOutput,
   type DOMExportOutput,
   type EditorConfig,
-  type LexicalNode,
 } from "lexical";
 
 const imageSrcState = createState("src", {
@@ -97,11 +96,7 @@ export class ImageNode extends DecoratorNode<null> {
   }
 }
 
-export function $createImageNode(
-  src: string,
-  width: number | null = null,
-  height: number | null = null,
-) {
+function $createImageNode(src: string, width: number | null = null, height: number | null = null) {
   return $applyNodeReplacement(
     $setState(
       $setState($setState(new ImageNode(), imageSrcState, src), imageWidthState, width),
@@ -109,8 +104,4 @@ export function $createImageNode(
       height,
     ),
   );
-}
-
-export function $isImageNode(node: LexicalNode | null | undefined): node is ImageNode {
-  return node instanceof ImageNode;
 }

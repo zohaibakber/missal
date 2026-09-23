@@ -1,21 +1,23 @@
 import type { ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useTheme } from "#/components/theme-provider";
 import { KeyboardIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useKeyboardShortcuts } from "#/components/keyboard-shortcuts";
-import { Page, PageDescription, PageHeader, PageHeading, PageTitle } from "#/components/page";
+import { Pane, PaneBody, PaneHeader, PaneTitle } from "#/components/pane";
 import { ShortcutKbd } from "#/components/shortcut-kbd";
+import { useTheme } from "#/components/theme-provider";
 import { Button } from "#/components/ui/button";
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "#/components/ui/card";
-import { Field, FieldLabel, FieldLegend, FieldSet } from "#/components/ui/field";
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSeparator,
+  FieldSet,
+  FieldTitle,
+} from "#/components/ui/field";
 import { RadioGroup, RadioGroupItem } from "#/components/ui/radio-group";
 import type { DesktopTheme } from "#/desktop-window";
 
@@ -34,25 +36,17 @@ function RouteComponent() {
   const { openShortcuts } = useKeyboardShortcuts();
 
   return (
-    <Page width="narrow">
-      <PageHeader>
-        <PageHeading>
-          <PageTitle>Settings</PageTitle>
-          <PageDescription>Preferences are saved on this computer.</PageDescription>
-        </PageHeading>
-      </PageHeader>
-      <Card>
-        <CardHeader>
-          <CardTitle>Appearance</CardTitle>
-          <CardDescription>
-            Choose how Missal looks. System follows your OS setting.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <Pane>
+      <PaneHeader>
+        <PaneTitle>Settings</PaneTitle>
+      </PaneHeader>
+      <PaneBody>
+        <FieldGroup className="mx-auto w-full max-w-2xl px-6 py-8">
           <FieldSet>
-            <FieldLegend className="sr-only">Theme</FieldLegend>
+            <FieldLegend>Appearance</FieldLegend>
+            <FieldDescription>System follows your Windows light or dark setting.</FieldDescription>
             <RadioGroup
-              className="flex w-auto flex-row gap-4"
+              className="flex w-auto flex-row gap-4 pt-2"
               name="theme"
               onValueChange={(value) => {
                 if (value === "system" || value === "light" || value === "dark") {
@@ -65,7 +59,7 @@ function RouteComponent() {
                 <Field key={item.value} className="w-auto">
                   <FieldLabel
                     appearance="plain"
-                    className="relative cursor-pointer flex-col"
+                    className="relative flex-col"
                     htmlFor={`theme-${item.value}`}
                   >
                     <RadioGroupItem
@@ -73,10 +67,10 @@ function RouteComponent() {
                       id={`theme-${item.value}`}
                       value={item.value}
                     />
-                    <span className="relative block h-[70px] w-[88px] overflow-hidden rounded-lg shadow-xs ring-1 ring-foreground/10 transition-shadow peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50 peer-data-checked:ring-2 peer-data-checked:ring-primary peer-data-checked:ring-offset-2 peer-data-checked:ring-offset-card">
+                    <span className="relative block h-[70px] w-[88px] overflow-hidden rounded-md ring-1 ring-foreground/10 transition-shadow peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50 peer-data-checked:ring-2 peer-data-checked:ring-primary peer-data-checked:ring-offset-2 peer-data-checked:ring-offset-background">
                       {themePreviews[item.value]}
                     </span>
-                    <span className="text-sm not-peer-data-checked:text-muted-foreground">
+                    <span className="text-xs not-peer-data-checked:text-muted-foreground">
                       {item.label}
                     </span>
                   </FieldLabel>
@@ -84,24 +78,23 @@ function RouteComponent() {
               ))}
             </RadioGroup>
           </FieldSet>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Keyboard</CardTitle>
-          <CardDescription>
-            Every action has a shortcut. Press <ShortcutKbd id="commandMenu" /> to search commands
-            or <ShortcutKbd id="cheatsheet" /> to see them all.
-          </CardDescription>
-          <CardAction>
+          <FieldSeparator />
+          <Field orientation="horizontal">
+            <FieldContent>
+              <FieldTitle>Keyboard shortcuts</FieldTitle>
+              <FieldDescription>
+                Press <ShortcutKbd id="commandMenu" /> to search commands and{" "}
+                <ShortcutKbd id="cheatsheet" /> to see every shortcut.
+              </FieldDescription>
+            </FieldContent>
             <Button variant="outline" size="sm" onClick={openShortcuts}>
-              <HugeiconsIcon icon={KeyboardIcon} data-icon="inline-start" />
-              View shortcuts
+              <HugeiconsIcon icon={KeyboardIcon} strokeWidth={2} data-icon="inline-start" />
+              Show all
             </Button>
-          </CardAction>
-        </CardHeader>
-      </Card>
-    </Page>
+          </Field>
+        </FieldGroup>
+      </PaneBody>
+    </Pane>
   );
 }
 

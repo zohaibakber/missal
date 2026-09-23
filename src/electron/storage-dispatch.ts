@@ -1,4 +1,4 @@
-import { Effect, Match, Schema } from "effect";
+import { Effect, Layer, Match, Schema } from "effect";
 import {
   GlobalPlaceholderListResult,
   FirDocumentListResult,
@@ -15,6 +15,8 @@ import {
   TemplateRecordResult,
   TemplateSaveAckResult,
 } from "#/electron/storage-contract";
+import { StorageRpcs, type StorageWorkerConfig } from "#/electron/storage-rpc";
+import { storageLayer } from "#/electron/storage-runtime";
 import { FirRecord } from "#/lib/fir";
 import { Placeholder } from "#/lib/placeholder";
 import { AppSettings } from "#/lib/settings";
@@ -224,5 +226,20 @@ export const dispatchStorageRequest = (payload: unknown) =>
           }),
         }),
       );
+    }),
+  );
+
+export const storageHandlers = (config: StorageWorkerConfig) =>
+  StorageRpcs.toLayer(
+    Effect.gen(function* () {
+      const database = yield* Effect.exit(Layer.build(storageLayer(config)));
+
+      return StorageRpcs.of({
+        "Storage.open": () => Effect.asVoid(database),
+        "Storage.request": ({ payload }) =>
+          Effect.flatMap(database, (context) =>
+            dispatchStorageRequest(payload).pipe(Effect.provide(context)),
+          ),
+      });
     }),
   );

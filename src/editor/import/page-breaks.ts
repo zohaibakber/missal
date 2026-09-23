@@ -13,7 +13,7 @@ export function createPageBreakMarker(doc: Document): HTMLDivElement {
   return divider;
 }
 
-export function isPageBreakMarker(node: Node | null | undefined): node is HTMLElement {
+function isPageBreakMarker(node: Node | null | undefined): node is HTMLElement {
   return node instanceof HTMLElement && node.dataset.pageBreak === "true";
 }
 

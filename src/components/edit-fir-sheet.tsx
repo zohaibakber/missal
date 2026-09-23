@@ -1,15 +1,21 @@
-import { EditFirForm } from "#/components/create-fir-form";
+import {
+  FirForm,
+  FirFormFields,
+  FirFormReset,
+  FirFormStatus,
+  FirFormSubmit,
+} from "#/components/fir-form";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "#/components/ui/sheet";
 import { toast } from "#/components/ui/toast";
 import type { FirRecord } from "#/lib/fir";
 
-/** The one place FIR details are edited, from both the FIR list and the FIR workspace. */
 export function EditFirSheet({
   fir,
   open,
@@ -21,19 +27,28 @@ export function EditFirSheet({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="data-[side=right]:sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle>Edit FIR {fir.fir_no}</SheetTitle>
-          <SheetDescription>Case details are used by every document in this FIR.</SheetDescription>
-        </SheetHeader>
-        <EditFirForm
-          className="min-h-0 flex-1"
+      <SheetContent size="lg">
+        <FirForm
           fir={fir}
+          className="flex min-h-0 flex-1 flex-col"
           onSuccess={() => {
             onOpenChange(false);
             toast.add({ title: "FIR details saved", type: "success" });
           }}
-        />
+        >
+          <SheetHeader>
+            <SheetTitle>FIR {fir.fir_no}</SheetTitle>
+            <SheetDescription>Every document in this FIR uses these details.</SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            <FirFormFields />
+          </div>
+          <SheetFooter>
+            <FirFormStatus />
+            <FirFormReset />
+            <FirFormSubmit>Save changes</FirFormSubmit>
+          </SheetFooter>
+        </FirForm>
       </SheetContent>
     </Sheet>
   );

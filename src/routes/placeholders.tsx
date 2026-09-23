@@ -1,37 +1,41 @@
-import { GlobalPlaceholderForm } from "#/components/global-placeholder-form";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "#/components/ui/tabs";
+import { useState } from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Exit, Schema } from "effect";
 import { useForm } from "@tanstack/react-form";
 import { createFileRoute } from "@tanstack/react-router";
-import { toast } from "#/components/ui/toast";
 import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { UnsavedChanges } from "#/components/unsaved-changes";
-import { Button } from "#/components/ui/button";
-import { Field, FieldError, FieldLabel } from "#/components/ui/field";
+import { GlobalPlaceholderForm } from "#/components/global-placeholder-form";
+import { Hint } from "#/components/hint";
 import {
-  Page,
-  PageDescription,
-  PageFooter,
-  PageHeader,
-  PageHeading,
-  PageTitle,
-} from "#/components/page";
+  Pane,
+  PaneActionsOutlet,
+  PaneActionsPortal,
+  PaneActionsProvider,
+  PaneBody,
+  PaneHeader,
+  PaneTitle,
+  SaveStatus,
+} from "#/components/pane";
 import {
   PlaceholderList,
-  PlaceholderListFooter,
   PlaceholderListCell,
+  PlaceholderListFooter,
+  PlaceholderListIntro,
   PlaceholderListRow,
   PlaceholderListTable,
 } from "#/components/placeholder-list";
-import { ShortcutKbd } from "#/components/shortcut-kbd";
-import { useShortcut } from "#/hooks/use-shortcut";
-import { useState } from "react";
+import { UnsavedChanges } from "#/components/unsaved-changes";
+import { Button } from "#/components/ui/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
+import { Field, FieldError, FieldLabel } from "#/components/ui/field";
 import { Input } from "#/components/ui/input";
 import { Skeleton } from "#/components/ui/skeleton";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
+import { Spinner } from "#/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "#/components/ui/tabs";
+import { toast } from "#/components/ui/toast";
+import { useShortcut } from "#/hooks/use-shortcut";
 import { Placeholder, PlaceholderCreateInput, PlaceholderUpdateInput } from "#/lib/placeholder";
 import { NonEmptyTrimmedString } from "#/lib/schema";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
@@ -46,64 +50,70 @@ function RouteComponent() {
   const [tab, setTab] = useState<PlaceholderTab>("global");
 
   return (
-    <Page width="narrow" className="pb-0">
-      <PageHeader>
-        <PageHeading>
-          <PageTitle>Placeholders</PageTitle>
-          <PageDescription>
-            Names you insert into templates. Documents replace them with real values.
-          </PageDescription>
-        </PageHeading>
-      </PageHeader>
-      {AsyncResult.isSuccess(result) ? (
-        <Tabs
-          value={tab}
-          onValueChange={(value) => {
-            if (value === "global" || value === "fir") setTab(value);
-          }}
-          className="gap-4"
-        >
-          <TabsList>
-            <TabsTrigger value="global">Global values</TabsTrigger>
-            <TabsTrigger value="fir">FIR fields</TabsTrigger>
-          </TabsList>
-          <TabsContent value="global" keepMounted>
-            <GlobalPlaceholderForm active={tab === "global"} />
-          </TabsContent>
-          <TabsContent value="fir" keepMounted>
-            <PlaceholderPage
-              active={tab === "fir"}
-              placeholders={result.value.filter((field) => field.source._tag !== "SharedSetting")}
-            />
-          </TabsContent>
-        </Tabs>
-      ) : AsyncResult.isFailure(result) ? (
-        <Empty variant="outline">
-          <EmptyHeader>
-            <EmptyTitle>Could not load placeholders</EmptyTitle>
-            <EmptyDescription>
-              The database could not be read. Restart Missal and try again.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <div className="flex flex-col gap-4">
-          <Skeleton className="h-8 w-56" />
-          <Skeleton className="h-72" />
-        </div>
-      )}
-    </Page>
+    <PaneActionsProvider>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => {
+          if (value === "global" || value === "fir") setTab(value);
+        }}
+        className="h-full"
+      >
+        <Pane>
+          <PaneHeader>
+            <PaneTitle>Placeholders</PaneTitle>
+            <TabsList className="ms-3">
+              <TabsTrigger value="global">Global values</TabsTrigger>
+              <TabsTrigger value="fir">FIR fields</TabsTrigger>
+            </TabsList>
+            <PaneActionsOutlet />
+          </PaneHeader>
+          <PaneBody>
+            <div className="mx-auto w-full max-w-3xl px-6 py-8">
+              {AsyncResult.isSuccess(result) ? (
+                <>
+                  <TabsContent value="global" keepMounted>
+                    <GlobalPlaceholderForm active={tab === "global"} />
+                  </TabsContent>
+                  <TabsContent value="fir" keepMounted>
+                    <FirFieldsForm
+                      active={tab === "fir"}
+                      placeholders={result.value.filter(
+                        (field) => field.source._tag !== "SharedSetting",
+                      )}
+                    />
+                  </TabsContent>
+                </>
+              ) : AsyncResult.isFailure(result) ? (
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyTitle>Could not load placeholders</EmptyTitle>
+                    <EmptyDescription>
+                      The database could not be read. Restart Missal.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <Skeleton className="h-4 w-80" />
+                  <Skeleton className="h-64" />
+                </div>
+              )}
+            </div>
+          </PaneBody>
+        </Pane>
+      </Tabs>
+    </PaneActionsProvider>
   );
 }
 
 function sourceDescription(placeholder: Placeholder | undefined) {
-  if (!placeholder) return "Entered per FIR";
-  return placeholder.source._tag === "FirProperty"
-    ? `FIR · ${placeholder.source.property}`
-    : "Entered per FIR";
+  if (placeholder?.source._tag === "FirProperty") return `FIR · ${placeholder.source.property}`;
+  return "Entered per FIR";
 }
 
-function PlaceholderPage({
+const FIR_FIELDS_FORM_ID = "fir-fields-form";
+
+function FirFieldsForm({
   active,
   placeholders,
 }: {
@@ -112,11 +122,12 @@ function PlaceholderPage({
 }) {
   const create = useAtomSet(atoms.createPlaceholderAtom, { mode: "promiseExit" });
   const update = useAtomSet(atoms.updatePlaceholderAtom, { mode: "promiseExit" });
+  const initialValues = () => ({
+    placeholders: placeholders.map((item) => ({ id: item.id, key: item.key, label: item.label })),
+    additions: [] as { label: string }[],
+  });
   const form = useForm({
-    defaultValues: {
-      placeholders: placeholders.map((item) => ({ id: item.id, key: item.key, label: item.label })),
-      additions: [] as { label: string }[],
-    },
+    defaultValues: initialValues(),
     onSubmit: async ({ value }) => {
       // Reset only after all writes succeed. Keep each successful row's identity on a partial failure.
       for (const item of value.placeholders) {
@@ -159,7 +170,7 @@ function PlaceholderPage({
 
   return (
     <form
-      className="flex flex-col gap-4"
+      id={FIR_FIELDS_FORM_ID}
       onSubmit={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -167,16 +178,48 @@ function PlaceholderPage({
       }}
     >
       <UnsavedChanges isDirty={() => form.state.isDirty} />
-      <form.Subscribe selector={(state) => state.isDirty && !state.isSubmitting}>
-        {(canSave) => (
-          <SaveShortcut enabled={active && canSave} onSave={() => void form.handleSubmit()} />
+      <form.Subscribe
+        selector={(state) => ({ isDirty: state.isDirty, isSubmitting: state.isSubmitting })}
+      >
+        {({ isDirty, isSubmitting }) => (
+          <>
+            <SaveShortcut
+              enabled={active && isDirty && !isSubmitting}
+              onSave={() => void form.handleSubmit()}
+            />
+            {active ? (
+              <PaneActionsPortal>
+                {isDirty ? <SaveStatus dirty /> : null}
+                <Button
+                  type="button"
+                  variant="subtle"
+                  size="sm"
+                  disabled={!isDirty || isSubmitting}
+                  onClick={() => form.reset(initialValues())}
+                >
+                  Reset
+                </Button>
+                <Hint label="Save" shortcut="save">
+                  <Button
+                    type="submit"
+                    form={FIR_FIELDS_FORM_ID}
+                    size="sm"
+                    disabled={!isDirty || isSubmitting}
+                  >
+                    {isSubmitting ? <Spinner data-icon="inline-start" /> : null}
+                    Save
+                  </Button>
+                </Hint>
+              </PaneActionsPortal>
+            ) : null}
+          </>
         )}
       </form.Subscribe>
-      <p className="text-sm text-muted-foreground">
-        These are filled from each FIR's details. Renaming keeps existing templates linked.
-      </p>
+      <PlaceholderListIntro>
+        Filled in from each FIR's details. Renaming one keeps it linked in every template.
+      </PlaceholderListIntro>
       <PlaceholderList>
-        <PlaceholderListTable nameHeading="Name" valueHeading="Filled from">
+        <PlaceholderListTable nameHeading="نام" valueHeading="ماخذ">
           <form.Field name="placeholders" mode="array">
             {(arrayField) =>
               arrayField.state.value.map((item, index) => (
@@ -196,9 +239,9 @@ function PlaceholderPage({
                             </FieldLabel>
                             <Input
                               id={`placeholder-${item.id}`}
+                              variant="cell"
+                              className="-ms-2.25"
                               name={field.name}
-                              lang="ur"
-                              dir="rtl"
                               value={field.state.value}
                               onBlur={field.handleBlur}
                               onChange={(event) => field.handleChange(event.target.value)}
@@ -208,7 +251,7 @@ function PlaceholderPage({
                           </Field>
                         </PlaceholderListCell>
                         <PlaceholderListCell>
-                          <span className="truncate font-mono text-xs text-muted-foreground">
+                          <span dir="ltr" lang="en" className="text-xs text-muted-foreground">
                             {sourceDescription(originals.get(item.id))}
                           </span>
                         </PlaceholderListCell>
@@ -221,61 +264,58 @@ function PlaceholderPage({
             }
           </form.Field>
           <form.Field name="additions" mode="array">
-            {(arrayField) => (
-              <>
-                {arrayField.state.value.map((_, index) => (
-                  <form.Field
-                    key={index}
-                    name={`additions[${index}].label`}
-                    validators={{ onBlur: validateLabel, onSubmit: validateLabel }}
-                  >
-                    {(field) => {
-                      const invalid = field.state.meta.isTouched && !field.state.meta.isValid;
-                      return (
-                        <PlaceholderListRow>
-                          <PlaceholderListCell>
-                            <Field data-invalid={invalid}>
-                              <FieldLabel className="sr-only" htmlFor={`new-placeholder-${index}`}>
-                                New placeholder {index + 1}
-                              </FieldLabel>
-                              <Input
-                                id={`new-placeholder-${index}`}
-                                name={field.name}
-                                lang="ur"
-                                dir="rtl"
-                                value={field.state.value}
-                                placeholder="متغیر کا نام"
-                                onBlur={field.handleBlur}
-                                onChange={(event) => field.handleChange(event.target.value)}
-                                aria-invalid={invalid}
-                              />
-                              <FieldError errors={field.state.meta.errors} />
-                            </Field>
-                          </PlaceholderListCell>
-                          <PlaceholderListCell>
-                            <span className="font-mono text-xs text-muted-foreground">
-                              Entered per FIR
-                            </span>
-                          </PlaceholderListCell>
-                          <PlaceholderListCell>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              title="Remove"
-                              onClick={() => arrayField.removeValue(index)}
-                              aria-label={`Remove new placeholder ${index + 1}`}
-                            >
-                              <HugeiconsIcon icon={Cancel01Icon} />
-                            </Button>
-                          </PlaceholderListCell>
-                        </PlaceholderListRow>
-                      );
-                    }}
-                  </form.Field>
-                ))}
-              </>
-            )}
+            {(arrayField) =>
+              arrayField.state.value.map((_, index) => (
+                <form.Field
+                  key={index}
+                  name={`additions[${index}].label`}
+                  validators={{ onBlur: validateLabel, onSubmit: validateLabel }}
+                >
+                  {(field) => {
+                    const invalid = field.state.meta.isTouched && !field.state.meta.isValid;
+                    return (
+                      <PlaceholderListRow>
+                        <PlaceholderListCell>
+                          <Field data-invalid={invalid}>
+                            <FieldLabel className="sr-only" htmlFor={`new-placeholder-${index}`}>
+                              New placeholder {index + 1}
+                            </FieldLabel>
+                            <Input
+                              id={`new-placeholder-${index}`}
+                              variant="cell"
+                              className="-ms-2.25"
+                              name={field.name}
+                              value={field.state.value}
+                              placeholder="متغیر کا نام"
+                              onBlur={field.handleBlur}
+                              onChange={(event) => field.handleChange(event.target.value)}
+                              aria-invalid={invalid}
+                            />
+                            <FieldError errors={field.state.meta.errors} />
+                          </Field>
+                        </PlaceholderListCell>
+                        <PlaceholderListCell>
+                          <span dir="ltr" lang="en" className="text-xs text-muted-foreground">
+                            Entered per FIR
+                          </span>
+                        </PlaceholderListCell>
+                        <PlaceholderListCell>
+                          <Button
+                            type="button"
+                            variant="subtle"
+                            size="icon-xs"
+                            onClick={() => arrayField.removeValue(index)}
+                            aria-label={`Remove new placeholder ${index + 1}`}
+                          >
+                            <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+                          </Button>
+                        </PlaceholderListCell>
+                      </PlaceholderListRow>
+                    );
+                  }}
+                </form.Field>
+              ))
+            }
           </form.Field>
         </PlaceholderListTable>
         <form.Field name="additions" mode="array">
@@ -283,7 +323,7 @@ function PlaceholderPage({
             <PlaceholderListFooter>
               <Button
                 type="button"
-                variant="ghost"
+                variant="subtle"
                 size="sm"
                 onClick={() => {
                   const index = arrayField.state.value.length;
@@ -293,45 +333,13 @@ function PlaceholderPage({
                   );
                 }}
               >
-                <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
                 Add FIR field
               </Button>
             </PlaceholderListFooter>
           )}
         </form.Field>
       </PlaceholderList>
-      <form.Subscribe
-        selector={(state) => ({ isDirty: state.isDirty, isSubmitting: state.isSubmitting })}
-      >
-        {({ isDirty, isSubmitting }) => (
-          <PageFooter>
-            <span className="me-auto text-xs text-muted-foreground" role="status">
-              {isDirty ? "Unsaved changes" : null}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={!isDirty || isSubmitting}
-              onClick={() =>
-                form.reset({
-                  placeholders: placeholders.map((item) => ({
-                    id: item.id,
-                    key: item.key,
-                    label: item.label,
-                  })),
-                  additions: [],
-                })
-              }
-            >
-              Reset
-            </Button>
-            <Button type="submit" disabled={!isDirty || isSubmitting}>
-              {isSubmitting ? "Saving…" : "Save changes"}
-              <ShortcutKbd id="save" />
-            </Button>
-          </PageFooter>
-        )}
-      </form.Subscribe>
     </form>
   );
 }

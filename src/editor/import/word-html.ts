@@ -6,7 +6,6 @@ import { URDU_FONT_FAMILY, URDU_FONT_URL } from "#/lib/output";
 const WORD_MARKERS =
   /urn:schemas-microsoft-com:office:(?:word|office)|<meta[^>]+content=["']?Microsoft Word|class=["']?Mso/i;
 const ARABIC_SCRIPT = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
-// Word stores complex-script (Urdu/Arabic) run formatting separately; browsers ignore these properties.
 const COMPLEX_SCRIPT_PROPERTIES = [
   ["mso-bidi-font-size", "font-size"],
   ["mso-bidi-font-family", "font-family"],
@@ -16,18 +15,13 @@ const COMPLEX_SCRIPT_PROPERTIES = [
 const BLOCKS = "p, h1, h2, h3, h4, h5, h6, li, td, th";
 
 type NormalizeOptions = {
-  /** Font's natural line height divided by its size; Word's % spacing is relative to this. */
   lineHeightRatio?: (fontFamily: string) => number | undefined;
 };
 
-export function isWordHtml(html: string) {
+function isWordHtml(html: string) {
   return WORD_MARKERS.test(html);
 }
 
-/**
- * Makes Word clipboard HTML self-contained: stylesheet rules (including Word's heading and Normal
- * styles) become inline styles, and Urdu runs use Word's complex-script size and font.
- */
 export function normalizeWordHtml(
   html: string,
   { lineHeightRatio }: NormalizeOptions = {},
@@ -74,12 +68,10 @@ export function normalizeWordHtml(
     span.append(text);
   }
 
-  // Word's "multiple" spacing scales the font's single line, not its size as CSS percentages do.
   for (const { element, lineHeight } of spacing) {
     element.style.lineHeight = String(Math.round(lineHeight * 1000) / 1000);
   }
 
-  // Word's "single" spacing is one font line; don't let the page's default line height apply.
   for (const { block, singleLine } of singleSpaced) {
     block.style.lineHeight = singleLine ? String(Math.round(singleLine * 1000) / 1000) : "normal";
   }
@@ -90,7 +82,6 @@ export function normalizeWordHtml(
   return doc.body.innerHTML;
 }
 
-/** Reads the first section's paper size and margins from Word's `@page` rule. */
 export function readWordPageLayout(html: string): PageLayout | undefined {
   if (!isWordHtml(html)) return undefined;
   const rule = /@page\s+WordSection1\s*\{([^}]*)\}/i.exec(html)?.[1];
@@ -116,11 +107,6 @@ type StyleRule = {
   declarations: string;
 };
 
-/**
- * Applies Word's `<style>` rules as inline styles with CSS precedence (specificity, then source
- * order, then the element's own inline style). Declarations are copied as text, so Word-only
- * properties such as `mso-bidi-font-size` survive for the complex-script pass.
- */
 function inlineStylesheets(doc: Document) {
   const rules: StyleRule[] = [];
   for (const style of doc.querySelectorAll("style")) {
@@ -128,7 +114,6 @@ function inlineStylesheets(doc: Document) {
     walk(ast, {
       visit: "Rule",
       enter(rule) {
-        // Skip rules nested in @media/@page and friends; they don't describe the pasted content.
         if (this.atrule || rule.prelude.type !== "SelectorList") return;
         const declarations = generate(rule.block).replace(/^\{|\}$/g, "");
         for (const selector of rule.prelude.children) {
@@ -184,7 +169,6 @@ function specificityOf(selector: Selector): [number, number, number] {
 }
 
 const lineHeightRatios = new Map<string, number | undefined>();
-/** Fonts shipped with the app; Word's single line is their Windows ascent + descent. */
 const BUNDLED_FONTS = [{ family: URDU_FONT_FAMILY, url: URDU_FONT_URL }];
 
 function primaryFamily(fontFamily: string) {
@@ -194,10 +178,6 @@ function primaryFamily(fontFamily: string) {
     .toLowerCase();
 }
 
-/**
- * A font's single-line height divided by its size, as Word computes it. Uses the font file's
- * Windows metrics when known, otherwise the browser's `normal` line height for the loaded font.
- */
 export function measureLineHeightRatio(fontFamily: string): number | undefined {
   const key = primaryFamily(fontFamily);
   if (lineHeightRatios.has(key)) return lineHeightRatios.get(key);
@@ -215,7 +195,6 @@ export function measureLineHeightRatio(fontFamily: string): number | undefined {
   return ratio;
 }
 
-/** Loads the fonts the pasted HTML uses and reads bundled fonts' Windows line metrics. */
 export async function prepareFontsFor(html: string) {
   const faces = [...document.fonts].filter(
     (face) => face.status === "unloaded" && html.includes(face.family.replace(/["']/g, "")),
@@ -229,9 +208,7 @@ export async function prepareFontsFor(html: string) {
       try {
         const ratio = windowsLineRatio(await (await fetch(font.url)).arrayBuffer());
         if (ratio) lineHeightRatios.set(primaryFamily(font.family), ratio);
-      } catch {
-        // Fall back to the browser's measurement.
-      }
+      } catch {}
     }),
   ]);
 }
@@ -256,7 +233,6 @@ export function windowsLineRatio(buffer: ArrayBuffer): number | undefined {
   return unitsPerEm ? (ascent + descent) / unitsPerEm : undefined;
 }
 
-/** Urdu text renders in Word's complex-script font; everything else in the Latin font. */
 function effectiveFontFamily(element: HTMLElement) {
   const complex = ARABIC_SCRIPT.test(element.textContent ?? "");
   return (
@@ -281,7 +257,6 @@ function inheritedDeclaration(element: HTMLElement, property: string): string | 
   return undefined;
 }
 
-/** The last declaration of `property` wins, as in CSS. */
 function declaration(style: string, property: string) {
   const escaped = property.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
   const matches = [...style.matchAll(new RegExp(`(?:^|[;{\\s])${escaped}\\s*:\\s*([^;}]+)`, "gi"))];

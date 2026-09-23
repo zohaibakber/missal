@@ -64,10 +64,10 @@ export class FirUpdateInput extends Schema.Class<FirUpdateInput>("FirUpdateInput
 
 export const getFirStatusColor = (status: FirRecord["status"]) =>
   Match.value(status).pipe(
-    Match.when("Open", () => "bg-amber-500"),
-    Match.when("Under Investigation", () => "bg-blue-500"),
-    Match.when("Challan Submitted", () => "bg-violet-500"),
-    Match.when("Closed", () => "bg-emerald-500"),
+    Match.when("Open", () => "bg-status-open"),
+    Match.when("Under Investigation", () => "bg-status-investigating"),
+    Match.when("Challan Submitted", () => "bg-status-challan"),
+    Match.when("Closed", () => "bg-status-closed"),
     Match.exhaustive,
   );
 
@@ -109,20 +109,3 @@ export const createEmptyFirRecord = (): FirFormValues => ({
   investigation_officer: "",
   status: "Open",
 });
-
-export const normalizeFirText = (value: unknown) => {
-  if (typeof value === "string") {
-    return value.replace(/\s+/g, " ").trim();
-  }
-
-  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
-    return `${value}`.replace(/\s+/g, " ").trim();
-  }
-
-  return "";
-};
-
-export const sanitizePhoneLikeValue = (value: unknown) =>
-  normalizeFirText(value)
-    .replace(/[^\d+\-\s]/g, "")
-    .trim();

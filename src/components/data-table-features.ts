@@ -4,11 +4,9 @@ import {
   columnVisibilityFeature,
   constructFilterFn,
   createFilteredRowModel,
-  createPaginatedRowModel,
   createSortedRowModel,
   filterFn_includesString,
   globalFilteringFeature,
-  rowPaginationFeature,
   rowSelectionFeature,
   rowSortingFeature,
   sortFn_alphanumeric,
@@ -19,7 +17,6 @@ import {
   type TableFeatures,
 } from "@tanstack/react-table";
 
-/** Keeps rows whose value is one of the selected options (used by faceted filters). */
 const filterFn_oneOf = constructFilterFn({
   filter: (dataValue: unknown, filterValue: readonly unknown[]) => filterValue.includes(dataValue),
   autoRemove: (value: readonly unknown[] | undefined) => !value?.length,
@@ -30,11 +27,9 @@ export const features = tableFeatures({
   columnSizingFeature,
   columnVisibilityFeature,
   globalFilteringFeature,
-  rowPaginationFeature,
   rowSelectionFeature,
   rowSortingFeature,
   filteredRowModel: createFilteredRowModel(),
-  paginatedRowModel: createPaginatedRowModel(),
   sortedRowModel: createSortedRowModel(),
   filterFns: {
     includesString: filterFn_includesString,
@@ -55,7 +50,6 @@ declare module "@tanstack/react-table" {
     TData extends RowData,
     TValue extends CellData,
   > {
-    /** Plain-text column name for menus such as column visibility. */
     label?: string;
   }
 }

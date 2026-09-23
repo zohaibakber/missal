@@ -1,7 +1,6 @@
 import type { Hotkey } from "@tanstack/react-hotkeys";
 
 export type Shortcut = {
-  /** A single chord, or a Vim-style sequence of chords pressed one after another. */
   keys: Hotkey | readonly Hotkey[];
   label: string;
   group: ShortcutGroup;
@@ -17,7 +16,6 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   "Templates",
 ];
 
-/** Single source of truth for every keyboard shortcut: bindings, command menu hints and the cheatsheet. */
 export const shortcuts = {
   commandMenu: { keys: "Mod+K", label: "Open command menu", group: "General" },
   cheatsheet: { keys: "?", label: "Show keyboard shortcuts", group: "General" },
@@ -25,11 +23,14 @@ export const shortcuts = {
   search: { keys: "/", label: "Search this page", group: "General" },
   save: { keys: "Mod+S", label: "Save", group: "General" },
   blurEditor: { keys: "Escape", label: "Leave the editor or field", group: "General" },
+  confirm: { keys: "Mod+Enter", label: "Confirm a selection", group: "General" },
 
   goHome: { keys: ["G", "H"], label: "Go to FIRs", group: "Navigation" },
   goTemplates: { keys: ["G", "T"], label: "Go to templates", group: "Navigation" },
   goPlaceholders: { keys: ["G", "P"], label: "Go to placeholders", group: "Navigation" },
   goSettings: { keys: ["G", "S"], label: "Go to settings", group: "Navigation" },
+  goBack: { keys: "Alt+ArrowLeft", label: "Back", group: "Navigation" },
+  goForward: { keys: "Alt+ArrowRight", label: "Forward", group: "Navigation" },
 
   newFir: { keys: "N", label: "New FIR", group: "FIRs" },
   nextRow: { keys: "J", label: "Next row", group: "FIRs" },
@@ -38,7 +39,7 @@ export const shortcuts = {
   openRow: { keys: "Enter", label: "Open FIR", group: "FIRs" },
   editFir: { keys: "E", label: "Edit FIR details", group: "FIRs" },
 
-  print: { keys: "Mod+P", label: "Print selected documents", group: "Documents" },
+  print: { keys: "Mod+P", label: "Print preview", group: "Documents" },
   nextDocument: { keys: "Alt+ArrowDown", label: "Next document", group: "Documents" },
   previousDocument: { keys: "Alt+ArrowUp", label: "Previous document", group: "Documents" },
   addTemplates: { keys: "A", label: "Add templates to FIR", group: "Documents" },

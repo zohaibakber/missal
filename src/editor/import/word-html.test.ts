@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { normalizeWordHtml, readWordPageLayout, windowsLineRatio } from "#/editor/import/word-html";
 
-// Trimmed from Word's clipboard HTML for an Urdu document that uses "Heading 1" for body text.
 const WORD_CLIPBOARD = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
 <head><meta name=Generator content="Microsoft Word 15">
 <style><!--

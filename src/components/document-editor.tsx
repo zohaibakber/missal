@@ -22,8 +22,6 @@ import type { PlaceholderIndex } from "#/lib/placeholder";
 import { EditorToolbar } from "#/components/editor-toolbar";
 import { cn } from "#/lib/utils";
 
-export type DocumentEditorHandle = EditorSessionHandle;
-
 function EditableToolbar() {
   const editable = useLexicalEditable();
   return editable ? <EditorToolbar /> : null;
@@ -106,6 +104,34 @@ function SessionPlugins({
   return null;
 }
 
+const MM_TO_PX = 96 / 25.4;
+const DEFAULT_PAGE_WIDTH_MM = 210;
+// Horizontal breathing room kept around the page when it is scaled down to fit.
+const CANVAS_GUTTER_PX = 48;
+
+/**
+ * Scales the page down (never up) so the whole width is visible, like "fit width" in Word.
+ * Writes a CSS variable instead of state so resizing never re-renders the editor.
+ */
+function usePageFit(pageWidthMm: number) {
+  const canvasRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const pageWidthPx = pageWidthMm * MM_TO_PX;
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const zoom = Math.min(1, (entry.contentRect.width - CANVAS_GUTTER_PX) / pageWidthPx);
+      canvas.style.setProperty("--page-zoom", `${Math.max(zoom, 0.25)}`);
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, [pageWidthMm]);
+
+  return canvasRef;
+}
+
 export function DocumentEditor({
   "aria-label": ariaLabel,
   className,
@@ -120,6 +146,7 @@ export function DocumentEditor({
   onSessionReady,
 }: DocumentEditorProps) {
   const [pageLayout, setPageLayout] = useState(envelope.pageLayout);
+  const canvasRef = usePageFit(pageLayout?.widthMm ?? DEFAULT_PAGE_WIDTH_MM);
   return (
     <LexicalComposer
       key={String(sessionKey)}
@@ -136,14 +163,14 @@ export function DocumentEditor({
     >
       <div className={cn("missal-editor relative flex h-full min-h-0 min-w-0 flex-col", className)}>
         <EditableToolbar />
-        <div className="min-h-0 flex-1 overflow-auto bg-muted/30">
+        <div ref={canvasRef} className="min-h-0 flex-1 overflow-auto bg-canvas">
           <RichTextPlugin
             contentEditable={
               <ContentEditable
                 aria-label={ariaLabel}
                 lang="ur"
                 dir="rtl"
-                className="missal-editor-input missal-page mx-auto bg-background outline-none"
+                className="missal-editor-input missal-page mx-auto outline-none select-text"
                 style={
                   pageLayout
                     ? {

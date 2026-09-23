@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync, readdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { makeElectronMainRuntime } from "#/electron/main-runtime";
+import { makeStorageRuntime } from "#/electron/storage-runtime";
 import { FirRepository } from "#/repositories/fir-repository";
 import { FirCreateInput, FirUpdateInput, FirRecord, createEmptyFirRecord } from "#/lib/fir";
 import { resolveFieldValue } from "#/lib/field";
@@ -47,7 +47,7 @@ it("persists, reopens and renders multiple FIR entries in their original order",
     databasePath: join(directory, "test.sqlite"),
     migrationsFolder: resolve("drizzle"),
   };
-  let runtime = makeElectronMainRuntime(options);
+  let runtime = makeStorageRuntime(options);
   try {
     const input = Schema.decodeUnknownSync(FirCreateInput)({
       ...createEmptyFirRecord(),
@@ -74,7 +74,7 @@ it("persists, reopens and renders multiple FIR entries in their original order",
       ),
     );
     await runtime.dispose();
-    runtime = makeElectronMainRuntime(options);
+    runtime = makeStorageRuntime(options);
     const reopened = await runtime.runPromise(
       Effect.flatMap(FirRepository, (repo) => repo.get(created.id)),
     );

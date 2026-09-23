@@ -35,11 +35,17 @@ export function envelopeToHtml(
   return editor.getEditorState().read(() => $generateHtmlFromNodes(editor));
 }
 
-export function printEnvelopePacket(sections: readonly EnvelopePrintSection[], title: string) {
-  return printHtmlDocument(printPacketFromSections(htmlSectionsFrom(sections), title), title);
+export type PrintPacket = { readonly html: string; readonly title: string };
+
+/** The complete, self-contained HTML that is both previewed and sent to the printer. */
+export function envelopePrintPacket(
+  sections: readonly EnvelopePrintSection[],
+  title: string,
+): PrintPacket {
+  return { html: printPacketFromSections(htmlSectionsFrom(sections), title), title };
 }
 
-export function printHtmlDocument(html: string, title: string) {
+export function printPacket({ html, title }: PrintPacket) {
   const existingFrame = document.getElementById("fir-print-frame");
   existingFrame?.remove();
 

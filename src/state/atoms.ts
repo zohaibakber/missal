@@ -31,7 +31,7 @@ import { appRuntime } from "#/state/app-runtime";
 
 const LATEST_LIMIT = 5;
 
-export function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
+function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
   const placeholdersAtom = runtime
     .atom(Effect.flatMap(PlaceholderRepository, (repository) => repository.list))
     .pipe(runtime.factory.withReactivity(["placeholders"]), Atom.keepAlive);
@@ -136,7 +136,7 @@ export function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
 
   const removeTemplateAtom = runtime.fn(
     (id: TemplateId) => Effect.flatMap(TemplateRepository, (repository) => repository.remove(id)),
-    { reactivityKeys: ["templates", "firs"] },
+    { reactivityKeys: ["templates"] },
   );
 
   const createFirAtom = runtime.fn(

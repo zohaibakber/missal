@@ -12,7 +12,6 @@ import { $isTableCellNode } from "@lexical/table";
 import { EDITOR_NODES } from "#/editor/nodes/registry";
 import { $applyImportedStyle, $setImportedStyle, retainedStyle } from "#/editor/imported-style";
 
-// Wrap the registered converters rather than replacing their table/list/format semantics.
 function createImportMap(): DOMConversionMap {
   const converters = new Map<string, NonNullable<DOMConversionMap[string]>[]>();
   for (const node of EDITOR_NODES) {

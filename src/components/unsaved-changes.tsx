@@ -23,7 +23,7 @@ export function UnsavedChanges({ isDirty }: { isDirty: () => boolean }) {
         if (!open) blocker.reset?.();
       }}
     >
-      <AlertDialogContent dir="ltr" size="sm">
+      <AlertDialogContent dir="ltr">
         <AlertDialogHeader>
           <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
           <AlertDialogDescription>

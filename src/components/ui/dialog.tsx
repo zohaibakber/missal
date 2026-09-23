@@ -29,7 +29,7 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-black/10 duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className,
       )}
       {...props}
@@ -40,9 +40,12 @@ function DialogOverlay({ className, ...props }: DialogPrimitive.Backdrop.Props) 
 function DialogContent({
   className,
   children,
+  size = "default",
   showCloseButton = true,
   ...props
 }: DialogPrimitive.Popup.Props & {
+  /** `workspace` fills the window below the title bar, for tool-like dialogs such as print preview. */
+  size?: "default" | "workspace";
   showCloseButton?: boolean;
 }) {
   return (
@@ -50,8 +53,10 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
+        data-size={size}
         className={cn(
           "fixed top-1/2 start-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 rtl:translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "data-[size=workspace]:top-[calc(var(--titlebar-height)+0.5rem)] data-[size=workspace]:flex data-[size=workspace]:h-[calc(100svh-var(--titlebar-height)-1rem)] data-[size=workspace]:w-[calc(100vw-2rem)] data-[size=workspace]:max-w-6xl data-[size=workspace]:translate-y-0 data-[size=workspace]:flex-col data-[size=workspace]:gap-0 data-[size=workspace]:overflow-hidden data-[size=workspace]:p-0 data-[size=workspace]:sm:max-w-6xl",
           className,
         )}
         {...props}
@@ -106,7 +111,10 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("font-heading text-base leading-none font-medium", className)}
+      className={cn(
+        "font-heading text-base leading-none font-medium in-data-[size=workspace]:text-sm",
+        className,
+      )}
       {...props}
     />
   );
@@ -117,7 +125,7 @@ function DialogDescription({ className, ...props }: DialogPrimitive.Description.
     <DialogPrimitive.Description
       data-slot="dialog-description"
       className={cn(
-        "text-sm text-muted-foreground *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
+        "text-sm text-muted-foreground in-data-[size=workspace]:truncate *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
         className,
       )}
       {...props}

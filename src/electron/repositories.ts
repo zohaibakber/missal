@@ -64,7 +64,7 @@ import {
 
 const nextRevision = (revision: DocumentRevision) => DocumentRevision.make(revision + 1);
 
-export const DrizzlePlaceholderRepositoryLive = Layer.effect(
+const DrizzlePlaceholderRepositoryLive = Layer.effect(
   PlaceholderRepository,
   Effect.gen(function* () {
     const db = yield* MissalDrizzle;
@@ -142,7 +142,7 @@ export const DrizzlePlaceholderRepositoryLive = Layer.effect(
   }),
 );
 
-export const DrizzleTemplateRepositoryLive = Layer.effect(
+const DrizzleTemplateRepositoryLive = Layer.effect(
   TemplateRepository,
   Effect.gen(function* () {
     const db = yield* MissalDrizzle;
@@ -292,7 +292,7 @@ export const DrizzleTemplateRepositoryLive = Layer.effect(
   }),
 );
 
-export const DrizzleFirRepositoryLive = Layer.effect(
+const DrizzleFirRepositoryLive = Layer.effect(
   FirRepository,
   Effect.gen(function* () {
     const db = yield* MissalDrizzle;
@@ -422,7 +422,7 @@ export const DrizzleFirRepositoryLive = Layer.effect(
   }),
 );
 
-export const DrizzleFirDocumentRepositoryLive = Layer.effect(
+const DrizzleFirDocumentRepositoryLive = Layer.effect(
   FirDocumentRepository,
   Effect.gen(function* () {
     const db = yield* MissalDrizzle;
@@ -650,7 +650,7 @@ export const DrizzleFirDocumentRepositoryLive = Layer.effect(
   }),
 );
 
-export const DrizzleFirPlaceholderValueRepositoryLive = Layer.effect(
+const DrizzleFirPlaceholderValueRepositoryLive = Layer.effect(
   FirPlaceholderValueRepository,
   Effect.gen(function* () {
     const db = yield* MissalDrizzle;
@@ -733,7 +733,7 @@ export const DrizzleFirPlaceholderValueRepositoryLive = Layer.effect(
   }),
 );
 
-export const DrizzleSettingsRepositoryLive = Layer.effect(
+const DrizzleSettingsRepositoryLive = Layer.effect(
   SettingsRepository,
   Effect.gen(function* () {
     const db = yield* MissalDrizzle;
@@ -774,7 +774,7 @@ export const DrizzleSettingsRepositoryLive = Layer.effect(
   }),
 );
 
-export const ElectronRepositoriesLive = Layer.mergeAll(
+const ElectronRepositoriesLive = Layer.mergeAll(
   DrizzlePlaceholderRepositoryLive,
   DrizzleTemplateRepositoryLive,
   DrizzleFirRepositoryLive,

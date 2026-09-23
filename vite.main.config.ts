@@ -11,9 +11,12 @@ export default defineConfig({
   },
   build: {
     lib: {
-      entry: "src/main.ts",
+      entry: { main: "src/main.ts", "storage-worker": "src/storage-worker.ts" },
       fileName: () => "[name].cjs",
       formats: ["cjs"],
+    },
+    rollupOptions: {
+      output: { chunkFileNames: "[name]-[hash].cjs" },
     },
   },
 });

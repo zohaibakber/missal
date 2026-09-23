@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { TemplateEditorForm } from "#/components/template-editor-form";
 
-export const Route = createFileRoute("/templates_/new")({
+export const Route = createFileRoute("/templates/new")({
   component: RouteComponent,
 });
 

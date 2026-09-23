@@ -4,7 +4,7 @@ import type { FirRecord } from "#/lib/fir";
 import { PlaceholderId } from "#/lib/ids";
 import type { Placeholder, PlaceholderIndex } from "#/lib/placeholder";
 
-export const FIR_PROPERTY_NAMES = [
+const FIR_PROPERTY_NAMES = [
   "fir_no",
   "date",
   "incident_date",
@@ -18,11 +18,11 @@ export const FIR_PROPERTY_NAMES = [
   "investigation_officer",
 ] as const;
 
-export const FirPropertyName = Schema.Literals(FIR_PROPERTY_NAMES);
+const FirPropertyName = Schema.Literals(FIR_PROPERTY_NAMES);
 
-export type FirPropertyName = typeof FirPropertyName.Type;
+type FirPropertyName = typeof FirPropertyName.Type;
 
-export const SHARED_SETTING_KEYS = [
+const SHARED_SETTING_KEYS = [
   "investigation_officer",
   "police_station",
   "district",
@@ -30,11 +30,11 @@ export const SHARED_SETTING_KEYS = [
   "dsp_name",
 ] as const;
 
-export const SharedSettingKey = NonEmptyTrimmedString;
+const SharedSettingKey = NonEmptyTrimmedString;
 
-export type SharedSettingKey = typeof SharedSettingKey.Type;
+type SharedSettingKey = typeof SharedSettingKey.Type;
 
-export const PLACEHOLDER_KEY_TO_FIR_PROPERTY = {
+const PLACEHOLDER_KEY_TO_FIR_PROPERTY = {
   fir_no: "fir_no",
   date: "date",
   incident_date: "incident_date",
@@ -111,10 +111,6 @@ export function fieldSourceForSeedKey(key: string): FieldSource {
   return CustomSource.make({});
 }
 
-export function isSeededFieldSource(source: FieldSource) {
-  return source._tag !== "Custom";
-}
-
 export type FieldPresentationContext = {
   catalog: PlaceholderIndex;
   fir: FirRecord | null;
@@ -161,7 +157,7 @@ export function resolveFieldValue(
   return resolveFieldValueFromMap(field, fir, overrideValuesFrom(overrides), sharedSettings);
 }
 
-export function resolveFieldValueFromMap(
+function resolveFieldValueFromMap(
   field: Placeholder,
   fir: FirRecord,
   overrideValues: HashMap.HashMap<PlaceholderId, string>,
@@ -180,22 +176,6 @@ export function resolveFieldValueFromMap(
       return resolvedOrMissing(override ?? "", field.label);
     },
   });
-}
-
-export function resolveFieldReferenceValue(
-  reference: FieldReference,
-  catalog: PlaceholderIndex,
-  fir: FirRecord,
-  overrides: readonly FieldOverride[],
-  sharedSettings: Record<string, string>,
-): ResolvedFieldValue {
-  return resolveFieldReferenceFromMap(
-    reference,
-    catalog,
-    fir,
-    overrideValuesFrom(overrides),
-    sharedSettings,
-  );
 }
 
 export function fieldDisplayText(
@@ -225,26 +205,6 @@ export function fieldDisplayText(
         ? { text: resolved.label, unresolved: true }
         : { text: resolved.text, unresolved: false };
     },
-  });
-}
-
-function resolveFieldReferenceFromMap(
-  reference: FieldReference,
-  catalog: PlaceholderIndex,
-  fir: FirRecord,
-  overrideValues: HashMap.HashMap<PlaceholderId, string>,
-  sharedSettings: Record<string, string>,
-): ResolvedFieldValue {
-  return Match.valueTags(reference, {
-    CatalogField: ({ id }) => {
-      const field = Option.getOrUndefined(HashMap.get(catalog.byId, id));
-      if (!field) {
-        return { _tag: "Unresolved", label: String(id) } as const;
-      }
-
-      return resolveFieldValueFromMap(field, fir, overrideValues, sharedSettings);
-    },
-    UnresolvedToken: ({ text }) => ({ _tag: "Unresolved", label: text }) as const,
   });
 }
 

@@ -1,4 +1,3 @@
-/** Style properties copied from a rendered import so the document keeps its look without its stylesheet. */
 const TEXT_STYLE = [
   "font-family",
   "font-size",
@@ -37,7 +36,6 @@ const BOX_STYLE = [
   "min-height",
 ];
 
-/** Inline the rendered look of an element; `keepNormal` also keeps explicit `normal` values. */
 export function collectStyles(
   element: HTMLElement,
   computed: CSSStyleDeclaration,

@@ -67,11 +67,13 @@ function isRetained(property: string, textOnly: boolean) {
   return !textOnly && (LAYOUT_PROPERTIES.has(property) || LONGHAND_FAMILIES.test(property));
 }
 
-export const importedStyleState = createState("importedStyle", {
-  parse: (value: unknown) => (typeof value === "string" ? value : ""),
+// Sanitized once when a saved document is parsed and when set, so rendering can apply it directly.
+const importedStyleState = createState("importedStyle", {
+  parse: (value: unknown) => (typeof value === "string" ? retainedStyle(value) : ""),
 });
 
 export function retainedStyle(cssText: string, textOnly = false): string {
+  if (!cssText) return "";
   const source = document.createElement("span").style;
   const result = document.createElement("span").style;
   source.cssText = cssText;
@@ -89,7 +91,7 @@ export function $setImportedStyle(node: LexicalNode, style: string) {
 }
 
 export function $applyImportedStyle(node: LexicalNode, element: HTMLElement) {
-  const style = retainedStyle($getState(node, importedStyleState));
+  const style = $getState(node, importedStyleState);
   if (!style) return;
   const source = document.createElement("span").style;
   source.cssText = style;
