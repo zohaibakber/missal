@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, protocol } from "electron";
 import squirrelStartup from "electron-squirrel-startup";
+import { updateElectronApp, UpdateSourceType } from "update-electron-app";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -152,6 +153,15 @@ const registerDesktopIntegration = () => {
 };
 
 const startApp = () => {
+  // Checks published GitHub Releases through update.electronjs.org, downloads in the background and
+  // offers a restart. Does nothing in development or outside Windows.
+  updateElectronApp({
+    updateSource: {
+      type: UpdateSourceType.ElectronPublicUpdateService,
+      repo: "zohaibakber/missal",
+    },
+  });
+
   let storageRuntime: ReturnType<typeof makeStorageWorkerRuntime> | undefined;
   let disposingStorage = false;
 
