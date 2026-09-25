@@ -10,7 +10,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type { DataTableInstance } from "#/components/data-table";
 import { Hint } from "#/components/hint";
 import { ShortcutKbd } from "#/components/shortcut-kbd";
-import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import {
   Command,
@@ -100,16 +99,18 @@ export function DataTableFacetedFilter<TData extends RowData>({
   columnId,
   title,
   options,
-}: TableProp<TData> & { columnId: string; title: string; options: FacetedFilterOption[] }) {
+  dir,
+}: TableProp<TData> & {
+  columnId: string;
+  title: string;
+  options: FacetedFilterOption[];
+  /** Text direction of the menu; "rtl" puts Urdu options on the right. */
+  dir?: "ltr" | "rtl";
+}) {
   const column = table.getColumn(columnId);
   if (!column) return null;
 
   const selected = new Set((column.getFilterValue() as string[] | undefined) ?? []);
-  const counts = new Map<string, number>();
-  for (const row of table.getCoreRowModel().rows) {
-    const value = String(row.getValue(columnId));
-    counts.set(value, (counts.get(value) ?? 0) + 1);
-  }
 
   function toggle(value: string) {
     const next = new Set(selected);
@@ -120,12 +121,22 @@ export function DataTableFacetedFilter<TData extends RowData>({
 
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="subtle" size="sm" type="button" />}>
-        <HugeiconsIcon icon={FilterHorizontalIcon} strokeWidth={2} data-icon="inline-start" />
-        {title}
-        {selected.size ? <Badge variant="secondary">{selected.size}</Badge> : null}
-      </PopoverTrigger>
-      <PopoverContent className="w-56" align="start">
+      <Hint label={selected.size ? `${title} · ${selected.size} selected` : title}>
+        <PopoverTrigger
+          render={
+            <Button
+              // Filled while a filter is applied, so the icon alone shows the table is narrowed.
+              variant={selected.size ? "secondary" : "subtle"}
+              size="icon-sm"
+              type="button"
+              aria-label={title}
+            />
+          }
+        >
+          <HugeiconsIcon icon={FilterHorizontalIcon} strokeWidth={2} />
+        </PopoverTrigger>
+      </Hint>
+      <PopoverContent className="w-56" align="start" dir={dir}>
         <Command>
           <CommandInput placeholder={title} />
           <CommandList>
@@ -140,9 +151,6 @@ export function DataTableFacetedFilter<TData extends RowData>({
                 >
                   {option.icon}
                   <span className="truncate">{option.label}</span>
-                  <span className="ms-auto font-mono text-xs text-muted-foreground">
-                    {counts.get(option.value) ?? 0}
-                  </span>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -201,7 +209,7 @@ export function DataTableViewOptions<TData extends RowData>({ table }: TableProp
           <HugeiconsIcon icon={LayoutThreeColumnIcon} strokeWidth={2} />
         </DropdownMenuTrigger>
       </Hint>
-      <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuContent align="start" className="w-44">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Show columns</DropdownMenuLabel>
           {columns.map((column) => (

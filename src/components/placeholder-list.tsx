@@ -1,77 +1,75 @@
-import type { ComponentProps, ReactNode } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "#/components/ui/table";
+import type { ComponentProps } from "react";
+import { useAtomValue } from "@effect/atom-react";
+import { Add01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Hint } from "#/components/hint";
+import { SaveStatus } from "#/components/pane";
+import { Button } from "#/components/ui/button";
+import { Spinner } from "#/components/ui/spinner";
 import { cn } from "#/lib/utils";
+import { atoms } from "#/state/atoms";
 
-/** An editable two-column list of placeholders, used on the Placeholders screen. */
+/** An editable list of placeholders, used in Settings. */
 function PlaceholderList({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="placeholder-list"
       dir="rtl"
       lang="ur"
-      className={cn("overflow-hidden rounded-lg border", className)}
+      className={cn("flex flex-col gap-2", className)}
       {...props}
     />
   );
 }
 
-function PlaceholderListTable({
-  nameHeading,
-  valueHeading,
-  children,
+/** Add button, plus Reset and Save once the list has unsaved changes. */
+function PlaceholderListActions({
+  addLabel,
+  dirty,
+  onAdd,
+  onReset,
+  saving,
 }: {
-  nameHeading: string;
-  valueHeading: string;
-  children: ReactNode;
+  addLabel: string;
+  dirty: boolean;
+  onAdd: () => void;
+  onReset: () => void;
+  saving: boolean;
 }) {
   return (
-    <Table className="table-fixed">
-      <TableHeader>
-        <TableRow>
-          <TableHead>{nameHeading}</TableHead>
-          <TableHead>{valueHeading}</TableHead>
-          <TableHead columnWidth={48}>
-            <span className="sr-only">Actions</span>
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>{children}</TableBody>
-    </Table>
+    <div dir="ltr" lang="en" className="flex items-center gap-2 pt-1">
+      <Button type="button" size="sm" variant="subtle" disabled={saving} onClick={onAdd}>
+        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+        {addLabel}
+      </Button>
+      {dirty ? (
+        <>
+          <SaveStatus dirty className="ms-auto" />
+          <Button type="button" variant="subtle" size="sm" disabled={saving} onClick={onReset}>
+            Reset
+          </Button>
+          <Hint label="Save" shortcut="save">
+            <Button type="submit" size="sm" disabled={saving}>
+              {saving ? <Spinner data-icon="inline-start" /> : null}
+              Save
+            </Button>
+          </Hint>
+        </>
+      ) : null}
+    </div>
   );
 }
 
-function PlaceholderListRow(props: ComponentProps<typeof TableRow>) {
-  return <TableRow className="hover:bg-transparent" {...props} />;
-}
-
-function PlaceholderListFooter({ className, ...props }: ComponentProps<"div">) {
+/** How a placeholder name is written in a template, using the markers chosen in Settings. */
+function PlaceholderToken({ name }: { name: string }) {
+  const { open, close } = useAtomValue(atoms.fieldMarkersAtom);
   return (
-    <div
-      dir="ltr"
-      lang="en"
-      className={cn("flex justify-end border-t p-1.5", className)}
-      {...props}
-    />
+    <code dir="rtl" lang="ur" className="rounded bg-muted px-1 font-mono text-foreground">
+      {open}
+      {name}
+      {close}
+    </code>
   );
 }
 
-/** Description line shown above a placeholder list. */
-function PlaceholderListIntro({ className, ...props }: ComponentProps<"p">) {
-  return <p className={cn("mb-4 text-sm text-muted-foreground", className)} {...props} />;
-}
-
-export {
-  PlaceholderList,
-  PlaceholderListFooter,
-  PlaceholderListIntro,
-  PlaceholderListRow,
-  PlaceholderListTable,
-  TableCell as PlaceholderListCell,
-};
+export { PlaceholderList, PlaceholderListActions, PlaceholderToken };

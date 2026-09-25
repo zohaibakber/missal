@@ -27,7 +27,6 @@ export const shortcuts = {
 
   goHome: { keys: ["G", "H"], label: "Go to FIRs", group: "Navigation" },
   goTemplates: { keys: ["G", "T"], label: "Go to templates", group: "Navigation" },
-  goPlaceholders: { keys: ["G", "P"], label: "Go to placeholders", group: "Navigation" },
   goSettings: { keys: ["G", "S"], label: "Go to settings", group: "Navigation" },
   goBack: { keys: "Alt+ArrowLeft", label: "Back", group: "Navigation" },
   goForward: { keys: "Alt+ArrowRight", label: "Forward", group: "Navigation" },
@@ -46,7 +45,7 @@ export const shortcuts = {
   toggleFieldNames: { keys: "Mod+Shift+L", label: "Show field names", group: "Documents" },
 
   newTemplate: { keys: "Shift+N", label: "New template", group: "Templates" },
-  importDocx: { keys: "Mod+O", label: "Import Word document", group: "Templates" },
+  importDocx: { keys: "Mod+O", label: "Upload Word", group: "Templates" },
   nextTemplate: { keys: "Alt+ArrowDown", label: "Next template", group: "Templates" },
   previousTemplate: { keys: "Alt+ArrowUp", label: "Previous template", group: "Templates" },
 } as const satisfies Record<string, Shortcut>;

@@ -31,6 +31,7 @@ import {
   PlaceholderRemoveRequest,
   PlaceholderUpdateRequest,
   SettingsGetRequest,
+  SettingsSaveFieldMarkersRequest,
   SettingsSaveRequest,
   StorageRequest,
   decodeStorageResponse,
@@ -329,6 +330,13 @@ const IpcSettingsRepositoryLive = Layer.effect(
           SettingsSaveRequest.make({ sharedPlaceholders }),
           AppSettings,
           "settings.save",
+        ),
+      saveFieldMarkers: (fieldMarkers) =>
+        ipcExit(
+          storage,
+          SettingsSaveFieldMarkersRequest.make({ fieldMarkers }),
+          AppSettings,
+          "settings.saveFieldMarkers",
         ),
     });
   }),

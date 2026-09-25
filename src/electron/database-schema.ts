@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm/sqlite-core";
 import type { DocumentEnvelope } from "#/lib/document-format";
 import type { FieldReference, FieldSource } from "#/lib/field";
+import type { FieldMarkers } from "#/lib/settings";
 
 export const FIR_STATUS_VALUES = [
   "Open",
@@ -20,8 +21,7 @@ export const FIR_STATUS_VALUES = [
 
 export const placeholders = sqliteTable("placeholders", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  key: text("key").notNull().unique(),
-  label: text("label").notNull(),
+  label: text("label").notNull().unique(),
   source: text("source", { mode: "json" }).notNull().$type<FieldSource>(),
 });
 
@@ -122,6 +122,10 @@ export const appSettings = sqliteTable(
     sharedPlaceholders: text("shared_placeholders", { mode: "json" })
       .notNull()
       .$type<Record<string, string>>(),
+    fieldMarkers: text("field_markers", { mode: "json" })
+      .notNull()
+      .$type<Pick<FieldMarkers, "open" | "close">>()
+      .default({ open: "@", close: "@" }),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [check("app_settings_id_default", sql`${table.id} = 'default'`)],

@@ -76,7 +76,7 @@
 
 :root {
   /* Matches TITLEBAR_HEIGHT in main.ts (the native caption button overlay). */
-  --titlebar-height: 2.5rem;
+  --titlebar-height: 2.75rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.17 0 0);
   --card: oklch(1 0 0);
@@ -187,6 +187,12 @@
   .select-text * {
     user-select: text;
   }
+  /* Editable text keeps the I-beam; the body's arrow would otherwise be inherited. */
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
+  textarea,
+  [contenteditable="true"] {
+    cursor: text;
+  }
   a,
   img {
     -webkit-user-drag: none;
@@ -272,6 +278,9 @@
   font-family: var(--font-urdu);
   font-size: 1.25rem;
   line-height: 2.4;
+  /* Jameel Noori's ccmp shapes a space between Urdu letters to zero width in Chromium; restore
+     the font's own space width (0.25em) so words don't run together. Keep in sync with output.ts. */
+  word-spacing: 0.25em;
   text-align: right;
   unicode-bidi: plaintext;
   overflow-wrap: anywhere;

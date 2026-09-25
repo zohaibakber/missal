@@ -42,9 +42,9 @@ it("binds seeded keys independently of later key names", () => {
 });
 
 it("resolves FIR properties and uses global values even when legacy FIR overrides exist", () => {
-  const policeStation = catalog.find((field) => field.key === "police_station");
-  const district = catalog.find((field) => field.key === "district");
-  const firNo = catalog.find((field) => field.key === "fir_no");
+  const policeStation = catalog.find((field) => field.label === "تھانہ نام");
+  const district = catalog.find((field) => field.label === "ضلع نام");
+  const firNo = catalog.find((field) => field.label === "ایف آئی آر نمبر");
 
   expect(policeStation && district && firNo).toBeTruthy();
   if (!policeStation || !district || !firNo) {
@@ -80,8 +80,8 @@ it("resolves FIR properties and uses global values even when legacy FIR override
   });
 });
 
-it("keeps renaming a key from changing source binding", () => {
-  const nic = catalog.find((field) => field.key === "nic");
+it("binds seeded fields to their source, not their name", () => {
+  const nic = catalog.find((field) => field.label === "شناختی کارڈ");
   expect(nic?.source).toEqual({ _tag: "FirProperty", property: "NIC" });
   expect(nic ? resolveFieldValue(nic, fir, [], {}) : undefined).toEqual({
     _tag: "Resolved",
@@ -128,7 +128,7 @@ it("projects field references from a serialized envelope without walking live ed
 
 it("shows catalog labels without a FIR and values when a FIR is present", () => {
   const index = indexPlaceholders(catalog);
-  const firNo = catalog.find((field) => field.key === "fir_no");
+  const firNo = catalog.find((field) => field.label === "ایف آئی آر نمبر");
   expect(firNo).toBeTruthy();
   if (!firNo) {
     return;

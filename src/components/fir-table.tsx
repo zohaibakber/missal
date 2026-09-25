@@ -23,14 +23,7 @@ import { EditFirSheet } from "#/components/edit-fir-sheet";
 import { firColumns, FirRowActionsContext, type FirRowActions } from "#/components/fir-columns";
 import { FirStatusDot } from "#/components/fir-status-badge";
 import { Hint } from "#/components/hint";
-import {
-  Pane,
-  PaneActions,
-  PaneBody,
-  PaneHeader,
-  PaneStatusBar,
-  PaneTitle,
-} from "#/components/pane";
+import { Pane, PaneActions, PaneBody, PaneHeader, PaneStatusBar } from "#/components/pane";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -95,7 +88,6 @@ export function FirsPane() {
   return (
     <Pane>
       <PaneHeader>
-        <PaneTitle>FIRs</PaneTitle>
         <PaneActions>
           <NewFirButton />
         </PaneActions>
@@ -154,19 +146,19 @@ function FirBrowser({ data }: { data: readonly FirRecord[] }) {
     <FirRowActionsContext value={actions}>
       <Pane>
         <PaneHeader>
-          <PaneTitle>FIRs</PaneTitle>
-          <div className="ms-3 flex min-w-0 items-center gap-1">
+          <div className="flex min-w-0 items-center gap-1">
             <DataTableSearch table={table} placeholder="Search FIRs" />
             <DataTableFacetedFilter
               table={table}
               columnId="status"
               title="Status"
               options={statusOptions}
+              dir="rtl"
             />
+            <DataTableViewOptions table={table} />
             <DataTableResetFilters table={table} />
           </div>
           <PaneActions>
-            <DataTableViewOptions table={table} />
             <NewFirButton />
           </PaneActions>
         </PaneHeader>

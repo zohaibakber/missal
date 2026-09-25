@@ -7,7 +7,6 @@ import {
   KeyboardIcon,
   LegalDocument01Icon,
   Settings01Icon,
-  TextFontIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FirStatusDot } from "#/components/fir-status-badge";
@@ -43,12 +42,6 @@ function NavMain() {
       label: "Templates",
       icon: LegalDocument01Icon,
       active: pathname.startsWith("/templates"),
-    },
-    {
-      to: "/placeholders",
-      label: "Placeholders",
-      icon: TextFontIcon,
-      active: pathname.startsWith("/placeholders"),
     },
   ] as const;
 

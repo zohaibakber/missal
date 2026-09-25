@@ -5,15 +5,17 @@ import type { MissalDrizzle } from "#/electron/database";
 import { appSettings, placeholders } from "#/electron/database-schema";
 import {
   decodeStored,
+  isDrizzleQueryError,
   mapQuery,
   mapTransaction,
   missingWrite,
   notFound,
+  recoverUnique,
   requireRow,
 } from "#/electron/repository-helpers";
 import { GlobalPlaceholder, SaveGlobalPlaceholdersInput } from "#/lib/global-placeholder";
 import { SharedSettingSource } from "#/lib/field";
-import { Placeholder, PlaceholderKey } from "#/lib/placeholder";
+import { Placeholder } from "#/lib/placeholder";
 import { AppSettings } from "#/lib/settings";
 import { StorageError } from "#/lib/storage-errors";
 import { nowIso } from "#/lib/time";
@@ -35,7 +37,6 @@ export function globalPlaceholderOperations(db: MissalDrizzle["Service"]) {
         ? [
             new GlobalPlaceholder({
               id: field.id,
-              key: field.key,
               label: field.label,
               value: settings.sharedPlaceholders[field.source.setting] ?? "",
             }),
@@ -59,13 +60,17 @@ export function globalPlaceholderOperations(db: MissalDrizzle["Service"]) {
           const values = { ...settings.sharedPlaceholders };
           for (const entry of input.entries) {
             if (entry._tag === "New") {
-              const key = PlaceholderKey.make(`global_${randomUUID().replaceAll("-", "_")}`);
-              yield* tx.insert(placeholders).values({
-                key,
-                label: entry.label,
-                source: SharedSettingSource.make({ setting: key }),
-              });
-              values[key] = entry.value;
+              const setting = `global_${randomUUID().replaceAll("-", "_")}`;
+              yield* tx
+                .insert(placeholders)
+                .values({ label: entry.label, source: SharedSettingSource.make({ setting }) })
+                .pipe(
+                  Effect.catchIf(
+                    isDrizzleQueryError,
+                    recoverUnique("globalPlaceholder.save", "placeholder", "name", entry.label),
+                  ),
+                );
+              values[setting] = entry.value;
             } else {
               const rows = yield* tx
                 .select()
@@ -84,7 +89,13 @@ export function globalPlaceholderOperations(db: MissalDrizzle["Service"]) {
               yield* tx
                 .update(placeholders)
                 .set({ label: entry.label })
-                .where(eq(placeholders.id, entry.id));
+                .where(eq(placeholders.id, entry.id))
+                .pipe(
+                  Effect.catchIf(
+                    isDrizzleQueryError,
+                    recoverUnique("globalPlaceholder.save", "placeholder", "name", entry.label),
+                  ),
+                );
               values[field.source.setting] = entry.value;
             }
           }

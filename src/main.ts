@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, protocol } from "electron";
 import squirrelStartup from "electron-squirrel-startup";
+import { updateElectronApp, UpdateSourceType } from "update-electron-app";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -20,7 +21,8 @@ import {
 
 const RENDERER_SCHEME = "missal";
 const RENDERER_HOST = "renderer";
-const TITLEBAR_HEIGHT = 40;
+// Matches --titlebar-height in styles.css.
+const TITLEBAR_HEIGHT = 44;
 const TITLEBAR_COLOR = "#01000000";
 const TITLEBAR_LIGHT_SYMBOL_COLOR = "#404040";
 const TITLEBAR_DARK_SYMBOL_COLOR = "#d4d4d4";
@@ -151,6 +153,15 @@ const registerDesktopIntegration = () => {
 };
 
 const startApp = () => {
+  // Checks published GitHub Releases through update.electronjs.org, downloads in the background and
+  // offers a restart. Does nothing in development or outside Windows.
+  updateElectronApp({
+    updateSource: {
+      type: UpdateSourceType.ElectronPublicUpdateService,
+      repo: "zohaibakber/missal",
+    },
+  });
+
   let storageRuntime: ReturnType<typeof makeStorageWorkerRuntime> | undefined;
   let disposingStorage = false;
 

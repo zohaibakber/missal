@@ -1,5 +1,9 @@
 import { createContext, use, useState, type ComponentProps, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { Tick02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Button } from "#/components/ui/button";
+import { Spinner } from "#/components/ui/spinner";
 import { cn } from "#/lib/utils";
 
 /** A content surface inside the window: toolbar header, scrolling body, optional status bar. */
@@ -86,6 +90,49 @@ function SaveStatus({ dirty, className }: { dirty: boolean; className?: string }
   );
 }
 
+/**
+ * The save button doubles as the save status, so the toolbar needs no separate label:
+ * filled with a dot while there are edits, a spinner while saving, a quiet "Saved" tick after.
+ */
+function SaveButton({
+  dirty,
+  pending = false,
+  disabled = false,
+  label = "Save",
+  onClick,
+}: {
+  dirty: boolean;
+  pending?: boolean;
+  disabled?: boolean;
+  label?: string;
+  onClick: () => void;
+}) {
+  const state = pending ? "saving" : dirty ? "dirty" : "saved";
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={state === "saved" ? "subtle" : "default"}
+      data-save-state={state}
+      disabled={disabled || state !== "dirty"}
+      onClick={onClick}
+    >
+      {state === "saving" ? (
+        <Spinner data-icon="inline-start" />
+      ) : state === "dirty" ? (
+        <span
+          aria-hidden="true"
+          data-icon="inline-start"
+          className="size-1.5 rounded-full bg-primary-foreground"
+        />
+      ) : (
+        <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} data-icon="inline-start" />
+      )}
+      {state === "saving" ? "Saving…" : state === "dirty" ? label : "Saved"}
+    </Button>
+  );
+}
+
 type ActionsSlot = {
   target: HTMLElement | null;
   setTarget: (element: HTMLElement | null) => void;
@@ -122,5 +169,6 @@ export {
   PaneHeader,
   PaneStatusBar,
   PaneTitle,
+  SaveButton,
   SaveStatus,
 };

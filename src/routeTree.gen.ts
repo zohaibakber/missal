@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FirIdRouteImport } from './routes/$firId'
 import { Route as NewRouteImport } from './routes/new'
-import { Route as PlaceholdersRouteImport } from './routes/placeholders'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as FirIdEditRouteImport } from './routes/$firId_.edit'
@@ -33,11 +32,6 @@ const FirIdRoute = FirIdRouteImport.update({
 const NewRoute = NewRouteImport.update({
   id: '/new',
   path: '/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PlaceholdersRoute = PlaceholdersRouteImport.update({
-  id: '/placeholders',
-  path: '/placeholders',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -75,7 +69,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$firId': typeof FirIdRoute
   '/new': typeof NewRoute
-  '/placeholders': typeof PlaceholdersRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/$firId/edit': typeof FirIdEditRoute
@@ -87,7 +80,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$firId': typeof FirIdRoute
   '/new': typeof NewRoute
-  '/placeholders': typeof PlaceholdersRoute
   '/settings': typeof SettingsRoute
   '/$firId/edit': typeof FirIdEditRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
@@ -99,7 +91,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/$firId': typeof FirIdRoute
   '/new': typeof NewRoute
-  '/placeholders': typeof PlaceholdersRoute
   '/settings': typeof SettingsRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/$firId_/edit': typeof FirIdEditRoute
@@ -113,7 +104,6 @@ export interface FileRouteTypes {
     | '/'
     | '/$firId'
     | '/new'
-    | '/placeholders'
     | '/settings'
     | '/templates'
     | '/$firId/edit'
@@ -125,7 +115,6 @@ export interface FileRouteTypes {
     | '/'
     | '/$firId'
     | '/new'
-    | '/placeholders'
     | '/settings'
     | '/$firId/edit'
     | '/templates/$templateId'
@@ -136,7 +125,6 @@ export interface FileRouteTypes {
     | '/'
     | '/$firId'
     | '/new'
-    | '/placeholders'
     | '/settings'
     | '/templates'
     | '/$firId_/edit'
@@ -149,7 +137,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FirIdRoute: typeof FirIdRoute
   NewRoute: typeof NewRoute
-  PlaceholdersRoute: typeof PlaceholdersRoute
   SettingsRoute: typeof SettingsRoute
   TemplatesRoute: typeof TemplatesRouteWithChildren
   FirIdEditRoute: typeof FirIdEditRoute
@@ -176,13 +163,6 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/new'
       preLoaderRoute: typeof NewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/placeholders': {
-      id: '/placeholders'
-      path: '/placeholders'
-      fullPath: '/placeholders'
-      preLoaderRoute: typeof PlaceholdersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -250,7 +230,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FirIdRoute: FirIdRoute,
   NewRoute: NewRoute,
-  PlaceholdersRoute: PlaceholdersRoute,
   SettingsRoute: SettingsRoute,
   TemplatesRoute: TemplatesRouteWithChildren,
   FirIdEditRoute: FirIdEditRoute,

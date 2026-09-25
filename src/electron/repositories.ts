@@ -1,5 +1,4 @@
 import { globalPlaceholderOperations } from "#/electron/global-placeholders";
-import { randomUUID } from "node:crypto";
 import { Effect, HashMap, Layer, Option, Schema } from "effect";
 import { and, asc, count, desc, eq, inArray, like, or } from "drizzle-orm";
 import {
@@ -38,12 +37,7 @@ import {
   FirValueContext,
 } from "#/lib/fir-document";
 import { DocumentRevision, TemplateId } from "#/lib/ids";
-import {
-  Placeholder,
-  PlaceholderCreateInput,
-  PlaceholderKey,
-  PlaceholderUpdateInput,
-} from "#/lib/placeholder";
+import { Placeholder, PlaceholderCreateInput, PlaceholderUpdateInput } from "#/lib/placeholder";
 import { AppSettings } from "#/lib/settings";
 import { EntityInUse } from "#/lib/storage-errors";
 import {
@@ -82,15 +76,14 @@ const DrizzlePlaceholderRepositoryLive = Layer.effect(
 
     const create = Effect.fn("PlaceholderRepository.create")(
       function* (input: PlaceholderCreateInput) {
-        const key = PlaceholderKey.make(`placeholder_${randomUUID().replaceAll("-", "_")}`);
         const rows = yield* db
           .insert(placeholders)
-          .values({ key, label: input.label, source: CustomSource.make({}) })
+          .values({ label: input.label, source: CustomSource.make({}) })
           .returning()
           .pipe(
             Effect.catchIf(
               isDrizzleQueryError,
-              recoverUnique("placeholder.create", "placeholder", "key", "generated"),
+              recoverUnique("placeholder.create", "placeholder", "name", input.label),
             ),
           );
         const row = yield* requireRow(rows, missingWrite("placeholder.create"));
@@ -106,13 +99,13 @@ const DrizzlePlaceholderRepositoryLive = Layer.effect(
       function* (input: PlaceholderUpdateInput) {
         const rows = yield* db
           .update(placeholders)
-          .set({ key: input.key, label: input.label })
+          .set({ label: input.label })
           .where(eq(placeholders.id, input.id))
           .returning()
           .pipe(
             Effect.catchIf(
               isDrizzleQueryError,
-              recoverUnique("placeholder.update", "placeholder", "key", input.key),
+              recoverUnique("placeholder.update", "placeholder", "name", input.label),
             ),
           );
         const row = yield* requireRow(rows, notFound("placeholder", input.id));
@@ -769,6 +762,25 @@ const DrizzleSettingsRepositoryLive = Layer.effect(
           )(row);
         },
         (effect) => mapQuery("settings.save", effect),
+      ),
+
+      saveFieldMarkers: Effect.fn("SettingsRepository.saveFieldMarkers")(
+        function* (fieldMarkers) {
+          const rows = yield* db
+            .update(appSettings)
+            .set({
+              fieldMarkers: { open: fieldMarkers.open, close: fieldMarkers.close },
+              updatedAt: yield* nowIso,
+            })
+            .where(eq(appSettings.id, "default"))
+            .returning();
+          const row = yield* requireRow(rows, missingWrite("settings.saveFieldMarkers"));
+          return yield* decodeStored(
+            Schema.decodeUnknownEffect(AppSettings),
+            "settings.decode",
+          )(row);
+        },
+        (effect) => mapQuery("settings.saveFieldMarkers", effect),
       ),
     });
   }),

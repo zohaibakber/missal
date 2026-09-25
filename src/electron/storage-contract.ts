@@ -13,6 +13,7 @@ import { FirCreateInput, FirId, FirRecord, FirUpdateInput } from "#/lib/fir";
 import { FirDocumentId, PlaceholderId, TemplateId } from "#/lib/ids";
 import { Placeholder, PlaceholderCreateInput, PlaceholderUpdateInput } from "#/lib/placeholder";
 import { RepositoryError } from "#/lib/storage-errors";
+import { FieldMarkers } from "#/lib/settings";
 import {
   FirPlaceholderValue,
   FirPlaceholderValueRemoveInput,
@@ -111,6 +112,9 @@ export const SettingsGetRequest = Schema.TaggedStruct("Settings.get", {});
 export const SettingsSaveRequest = Schema.TaggedStruct("Settings.save", {
   sharedPlaceholders: Schema.Record(Schema.String, Schema.String),
 });
+export const SettingsSaveFieldMarkersRequest = Schema.TaggedStruct("Settings.saveFieldMarkers", {
+  fieldMarkers: FieldMarkers,
+});
 
 export const StorageRequest = Schema.Union([
   GlobalPlaceholderListRequest,
@@ -142,6 +146,7 @@ export const StorageRequest = Schema.Union([
   FirPlaceholderValueRemoveRequest,
   SettingsGetRequest,
   SettingsSaveRequest,
+  SettingsSaveFieldMarkersRequest,
 ]);
 
 export type StorageRequest = typeof StorageRequest.Type;

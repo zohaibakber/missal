@@ -1,25 +1,30 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { Exit, Schema } from "effect";
 import { createFileRoute } from "@tanstack/react-router";
-import { KeyboardIcon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { useKeyboardShortcuts } from "#/components/keyboard-shortcuts";
-import { Pane, PaneBody, PaneHeader, PaneTitle } from "#/components/pane";
-import { ShortcutKbd } from "#/components/shortcut-kbd";
+import { FirFieldsSettings } from "#/components/fir-fields-form";
+import { GlobalPlaceholderForm } from "#/components/global-placeholder-form";
+import { Pane, PaneBody } from "#/components/pane";
 import { useTheme } from "#/components/theme-provider";
 import { Button } from "#/components/ui/button";
 import {
   Field,
-  FieldContent,
   FieldDescription,
+  FieldError,
   FieldGroup,
   FieldLabel,
   FieldLegend,
   FieldSeparator,
   FieldSet,
-  FieldTitle,
 } from "#/components/ui/field";
+import { InputGroup, InputGroupInput, InputGroupText } from "#/components/ui/input-group";
 import { RadioGroup, RadioGroupItem } from "#/components/ui/radio-group";
+import { toast } from "#/components/ui/toast";
 import type { DesktopTheme } from "#/desktop-window";
+import { type AppSettings, FieldMarkers } from "#/lib/settings";
+import { getRepositoryErrorMessage } from "#/lib/storage-errors";
+import { atoms } from "#/state/atoms";
 
 export const Route = createFileRoute("/settings")({
   component: RouteComponent,
@@ -33,13 +38,9 @@ const items = [
 
 function RouteComponent() {
   const { theme, setTheme } = useTheme();
-  const { openShortcuts } = useKeyboardShortcuts();
 
   return (
     <Pane>
-      <PaneHeader>
-        <PaneTitle>Settings</PaneTitle>
-      </PaneHeader>
       <PaneBody>
         <FieldGroup className="mx-auto w-full max-w-2xl px-6 py-8">
           <FieldSet>
@@ -79,22 +80,105 @@ function RouteComponent() {
             </RadioGroup>
           </FieldSet>
           <FieldSeparator />
-          <Field orientation="horizontal">
-            <FieldContent>
-              <FieldTitle>Keyboard shortcuts</FieldTitle>
-              <FieldDescription>
-                Press <ShortcutKbd id="commandMenu" /> to search commands and{" "}
-                <ShortcutKbd id="cheatsheet" /> to see every shortcut.
-              </FieldDescription>
-            </FieldContent>
-            <Button variant="outline" size="sm" onClick={openShortcuts}>
-              <HugeiconsIcon icon={KeyboardIcon} strokeWidth={2} data-icon="inline-start" />
-              Show all
-            </Button>
-          </Field>
+          <FieldMarkersSetting />
+          <FieldSeparator />
+          <GlobalPlaceholderForm />
+          <FieldSeparator />
+          <FirFieldsSettings />
         </FieldGroup>
       </PaneBody>
     </Pane>
+  );
+}
+
+function FieldMarkersSetting() {
+  const result = useAtomValue(atoms.settingsAtom);
+  if (!AsyncResult.isSuccess(result)) return null;
+  // Remount after a save so the inputs start from the stored markers.
+  const { open, close } = result.value.fieldMarkers;
+  return <FieldMarkersForm key={`${open}${close}`} settings={result.value} />;
+}
+
+function FieldMarkersForm({ settings }: { settings: AppSettings }) {
+  const [open, setOpen] = useState(settings.fieldMarkers.open);
+  const [close, setClose] = useState(settings.fieldMarkers.close);
+  const [saving, setSaving] = useState(false);
+  const save = useAtomSet(atoms.saveFieldMarkersAtom, { mode: "promiseExit" });
+  const decoded = Schema.decodeUnknownExit(FieldMarkers)({ open, close });
+  const invalid = Exit.isFailure(decoded);
+  const dirty = open !== settings.fieldMarkers.open || close !== settings.fieldMarkers.close;
+
+  async function submit() {
+    if (saving || !dirty || Exit.isFailure(decoded)) return;
+    setSaving(true);
+    try {
+      const exit = await save(decoded.value);
+      if (Exit.isFailure(exit)) {
+        toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
+        return;
+      }
+      toast.add({ title: "Placeholder markers saved", type: "success" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <FieldSet>
+      <FieldLegend>Placeholder markers</FieldLegend>
+      <FieldDescription>
+        The signs typed around a placeholder name in a template. With these markers, type{" "}
+        <code dir="rtl" lang="ur" className="rounded bg-muted px-1 font-mono text-foreground">
+          {open}
+          جرم
+          {close}
+        </code>{" "}
+        to insert the جرم placeholder.
+      </FieldDescription>
+      <form
+        className="flex flex-col items-start gap-2 pt-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <Field data-invalid={invalid}>
+          <FieldLabel className="sr-only" htmlFor="field-marker-open">
+            Markers
+          </FieldLabel>
+          <InputGroup dir="rtl" className="w-48">
+            <InputGroupInput
+              id="field-marker-open"
+              aria-label="Before name"
+              className="text-center"
+              maxLength={3}
+              value={open}
+              disabled={saving}
+              aria-invalid={invalid}
+              onChange={(event) => setOpen(event.target.value.trim())}
+            />
+            <InputGroupText lang="ur">نام</InputGroupText>
+            <InputGroupInput
+              aria-label="After name"
+              className="text-center"
+              maxLength={3}
+              value={close}
+              disabled={saving}
+              aria-invalid={invalid}
+              onChange={(event) => setClose(event.target.value.trim())}
+            />
+          </InputGroup>
+          {invalid ? (
+            <FieldError>
+              Use one to three symbols, such as @ or #. No letters or numbers.
+            </FieldError>
+          ) : null}
+        </Field>
+        <Button type="submit" size="sm" disabled={!dirty || invalid || saving}>
+          Update
+        </Button>
+      </form>
+    </FieldSet>
   );
 }
 

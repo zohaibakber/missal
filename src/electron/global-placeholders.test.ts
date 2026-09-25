@@ -22,16 +22,10 @@ it("saves arbitrary global placeholders atomically and resolves the same values 
     const initial = await runtime.runPromise(
       Effect.flatMap(PlaceholderRepository, (repo) => repo.listGlobals),
     );
-    expect(initial.map((field) => field.key)).toEqual(
-      expect.arrayContaining([
-        "investigation_officer",
-        "police_station",
-        "district",
-        "sho_name",
-        "dsp_name",
-      ]),
+    expect(initial.map((field) => field.label)).toEqual(
+      expect.arrayContaining(["تفتیشی افسر", "تھانہ نام", "ضلع نام", "SHO نام", "DSP نام"]),
     );
-    const officer = initial.find((field) => field.key === "investigation_officer");
+    const officer = initial.find((field) => field.label === "تفتیشی افسر");
     if (!officer) throw new Error("Missing global officer");
     const saved = await runtime.runPromise(
       Effect.flatMap(PlaceholderRepository, (repo) =>
@@ -112,7 +106,6 @@ it("saves arbitrary global placeholders atomically and resolves the same values 
       structuredClone(response.value),
     );
     expect(ipcRows.find((field) => field.id === address.id)).toMatchObject({
-      key: address.key,
       label: "دفتر",
       value: "اسلام آباد",
     });

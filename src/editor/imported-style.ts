@@ -86,6 +86,10 @@ export function retainedStyle(cssText: string, textOnly = false): string {
   return result.cssText;
 }
 
+export function $getImportedStyle(node: LexicalNode): string {
+  return $getState(node, importedStyleState) ?? "";
+}
+
 export function $setImportedStyle(node: LexicalNode, style: string) {
   $setState(node, importedStyleState, retainedStyle(style));
 }

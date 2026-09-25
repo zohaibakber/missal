@@ -65,7 +65,7 @@ function HistoryButtons() {
 export function TitleBar() {
   return (
     <header className="grid h-(--titlebar-height) shrink-0 grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-3 bg-sidebar app-drag [&_button]:app-no-drag [&_a]:app-no-drag">
-      <div className="flex items-center gap-0.5 ps-4.5">
+      <div className="flex items-center gap-0.5 ps-2.5">
         <Hint label="Toggle sidebar" shortcut="toggleSidebar">
           <SidebarTrigger variant="subtle" />
         </Hint>

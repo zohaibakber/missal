@@ -14,7 +14,6 @@ import {
   Settings01Icon,
   SidebarLeftIcon,
   Sun03Icon,
-  TextFontIcon,
 } from "@hugeicons/core-free-icons";
 import { useKeyboardShortcuts } from "#/components/keyboard-shortcuts";
 import { ShortcutKbd } from "#/components/shortcut-kbd";
@@ -42,13 +41,12 @@ type CommandLink = {
   icon: HugeIcon;
   shortcut: ShortcutId;
   title: string;
-  to: "/" | "/templates" | "/placeholders" | "/settings" | "/new" | "/templates/new";
+  to: "/" | "/templates" | "/settings" | "/new" | "/templates/new";
 };
 
 const navigationCommands: readonly CommandLink[] = [
   { icon: Folder01Icon, shortcut: "goHome", title: "FIRs", to: "/" },
   { icon: LegalDocument01Icon, shortcut: "goTemplates", title: "Templates", to: "/templates" },
-  { icon: TextFontIcon, shortcut: "goPlaceholders", title: "Placeholders", to: "/placeholders" },
   { icon: Settings01Icon, shortcut: "goSettings", title: "Settings", to: "/settings" },
 ];
 
