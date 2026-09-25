@@ -76,7 +76,7 @@
 
 :root {
   /* Matches TITLEBAR_HEIGHT in main.ts (the native caption button overlay). */
-  --titlebar-height: 2.5rem;
+  --titlebar-height: 2.75rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.17 0 0);
   --card: oklch(1 0 0);
@@ -186,6 +186,12 @@
   .select-text,
   .select-text * {
     user-select: text;
+  }
+  /* Editable text keeps the I-beam; the body's arrow would otherwise be inherited. */
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
+  textarea,
+  [contenteditable="true"] {
+    cursor: text;
   }
   a,
   img {

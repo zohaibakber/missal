@@ -1,6 +1,6 @@
 import type { SaveGlobalPlaceholdersInput } from "#/lib/global-placeholder";
 import { Effect } from "effect";
-import { Atom, Reactivity } from "effect/unstable/reactivity";
+import { AsyncResult, Atom, Reactivity } from "effect/unstable/reactivity";
 import type { FirCreateInput, FirId, FirUpdateInput } from "#/lib/fir";
 import type { FirDocumentId, TemplateId } from "#/lib/ids";
 import {
@@ -19,11 +19,13 @@ import type {
   TemplateCreateInput,
   TemplateUpdateInput,
 } from "#/lib/templates";
+import { DEFAULT_FIELD_MARKERS, type FieldMarkers } from "#/lib/settings";
 import {
   FirDocumentRepository,
   FirPlaceholderValueRepository,
   FirRepository,
   PlaceholderRepository,
+  SettingsRepository,
   TemplateRepository,
   type AppRepositories,
 } from "#/repositories/index";
@@ -46,6 +48,21 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
   );
 
   const placeholderIndexAtom = Atom.mapResult(placeholdersAtom, indexPlaceholders);
+
+  const settingsAtom = runtime
+    .atom(Effect.flatMap(SettingsRepository, (repository) => repository.get))
+    .pipe(runtime.factory.withReactivity(["settings"]), Atom.keepAlive);
+
+  /** The markers typed around placeholder names; the default until settings load. */
+  const fieldMarkersAtom = Atom.map(settingsAtom, (result) =>
+    AsyncResult.isSuccess(result) ? result.value.fieldMarkers : DEFAULT_FIELD_MARKERS,
+  );
+
+  const saveFieldMarkersAtom = runtime.fn(
+    (fieldMarkers: FieldMarkers) =>
+      Effect.flatMap(SettingsRepository, (repository) => repository.saveFieldMarkers(fieldMarkers)),
+    { reactivityKeys: ["settings"] },
+  );
 
   const templatesAtom = runtime
     .atom(Effect.flatMap(TemplateRepository, (repository) => repository.list))
@@ -203,6 +220,9 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     saveGlobalPlaceholdersAtom,
     placeholdersAtom,
     placeholderIndexAtom,
+    settingsAtom,
+    fieldMarkersAtom,
+    saveFieldMarkersAtom,
     templatesAtom,
     latestTemplatesAtom,
     templateByIdAtom,

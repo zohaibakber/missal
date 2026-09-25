@@ -14,12 +14,12 @@ it("migrates legacy text without splitting names, punctuation or line breaks", (
   const db = new DatabaseSync(":memory:");
   try {
     const directories = readdirSync(resolve("drizzle")).sort();
-    for (const directory of directories.filter((name) => !name.endsWith("fir-repeatable-fields"))) {
+    const migration = directories.find((name) => name.endsWith("fir-repeatable-fields"));
+    if (!migration) throw new Error("Missing repeatable fields migration");
+    for (const directory of directories.filter((name) => name < migration)) {
       db.exec(readFileSync(resolve("drizzle", directory, "migration.sql"), "utf8"));
     }
     const before = db.prepare("SELECT id, accused, witness FROM fir_records ORDER BY id").all();
-    const migration = directories.find((name) => name.endsWith("fir-repeatable-fields"));
-    if (!migration) throw new Error("Missing repeatable fields migration");
     db.exec(readFileSync(resolve("drizzle", migration, "migration.sql"), "utf8"));
     const after = db
       .prepare("SELECT id, accused, witness, zimni FROM fir_records ORDER BY id")
@@ -80,7 +80,9 @@ it("persists, reopens and renders multiple FIR entries in their original order",
     );
     expect(reopened).toEqual(updated);
     for (const key of ["accused", "witness", "zimni"] as const) {
-      const field = createDefaultPlaceholders().find((item) => item.key === key);
+      const field = createDefaultPlaceholders().find(
+        (item) => item.source._tag === "FirProperty" && item.source.property === key,
+      );
       if (!field) throw new Error(`Missing ${key} field`);
       expect(resolveFieldValue(field, reopened, [], {})).toEqual({
         _tag: "Resolved",

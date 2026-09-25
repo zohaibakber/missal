@@ -6,7 +6,6 @@ export function useAppShortcuts() {
 
   useSequenceShortcut("goHome", () => void navigate({ to: "/" }));
   useSequenceShortcut("goTemplates", () => void navigate({ to: "/templates" }));
-  useSequenceShortcut("goPlaceholders", () => void navigate({ to: "/placeholders" }));
   useSequenceShortcut("goSettings", () => void navigate({ to: "/settings" }));
   useShortcut("newFir", () => void navigate({ to: "/new" }));
   useShortcut("newTemplate", () => void navigate({ to: "/templates/new" }));

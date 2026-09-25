@@ -6,7 +6,7 @@ import { Add01Icon, Cancel01Icon, Search01Icon } from "@hugeicons/core-free-icon
 import { HugeiconsIcon } from "@hugeicons/react";
 import { IconAction } from "#/components/icon-action";
 import { ShortcutKbd } from "#/components/shortcut-kbd";
-import { SplitViewListHeader, SplitViewListTitle } from "#/components/split-view";
+import { SplitViewListHeader } from "#/components/split-view";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import {
   InputGroup,
@@ -49,26 +49,8 @@ export function TemplateList() {
 
   return (
     <>
-      <SplitViewListHeader>
-        <SplitViewListTitle>
-          Templates
-          {templates.length ? (
-            <span className="font-normal text-muted-foreground tabular-nums">
-              {templates.length}
-            </span>
-          ) : null}
-        </SplitViewListTitle>
-        <IconAction
-          label="New template"
-          shortcut="newTemplate"
-          nativeButton={false}
-          render={<Link to="/templates/new" />}
-        >
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-        </IconAction>
-      </SplitViewListHeader>
-      <div className="p-2 pb-1">
-        <InputGroup className="h-7">
+      <SplitViewListHeader className="ps-2">
+        <InputGroup className="h-7 flex-1">
           <InputGroupAddon align="inline-start">
             <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
           </InputGroupAddon>
@@ -111,7 +93,15 @@ export function TemplateList() {
             )}
           </InputGroupAddon>
         </InputGroup>
-      </div>
+        <IconAction
+          label="New template"
+          shortcut="newTemplate"
+          nativeButton={false}
+          render={<Link to="/templates/new" />}
+        >
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+        </IconAction>
+      </SplitViewListHeader>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {AsyncResult.isSuccess(result) ? (
           filtered.length ? (

@@ -21,7 +21,7 @@ The versioned serialized document body stored for a template or FIR document. Ca
 _Avoid_: HTML, CKEditor content, editor state
 
 **Field**:
-A catalog token that can appear in a template or FIR document. It has a stable ID, an ASCII key, an Urdu label, and a source binding: a FIR property, a shared setting, or a custom FIR-specific value. Renaming the key does not change the source binding.
+A catalog token that can appear in a template or FIR document. It has a stable ID, one unique name, and a source binding: a FIR property, a shared setting, or a custom FIR-specific value. Templates refer to it by writing the name between the field markers chosen in Settings (default `@name@`). Renaming it does not change the source binding or existing documents, which store the ID.
 _Avoid_: variable, tag, merge field
 
 **Placeholder**:

@@ -7,6 +7,7 @@ import { EDITOR_NODES } from "#/editor/nodes/registry";
 import { insertSanitizedHtml } from "#/editor/import/convert";
 import { registerCompletedTokenConversion } from "#/editor/recognition";
 import { createDefaultPlaceholders, indexPlaceholders } from "#/lib/placeholder";
+import { DEFAULT_FIELD_MARKERS } from "#/lib/settings";
 
 it("retains Word paragraph, cell, run and field styling after JSON save/reopen and HTML export", () => {
   const editor = createEditor({
@@ -22,11 +23,15 @@ it("retains Word paragraph, cell, run and field styling after JSON save/reopen a
   editor.setRootElement(root);
   const stopStyles = registerImportedStyleRendering(editor);
   const catalog = indexPlaceholders(createDefaultPlaceholders());
-  const stopTokens = registerCompletedTokenConversion(editor, () => catalog);
+  const stopTokens = registerCompletedTokenConversion(
+    editor,
+    () => catalog,
+    () => DEFAULT_FIELD_MARKERS,
+  );
   try {
     insertSanitizedHtml(
       editor,
-      '<p dir="rtl" style="margin-bottom:3pt;line-height:1.2;text-align:center"><span style="font-family:serif;font-size:16pt;font-weight:bold">مقدمہ @fir_no@</span></p><table dir="rtl" style="width:450pt;border-collapse:collapse"><tr><td style="width:100pt;border:0;padding:4pt"><p>اول</p></td><td style="width:350pt;border:1pt solid black"><p>دوم</p></td></tr></table><p><img src="data:image/png;base64,aGVsbG8=" width="40" height="20"></p>',
+      '<p dir="rtl" style="margin-bottom:3pt;line-height:1.2;text-align:center"><span style="font-family:serif;font-size:16pt;font-weight:bold">مقدمہ @ایف آئی آر نمبر@</span></p><table dir="rtl" style="width:450pt;border-collapse:collapse"><tr><td style="width:100pt;border:0;padding:4pt"><p>اول</p></td><td style="width:350pt;border:1pt solid black"><p>دوم</p></td></tr></table><p><img src="data:image/png;base64,aGVsbG8=" width="40" height="20"></p>',
     );
     const saved = editor.getEditorState().toJSON();
     editor.setEditorState(editor.parseEditorState(saved));

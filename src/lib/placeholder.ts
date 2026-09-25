@@ -7,43 +7,43 @@ import {
   type FieldReference,
 } from "#/lib/field";
 import { PlaceholderId } from "#/lib/ids";
-import { NonEmptyTrimmedString } from "#/lib/schema";
 
 export { PlaceholderId } from "#/lib/ids";
 
-export const PlaceholderKey = Schema.String.pipe(
-  Schema.decode(SchemaTransformation.trim()),
-  Schema.check(Schema.isNonEmpty()),
-  Schema.check(Schema.isPattern(/^[A-Za-z][A-Za-z0-9_]*$/)),
-  Schema.brand("PlaceholderKey"),
-);
+/** Names match regardless of surrounding or repeated whitespace, as typed in a template. */
+export function normalizePlaceholderName(name: string) {
+  return name.trim().replace(/\s+/g, " ");
+}
 
-export type PlaceholderKey = typeof PlaceholderKey.Type;
+/** The one name a placeholder has: shown in the UI and typed between markers in templates. */
+export const PlaceholderName = Schema.String.pipe(
+  Schema.decode(
+    SchemaTransformation.transform({ decode: normalizePlaceholderName, encode: (name) => name }),
+  ),
+  Schema.check(Schema.isNonEmpty()),
+);
 
 export class Placeholder extends Schema.Class<Placeholder>("Placeholder")({
   id: PlaceholderId,
-  key: PlaceholderKey,
-  label: NonEmptyTrimmedString,
+  label: PlaceholderName,
   source: FieldSource,
 }) {}
 
 export class PlaceholderCreateInput extends Schema.Class<PlaceholderCreateInput>(
   "PlaceholderCreateInput",
 )({
-  label: NonEmptyTrimmedString,
+  label: PlaceholderName,
 }) {}
 
 export class PlaceholderUpdateInput extends Schema.Class<PlaceholderUpdateInput>(
   "PlaceholderUpdateInput",
 )({
   id: PlaceholderId,
-  key: PlaceholderKey,
-  label: NonEmptyTrimmedString,
+  label: PlaceholderName,
 }) {}
 
 export type PlaceholderIndex = {
   byId: HashMap.HashMap<Placeholder["id"], Placeholder>;
-  byKey: HashMap.HashMap<string, Placeholder>;
   byLabel: HashMap.HashMap<string, Placeholder>;
 };
 
@@ -68,11 +68,10 @@ const defaultPlaceholderSeeds = [
 export function indexPlaceholders(placeholders: readonly Placeholder[]): PlaceholderIndex {
   return {
     byId: HashMap.fromIterable(placeholders.map((placeholder) => [placeholder.id, placeholder])),
-    byKey: HashMap.fromIterable(
-      placeholders.map((placeholder) => [placeholder.key, placeholder] as const),
-    ),
     byLabel: HashMap.fromIterable(
-      placeholders.map((placeholder) => [placeholder.label.trim(), placeholder] as const),
+      placeholders.map(
+        (placeholder) => [normalizePlaceholderName(placeholder.label), placeholder] as const,
+      ),
     ),
   };
 }
@@ -82,7 +81,6 @@ export function createDefaultPlaceholders() {
     (placeholder, index) =>
       new Placeholder({
         id: PlaceholderId.make(index + 1),
-        key: PlaceholderKey.make(placeholder.key),
         label: placeholder.label,
         source: fieldSourceForSeedKey(placeholder.key),
       }),
@@ -93,27 +91,8 @@ export function resolvePlaceholder(
   token: string,
   index: PlaceholderIndex = indexPlaceholders([]),
 ): Placeholder | undefined {
-  const value = token.trim();
-
-  if (!value) {
-    return undefined;
-  }
-
-  if (/^\d+$/.test(value)) {
-    const byId = Option.getOrUndefined(HashMap.get(index.byId, Number(value) as Placeholder["id"]));
-
-    if (byId) {
-      return byId;
-    }
-  }
-
-  const byKey = Option.getOrUndefined(HashMap.get(index.byKey, value));
-
-  if (byKey) {
-    return byKey;
-  }
-
-  return Option.getOrUndefined(HashMap.get(index.byLabel, value));
+  const name = normalizePlaceholderName(token);
+  return name ? Option.getOrUndefined(HashMap.get(index.byLabel, name)) : undefined;
 }
 
 export function resolveFieldReference(
@@ -126,5 +105,5 @@ export function resolveFieldReference(
     return CatalogFieldReference.make({ id: placeholder.id });
   }
 
-  return UnresolvedTokenReference.make({ text: token.trim() });
+  return UnresolvedTokenReference.make({ text: normalizePlaceholderName(token) });
 }

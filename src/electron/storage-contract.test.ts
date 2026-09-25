@@ -9,7 +9,6 @@ it("preserves storage responses across Electron structured cloning", () => {
     value: [
       {
         id: 1,
-        key: "fir_no",
         label: "ایف آئی آر نمبر",
         source: FirPropertySource.make({ property: "fir_no" }),
       },
@@ -23,7 +22,6 @@ it("preserves storage responses across Electron structured cloning", () => {
     value: [
       {
         id: 1,
-        key: "fir_no",
         label: "ایف آئی آر نمبر",
         source: { _tag: "FirProperty", property: "fir_no" },
       },

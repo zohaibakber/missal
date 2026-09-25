@@ -10,14 +10,15 @@ import {
 const catalog = createDefaultPlaceholders();
 const index = indexPlaceholders(catalog);
 
-it("indexes seeded fields by key and id", () => {
-  expect(resolvePlaceholder("fir_no", index)?.id).toBe(PlaceholderId.make(1));
-  expect(resolvePlaceholder("1", index)?.key).toBe("fir_no");
-  expect(catalog.find((field) => field.key === "nic")?.source._tag).toBe("FirProperty");
+it("indexes seeded fields by name alone", () => {
+  expect(resolvePlaceholder("ایف آئی آر نمبر", index)?.id).toBe(PlaceholderId.make(1));
+  expect(resolvePlaceholder("  ایف آئی آر   نمبر ", index)?.id).toBe(PlaceholderId.make(1));
+  expect(resolvePlaceholder("fir_no", index)).toBeUndefined();
+  expect(resolvePlaceholder("1", index)).toBeUndefined();
 });
 
-it("resolves typed tokens to catalog field references", () => {
-  expect(resolveFieldReference("fir_no", index)).toEqual({
+it("resolves typed names to catalog field references", () => {
+  expect(resolveFieldReference("ایف آئی آر نمبر", index)).toEqual({
     _tag: "CatalogField",
     id: PlaceholderId.make(1),
   });

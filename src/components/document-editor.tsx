@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useAtomValue } from "@effect/atom-react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -21,6 +22,7 @@ import type { DocumentEnvelope, PageLayout } from "#/lib/document-format";
 import type { PlaceholderIndex } from "#/lib/placeholder";
 import { EditorToolbar } from "#/components/editor-toolbar";
 import { cn } from "#/lib/utils";
+import { atoms } from "#/state/atoms";
 
 function EditableToolbar() {
   const editable = useLexicalEditable();
@@ -55,6 +57,9 @@ function SessionPlugins({
   const [editor] = useLexicalComposerContext();
   const indexRef = useRef(placeholderIndex);
   indexRef.current = placeholderIndex;
+  const fieldMarkers = useAtomValue(atoms.fieldMarkersAtom);
+  const fieldMarkersRef = useRef(fieldMarkers);
+  fieldMarkersRef.current = fieldMarkers;
   const presentationRef = useRef(presentation);
   presentationRef.current = presentation;
   const envelopeRef = useRef(envelope);
@@ -77,6 +82,7 @@ function SessionPlugins({
   useEffect(() => {
     const session = attachEditorSession(editor, {
       getPlaceholderIndex: () => indexRef.current,
+      getFieldMarkers: () => fieldMarkersRef.current,
       onUiChange: (ui: EditorUiState) => {
         const handlers = uiHandlersRef.current;
         handlers.onDirtyChange?.(ui.dirty);

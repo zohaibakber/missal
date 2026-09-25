@@ -191,6 +191,13 @@ const handleStorageRequest = Effect.fnUntraced(function* (request: StorageReques
         const repository = yield* SettingsRepository;
         return Schema.encodeUnknownSync(AppSettings)(yield* repository.save(sharedPlaceholders));
       }),
+    "Settings.saveFieldMarkers": ({ fieldMarkers }) =>
+      Effect.gen(function* () {
+        const repository = yield* SettingsRepository;
+        return Schema.encodeUnknownSync(AppSettings)(
+          yield* repository.saveFieldMarkers(fieldMarkers),
+        );
+      }),
   });
 });
 

@@ -11,6 +11,7 @@ import {
 import type { DocumentEnvelope, PageLayout } from "#/lib/document-format";
 import type { FieldPresentationContext } from "#/lib/field";
 import type { PlaceholderIndex } from "#/lib/placeholder";
+import { DEFAULT_FIELD_MARKERS, type FieldMarkers } from "#/lib/settings";
 import { captureEditorEnvelope, loadEnvelopeIntoEditor } from "#/editor/envelope";
 import { $generateNodesFromDOM } from "@lexical/html";
 import { registerImportedStyleRendering } from "#/editor/html-config";
@@ -68,6 +69,7 @@ export function attachEditorSession(
   editor: LexicalEditor,
   options: {
     getPlaceholderIndex: () => PlaceholderIndex;
+    getFieldMarkers?: () => FieldMarkers;
     presentation: FieldPresentationContext;
     onUiChange?: (ui: EditorUiState) => void;
   },
@@ -77,12 +79,13 @@ export function attachEditorSession(
   let disposed = false;
   const history = createEmptyHistoryState();
   const presentation = new FieldPresentationController(editor, options.presentation);
+  const getFieldMarkers = options.getFieldMarkers ?? (() => DEFAULT_FIELD_MARKERS);
   const unregisters = [
     registerImportedStyleRendering(editor),
     registerHistory(editor, history, 300, Date.now, undefined, HISTORY_MAX_DEPTH),
     presentation.attach(),
-    registerFieldRecognition(editor, options.getPlaceholderIndex),
-    registerCompletedTokenConversion(editor, options.getPlaceholderIndex),
+    registerFieldRecognition(editor, options.getPlaceholderIndex, getFieldMarkers),
+    registerCompletedTokenConversion(editor, options.getPlaceholderIndex, getFieldMarkers),
     registerClipboardImport(editor, {
       onPageLayout: (pageLayout) => {
         // The first Word paste defines the page; later pastes don't reflow an existing layout.

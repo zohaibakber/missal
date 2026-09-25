@@ -27,7 +27,6 @@ export const shortcuts = {
 
   goHome: { keys: ["G", "H"], label: "Go to FIRs", group: "Navigation" },
   goTemplates: { keys: ["G", "T"], label: "Go to templates", group: "Navigation" },
-  goPlaceholders: { keys: ["G", "P"], label: "Go to placeholders", group: "Navigation" },
   goSettings: { keys: ["G", "S"], label: "Go to settings", group: "Navigation" },
   goBack: { keys: "Alt+ArrowLeft", label: "Back", group: "Navigation" },
   goForward: { keys: "Alt+ArrowRight", label: "Forward", group: "Navigation" },

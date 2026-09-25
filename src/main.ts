@@ -20,7 +20,8 @@ import {
 
 const RENDERER_SCHEME = "missal";
 const RENDERER_HOST = "renderer";
-const TITLEBAR_HEIGHT = 40;
+// Matches --titlebar-height in styles.css.
+const TITLEBAR_HEIGHT = 44;
 const TITLEBAR_COLOR = "#01000000";
 const TITLEBAR_LIGHT_SYMBOL_COLOR = "#404040";
 const TITLEBAR_DARK_SYMBOL_COLOR = "#d4d4d4";
