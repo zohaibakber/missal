@@ -182,7 +182,6 @@ function DropdownMenuCheckboxItem({
   );
 }
 
-/** A checkbox item that stays open and shows a switch, for on/off view settings. */
 function DropdownMenuSwitchItem({
   className,
   children,

@@ -38,7 +38,6 @@ import {
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
 import { atoms } from "#/state/atoms";
 
-/** Names of the placeholders filled from each FIR (global values live in their own list). */
 export function FirFieldsSettings() {
   const result = useAtomValue(atoms.placeholdersAtom);
   if (AsyncResult.isSuccess(result)) {

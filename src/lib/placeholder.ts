@@ -10,12 +10,10 @@ import { PlaceholderId } from "#/lib/ids";
 
 export { PlaceholderId } from "#/lib/ids";
 
-/** Names match regardless of surrounding or repeated whitespace, as typed in a template. */
 export function normalizePlaceholderName(name: string) {
   return name.trim().replace(/\s+/g, " ");
 }
 
-/** The one name a placeholder has: shown in the UI and typed between markers in templates. */
 export const PlaceholderName = Schema.String.pipe(
   Schema.decode(
     SchemaTransformation.transform({ decode: normalizePlaceholderName, encode: (name) => name }),

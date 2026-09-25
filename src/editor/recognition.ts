@@ -173,10 +173,6 @@ function caretOf(state: EditorState) {
   });
 }
 
-/**
- * Double-clicking a field turns it back into `<open>name<close>` text with the name selected, so
- * the markers and name can be edited; it becomes a field again once the caret leaves.
- */
 export function registerFieldReveal(
   editor: LexicalEditor,
   getIndex: () => PlaceholderIndex,

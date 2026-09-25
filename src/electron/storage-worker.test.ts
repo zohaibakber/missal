@@ -41,21 +41,9 @@ it.live("reports a database that cannot be opened", () =>
     expect(Exit.isFailure(exit) && String(Cause.squash(exit.cause))).toContain(
       "/nonexistent/drizzle",
     );
-  }).pipe(
-    Effect.provide(
-      storageHandlers({ databasePath: databasePath(), migrationsFolder: "/nonexistent/drizzle" }),
-    ),
-    Effect.scoped,
-  ),
-);
-
-it.live("answers requests with the reason when the database never opened", () =>
-  Effect.gen(function* () {
-    const client = yield* RpcTest.makeClient(StorageRpcs);
     const response = yield* client["Storage.request"]({
       payload: JSON.stringify({ _tag: "Fir.list" }),
     });
-
     expect(JSON.parse(response)).toMatchObject({
       _tag: "Failure",
       error: { _tag: "StorageError" },

@@ -69,7 +69,6 @@ it("leaves non-Word HTML untouched", () => {
 // WOFF2's table tags by index (spec §5.1); only the first 12 matter to the fonts read here.
 const WOFF2_KNOWN_TAGS = ["cmap", "head", "hhea", "hmtx", "maxp", "name", "OS/2", "post"];
 
-/** The decompressed bytes of each sfnt table in a WOFF2 file, by tag. */
 function woff2Tables(file: Buffer) {
   const view = new DataView(file.buffer, file.byteOffset, file.byteLength);
   const readBase128 = (at: number): [number, number] => {

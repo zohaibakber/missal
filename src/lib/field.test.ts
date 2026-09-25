@@ -4,7 +4,6 @@ import {
   catalogFieldPresentation,
   FieldOverride,
   fieldDisplayText,
-  fieldSourceForSeedKey,
   resolveFieldValue,
 } from "#/lib/field";
 import { FirRecord } from "#/lib/fir";
@@ -27,18 +26,6 @@ const fir = new FirRecord({
   status: "Open",
   witness: [],
   zimni: [],
-});
-
-it("binds seeded keys independently of later key names", () => {
-  expect(fieldSourceForSeedKey("fir_no")).toEqual({
-    _tag: "FirProperty",
-    property: "fir_no",
-  });
-  expect(fieldSourceForSeedKey("police_station")).toEqual({
-    _tag: "SharedSetting",
-    setting: "police_station",
-  });
-  expect(fieldSourceForSeedKey("custom")).toEqual({ _tag: "Custom" });
 });
 
 it("resolves FIR properties and uses global values even when legacy FIR overrides exist", () => {

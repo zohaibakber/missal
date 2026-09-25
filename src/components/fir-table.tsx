@@ -78,7 +78,6 @@ function NewFirButton() {
   );
 }
 
-/** The FIR list: toolbar, sortable/filterable table and a status bar. */
 export function FirsPane() {
   const firs = useAtomValue(atoms.firsAtom);
 

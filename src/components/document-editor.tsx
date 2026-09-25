@@ -61,7 +61,6 @@ function SessionPlugins({
   const [initialPresentation] = useState(presentation);
   const sessionRef = useRef<EditorSessionHandle | null>(null);
 
-  // Effect events read the latest props without re-attaching the session when they change.
   const getPlaceholderIndex = useEffectEvent(() => placeholderIndex);
   const getFieldMarkers = useEffectEvent(() => fieldMarkers);
   const reportUi = useEffectEvent((ui: EditorUiState) => {
@@ -101,13 +100,9 @@ function SessionPlugins({
 
 const MM_TO_PX = 96 / 25.4;
 const DEFAULT_PAGE_WIDTH_MM = 210;
-// Horizontal breathing room kept around the page when it is scaled down to fit.
 const CANVAS_GUTTER_PX = 48;
 
-/**
- * Scales the page down (never up) so the whole width is visible, like "fit width" in Word.
- * Writes a CSS variable instead of state so resizing never re-renders the editor.
- */
+/** Writes a CSS variable instead of state so resizing never re-renders the editor. */
 function usePageFit(pageWidthMm: number) {
   const canvasRef = useRef<HTMLDivElement>(null);
 

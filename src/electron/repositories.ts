@@ -62,7 +62,6 @@ import {
 
 const nextRevision = (revision: DocumentRevision) => DocumentRevision.make(revision + 1);
 
-// Decoders are built once; each call site used to rebuild its parser per query.
 const decodePlaceholders = decodeStored(
   Schema.decodeUnknownEffect(Schema.Array(Placeholder)),
   "placeholder.decode",

@@ -6,7 +6,6 @@ import { cn } from "#/lib/utils";
 const LIST_PANEL_ID = "list";
 const DETAIL_PANEL_ID = "detail";
 
-/** Master/detail layout with a resizable list column whose width is remembered per `id`. */
 function SplitView({ id, children }: { id: string; children: ReactNode }) {
   const layout = useDefaultLayout({
     id: `split-view:${id}`,
@@ -58,7 +57,6 @@ function SplitViewDetail({ className, children }: { className?: string; children
   );
 }
 
-/** Header row of the list column; same height and border as the neighbouring pane header. */
 function SplitViewListHeader({ className, ...props }: ComponentProps<"div">) {
   return (
     <div

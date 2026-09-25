@@ -41,7 +41,6 @@ export function ThemeProvider({
   defaultTheme = "system",
   storageKey = "theme",
 }: ThemeProviderProps) {
-  // The renderer only runs on the client, so the stored theme is known on the first render.
   const [theme, setThemeState] = useState<Theme>(() => readStoredTheme(storageKey, defaultTheme));
 
   useEffect(() => {

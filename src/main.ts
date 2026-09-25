@@ -166,8 +166,7 @@ const registerDesktopIntegration = () => {
 };
 
 const startApp = () => {
-  // Checks published GitHub Releases through update.electronjs.org, downloads in the background and
-  // offers a restart. Does nothing in development or outside Windows.
+  // Auto-update does nothing in development or outside Windows.
   updateElectronApp({
     updateSource: {
       type: UpdateSourceType.ElectronPublicUpdateService,

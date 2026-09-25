@@ -58,7 +58,6 @@ function isInteractiveElement(target: EventTarget | null) {
 type DataTableProps<TData extends RowData> = {
   table: DataTableInstance<TData>;
   onRowActivate?: (row: TData) => void;
-  /** Items for the right-click menu of a row. */
   rowContextMenu?: (row: TData) => ReactNode;
   empty?: ReactNode;
   dir?: "ltr" | "rtl";
@@ -146,10 +145,6 @@ export function DataTable<TData extends RowData>({
 
 type MenuRow<TData> = { readonly id: string; readonly original: TData };
 
-/**
- * Renders only the rows near the viewport, padded above and below so the scrollbar stays true, and
- * one context menu for the whole body that opens on whichever row was right-clicked.
- */
 function DataTableRows<TData extends RowData>({
   table,
   scrollElement,
@@ -175,7 +170,6 @@ function DataTableRows<TData extends RowData>({
   const paddingTop = virtualRows[0]?.start ?? 0;
   const paddingBottom = virtualizer.totalSize - (virtualRows.at(-1)?.end ?? 0);
   const renderedIds = virtualRows.map((virtualRow) => rows[virtualRow.index]?.id);
-  // Roving tab stop: the last focused row while it is rendered, else the first rendered row.
   const tabStop = tabStopId && renderedIds.includes(tabStopId) ? tabStopId : renderedIds[0];
 
   function rowElement(index: number) {
@@ -193,7 +187,6 @@ function DataTableRows<TData extends RowData>({
       element.focus();
       return;
     }
-    // Far rows aren't rendered yet: scroll there, then focus once they are.
     virtualizer.scrollToIndex(index);
     requestAnimationFrame(() => requestAnimationFrame(() => rowElement(index)?.focus()));
   }
@@ -289,7 +282,6 @@ function DataTableRows<TData extends RowData>({
   );
 }
 
-/** Stands in for the rows scrolled out of view. */
 function Spacer({ height, columnCount }: { height: number; columnCount: number }) {
   return (
     <tr aria-hidden="true">

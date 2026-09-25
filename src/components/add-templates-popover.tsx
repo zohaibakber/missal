@@ -35,7 +35,6 @@ type AddTemplatesPopoverProps = TemplateChecklistProps & {
   onOpenChange: (open: boolean) => void;
 };
 
-/** "+" button that opens a searchable, multi-select list of templates to add to an FIR. */
 export function AddTemplatesPopover({
   firId,
   onAdded,

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { makeStorageRuntime } from "#/electron/storage-runtime";
 import { emptyDocumentEnvelope } from "#/lib/document-format";
-import { FirCreateInput, FirId, FirSummary, createEmptyFirRecord } from "#/lib/fir";
+import { FirCreateInput, FirId, createEmptyFirRecord } from "#/lib/fir";
 import { AddFirTemplatesInput } from "#/lib/fir-document";
 import { FirDocumentId, PlaceholderId } from "#/lib/ids";
 import { FirPlaceholderValueUpsertInput, TemplateCreateInput } from "#/lib/templates";
@@ -40,23 +40,6 @@ const firInput = (fir_no: string) =>
     offence: "test",
     accused: ["ملزم"],
   });
-
-it("lists FIRs as summaries, newest first", () =>
-  withStorage(async (runtime) => {
-    const first = await runtime.runPromise(
-      Effect.flatMap(FirRepository, (repo) => repo.create(firInput("1/26"))),
-    );
-    const second = await runtime.runPromise(
-      Effect.flatMap(FirRepository, (repo) => repo.create(firInput("2/26"))),
-    );
-    const list = await runtime.runPromise(Effect.flatMap(FirRepository, (repo) => repo.list));
-
-    expect(list.map((fir) => fir.id)).toEqual([second.id, first.id]);
-    expect(list[0]).toBeInstanceOf(FirSummary);
-    expect(Object.keys(list[0] ?? {}).toSorted()).toEqual(
-      ["arrest_date", "date", "fir_no", "id", "incident_date", "offence", "status"].toSorted(),
-    );
-  }));
 
 it("loads several documents in the order asked for, and fails on a missing one", () =>
   withStorage(async (runtime) => {

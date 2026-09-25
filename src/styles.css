@@ -17,7 +17,6 @@
   --font-urdu: "Jameel Noori Nastaleeq", serif;
   /* UI text in Urdu: Latin letters and digits stay in Inter, Urdu script falls through to Nastaleeq. */
   --font-urdu-ui: "Inter Variable", "Jameel Noori Nastaleeq", sans-serif;
-  /* Nastaleeq reads small; UI labels in Urdu sit one step above text-sm with a tall line. */
   --text-ur: 0.9375rem;
   --text-ur--line-height: 2rem;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -176,7 +175,6 @@
   }
   body {
     @apply bg-sidebar text-foreground antialiased;
-    /* Desktop chrome: text is not selectable and the pointer stays an arrow. */
     cursor: default;
     user-select: none;
   }

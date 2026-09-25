@@ -53,10 +53,6 @@ export type EditorSessionHandle = {
   markSaved(contentRevision: number): void;
   tryBeginSave(): boolean;
   endSave(): void;
-  /**
-   * Runs `save` on a fresh capture while holding the save lock, and marks the capture saved when
-   * `save` reports success. Resolves `undefined` when another save or an import is running.
-   */
   runSave<A>(
     save: (captured: CapturedEnvelope) => Promise<{ readonly saved: boolean; readonly value: A }>,
   ): Promise<A | undefined>;

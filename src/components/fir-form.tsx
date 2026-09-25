@@ -158,17 +158,12 @@ function useFirForm() {
 }
 
 type FirFormProps = {
-  /** The FIR being edited; omit to create a new one. */
   fir?: FirRecord;
   onSuccess?: (firId: number) => void;
   className?: string;
   children: ReactNode;
 };
 
-/**
- * Owns the form state. Compose `FirFormFields` with `FirFormSubmit`, `FirFormReset` and
- * `FirFormStatus` wherever the surrounding surface wants its actions (toolbar or footer).
- */
 function FirForm({ fir, onSuccess, className, children }: FirFormProps) {
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
@@ -268,7 +263,6 @@ const repeatableSections = [
   },
 ] as const;
 
-/** The FIR's case details. Urdu labels, right-to-left layout. */
 function FirFormFields({ className }: { className?: string }) {
   const { form, formId, fir } = useFirForm();
   const id = (name: string) => `${formId}-${name}`;

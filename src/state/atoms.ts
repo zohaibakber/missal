@@ -29,7 +29,6 @@ import {
 import { appRuntime } from "#/state/app-runtime";
 
 const LATEST_LIMIT = 5;
-/** How long a FIR's or template's data stays cached after its page closes, for quick returns. */
 const IDLE_TTL = "1 minute";
 
 /**
@@ -72,7 +71,6 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     .atom(Effect.flatMap(SettingsRepository, (repository) => repository.get))
     .pipe(runtime.factory.withReactivity(["settings"]), Atom.keepAlive);
 
-  /** The markers typed around placeholder names; the default until settings load. */
   const fieldMarkersAtom = Atom.map(settingsAtom, (result) =>
     AsyncResult.isSuccess(result) ? result.value.fieldMarkers : DEFAULT_FIELD_MARKERS,
   );
@@ -110,7 +108,6 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
       .pipe(runtime.factory.withReactivity(["firs", `fir:${firId}`]), Atom.setIdleTTL(IDLE_TTL)),
   );
 
-  /** The FIR record with everything its fields resolve against; the FIR page reads both here. */
   const firValueContextAtom = Atom.family((firId: FirId) =>
     runtime
       .atom(Effect.flatMap(FirRepository, (repository) => repository.getValueContext(firId)))
@@ -165,7 +162,6 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     { reactivityKeys: ["templates"] },
   );
 
-  /** Saves over `current` and caches the saved template in its place. */
   const saveTemplateAtom = runtime.fn(
     Effect.fnUntraced(function* (
       {
@@ -236,7 +232,6 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     Effect.flatMap(FirDocumentRepository, (repository) => repository.getMany(ids)),
   );
 
-  /** Saves over `current` and caches the saved document in its place. */
   const saveFirDocumentAtom = runtime.fn(
     Effect.fnUntraced(function* (
       { current, document }: { current: FirDocumentRecord; document: DocumentEnvelope },

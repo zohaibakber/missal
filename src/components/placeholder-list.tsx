@@ -9,7 +9,6 @@ import { Spinner } from "#/components/ui/spinner";
 import { cn } from "#/lib/utils";
 import { atoms } from "#/state/atoms";
 
-/** An editable list of placeholders, used in Settings. */
 function PlaceholderList({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
@@ -22,7 +21,6 @@ function PlaceholderList({ className, ...props }: ComponentProps<"div">) {
   );
 }
 
-/** Add button, plus Reset and Save once the list has unsaved changes. */
 function PlaceholderListActions({
   addLabel,
   dirty,
@@ -60,7 +58,6 @@ function PlaceholderListActions({
   );
 }
 
-/** How a placeholder name is written in a template, using the markers chosen in Settings. */
 function PlaceholderToken({ name }: { name: string }) {
   const { open, close } = useAtomValue(atoms.fieldMarkersAtom);
   return (

@@ -53,7 +53,6 @@ type PreviewState =
   | { readonly _tag: "Ready"; readonly pdf: PDFDocumentProxy; readonly pages: readonly PageSize[] }
   | { readonly _tag: "Failed"; readonly message: string };
 
-/** Renders the packet through the same Chromium print pipeline as the printer, then loads it. */
 async function loadPrintPdf(html: string, onTask: (task: PDFDocumentLoadingTask) => void) {
   const api = window.electronPrint;
   if (!api) throw new Error("Print preview is only available in the Missal desktop app.");
@@ -106,7 +105,6 @@ function usePrintPdf(packet: PrintPacket | null, attempt: number) {
   return state;
 }
 
-/** Draws one page only while it is near the viewport, so long packets stay light. */
 function PreviewPage({
   pdf,
   pageNumber,
@@ -186,9 +184,7 @@ type PrintPreviewProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  /** Null while the documents are still being gathered. */
   packet: PrintPacket | null;
-  /** Secondary line under the title, e.g. how many documents are included. */
   description: string;
   onPrint: () => void;
 };
@@ -201,7 +197,6 @@ export function PrintPreview({
   description,
   onPrint,
 }: PrintPreviewProps) {
-  // Focus lands on the pages so PageUp/PageDown and arrow scrolling work straight away.
   const pagesRef = useRef<HTMLDivElement | null>(null);
 
   return (
@@ -242,7 +237,6 @@ function PrintPreviewBody({
   const [viewportWidth, setViewportWidth] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageDraft, setPageDraft] = useState<string | null>(null);
-  // How far through the document the reader is, so zooming keeps the same spot in view.
   const scrollFractionRef = useRef(0);
   const pages = state._tag === "Ready" ? state.pages : [];
   const widestPage = Math.max(...pages.map((page) => page.width), 1);

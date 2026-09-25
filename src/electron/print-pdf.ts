@@ -30,7 +30,6 @@ const writePacket = (html: string) => `(async () => {
 type PrintTarget = {
   readonly window: BrowserWindow;
   readonly loaded: Promise<void>;
-  /** The packet currently laid out in the window. */
   html?: string;
 };
 
@@ -89,7 +88,6 @@ function scheduleClose() {
   idleTimer.unref();
 }
 
-/** Destroys the hidden print window, e.g. once the app window closes so the app can quit. */
 export function closePrintWindow() {
   clearTimeout(idleTimer);
   const current = target;
@@ -97,10 +95,6 @@ export function closePrintWindow() {
   if (current && !current.window.isDestroyed()) current.window.destroy();
 }
 
-/**
- * Lays out a print packet in the hidden window and returns Chromium's paginated PDF. Page sizes
- * and margins come from the packet's own `@page` rules, so the result matches the printed output.
- */
 export function renderPrintPdf(rendererOrigin: string, html: string) {
   return serialize(async () => {
     try {
@@ -116,10 +110,6 @@ export function renderPrintPdf(rendererOrigin: string, html: string) {
   });
 }
 
-/**
- * Prints a packet from the hidden window. When it is the packet just previewed, the existing
- * layout is reused, so the app's own renderer never lays the pages out again.
- */
 export function printPacket(rendererOrigin: string, html: string) {
   return serialize(async () => {
     try {

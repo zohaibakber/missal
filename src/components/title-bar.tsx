@@ -58,10 +58,6 @@ function HistoryButtons() {
   );
 }
 
-/**
- * Window title bar. The whole strip is a drag region; interactive controls opt out.
- * On Windows the native caption buttons are overlaid on the inline-end side.
- */
 export function TitleBar() {
   return (
     <header className="grid h-(--titlebar-height) shrink-0 grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-3 bg-sidebar app-drag [&_button]:app-no-drag [&_a]:app-no-drag">

@@ -30,7 +30,6 @@ export function EditFirSheet({
   open,
   onOpenChange,
 }: EditFirSheetProps & {
-  /** Null while the record is still loading. */
   fir: FirRecord | null;
 }) {
   return (
@@ -74,7 +73,6 @@ export function EditFirSheet({
   );
 }
 
-/** Edits a FIR from the list, whose rows only carry a summary, by loading the full record. */
 export function EditFirSheetById({ firId, ...props }: EditFirSheetProps & { firId: FirId }) {
   const result = useAtomValue(atoms.firByIdAtom(firId));
   return <EditFirSheet fir={AsyncResult.isSuccess(result) ? result.value : null} {...props} />;

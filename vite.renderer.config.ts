@@ -67,7 +67,6 @@ export default defineConfig({
       target: "react",
       autoCodeSplitting: true,
     }),
-    // Rust React Compiler (oxc-transform-react). Diagnostics surface components it had to skip.
     viteReact({ compiler: { logDiagnostics: true } }),
   ],
 });

@@ -37,7 +37,6 @@ export function envelopeToHtml(
 
 export type PrintPacket = { readonly html: string; readonly title: string };
 
-/** The complete, self-contained HTML that is both previewed and sent to the printer. */
 export function envelopePrintPacket(
   sections: readonly EnvelopePrintSection[],
   title: string,
@@ -45,13 +44,8 @@ export function envelopePrintPacket(
   return { html: printPacketFromSections(htmlSectionsFrom(sections), title), title };
 }
 
-// Chromium's reason when the user closes the print dialog without printing.
 const PRINT_CANCELED = "Print job canceled";
 
-/**
- * Prints a packet from the hidden window that laid out its preview, so the app's own renderer
- * never lays the pages out again. Resolves an error message, or null once printed or canceled.
- */
 export async function printPacket({ html }: PrintPacket): Promise<string | null> {
   const api = window.electronPrint;
   if (!api) return "Printing is only available in the Missal desktop app.";

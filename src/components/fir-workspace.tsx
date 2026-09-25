@@ -271,7 +271,6 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
     void navigate({ to: "/" });
   }
 
-  /** Gathers the documents marked for printing, using the live editor state for the open one. */
   async function buildPrintPacket(): Promise<PrintPacket | null> {
     if (!printIds.length) {
       toast.add({ title: "Select at least one document to print", type: "warning" });
@@ -394,7 +393,6 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
           ) : null}
         </SplitViewList>
         <SplitViewDetail>
-          {/* As on the template page: the editor column carries the actions, then the FIR. */}
           <Pane>
             <PaneHeader>
               <PaneActions className="ms-0 me-auto">
@@ -616,7 +614,6 @@ type DocumentRowProps = {
   onRemove: () => void;
 };
 
-/** A document in the FIR: print checkbox, title, and the same actions on "…" and right-click. */
 function DocumentRow({
   title,
   active,

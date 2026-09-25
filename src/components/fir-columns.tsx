@@ -17,7 +17,6 @@ import {
 import { formatDate } from "#/lib/date";
 import type { FirSummary } from "#/lib/fir";
 
-/** Row actions are owned by the table so a single sheet and dialog serve every row. */
 export type FirRowActions = {
   edit: (fir: FirSummary) => void;
   remove: (firs: readonly FirSummary[]) => void;
@@ -68,7 +67,6 @@ function FirRowMenu({ fir }: { fir: FirSummary }) {
   );
 }
 
-/** Revealed on row hover, focus, or while any row is selected. */
 const revealClassName =
   "flex opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 group-data-[selecting=true]/table:opacity-100 has-aria-expanded:opacity-100 has-data-checked:opacity-100";
 

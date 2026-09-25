@@ -44,7 +44,6 @@ function DialogContent({
   showCloseButton = true,
   ...props
 }: DialogPrimitive.Popup.Props & {
-  /** `workspace` fills the window below the title bar, for tool-like dialogs such as print preview. */
   size?: "default" | "workspace";
   showCloseButton?: boolean;
 }) {

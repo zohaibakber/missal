@@ -41,14 +41,11 @@ export function makeStorageWorkerRuntime(options: {
 }
 
 export type StorageHost = {
-  /** Settles once the database is open and migrated. */
   readonly ready: Promise<void>;
-  /** Relays one JSON-encoded storage request to the worker and returns its JSON response. */
   readonly request: (payload: string) => Promise<string>;
   readonly dispose: () => Promise<void>;
 };
 
-/** Starts the SQLite worker; main only relays JSON text, it never decodes storage messages. */
 export function startStorageWorker(options: {
   workerPath: string;
   config: StorageWorkerConfig;

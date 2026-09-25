@@ -6,7 +6,6 @@ import { Button } from "#/components/ui/button";
 import { Spinner } from "#/components/ui/spinner";
 import { cn } from "#/lib/utils";
 
-/** A content surface inside the window: toolbar header, scrolling body, optional status bar. */
 function Pane({ className, ...props }: ComponentProps<"section">) {
   return (
     <section
@@ -57,7 +56,6 @@ function PaneBody({ className, ...props }: ComponentProps<"div">) {
   );
 }
 
-/** Slim status bar pinned to the bottom of the pane. */
 function PaneStatusBar({ className, ...props }: ComponentProps<"footer">) {
   return (
     <footer
@@ -90,10 +88,6 @@ function SaveStatus({ dirty, className }: { dirty: boolean; className?: string }
   );
 }
 
-/**
- * The save button doubles as the save status, so the toolbar needs no separate label:
- * filled with a dot while there are edits, a spinner while saving, a quiet "Saved" tick after.
- */
 function SaveButton({
   dirty,
   pending = false,
@@ -140,10 +134,6 @@ type ActionsSlot = {
 
 const PaneActionsSlotContext = createContext<ActionsSlot | null>(null);
 
-/**
- * Lets content deep inside a pane (e.g. the active tab's form) place its actions in the
- * pane header: render `PaneActionsOutlet` in the header and `PaneActionsPortal` anywhere below.
- */
 function PaneActionsProvider({ children }: { children: ReactNode }) {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   return <PaneActionsSlotContext value={{ target, setTarget }}>{children}</PaneActionsSlotContext>;

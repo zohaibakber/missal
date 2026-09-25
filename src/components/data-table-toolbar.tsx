@@ -104,7 +104,6 @@ export function DataTableFacetedFilter<TData extends RowData>({
   columnId: string;
   title: string;
   options: FacetedFilterOption[];
-  /** Text direction of the menu; "rtl" puts Urdu options on the right. */
   dir?: "ltr" | "rtl";
 }) {
   const column = table.getColumn(columnId);
@@ -125,7 +124,6 @@ export function DataTableFacetedFilter<TData extends RowData>({
         <PopoverTrigger
           render={
             <Button
-              // Filled while a filter is applied, so the icon alone shows the table is narrowed.
               variant={selected.size ? "secondary" : "subtle"}
               size="icon-sm"
               type="button"

@@ -65,7 +65,6 @@ import {
 export class ElectronStorage extends Context.Service<
   ElectronStorage,
   {
-    /** Sends one JSON-encoded storage request; resolves with the JSON response. */
     readonly request: (payload: string) => Promise<string>;
   }
 >()("missal/ElectronStorage") {}
