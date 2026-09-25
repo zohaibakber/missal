@@ -48,6 +48,7 @@ function printablePacketHtml(content: string, title: string, pageRules = "") {
         font-family: "Jameel Noori Nastaleeq", serif;
         font-size: 20px;
         line-height: 2.4;
+        word-spacing: 0.25em; /* Jameel Noori collapses spaces in Chromium; see styles.css. */
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
       }

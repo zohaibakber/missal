@@ -45,7 +45,7 @@ export const shortcuts = {
   toggleFieldNames: { keys: "Mod+Shift+L", label: "Show field names", group: "Documents" },
 
   newTemplate: { keys: "Shift+N", label: "New template", group: "Templates" },
-  importDocx: { keys: "Mod+O", label: "Import Word document", group: "Templates" },
+  importDocx: { keys: "Mod+O", label: "Upload Word", group: "Templates" },
   nextTemplate: { keys: "Alt+ArrowDown", label: "Next template", group: "Templates" },
   previousTemplate: { keys: "Alt+ArrowUp", label: "Previous template", group: "Templates" },
 } as const satisfies Record<string, Shortcut>;

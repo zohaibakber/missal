@@ -1,9 +1,13 @@
 /** @vitest-environment jsdom */
 import { expect, it } from "vitest";
-import { $getRoot, createEditor } from "lexical";
+import { $createParagraphNode, $createTextNode, $getRoot, createEditor } from "lexical";
 import { insertSanitizedHtml } from "#/editor/import/convert";
 import { EDITOR_NODES } from "#/editor/nodes/registry";
-import { findPlaceholderToken, registerCompletedTokenConversion } from "#/editor/recognition";
+import {
+  findPlaceholderToken,
+  registerCompletedTokenConversion,
+  registerFieldReveal,
+} from "#/editor/recognition";
 import { createDefaultPlaceholders, indexPlaceholders } from "#/lib/placeholder";
 import { DEFAULT_FIELD_MARKERS, FieldMarkers } from "#/lib/settings";
 
@@ -64,4 +68,53 @@ it("finds names between custom markers", () => {
   expect(findPlaceholderToken("x@y @جرم@", DEFAULT_FIELD_MARKERS, catalog)).toMatchObject({
     start: 4,
   });
+});
+
+it("reveals a field's markers on double-click and turns it back once the caret leaves", async () => {
+  const editor = createEditor({
+    namespace: "reveal-placeholders",
+    nodes: [...EDITOR_NODES],
+    onError: (error) => {
+      throw error;
+    },
+  });
+  const root = document.createElement("div");
+  root.contentEditable = "true";
+  document.body.append(root);
+  editor.setRootElement(root);
+  const catalog = indexPlaceholders(createDefaultPlaceholders());
+  const markers = () => new FieldMarkers({ open: "#", close: "#" });
+  const unregister = [
+    registerCompletedTokenConversion(editor, () => catalog, markers),
+    registerFieldReveal(editor, () => catalog, markers),
+  ];
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const text = () => editor.getEditorState().read(() => $getRoot().getTextContent());
+  const fields = () => root.querySelectorAll("[data-field='true']").length;
+
+  try {
+    editor.update(
+      () => {
+        $getRoot().append($createParagraphNode().append($createTextNode("مقدمہ #جرم# ختم")));
+      },
+      { discrete: true },
+    );
+    expect(fields()).toBe(1);
+
+    root
+      .querySelector("[data-field='true']")
+      ?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    await settle();
+    expect(fields()).toBe(0);
+    expect(text()).toBe("مقدمہ #جرم# ختم");
+
+    editor.update(() => $getRoot().selectEnd(), { discrete: true });
+    await settle();
+    expect(fields()).toBe(1);
+    expect(text()).not.toContain("#");
+  } finally {
+    for (const stop of unregister) stop();
+    editor.setRootElement(null);
+    root.remove();
+  }
 });

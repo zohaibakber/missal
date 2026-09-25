@@ -278,6 +278,9 @@
   font-family: var(--font-urdu);
   font-size: 1.25rem;
   line-height: 2.4;
+  /* Jameel Noori's ccmp shapes a space between Urdu letters to zero width in Chromium; restore
+     the font's own space width (0.25em) so words don't run together. Keep in sync with output.ts. */
+  word-spacing: 0.25em;
   text-align: right;
   unicode-bidi: plaintext;
   overflow-wrap: anywhere;

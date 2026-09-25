@@ -30,7 +30,7 @@ import {
   PaneHeader,
   PaneStatusBar,
   PaneTitle,
-  SaveStatus,
+  SaveButton,
 } from "#/components/pane";
 import { ShortcutKbd } from "#/components/shortcut-kbd";
 import {
@@ -87,7 +87,6 @@ import {
   SidebarMenuItem,
 } from "#/components/ui/sidebar";
 import { Skeleton } from "#/components/ui/skeleton";
-import { Spinner } from "#/components/ui/spinner";
 import { toast } from "#/components/ui/toast";
 import { envelopePrintPacket, printPacket, type PrintPacket } from "#/editor/html-export";
 import type { EditorSessionHandle } from "#/editor/session";
@@ -401,7 +400,6 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
           {fir.offence}
         </span>
         <PaneActions>
-          {activeDocument ? <SaveStatus dirty={dirty} /> : null}
           <IconAction
             label="Edit FIR details"
             shortcut="editFir"
@@ -455,16 +453,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
           </DropdownMenu>
           {activeDocument ? (
             <Hint label="Save document" shortcut="save">
-              <Button
-                className="ms-1"
-                size="sm"
-                disabled={!dirty || savePending}
-                onClick={() => void handleSave()}
-                type="button"
-              >
-                {savePending ? <Spinner data-icon="inline-start" /> : null}
-                Save
-              </Button>
+              <SaveButton dirty={dirty} pending={savePending} onClick={() => void handleSave()} />
             </Hint>
           ) : null}
         </PaneActions>

@@ -17,7 +17,11 @@ import { $generateNodesFromDOM } from "@lexical/html";
 import { registerImportedStyleRendering } from "#/editor/html-config";
 import { registerClipboardImport } from "#/editor/import/clipboard";
 import { FieldPresentationController } from "#/editor/presentation";
-import { registerCompletedTokenConversion, registerFieldRecognition } from "#/editor/recognition";
+import {
+  registerCompletedTokenConversion,
+  registerFieldRecognition,
+  registerFieldReveal,
+} from "#/editor/recognition";
 
 type EditorPhase =
   | { readonly _tag: "Loading" }
@@ -86,6 +90,7 @@ export function attachEditorSession(
     presentation.attach(),
     registerFieldRecognition(editor, options.getPlaceholderIndex, getFieldMarkers),
     registerCompletedTokenConversion(editor, options.getPlaceholderIndex, getFieldMarkers),
+    registerFieldReveal(editor, options.getPlaceholderIndex, getFieldMarkers),
     registerClipboardImport(editor, {
       onPageLayout: (pageLayout) => {
         // The first Word paste defines the page; later pastes don't reflow an existing layout.
