@@ -5,19 +5,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  DESKTOP_PRINT_CHANNEL,
   DESKTOP_PRINT_PDF_CHANNEL,
   DESKTOP_THEME_CHANNEL,
   type DesktopTheme,
 } from "./desktop-window";
-import { renderPrintPdf } from "./electron/print-pdf";
-import { Effect } from "effect";
+import { closePrintWindow, printPacket, renderPrintPdf } from "./electron/print-pdf";
 import { registerStorageIpc } from "./electron/storage-ipc-main";
-import {
-  makeStorageWorkerRuntime,
-  resolveDatabasePath,
-  resolveMigrationsFolder,
-  StorageWorker,
-} from "./electron/storage-worker-client";
+import type { StorageHost } from "./electron/storage-worker-client";
 
 const RENDERER_SCHEME = "missal";
 const RENDERER_HOST = "renderer";
@@ -60,6 +55,9 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
+// App windows only: the hidden print window has no title bar overlay and must not keep the app open.
+const appWindows = new Set<BrowserWindow>();
+
 const updateWindowAppearance = (window: BrowserWindow) => {
   if (window.isDestroyed()) return;
 
@@ -92,8 +90,13 @@ const createWindow = () => {
     },
   });
 
+  appWindows.add(mainWindow);
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
+  });
+  mainWindow.once("closed", () => {
+    appWindows.delete(mainWindow);
+    if (appWindows.size === 0) closePrintWindow();
   });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
@@ -142,13 +145,23 @@ const registerDesktopIntegration = () => {
     if (isDesktopTheme(theme)) nativeTheme.themeSource = theme;
   });
 
-  ipcMain.handle(DESKTOP_PRINT_PDF_CHANNEL, (event, html: unknown) => {
+  const printRequest = (event: Electron.IpcMainInvokeEvent, html: unknown) => {
     const origin = rendererOrigin();
     const senderUrl = event.senderFrame?.url;
     if (typeof html !== "string" || !senderUrl || new URL(senderUrl).origin !== origin) {
-      throw new Error("Print preview request rejected");
+      throw new Error("Print request rejected");
     }
-    return renderPrintPdf(origin, html);
+    return { origin, html };
+  };
+
+  ipcMain.handle(DESKTOP_PRINT_PDF_CHANNEL, (event, html: unknown) => {
+    const request = printRequest(event, html);
+    return renderPrintPdf(request.origin, request.html);
+  });
+
+  ipcMain.handle(DESKTOP_PRINT_CHANNEL, (event, html: unknown) => {
+    const request = printRequest(event, html);
+    return printPacket(request.origin, request.html);
   });
 };
 
@@ -162,41 +175,43 @@ const startApp = () => {
     },
   });
 
-  let storageRuntime: ReturnType<typeof makeStorageWorkerRuntime> | undefined;
+  let storage: Promise<StorageHost> | undefined;
   let disposingStorage = false;
 
   void app.whenReady().then(() => {
     protocol.handle(RENDERER_SCHEME, handleRendererProtocol);
     registerDesktopIntegration();
-
-    storageRuntime = makeStorageWorkerRuntime({
-      workerPath: path.join(__dirname, "storage-worker.cjs"),
-      config: {
-        databasePath: resolveDatabasePath(app.getPath("userData")),
-        migrationsFolder: resolveMigrationsFolder({
-          packaged: app.isPackaged,
-          resourcesPath: process.resourcesPath,
-          cwd: process.cwd(),
-        }),
-      },
-    });
-
     createWindow();
-    const storageReady = storageRuntime.runPromise(
-      Effect.flatMap(StorageWorker, (worker) => worker["Storage.open"]()),
+
+    // Effect, RPC and the storage schemas load only after the window exists, so compiling them
+    // doesn't delay first paint. The channel is registered now and its requests wait for them.
+    storage = import("./electron/storage-worker-client").then((client) =>
+      client.startStorageWorker({
+        workerPath: path.join(__dirname, "storage-worker.cjs"),
+        config: {
+          databasePath: client.resolveDatabasePath(app.getPath("userData")),
+          migrationsFolder: client.resolveMigrationsFolder({
+            packaged: app.isPackaged,
+            resourcesPath: process.resourcesPath,
+            cwd: process.cwd(),
+          }),
+        },
+      }),
     );
-    registerStorageIpc(storageRuntime, storageReady);
-    storageReady.catch((error: unknown) => {
-      dialog.showErrorBox(
-        "Missal could not open the database",
-        error instanceof Error ? error.message : "Storage operation failed",
-      );
-      app.quit();
-    });
+    registerStorageIpc(storage);
+    storage
+      .then((host) => host.ready)
+      .catch((error: unknown) => {
+        dialog.showErrorBox(
+          "Missal could not open the database",
+          error instanceof Error ? error.message : "Storage operation failed",
+        );
+        app.quit();
+      });
   });
 
   nativeTheme.on("updated", () => {
-    for (const window of BrowserWindow.getAllWindows()) {
+    for (const window of appWindows) {
       updateWindowAppearance(window);
     }
   });
@@ -208,21 +223,23 @@ const startApp = () => {
   });
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (appWindows.size === 0) {
       createWindow();
     }
   });
 
   app.on("before-quit", (event) => {
-    if (!storageRuntime || disposingStorage) {
+    if (!storage || disposingStorage) {
       return;
     }
 
     event.preventDefault();
     disposingStorage = true;
-    void storageRuntime.dispose().finally(() => {
-      app.quit();
-    });
+    void storage
+      .then((host) => host.dispose())
+      .finally(() => {
+        app.quit();
+      });
   });
 };
 

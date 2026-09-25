@@ -1,3 +1,5 @@
+// First import: every Schema parser in the worker is JIT-compiled (interpreted where it can't be).
+import "effect/unstable/schema/SchemaJITCompiler/enable";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeWorkerRunner from "@effect/platform-node/NodeWorkerRunner";
 import { Effect, Layer } from "effect";

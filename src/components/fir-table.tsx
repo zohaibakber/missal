@@ -19,7 +19,7 @@ import {
   DataTableSearch,
   DataTableViewOptions,
 } from "#/components/data-table-toolbar";
-import { EditFirSheet } from "#/components/edit-fir-sheet";
+import { EditFirSheetById } from "#/components/edit-fir-sheet";
 import { firColumns, FirRowActionsContext, type FirRowActions } from "#/components/fir-columns";
 import { FirStatusDot } from "#/components/fir-status-badge";
 import { Hint } from "#/components/hint";
@@ -50,8 +50,9 @@ import {
 import { Skeleton } from "#/components/ui/skeleton";
 import { Spinner } from "#/components/ui/spinner";
 import { toast } from "#/components/ui/toast";
-import { FIR_STATUS_OPTIONS, getFirStatusLabel, type FirRecord } from "#/lib/fir";
+import { FIR_STATUS_OPTIONS, getFirStatusLabel, type FirId, type FirSummary } from "#/lib/fir";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
+import { whilePending } from "#/lib/utils";
 import { atoms } from "#/state/atoms";
 
 const initialSorting: SortingState = [{ desc: true, id: "fir_no" }];
@@ -120,19 +121,19 @@ export function FirsPane() {
   );
 }
 
-function FirBrowser({ data }: { data: readonly FirRecord[] }) {
+function FirBrowser({ data }: { data: readonly FirSummary[] }) {
   const navigate = useNavigate();
   const table = useDataTable({ columns: firColumns, data: [...data], initialSorting });
   // Targets outlive their `open` flags so the sheet and dialog keep their content while closing.
-  const [editing, setEditing] = useState<FirRecord | null>(null);
+  const [editing, setEditing] = useState<FirId | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [deleting, setDeleting] = useState<readonly FirRecord[]>([]);
+  const [deleting, setDeleting] = useState<readonly FirSummary[]>([]);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const selected = table.getSelectedRowModel().rows.map((row) => row.original);
   const visibleCount = table.getRowModel().rows.length;
   const actions: FirRowActions = {
     edit: (fir) => {
-      setEditing(fir);
+      setEditing(fir.id);
       setEditOpen(true);
     },
     remove: (firs) => {
@@ -140,7 +141,8 @@ function FirBrowser({ data }: { data: readonly FirRecord[] }) {
       setDeleteOpen(true);
     },
   };
-  const open = (fir: FirRecord) => void navigate({ to: "/$firId", params: { firId: `${fir.id}` } });
+  const open = (fir: FirSummary) =>
+    void navigate({ to: "/$firId", params: { firId: `${fir.id}` } });
 
   return (
     <FirRowActionsContext value={actions}>
@@ -213,7 +215,9 @@ function FirBrowser({ data }: { data: readonly FirRecord[] }) {
           )}
         </PaneStatusBar>
       </Pane>
-      {editing ? <EditFirSheet fir={editing} open={editOpen} onOpenChange={setEditOpen} /> : null}
+      {editing ? (
+        <EditFirSheetById firId={editing} open={editOpen} onOpenChange={setEditOpen} />
+      ) : null}
       <DeleteFirsDialog
         firs={deleting}
         open={deleteOpen}
@@ -230,7 +234,7 @@ function DeleteFirsDialog({
   onClose,
   onDeleted,
 }: {
-  firs: readonly FirRecord[];
+  firs: readonly FirSummary[];
   open: boolean;
   onClose: () => void;
   onDeleted: () => void;
@@ -240,19 +244,19 @@ function DeleteFirsDialog({
   const [first] = firs;
 
   async function handleDelete() {
-    setPending(true);
-    try {
+    const deleted = await whilePending(setPending, async () => {
       for (const fir of firs) {
         const exit = await removeFir(fir.id);
         if (Exit.isFailure(exit)) {
           toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
-          return;
+          return false;
         }
       }
+      return true;
+    });
+    if (deleted) {
       onDeleted();
       onClose();
-    } finally {
-      setPending(false);
     }
   }
 

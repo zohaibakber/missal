@@ -2,7 +2,9 @@
 import { expect, it } from "vite-plus/test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { normalizeWordHtml, readWordPageLayout, windowsLineRatio } from "#/editor/import/word-html";
+import { brotliDecompressSync } from "node:zlib";
+import { normalizeWordHtml, readWordPageLayout } from "#/editor/import/word-html";
+import { URDU_FONT_WINDOWS_LINE_RATIO } from "#/lib/output";
 
 const WORD_CLIPBOARD = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
 <head><meta name=Generator content="Microsoft Word 15">
@@ -64,8 +66,54 @@ it("leaves non-Word HTML untouched", () => {
   );
 });
 
-it("reads Word's single-line height from the bundled Urdu font's Windows metrics", () => {
-  const font = readFileSync(resolve("public/Jameel Noori Nastaleeq.ttf"));
-  const ratio = windowsLineRatio(font.buffer.slice(font.byteOffset, font.byteOffset + font.length));
+// WOFF2's table tags by index (spec §5.1); only the first 12 matter to the fonts read here.
+const WOFF2_KNOWN_TAGS = ["cmap", "head", "hhea", "hmtx", "maxp", "name", "OS/2", "post"];
+
+/** The decompressed bytes of each sfnt table in a WOFF2 file, by tag. */
+function woff2Tables(file: Buffer) {
+  const view = new DataView(file.buffer, file.byteOffset, file.byteLength);
+  const readBase128 = (at: number): [number, number] => {
+    let value = 0;
+    for (let index = 0; index < 5; index++) {
+      const byte = view.getUint8(at + index);
+      value = value * 128 + (byte & 0x7f);
+      if (!(byte & 0x80)) return [value, at + index + 1];
+    }
+    throw new Error("Invalid UIntBase128");
+  };
+  let offset = 48;
+  const entries: { tag: string; length: number }[] = [];
+  for (let index = 0; index < view.getUint16(12); index++) {
+    const flags = view.getUint8(offset++);
+    let tag = WOFF2_KNOWN_TAGS[flags & 0x3f] ?? `#${flags & 0x3f}`;
+    if ((flags & 0x3f) === 63) {
+      tag = file.toString("latin1", offset, offset + 4);
+      offset += 4;
+    }
+    let length: number;
+    [length, offset] = readBase128(offset);
+    const version = flags >> 6;
+    const glyphTable = (flags & 0x3f) === 10 || (flags & 0x3f) === 11;
+    if (glyphTable ? version === 0 : version !== 0) [length, offset] = readBase128(offset);
+    entries.push({ tag, length });
+  }
+  const data = brotliDecompressSync(file.subarray(offset, offset + view.getUint32(20)));
+  const tables = new Map<string, DataView>();
+  let start = 0;
+  for (const { tag, length } of entries) {
+    tables.set(tag, new DataView(data.buffer, data.byteOffset + start, length));
+    start += length;
+  }
+  return tables;
+}
+
+it("keeps Word's single-line height in step with the bundled Urdu font's Windows metrics", () => {
+  const tables = woff2Tables(readFileSync(resolve("public/Jameel Noori Nastaleeq.woff2")));
+  const head = tables.get("head");
+  const os2 = tables.get("OS/2");
+  if (!head || !os2) throw new Error("Missing head or OS/2 table");
+  const ratio = (os2.getUint16(74) + os2.getUint16(76)) / head.getUint16(18);
+
+  expect(URDU_FONT_WINDOWS_LINE_RATIO).toBe(ratio);
   expect(ratio).toBeCloseTo(1.694, 3);
 });

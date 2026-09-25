@@ -1,7 +1,6 @@
-import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
-import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
+import viteReact from "@vitejs/plugin-react";
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
@@ -58,6 +57,9 @@ export default defineConfig({
       },
     ],
   },
+  test: {
+    setupFiles: ["./src/test-setup.ts"],
+  },
   resolve: { tsconfigPaths: true },
   plugins: [
     tailwindcss(),
@@ -65,7 +67,7 @@ export default defineConfig({
       target: "react",
       autoCodeSplitting: true,
     }),
-    viteReact(),
-    babel({ presets: [reactCompilerPreset()] }),
+    // Rust React Compiler (oxc-transform-react). Diagnostics surface components it had to skip.
+    viteReact({ compiler: { logDiagnostics: true } }),
   ],
 });

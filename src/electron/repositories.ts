@@ -3,11 +3,14 @@ import { Effect, HashMap, Layer, Option, Schema } from "effect";
 import { and, asc, count, desc, eq, inArray, like, or } from "drizzle-orm";
 import {
   appSettings,
+  firDocumentRecordColumns,
   firDocumentSummaryColumns,
   firDocuments,
   firPlaceholderValues,
   firRecords,
+  firSummaryColumns,
   placeholders,
+  templateRecordColumns,
   templateSummaryColumns,
   templates,
 } from "#/electron/database-schema";
@@ -29,17 +32,18 @@ import {
 } from "#/electron/repository-helpers";
 import { documentWriteColumns, DocumentEnvelope } from "#/lib/document-format";
 import { CustomSource } from "#/lib/field";
-import { FirRecord } from "#/lib/fir";
+import { FirRecord, FirSummary } from "#/lib/fir";
 import {
   FirDocumentRecord,
   FirDocumentSaveAck,
   FirDocumentSummary,
   FirValueContext,
 } from "#/lib/fir-document";
-import { DocumentRevision, TemplateId } from "#/lib/ids";
+import { DocumentRevision, type FirId, type PlaceholderId, TemplateId } from "#/lib/ids";
 import { Placeholder, PlaceholderCreateInput, PlaceholderUpdateInput } from "#/lib/placeholder";
 import { AppSettings } from "#/lib/settings";
-import { EntityInUse } from "#/lib/storage-errors";
+import { EntityInUse, type EntityNotFound, type StorageError } from "#/lib/storage-errors";
+import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core/errors";
 import {
   FirPlaceholderValue,
   TemplateRecord,
@@ -58,6 +62,66 @@ import {
 
 const nextRevision = (revision: DocumentRevision) => DocumentRevision.make(revision + 1);
 
+// Decoders are built once; each call site used to rebuild its parser per query.
+const decodePlaceholders = decodeStored(
+  Schema.decodeUnknownEffect(Schema.Array(Placeholder)),
+  "placeholder.decode",
+);
+const decodePlaceholder = decodeStored(
+  Schema.decodeUnknownEffect(Placeholder),
+  "placeholder.decode",
+);
+const decodeTemplateSummaries = decodeStored(
+  Schema.decodeUnknownEffect(Schema.Array(TemplateSummary)),
+  "template.summary.decode",
+);
+const decodeTemplateSummary = decodeStored(
+  Schema.decodeUnknownEffect(TemplateSummary),
+  "template.summary.decode",
+);
+const decodeTemplateRecord = decodeStored(
+  Schema.decodeUnknownEffect(TemplateRecord),
+  "template.decode",
+);
+const decodeTemplateAck = decodeStored(
+  Schema.decodeUnknownEffect(TemplateSaveAck),
+  "template.ack.decode",
+);
+const decodeFirSummaries = decodeStored(
+  Schema.decodeUnknownEffect(Schema.Array(FirSummary)),
+  "fir.decode",
+);
+const decodeFir = decodeStored(Schema.decodeUnknownEffect(FirRecord), "fir.decode");
+const decodeFirDocumentSummaries = decodeStored(
+  Schema.decodeUnknownEffect(Schema.Array(FirDocumentSummary)),
+  "firDocument.summary.decode",
+);
+const decodeFirDocumentRecord = decodeStored(
+  Schema.decodeUnknownEffect(FirDocumentRecord),
+  "firDocument.decode",
+);
+const decodeFirDocumentRecords = decodeStored(
+  Schema.decodeUnknownEffect(Schema.Array(FirDocumentRecord)),
+  "firDocument.decode",
+);
+const decodeFirDocumentAck = decodeStored(
+  Schema.decodeUnknownEffect(FirDocumentSaveAck),
+  "firDocument.ack.decode",
+);
+const decodeEnvelope = decodeStored(
+  Schema.decodeUnknownEffect(DocumentEnvelope),
+  "template.document.decode",
+);
+const decodeFirPlaceholderValues = decodeStored(
+  Schema.decodeUnknownEffect(Schema.Array(FirPlaceholderValue)),
+  "firPlaceholderValue.decode",
+);
+const decodeFirPlaceholderValue = decodeStored(
+  Schema.decodeUnknownEffect(FirPlaceholderValue),
+  "firPlaceholderValue.decode",
+);
+const decodeSettings = decodeStored(Schema.decodeUnknownEffect(AppSettings), "settings.decode");
+
 const DrizzlePlaceholderRepositoryLive = Layer.effect(
   PlaceholderRepository,
   Effect.gen(function* () {
@@ -66,10 +130,7 @@ const DrizzlePlaceholderRepositoryLive = Layer.effect(
     const list = Effect.fn("PlaceholderRepository.list")(
       function* () {
         const rows = yield* db.select().from(placeholders).orderBy(placeholders.id);
-        return yield* decodeStored(
-          Schema.decodeUnknownEffect(Schema.Array(Placeholder)),
-          "placeholder.decode",
-        )(rows);
+        return yield* decodePlaceholders(rows);
       },
       (effect) => mapQuery("placeholder.list", effect),
     )();
@@ -87,10 +148,7 @@ const DrizzlePlaceholderRepositoryLive = Layer.effect(
             ),
           );
         const row = yield* requireRow(rows, missingWrite("placeholder.create"));
-        return yield* decodeStored(
-          Schema.decodeUnknownEffect(Placeholder),
-          "placeholder.decode",
-        )(row);
+        return yield* decodePlaceholder(row);
       },
       (effect) => mapQuery("placeholder.create", effect),
     );
@@ -109,10 +167,7 @@ const DrizzlePlaceholderRepositoryLive = Layer.effect(
             ),
           );
         const row = yield* requireRow(rows, notFound("placeholder", input.id));
-        return yield* decodeStored(
-          Schema.decodeUnknownEffect(Placeholder),
-          "placeholder.decode",
-        )(row);
+        return yield* decodePlaceholder(row);
       },
       (effect) => mapQuery("placeholder.update", effect),
     );
@@ -140,18 +195,13 @@ const DrizzleTemplateRepositoryLive = Layer.effect(
   Effect.gen(function* () {
     const db = yield* MissalDrizzle;
 
-    const decodeSummary = decodeStored(
-      Schema.decodeUnknownEffect(Schema.Array(TemplateSummary)),
-      "template.summary.decode",
-    );
-
     const list = Effect.fn("TemplateRepository.list")(
       function* () {
         const rows = yield* db
           .select(templateSummaryColumns)
           .from(templates)
           .orderBy(desc(templates.updatedAt), desc(templates.id));
-        return yield* decodeSummary(rows);
+        return yield* decodeTemplateSummaries(rows);
       },
       (effect) => mapQuery("template.list", effect),
     )();
@@ -168,26 +218,19 @@ const DrizzleTemplateRepositoryLive = Layer.effect(
           .from(templates)
           .where(or(like(templates.name, needle), like(templates.plainText, needle)))
           .orderBy(desc(templates.updatedAt), desc(templates.id));
-        return yield* decodeSummary(rows);
+        return yield* decodeTemplateSummaries(rows);
       },
       (effect) => mapQuery("template.search", effect),
     );
 
     const get = Effect.fn("TemplateRepository.get")(
       function* (id) {
-        const rows = yield* db.select().from(templates).where(eq(templates.id, id));
+        const rows = yield* db
+          .select(templateRecordColumns)
+          .from(templates)
+          .where(eq(templates.id, id));
         const row = yield* requireRow(rows, notFound("template", id));
-        return yield* decodeStored(
-          Schema.decodeUnknownEffect(TemplateRecord),
-          "template.decode",
-        )({
-          createdAt: row.createdAt,
-          document: row.document,
-          id: row.id,
-          name: row.name,
-          revision: row.revision,
-          updatedAt: row.updatedAt,
-        });
+        return yield* decodeTemplateRecord(row);
       },
       (effect) => mapQuery("template.get", effect),
     );
@@ -206,10 +249,7 @@ const DrizzleTemplateRepositoryLive = Layer.effect(
           })
           .returning(templateSummaryColumns);
         const row = yield* requireRow(rows, missingWrite("template.create"));
-        return yield* decodeStored(
-          Schema.decodeUnknownEffect(TemplateSummary),
-          "template.summary.decode",
-        )(row);
+        return yield* decodeTemplateSummary(row);
       },
       (effect) => mapQuery("template.create", effect),
     );
@@ -234,10 +274,7 @@ const DrizzleTemplateRepositoryLive = Layer.effect(
           input.id,
           input.expectedRevision,
         );
-        return yield* decodeStored(
-          Schema.decodeUnknownEffect(TemplateSaveAck),
-          "template.ack.decode",
-        )({
+        return yield* decodeTemplateAck({
           fieldCount: row.fieldCount,
           id: row.id,
           previewText: row.previewText,
@@ -305,15 +342,13 @@ const DrizzleFirRepositoryLive = Layer.effect(
       zimni: input.zimni,
     });
 
-    const decodeFir = decodeStored(Schema.decodeUnknownEffect(FirRecord), "fir.decode");
-
     const list = Effect.fn("FirRepository.list")(
       function* () {
-        const rows = yield* db.select().from(firRecords).orderBy(desc(firRecords.id));
-        return yield* decodeStored(
-          Schema.decodeUnknownEffect(Schema.Array(FirRecord)),
-          "fir.decode",
-        )(rows);
+        const rows = yield* db
+          .select(firSummaryColumns)
+          .from(firRecords)
+          .orderBy(desc(firRecords.id));
+        return yield* decodeFirSummaries(rows);
       },
       (effect) => mapQuery("fir.list", effect),
     )();
@@ -366,40 +401,27 @@ const DrizzleFirRepositoryLive = Layer.effect(
           .select()
           .from(placeholders)
           .orderBy(placeholders.id)
-          .pipe(
-            Effect.flatMap(
-              decodeStored(
-                Schema.decodeUnknownEffect(Schema.Array(Placeholder)),
-                "placeholder.decode",
-              ),
-            ),
-          );
+          .pipe(Effect.flatMap(decodePlaceholders));
         const overridesEffect = db
           .select()
           .from(firPlaceholderValues)
           .where(eq(firPlaceholderValues.firId, id))
-          .pipe(
-            Effect.flatMap(
-              decodeStored(
-                Schema.decodeUnknownEffect(Schema.Array(FirPlaceholderValue)),
-                "firPlaceholderValue.decode",
-              ),
-            ),
-          );
+          .pipe(Effect.flatMap(decodeFirPlaceholderValues));
         const settingsEffect = db
           .select()
           .from(appSettings)
           .where(eq(appSettings.id, "default"))
           .pipe(
             Effect.flatMap((rows) => requireRow(rows, missingWrite("settings.get"))),
-            Effect.flatMap(
-              decodeStored(Schema.decodeUnknownEffect(AppSettings), "settings.decode"),
-            ),
+            Effect.flatMap(decodeSettings),
           );
-        const [fir, catalog, overrides, settings] = yield* Effect.all(
-          [firEffect, catalogEffect, overridesEffect, settingsEffect],
-          { concurrency: "unbounded" },
-        );
+        // One SQLite connection serves every query, so running these concurrently gains nothing.
+        const [fir, catalog, overrides, settings] = yield* Effect.all([
+          firEffect,
+          catalogEffect,
+          overridesEffect,
+          settingsEffect,
+        ]);
 
         return new FirValueContext({
           catalog,
@@ -420,11 +442,6 @@ const DrizzleFirDocumentRepositoryLive = Layer.effect(
   Effect.gen(function* () {
     const db = yield* MissalDrizzle;
 
-    const decodeSummaries = decodeStored(
-      Schema.decodeUnknownEffect(Schema.Array(FirDocumentSummary)),
-      "firDocument.summary.decode",
-    );
-
     const listForFir = Effect.fn("FirDocumentRepository.listForFir")(
       function* (firId) {
         const rows = yield* db
@@ -432,32 +449,45 @@ const DrizzleFirDocumentRepositoryLive = Layer.effect(
           .from(firDocuments)
           .where(eq(firDocuments.firId, firId))
           .orderBy(asc(firDocuments.position), asc(firDocuments.id));
-        return yield* decodeSummaries(rows);
+        return yield* decodeFirDocumentSummaries(rows);
       },
       (effect) => mapQuery("firDocument.listForFir", effect),
     );
 
     const get = Effect.fn("FirDocumentRepository.get")(
       function* (id) {
-        const rows = yield* db.select().from(firDocuments).where(eq(firDocuments.id, id));
+        const rows = yield* db
+          .select(firDocumentRecordColumns)
+          .from(firDocuments)
+          .where(eq(firDocuments.id, id));
         const row = yield* requireRow(rows, notFound("firDocument", id));
-        return yield* decodeStored(
-          Schema.decodeUnknownEffect(FirDocumentRecord),
-          "firDocument.decode",
-        )({
-          createdAt: row.createdAt,
-          document: row.document,
-          firId: row.firId,
-          id: row.id,
-          position: row.position,
-          revision: row.revision,
-          sourceTemplateRevision: row.sourceTemplateRevision,
-          templateId: row.templateId,
-          title: row.title,
-          updatedAt: row.updatedAt,
-        });
+        return yield* decodeFirDocumentRecord(row);
       },
       (effect) => mapQuery("firDocument.get", effect),
+    );
+
+    const getMany = Effect.fn("FirDocumentRepository.getMany")(
+      function* (ids) {
+        if (ids.length === 0) {
+          return [];
+        }
+
+        const rows = yield* db
+          .select(firDocumentRecordColumns)
+          .from(firDocuments)
+          .where(inArray(firDocuments.id, [...ids]));
+        const rowsById = new Map(rows.map((row) => [row.id, row]));
+        const ordered: (typeof rows)[number][] = [];
+        for (const id of ids) {
+          const row = rowsById.get(id);
+          if (!row) {
+            return yield* notFound("firDocument", id);
+          }
+          ordered.push(row);
+        }
+        return yield* decodeFirDocumentRecords(ordered);
+      },
+      (effect) => mapQuery("firDocument.getMany", effect),
     );
 
     const addTemplates = Effect.fn("FirDocumentRepository.addTemplates")(
@@ -520,10 +550,7 @@ const DrizzleFirDocumentRepositoryLive = Layer.effect(
                 }
 
                 const template = Option.getOrThrow(HashMap.get(templatesById, templateId));
-                const envelope = yield* decodeStored(
-                  Schema.decodeUnknownEffect(DocumentEnvelope),
-                  "template.document.decode",
-                )(template.document);
+                const envelope = yield* decodeEnvelope(template.document);
                 const write = documentWriteColumns(envelope);
                 position += 1;
                 yield* tx.insert(firDocuments).values({
@@ -545,7 +572,7 @@ const DrizzleFirDocumentRepositoryLive = Layer.effect(
               .from(firDocuments)
               .where(eq(firDocuments.firId, input.firId))
               .orderBy(asc(firDocuments.position), asc(firDocuments.id));
-            return yield* decodeSummaries(rows);
+            return yield* decodeFirDocumentSummaries(rows);
           }),
         );
       },
@@ -576,10 +603,7 @@ const DrizzleFirDocumentRepositoryLive = Layer.effect(
           input.id,
           input.expectedRevision,
         );
-        return yield* decodeStored(
-          Schema.decodeUnknownEffect(FirDocumentSaveAck),
-          "firDocument.ack.decode",
-        )({
+        return yield* decodeFirDocumentAck({
           fieldCount: row.fieldCount,
           id: row.id,
           previewText: row.previewText,
@@ -622,7 +646,7 @@ const DrizzleFirDocumentRepositoryLive = Layer.effect(
               .from(firDocuments)
               .where(eq(firDocuments.firId, input.firId))
               .orderBy(asc(firDocuments.position), asc(firDocuments.id));
-            return yield* decodeSummaries(rows);
+            return yield* decodeFirDocumentSummaries(rows);
           }),
         );
       },
@@ -639,7 +663,15 @@ const DrizzleFirDocumentRepositoryLive = Layer.effect(
       (effect) => mapQuery("firDocument.remove", effect),
     );
 
-    return FirDocumentRepository.of({ listForFir, get, addTemplates, save, reorder, remove });
+    return FirDocumentRepository.of({
+      listForFir,
+      get,
+      getMany,
+      addTemplates,
+      save,
+      reorder,
+      remove,
+    });
   }),
 );
 
@@ -648,6 +680,28 @@ const DrizzleFirPlaceholderValueRepositoryLive = Layer.effect(
   Effect.gen(function* () {
     const db = yield* MissalDrizzle;
 
+    const missingValueOwner = Effect.fnUntraced(function* (
+      firId: FirId,
+      placeholderId: PlaceholderId,
+    ) {
+      const firs = yield* db
+        .select({ id: firRecords.id })
+        .from(firRecords)
+        .where(eq(firRecords.id, firId));
+      return yield* firs.length === 0
+        ? notFound("fir", firId)
+        : notFound("placeholder", placeholderId);
+    });
+
+    const recoverMissingOwner =
+      (firId: FirId, placeholderId: PlaceholderId) =>
+      (
+        error: EffectDrizzleQueryError,
+      ): Effect.Effect<never, EntityNotFound | StorageError | EffectDrizzleQueryError> =>
+        constraintKind(error) === "constraint"
+          ? missingValueOwner(firId, placeholderId)
+          : failQuery("firPlaceholderValue.upsert")(error);
+
     return FirPlaceholderValueRepository.of({
       listForFir: Effect.fn("FirPlaceholderValueRepository.listForFir")(
         function* (firId) {
@@ -655,53 +709,41 @@ const DrizzleFirPlaceholderValueRepositoryLive = Layer.effect(
             .select()
             .from(firPlaceholderValues)
             .where(eq(firPlaceholderValues.firId, firId));
-          return yield* decodeStored(
-            Schema.decodeUnknownEffect(Schema.Array(FirPlaceholderValue)),
-            "firPlaceholderValue.decode",
-          )(rows);
+          return yield* decodeFirPlaceholderValues(rows);
         },
         (effect) => mapQuery("firPlaceholderValue.listForFir", effect),
       ),
 
       upsert: Effect.fn("FirPlaceholderValueRepository.upsert")(
         function* (input) {
-          return yield* db.transaction(
-            Effect.fnUntraced(function* (tx) {
-              const fir = yield* tx.select().from(firRecords).where(eq(firRecords.id, input.firId));
-              yield* requireRow(fir, notFound("fir", input.firId));
-
-              const placeholder = yield* tx
-                .select()
-                .from(placeholders)
-                .where(eq(placeholders.id, input.placeholderId));
-              yield* requireRow(placeholder, notFound("placeholder", input.placeholderId));
-
-              const timestamp = yield* nowIso;
-              const rows = yield* tx
-                .insert(firPlaceholderValues)
-                .values({
-                  firId: input.firId,
-                  placeholderId: input.placeholderId,
-                  updatedAt: timestamp,
-                  value: input.value,
-                })
-                .onConflictDoUpdate({
-                  set: {
-                    updatedAt: timestamp,
-                    value: input.value,
-                  },
-                  target: [firPlaceholderValues.firId, firPlaceholderValues.placeholderId],
-                })
-                .returning();
-              const row = yield* requireRow(rows, missingWrite("firPlaceholderValue.upsert"));
-              return yield* decodeStored(
-                Schema.decodeUnknownEffect(FirPlaceholderValue),
-                "firPlaceholderValue.decode",
-              )(row);
-            }),
-          );
+          const timestamp = yield* nowIso;
+          const rows = yield* db
+            .insert(firPlaceholderValues)
+            .values({
+              firId: input.firId,
+              placeholderId: input.placeholderId,
+              updatedAt: timestamp,
+              value: input.value,
+            })
+            .onConflictDoUpdate({
+              set: {
+                updatedAt: timestamp,
+                value: input.value,
+              },
+              target: [firPlaceholderValues.firId, firPlaceholderValues.placeholderId],
+            })
+            .returning()
+            .pipe(
+              // Foreign keys already reject a missing FIR or placeholder; only then look up which.
+              Effect.catchIf(
+                isDrizzleQueryError,
+                recoverMissingOwner(input.firId, input.placeholderId),
+              ),
+            );
+          const row = yield* requireRow(rows, missingWrite("firPlaceholderValue.upsert"));
+          return yield* decodeFirPlaceholderValue(row);
         },
-        (effect) => mapTransaction("firPlaceholderValue.upsert", effect),
+        (effect) => mapQuery("firPlaceholderValue.upsert", effect),
       ),
 
       remove: Effect.fn("FirPlaceholderValueRepository.remove")(
@@ -736,10 +778,7 @@ const DrizzleSettingsRepositoryLive = Layer.effect(
         function* () {
           const rows = yield* db.select().from(appSettings).where(eq(appSettings.id, "default"));
           const row = yield* requireRow(rows, missingWrite("settings.get"));
-          return yield* decodeStored(
-            Schema.decodeUnknownEffect(AppSettings),
-            "settings.decode",
-          )(row);
+          return yield* decodeSettings(row);
         },
         (effect) => mapQuery("settings.get", effect),
       )(),
@@ -756,10 +795,7 @@ const DrizzleSettingsRepositoryLive = Layer.effect(
             .where(eq(appSettings.id, "default"))
             .returning();
           const row = yield* requireRow(rows, missingWrite("settings.save"));
-          return yield* decodeStored(
-            Schema.decodeUnknownEffect(AppSettings),
-            "settings.decode",
-          )(row);
+          return yield* decodeSettings(row);
         },
         (effect) => mapQuery("settings.save", effect),
       ),
@@ -775,10 +811,7 @@ const DrizzleSettingsRepositoryLive = Layer.effect(
             .where(eq(appSettings.id, "default"))
             .returning();
           const row = yield* requireRow(rows, missingWrite("settings.saveFieldMarkers"));
-          return yield* decodeStored(
-            Schema.decodeUnknownEffect(AppSettings),
-            "settings.decode",
-          )(row);
+          return yield* decodeSettings(row);
         },
         (effect) => mapQuery("settings.saveFieldMarkers", effect),
       ),

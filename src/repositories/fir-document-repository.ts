@@ -17,6 +17,10 @@ export class FirDocumentRepository extends Context.Service<
       firId: FirId,
     ) => Effect.Effect<readonly FirDocumentSummary[], RepositoryError>;
     readonly get: (id: FirDocumentId) => Effect.Effect<FirDocumentRecord, RepositoryError>;
+    /** Several documents in one round trip, in the order asked for. */
+    readonly getMany: (
+      ids: readonly FirDocumentId[],
+    ) => Effect.Effect<readonly FirDocumentRecord[], RepositoryError>;
     readonly addTemplates: (
       input: AddFirTemplatesInput,
     ) => Effect.Effect<readonly FirDocumentSummary[], RepositoryError>;

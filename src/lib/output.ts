@@ -2,7 +2,12 @@ import { Match } from "effect";
 import type { PageLayout } from "#/lib/document-format";
 
 export const URDU_FONT_FAMILY = "Jameel Noori Nastaleeq";
-export const URDU_FONT_URL = "/Jameel%20Noori%20Nastaleeq.ttf";
+export const URDU_FONT_URL = "/Jameel%20Noori%20Nastaleeq.woff2";
+/**
+ * Word's single-line height for the bundled font, (usWinAscent + usWinDescent) / unitsPerEm from
+ * its Windows metrics. Kept here so a Word import needn't download the font to read three numbers.
+ */
+export const URDU_FONT_WINDOWS_LINE_RATIO = (2570 + 900) / 2048;
 
 function escapeOutputHtml(value: string) {
   return value
@@ -37,7 +42,7 @@ function printablePacketHtml(content: string, title: string, pageRules = "") {
     <style>
       @font-face {
         font-family: "Jameel Noori Nastaleeq";
-        src: url("${escapeOutputHtml(URDU_FONT_URL)}") format("truetype");
+        src: url("${escapeOutputHtml(URDU_FONT_URL)}") format("woff2");
         font-display: swap;
       }
       @page { size: A4; margin: 18mm 0; }

@@ -6,9 +6,11 @@ import {
   GlobalPlaceholderListResult,
   FirCreateRequest,
   FirDocumentAddTemplatesRequest,
+  FirDocumentGetManyRequest,
   FirDocumentGetRequest,
   FirDocumentListRequest,
   FirDocumentListResult,
+  FirDocumentRecordListResult,
   FirDocumentRecordResult,
   FirDocumentRemoveRequest,
   FirDocumentReorderRequest,
@@ -33,8 +35,9 @@ import {
   SettingsGetRequest,
   SettingsSaveFieldMarkersRequest,
   SettingsSaveRequest,
-  StorageRequest,
+  type StorageRequest,
   decodeStorageResponse,
+  encodeStorageRequest,
   TemplateCreateRequest,
   TemplateGetRequest,
   TemplateListRequest,
@@ -62,7 +65,8 @@ import {
 export class ElectronStorage extends Context.Service<
   ElectronStorage,
   {
-    readonly request: (payload: unknown) => Promise<unknown>;
+    /** Sends one JSON-encoded storage request; resolves with the JSON response. */
+    readonly request: (payload: string) => Promise<string>;
   }
 >()("missal/ElectronStorage") {}
 
@@ -94,7 +98,7 @@ const ipcExit = Effect.fn("ipcExit")(function* <A>(
   success: Schema.ConstraintDecoder<A>,
   operation: string,
 ) {
-  const payload = Schema.encodeUnknownSync(StorageRequest)(request);
+  const payload = encodeStorageRequest(request);
   const raw = yield* Effect.tryPromise({
     try: () => storage.request(payload),
     catch: () =>
@@ -253,6 +257,13 @@ const IpcFirDocumentRepositoryLive = Layer.effect(
           FirDocumentGetRequest.make({ id }),
           FirDocumentRecordResult,
           "firDocument.get",
+        ),
+      getMany: (ids) =>
+        ipcExit(
+          storage,
+          FirDocumentGetManyRequest.make({ ids }),
+          FirDocumentRecordListResult,
+          "firDocument.getMany",
         ),
       addTemplates: (input) =>
         ipcExit(

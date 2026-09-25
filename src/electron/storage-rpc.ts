@@ -11,9 +11,9 @@ export type StorageWorkerConfig = typeof StorageWorkerConfig.Type;
 
 export class StorageRpcs extends RpcGroup.make(
   Rpc.make("Storage.open", { error: StorageError }),
+  // JSON text in both directions (see storage-contract). Failures travel inside the response.
   Rpc.make("Storage.request", {
-    payload: { payload: Schema.Any },
-    success: Schema.Any,
-    error: StorageError,
+    payload: { payload: Schema.String },
+    success: Schema.String,
   }),
 ) {}

@@ -53,6 +53,13 @@ export type EditorSessionHandle = {
   markSaved(contentRevision: number): void;
   tryBeginSave(): boolean;
   endSave(): void;
+  /**
+   * Runs `save` on a fresh capture while holding the save lock, and marks the capture saved when
+   * `save` reports success. Resolves `undefined` when another save or an import is running.
+   */
+  runSave<A>(
+    save: (captured: CapturedEnvelope) => Promise<{ readonly saved: boolean; readonly value: A }>,
+  ): Promise<A | undefined>;
   dispose(): void;
 };
 
@@ -141,13 +148,37 @@ export function attachEditorSession(
     notify();
   }
 
+  function tryBeginSave() {
+    if (ui.savePending || ui.phase._tag !== "Ready") {
+      return false;
+    }
+
+    ui.savePending = true;
+    notify();
+    return true;
+  }
+
+  function endSave() {
+    ui.savePending = false;
+    notify();
+  }
+
+  function markSaved(savedContentRevision: number) {
+    if (contentRevision === savedContentRevision) {
+      ui.dirty = false;
+      notify();
+    }
+  }
+
+  function captureEnvelope(): CapturedEnvelope {
+    return {
+      contentRevision,
+      envelope: captureEditorEnvelope(editor, ui.pageLayout),
+    };
+  }
+
   return {
-    captureEnvelope() {
-      return {
-        contentRevision,
-        envelope: captureEditorEnvelope(editor, ui.pageLayout),
-      };
-    },
+    captureEnvelope,
     async importDocx(file) {
       if (disposed || ui.phase._tag !== "Ready" || ui.savePending) {
         throw new Error("Wait for the current operation before importing a document.");
@@ -199,24 +230,24 @@ export function attachEditorSession(
     setPresentation(context) {
       presentation.setContext(context);
     },
-    markSaved(savedContentRevision) {
-      if (contentRevision === savedContentRevision) {
-        ui.dirty = false;
-        notify();
-      }
-    },
-    tryBeginSave() {
-      if (ui.savePending || ui.phase._tag !== "Ready") {
-        return false;
+    markSaved,
+    tryBeginSave,
+    endSave,
+    async runSave(save) {
+      if (!tryBeginSave()) {
+        return undefined;
       }
 
-      ui.savePending = true;
-      notify();
-      return true;
-    },
-    endSave() {
-      ui.savePending = false;
-      notify();
+      try {
+        const captured = captureEnvelope();
+        const result = await save(captured);
+        if (result.saved) {
+          markSaved(captured.contentRevision);
+        }
+        return result.value;
+      } finally {
+        endSave();
+      }
     },
     dispose() {
       disposed = true;

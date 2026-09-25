@@ -30,7 +30,7 @@ import {
   CommandShortcut,
 } from "#/components/ui/command";
 import { useSidebar } from "#/components/ui/sidebar";
-import type { FirRecord } from "#/lib/fir";
+import type { FirSummary } from "#/lib/fir";
 import type { ShortcutId } from "#/lib/shortcuts";
 import type { TemplateSummary } from "#/lib/templates";
 import { atoms } from "#/state/atoms";
@@ -63,7 +63,7 @@ const themeCommands = [
 
 const MAX_RESULTS = 20;
 
-const firValue = (fir: FirRecord) => `fir ${fir.fir_no} ${fir.offence} ${fir.id}`;
+const firValue = (fir: FirSummary) => `fir ${fir.fir_no} ${fir.offence} ${fir.id}`;
 const templateValue = (template: TemplateSummary) => `template ${template.name} ${template.id}`;
 
 function topMatches<T>(items: readonly T[], search: string, value: (item: T) => string) {

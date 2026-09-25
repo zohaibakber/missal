@@ -39,3 +39,33 @@ export function makeStorageWorkerRuntime(options: {
 
   return ManagedRuntime.make(layer);
 }
+
+export type StorageHost = {
+  /** Settles once the database is open and migrated. */
+  readonly ready: Promise<void>;
+  /** Relays one JSON-encoded storage request to the worker and returns its JSON response. */
+  readonly request: (payload: string) => Promise<string>;
+  readonly dispose: () => Promise<void>;
+};
+
+/** Starts the SQLite worker; main only relays JSON text, it never decodes storage messages. */
+export function startStorageWorker(options: {
+  workerPath: string;
+  config: StorageWorkerConfig;
+}): StorageHost {
+  const runtime = makeStorageWorkerRuntime(options);
+  const ready = runtime.runPromise(
+    Effect.flatMap(StorageWorker, (worker) => worker["Storage.open"]()),
+  );
+
+  return {
+    ready,
+    request: async (payload) => {
+      await ready;
+      return runtime.runPromise(
+        Effect.flatMap(StorageWorker, (worker) => worker["Storage.request"]({ payload })),
+      );
+    },
+    dispose: () => runtime.dispose(),
+  };
+}

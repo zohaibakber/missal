@@ -131,6 +131,16 @@ export const appSettings = sqliteTable(
   (table) => [check("app_settings_id_default", sql`${table.id} = 'default'`)],
 );
 
+export const firSummaryColumns = {
+  id: firRecords.id,
+  fir_no: firRecords.fir_no,
+  date: firRecords.date,
+  offence: firRecords.offence,
+  incident_date: firRecords.incident_date,
+  arrest_date: firRecords.arrest_date,
+  status: firRecords.status,
+};
+
 export const templateSummaryColumns = {
   id: templates.id,
   name: templates.name,
@@ -139,6 +149,28 @@ export const templateSummaryColumns = {
   fieldCount: templates.fieldCount,
   createdAt: templates.createdAt,
   updatedAt: templates.updatedAt,
+};
+
+export const templateRecordColumns = {
+  id: templates.id,
+  name: templates.name,
+  document: templates.document,
+  revision: templates.revision,
+  createdAt: templates.createdAt,
+  updatedAt: templates.updatedAt,
+};
+
+export const firDocumentRecordColumns = {
+  id: firDocuments.id,
+  firId: firDocuments.firId,
+  templateId: firDocuments.templateId,
+  sourceTemplateRevision: firDocuments.sourceTemplateRevision,
+  title: firDocuments.title,
+  document: firDocuments.document,
+  revision: firDocuments.revision,
+  position: firDocuments.position,
+  createdAt: firDocuments.createdAt,
+  updatedAt: firDocuments.updatedAt,
 };
 
 export const firDocumentSummaryColumns = {

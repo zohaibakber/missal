@@ -1,7 +1,7 @@
 import { generate, parse, walk, type CssNode, type Selector } from "css-tree";
 import { cssLengthMm } from "#/editor/import/computed-style";
 import { PageLayout } from "#/lib/document-format";
-import { URDU_FONT_FAMILY, URDU_FONT_URL } from "#/lib/output";
+import { URDU_FONT_FAMILY, URDU_FONT_WINDOWS_LINE_RATIO } from "#/lib/output";
 
 const WORD_MARKERS =
   /urn:schemas-microsoft-com:office:(?:word|office)|<meta[^>]+content=["']?Microsoft Word|class=["']?Mso/i;
@@ -169,7 +169,7 @@ function specificityOf(selector: Selector): [number, number, number] {
 }
 
 const lineHeightRatios = new Map<string, number | undefined>();
-const BUNDLED_FONTS = [{ family: URDU_FONT_FAMILY, url: URDU_FONT_URL }];
+const BUNDLED_FONTS = [{ family: URDU_FONT_FAMILY, lineRatio: URDU_FONT_WINDOWS_LINE_RATIO }];
 
 function primaryFamily(fontFamily: string) {
   return (fontFamily.split(",")[0] ?? "")
@@ -199,38 +199,11 @@ export async function prepareFontsFor(html: string) {
   const faces = [...document.fonts].filter(
     (face) => face.status === "unloaded" && html.includes(face.family.replace(/["']/g, "")),
   );
-  const bundled = BUNDLED_FONTS.filter(
-    (font) => html.includes(font.family) && !lineHeightRatios.has(primaryFamily(font.family)),
-  );
-  await Promise.all([
-    ...faces.map((face) => face.load().catch(() => undefined)),
-    ...bundled.map(async (font) => {
-      try {
-        const ratio = windowsLineRatio(await (await fetch(font.url)).arrayBuffer());
-        if (ratio) lineHeightRatios.set(primaryFamily(font.family), ratio);
-      } catch {}
-    }),
-  ]);
-}
-
-/** (usWinAscent + usWinDescent) / unitsPerEm from a TrueType/OpenType file. */
-export function windowsLineRatio(buffer: ArrayBuffer): number | undefined {
-  const view = new DataView(buffer);
-  const tables = new Map<string, number>();
-  for (let index = 0; index < view.getUint16(4); index++) {
-    const record = 12 + index * 16;
-    const tag = String.fromCharCode(
-      ...[0, 1, 2, 3].map((offset) => view.getUint8(record + offset)),
-    );
-    tables.set(tag, view.getUint32(record + 8));
+  for (const font of BUNDLED_FONTS) {
+    if (html.includes(font.family))
+      lineHeightRatios.set(primaryFamily(font.family), font.lineRatio);
   }
-  const head = tables.get("head");
-  const os2 = tables.get("OS/2");
-  if (head === undefined || os2 === undefined) return undefined;
-  const unitsPerEm = view.getUint16(head + 18);
-  const ascent = view.getUint16(os2 + 74);
-  const descent = view.getUint16(os2 + 76);
-  return unitsPerEm ? (ascent + descent) / unitsPerEm : undefined;
+  await Promise.all(faces.map((face) => face.load().catch(() => undefined)));
 }
 
 function effectiveFontFamily(element: HTMLElement) {

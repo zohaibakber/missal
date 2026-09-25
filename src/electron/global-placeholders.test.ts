@@ -94,17 +94,19 @@ it("saves arbitrary global placeholders atomically and resolves the same values 
     );
     expect(reopened).toEqual(saved);
     const response = await runtime.runPromise(
-      dispatchStorageRequest({
-        _tag: "Placeholder.saveGlobals",
-        input: {
-          entries: [{ _tag: "Existing", id: address.id, label: "دفتر", value: "اسلام آباد" }],
-        },
-      }),
+      dispatchStorageRequest(
+        JSON.stringify({
+          _tag: "Placeholder.saveGlobals",
+          input: {
+            entries: [{ _tag: "Existing", id: address.id, label: "دفتر", value: "اسلام آباد" }],
+          },
+        }),
+      ),
     );
-    if (response._tag !== "Success") throw new Error("IPC save failed");
-    const ipcRows = Schema.decodeUnknownSync(Schema.Array(GlobalPlaceholder))(
-      structuredClone(response.value),
-    );
+    const decoded: unknown = JSON.parse(response);
+    const ipcRows = Schema.decodeUnknownSync(
+      Schema.Struct({ _tag: Schema.Literal("Success"), value: Schema.Array(GlobalPlaceholder) }),
+    )(decoded).value;
     expect(ipcRows.find((field) => field.id === address.id)).toMatchObject({
       label: "دفتر",
       value: "اسلام آباد",

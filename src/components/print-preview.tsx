@@ -54,6 +54,23 @@ type PreviewState =
   | { readonly _tag: "Failed"; readonly message: string };
 
 /** Renders the packet through the same Chromium print pipeline as the printer, then loads it. */
+async function loadPrintPdf(html: string, onTask: (task: PDFDocumentLoadingTask) => void) {
+  const api = window.electronPrint;
+  if (!api) throw new Error("Print preview is only available in the Missal desktop app.");
+  const [data, pdfjs] = await Promise.all([api.renderPdf(html), import("pdfjs-dist")]);
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  const loadingTask = pdfjs.getDocument({ data });
+  onTask(loadingTask);
+  const pdf = await loadingTask.promise;
+  const pages = await Promise.all(
+    Array.from({ length: pdf.numPages }, async (_, index) => {
+      const viewport = (await pdf.getPage(index + 1)).getViewport({ scale: 1 });
+      return { width: viewport.width, height: viewport.height };
+    }),
+  );
+  return { pdf, pages };
+}
+
 function usePrintPdf(packet: PrintPacket | null, attempt: number) {
   const [state, setState] = useState<PreviewState>({ _tag: "Loading" });
 
@@ -63,30 +80,22 @@ function usePrintPdf(packet: PrintPacket | null, attempt: number) {
     let loadingTask: PDFDocumentLoadingTask | undefined;
     setState({ _tag: "Loading" });
 
-    void (async () => {
-      try {
-        const api = window.electronPrint;
-        if (!api) throw new Error("Print preview is only available in the Missal desktop app.");
-        const [data, pdfjs] = await Promise.all([api.renderPdf(packet.html), import("pdfjs-dist")]);
-        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-        loadingTask = pdfjs.getDocument({ data });
-        const document = await loadingTask.promise;
-        const pages = await Promise.all(
-          Array.from({ length: document.numPages }, async (_, index) => {
-            const viewport = (await document.getPage(index + 1)).getViewport({ scale: 1 });
-            return { width: viewport.width, height: viewport.height };
-          }),
-        );
-        if (!cancelled) setState({ _tag: "Ready", pdf: document, pages });
-      } catch (error) {
+    loadPrintPdf(packet.html, (task) => {
+      if (cancelled) void task.destroy();
+      else loadingTask = task;
+    }).then(
+      ({ pdf, pages }) => {
+        if (!cancelled) setState({ _tag: "Ready", pdf, pages });
+      },
+      (error: unknown) => {
         if (!cancelled) {
           setState({
             _tag: "Failed",
             message: error instanceof Error ? error.message : "The pages could not be prepared.",
           });
         }
-      }
-    })();
+      },
+    );
 
     return () => {
       cancelled = true;
@@ -273,8 +282,10 @@ function PrintPreviewBody({
   }
 
   useLayoutEffect(() => {
-    if (viewport) viewport.scrollTop = scrollFractionRef.current * viewport.scrollHeight;
-  }, [scale, viewport]);
+    // Through the ref: the element held in state is read-only to React Compiler.
+    const element = pagesRef.current;
+    if (element) element.scrollTop = scrollFractionRef.current * element.scrollHeight;
+  }, [pagesRef, scale, viewport]);
 
   function trackCurrentPage() {
     if (!viewport) return;

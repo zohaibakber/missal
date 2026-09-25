@@ -55,7 +55,8 @@ import { emptyDocumentEnvelope, projectDocument } from "#/lib/document-format";
 import { type TemplateId } from "#/lib/ids";
 import { indexPlaceholders, type PlaceholderIndex } from "#/lib/placeholder";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
-import { TemplateCreateInput, TemplateRecord, TemplateUpdateInput } from "#/lib/templates";
+import { whilePending } from "#/lib/utils";
+import { TemplateCreateInput, type TemplateRecord } from "#/lib/templates";
 import { envelopePrintPacket, printPacket, type PrintPacket } from "#/editor/html-export";
 import type { EditorSessionHandle } from "#/editor/session";
 import { useShortcut } from "#/hooks/use-shortcut";
@@ -157,10 +158,9 @@ function TemplateEditorWorkspace({
   const saveTemplate = useAtomSet(atoms.saveTemplateAtom, { mode: "promiseExit" });
   const removeTemplate = useAtomSet(atoms.removeTemplateAtom, { mode: "promiseExit" });
   const [name, setName] = useState("");
-  const [revision, setRevision] = useState(selectedTemplate?.revision);
   const [contentDirty, setContentDirty] = useState(false);
-  const [savedName, setSavedName] = useState(selectedTemplate?.name ?? "");
-  const dirty = contentDirty || name !== savedName;
+  // A save caches the saved template, so the selected record is always the stored one.
+  const dirty = contentDirty || name !== (selectedTemplate?.name ?? "");
   const [savePending, setSavePending] = useState(false);
   const [importPending, setImportPending] = useState(false);
   const [pendingImport, setPendingImport] = useState<File | null>(null);
@@ -185,37 +185,34 @@ function TemplateEditorWorkspace({
     loadedKeyRef.current = sessionKey;
     allowNavigationRef.current = false;
     setName(selectedTemplate?.name ?? "");
-    setRevision(selectedTemplate?.revision);
     setContentDirty(false);
-    setSavedName(selectedTemplate?.name ?? "");
   }, [selectedTemplate, sessionKey]);
 
   async function handleImport(file: File) {
     const session = sessionRef.current;
     if (!session || importPending || savePending) return;
     setPendingImport(null);
-    setImportPending(true);
-    try {
-      const notices = await session.importDocx(file);
-      if (sessionRef.current !== session) return;
-      setName((current) => (current.trim() ? current : file.name.replace(/\.docx$/i, "")));
-      toast.add({
-        title: "Word document imported",
-        description: notices.length
-          ? notices.join(" ")
-          : "Review the layout and placeholders, then save the template.",
-        type: notices.length ? "warning" : "success",
-      });
-    } catch (error) {
-      toast.add({
-        title: "Could not import Word document",
-        description:
-          error instanceof Error ? error.message : "Choose a valid .docx file and try again.",
-        type: "error",
-      });
-    } finally {
-      setImportPending(false);
-    }
+    await whilePending(setImportPending, async () => {
+      try {
+        const notices = await session.importDocx(file);
+        if (sessionRef.current !== session) return;
+        setName((current) => (current.trim() ? current : file.name.replace(/\.docx$/i, "")));
+        toast.add({
+          title: "Word document imported",
+          description: notices.length
+            ? notices.join(" ")
+            : "Review the layout and placeholders, then save the template.",
+          type: notices.length ? "warning" : "success",
+        });
+      } catch (error) {
+        toast.add({
+          title: "Could not import Word document",
+          description:
+            error instanceof Error ? error.message : "Choose a valid .docx file and try again.",
+          type: "error",
+        });
+      }
+    });
   }
 
   function chooseImport(file: File) {
@@ -236,57 +233,33 @@ function TemplateEditorWorkspace({
       return;
     }
 
-    if (selectedTemplate && revision === undefined) {
-      return;
-    }
-
-    if (!session.tryBeginSave()) {
-      return;
-    }
-
-    const captured = session.captureEnvelope();
-    try {
-      if (selectedTemplate && revision !== undefined) {
-        const exit = await saveTemplate(
-          new TemplateUpdateInput({
-            document: captured.envelope,
-            expectedRevision: revision,
-            id: selectedTemplate.id,
-            name: trimmed,
-          }),
-        );
-
+    if (selectedTemplate) {
+      const current = selectedTemplate;
+      const saved = await session.runSave(async (captured) => {
+        const exit = await saveTemplate({ current, document: captured.envelope, name: trimmed });
         if (Exit.isFailure(exit)) {
           toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
-          return;
+          return { saved: false, value: false };
         }
+        return { saved: true, value: true };
+      });
+      if (saved) toast.add({ title: "Template updated", type: "success" });
+      return;
+    }
 
-        session.markSaved(captured.contentRevision);
-        setRevision(exit.value.revision);
-        setSavedName(trimmed);
-        toast.add({ title: "Template updated", type: "success" });
-        return;
-      }
-
+    const created = await session.runSave(async (captured) => {
       const exit = await createTemplate(
-        new TemplateCreateInput({
-          document: captured.envelope,
-          name: trimmed,
-        }),
+        new TemplateCreateInput({ document: captured.envelope, name: trimmed }),
       );
-
       if (Exit.isFailure(exit)) {
         toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
-        return;
+        return { saved: false, value: null };
       }
-
+      return { saved: false, value: exit.value.id };
+    });
+    if (created) {
       allowNavigationRef.current = true;
-      void navigate({
-        params: { templateId: `${exit.value.id}` },
-        to: "/templates/$templateId",
-      });
-    } finally {
-      session.endSave();
+      void navigate({ params: { templateId: `${created}` }, to: "/templates/$templateId" });
     }
   }
 
@@ -319,6 +292,13 @@ function TemplateEditorWorkspace({
       ),
     );
     setPreviewOpen(true);
+  }
+
+  async function handlePrint(packet: PrintPacket) {
+    const failure = await printPacket(packet);
+    if (failure) {
+      toast.add({ title: failure, type: "error" });
+    }
   }
 
   const canSave =
@@ -438,9 +418,7 @@ function TemplateEditorWorkspace({
         description="Placeholders show their names"
         onPrint={() => {
           setPreviewOpen(false);
-          if (previewPacket && !printPacket(previewPacket)) {
-            toast.add({ title: "Unable to prepare print view", type: "error" });
-          }
+          if (previewPacket) void handlePrint(previewPacket);
         }}
       />
 

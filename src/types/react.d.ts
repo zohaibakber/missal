@@ -9,5 +9,6 @@ declare module "react" {
     "--page-right"?: string;
     "--page-bottom"?: string;
     "--page-left"?: string;
+    "--spacer-height"?: string;
   }
 }

@@ -15,12 +15,12 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { formatDate } from "#/lib/date";
-import type { FirRecord } from "#/lib/fir";
+import type { FirSummary } from "#/lib/fir";
 
 /** Row actions are owned by the table so a single sheet and dialog serve every row. */
 export type FirRowActions = {
-  edit: (fir: FirRecord) => void;
-  remove: (firs: readonly FirRecord[]) => void;
+  edit: (fir: FirSummary) => void;
+  remove: (firs: readonly FirSummary[]) => void;
 };
 
 export const FirRowActionsContext = createContext<FirRowActions | null>(null);
@@ -31,7 +31,7 @@ function useFirRowActions() {
   return actions;
 }
 
-function FirRowMenu({ fir }: { fir: FirRecord }) {
+function FirRowMenu({ fir }: { fir: FirSummary }) {
   const { edit, remove } = useFirRowActions();
 
   return (
@@ -72,7 +72,7 @@ function FirRowMenu({ fir }: { fir: FirRecord }) {
 const revealClassName =
   "flex opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100 group-data-[selecting=true]/table:opacity-100 has-aria-expanded:opacity-100 has-data-checked:opacity-100";
 
-const columnHelper = createColumnHelper<DataTableFeatures, FirRecord>();
+const columnHelper = createColumnHelper<DataTableFeatures, FirSummary>();
 
 const dateCell = (value: string | null | undefined) => (
   <div dir="ltr" className="text-end tabular-nums">

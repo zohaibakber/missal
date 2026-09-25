@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
@@ -55,53 +55,42 @@ function SessionPlugins({
   onSessionReady,
 }: Omit<DocumentEditorProps, "aria-label" | "className" | "editable" | "sessionKey">) {
   const [editor] = useLexicalComposerContext();
-  const indexRef = useRef(placeholderIndex);
-  indexRef.current = placeholderIndex;
   const fieldMarkers = useAtomValue(atoms.fieldMarkersAtom);
-  const fieldMarkersRef = useRef(fieldMarkers);
-  fieldMarkersRef.current = fieldMarkers;
-  const presentationRef = useRef(presentation);
-  presentationRef.current = presentation;
-  const envelopeRef = useRef(envelope);
-  const uiHandlersRef = useRef({
-    onDirtyChange,
-    onHistoryChange,
-    onSavePendingChange,
-    onPageLayoutChange,
-  });
-  uiHandlersRef.current = {
-    onDirtyChange,
-    onHistoryChange,
-    onSavePendingChange,
-    onPageLayoutChange,
-  };
-  const onSessionReadyRef = useRef(onSessionReady);
-  onSessionReadyRef.current = onSessionReady;
+  // The session loads the first envelope and presentation; later presentations are pushed below.
+  const [initialEnvelope] = useState(envelope);
+  const [initialPresentation] = useState(presentation);
   const sessionRef = useRef<EditorSessionHandle | null>(null);
+
+  // Effect events read the latest props without re-attaching the session when they change.
+  const getPlaceholderIndex = useEffectEvent(() => placeholderIndex);
+  const getFieldMarkers = useEffectEvent(() => fieldMarkers);
+  const reportUi = useEffectEvent((ui: EditorUiState) => {
+    onDirtyChange?.(ui.dirty);
+    onPageLayoutChange?.(ui.pageLayout);
+    onHistoryChange?.(ui.canUndo, ui.canRedo);
+    onSavePendingChange?.(ui.savePending);
+  });
+  const announceSession = useEffectEvent((session: EditorSessionHandle | null) => {
+    onSessionReady?.(session);
+  });
 
   useEffect(() => {
     const session = attachEditorSession(editor, {
-      getPlaceholderIndex: () => indexRef.current,
-      getFieldMarkers: () => fieldMarkersRef.current,
-      onUiChange: (ui: EditorUiState) => {
-        const handlers = uiHandlersRef.current;
-        handlers.onDirtyChange?.(ui.dirty);
-        handlers.onPageLayoutChange?.(ui.pageLayout);
-        handlers.onHistoryChange?.(ui.canUndo, ui.canRedo);
-        handlers.onSavePendingChange?.(ui.savePending);
-      },
-      presentation: presentationRef.current,
+      getPlaceholderIndex: () => getPlaceholderIndex(),
+      getFieldMarkers: () => getFieldMarkers(),
+      onUiChange: (ui) => reportUi(ui),
+      presentation: initialPresentation,
     });
-    session.loadEnvelope(envelopeRef.current);
+    session.loadEnvelope(initialEnvelope);
     sessionRef.current = session;
-    onSessionReadyRef.current?.(session);
+    announceSession(session);
 
     return () => {
       session.dispose();
       sessionRef.current = null;
-      onSessionReadyRef.current?.(null);
+      announceSession(null);
     };
-  }, [editor]);
+  }, [editor, initialEnvelope, initialPresentation]);
 
   useEffect(() => {
     sessionRef.current?.setPresentation(presentation);
@@ -126,13 +115,24 @@ function usePageFit(pageWidthMm: number) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const pageWidthPx = pageWidthMm * MM_TO_PX;
+    let frame = 0;
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return;
-      const zoom = Math.min(1, (entry.contentRect.width - CANVAS_GUTTER_PX) / pageWidthPx);
-      canvas.style.setProperty("--page-zoom", `${Math.max(zoom, 0.25)}`);
+      const zoom = `${Math.max(Math.min(1, (entry.contentRect.width - CANVAS_GUTTER_PX) / pageWidthPx), 0.25)}`;
+      // Next frame, and only on change: rescaling can toggle the scrollbar and resize the canvas,
+      // which inside this callback would loop ("ResizeObserver loop completed…").
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (canvas.style.getPropertyValue("--page-zoom") !== zoom) {
+          canvas.style.setProperty("--page-zoom", zoom);
+        }
+      });
     });
     observer.observe(canvas);
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [pageWidthMm]);
 
   return canvasRef;

@@ -1,8 +1,12 @@
 import { BrowserWindow } from "electron";
+import type { PrintResult } from "#/desktop-window";
 
 // A blank page served from the renderer's own origin, so the packet's relative font URL resolves
-// exactly as it does when the renderer prints through its hidden iframe.
+// exactly as it does in the app.
 const PRINT_PAGE_PATH = "/print.html";
+// The hidden window stays warm between previews: reopening one reuses its renderer process and
+// the already decoded Urdu font instead of starting both from scratch.
+const IDLE_CLOSE_MS = 2 * 60_000;
 
 const writePacket = (html: string) => `(async () => {
   document.open();
@@ -23,27 +27,110 @@ const writePacket = (html: string) => `(async () => {
   return true;
 })()`;
 
-/**
- * Lays out a print packet in an invisible window and returns Chromium's paginated PDF. Page sizes
- * and margins come from the packet's own `@page` rules, so the result matches the printed output.
- */
-export async function renderPrintPdf(rendererOrigin: string, html: string) {
+type PrintTarget = {
+  readonly window: BrowserWindow;
+  readonly loaded: Promise<void>;
+  /** The packet currently laid out in the window. */
+  html?: string;
+};
+
+let target: PrintTarget | undefined;
+let idleTimer: NodeJS.Timeout | undefined;
+let queue: Promise<unknown> = Promise.resolve();
+
+/** One window serves every packet, so a preview and a print never write over each other. */
+function serialize<A>(task: () => Promise<A>) {
+  const run = queue.then(task, task);
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+function acquire(rendererOrigin: string) {
+  clearTimeout(idleTimer);
+  if (target && !target.window.isDestroyed()) return target;
+
   const window = new BrowserWindow({
     show: false,
     width: 900,
     height: 1200,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
+  const created: PrintTarget = {
+    window,
+    loaded: window.loadURL(new URL(PRINT_PAGE_PATH, rendererOrigin).href),
+  };
+  window.once("closed", () => {
+    if (target === created) target = undefined;
+  });
+  window.webContents.once("render-process-gone", () => closePrintWindow());
+  target = created;
+  return created;
+}
 
+async function layOut(rendererOrigin: string, html: string) {
+  const current = acquire(rendererOrigin);
   try {
-    await window.loadURL(new URL(PRINT_PAGE_PATH, rendererOrigin).href);
-    await window.webContents.executeJavaScript(writePacket(html));
-    const pdf = await window.webContents.printToPDF({
-      preferCSSPageSize: true,
-      printBackground: true,
-    });
-    return new Uint8Array(pdf);
-  } finally {
-    window.destroy();
+    await current.loaded;
+    if (current.html !== html) {
+      current.html = undefined;
+      await current.window.webContents.executeJavaScript(writePacket(html));
+      current.html = html;
+    }
+    return current.window;
+  } catch (error) {
+    closePrintWindow();
+    throw error;
   }
+}
+
+function scheduleClose() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(closePrintWindow, IDLE_CLOSE_MS);
+  idleTimer.unref();
+}
+
+/** Destroys the hidden print window, e.g. once the app window closes so the app can quit. */
+export function closePrintWindow() {
+  clearTimeout(idleTimer);
+  const current = target;
+  target = undefined;
+  if (current && !current.window.isDestroyed()) current.window.destroy();
+}
+
+/**
+ * Lays out a print packet in the hidden window and returns Chromium's paginated PDF. Page sizes
+ * and margins come from the packet's own `@page` rules, so the result matches the printed output.
+ */
+export function renderPrintPdf(rendererOrigin: string, html: string) {
+  return serialize(async () => {
+    try {
+      const window = await layOut(rendererOrigin, html);
+      const pdf = await window.webContents.printToPDF({
+        preferCSSPageSize: true,
+        printBackground: true,
+      });
+      return new Uint8Array(pdf);
+    } finally {
+      scheduleClose();
+    }
+  });
+}
+
+/**
+ * Prints a packet from the hidden window. When it is the packet just previewed, the existing
+ * layout is reused, so the app's own renderer never lays the pages out again.
+ */
+export function printPacket(rendererOrigin: string, html: string) {
+  return serialize(async () => {
+    try {
+      const window = await layOut(rendererOrigin, html);
+      return await new Promise<PrintResult>((resolve) => {
+        window.webContents.print({ printBackground: true }, (printed, failureReason) =>
+          resolve(printed ? { printed } : { printed, failureReason }),
+        );
+      });
+    } finally {
+      scheduleClose();
+    }
+  });
 }

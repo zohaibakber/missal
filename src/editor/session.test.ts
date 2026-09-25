@@ -132,3 +132,51 @@ it("keeps the existing document editable and saveable after a failed DOCX import
     session.dispose();
   }
 });
+
+it("holds the save lock around runSave and only marks a successful save", async () => {
+  const editor = createEditor({
+    namespace: "run-save",
+    nodes: [...EDITOR_NODES],
+    onError: (error) => {
+      throw error;
+    },
+  });
+  const index = indexPlaceholders([]);
+  let ui: EditorUiState | undefined;
+  const session = attachEditorSession(editor, {
+    getPlaceholderIndex: () => index,
+    presentation: catalogFieldPresentation(index),
+    onUiChange: (value) => {
+      ui = value;
+    },
+  });
+  try {
+    session.loadEnvelope(emptyDocumentEnvelope());
+    editor.update(
+      () => {
+        $getRoot()
+          .selectEnd()
+          .insertNodes([$createTextNode("Draft")]);
+      },
+      { discrete: true },
+    );
+    expect(ui?.dirty).toBe(true);
+
+    const failed = await session.runSave(async () => {
+      expect(ui?.savePending).toBe(true);
+      expect(await session.runSave(async () => ({ saved: true, value: "nested" }))).toBe(undefined);
+      return { saved: false, value: "failed" };
+    });
+    expect(failed).toBe("failed");
+    expect(ui).toMatchObject({ dirty: true, savePending: false });
+
+    const saved = await session.runSave(async (captured) => {
+      expect(captured.envelope.state).toBeTruthy();
+      return { saved: true, value: "saved" };
+    });
+    expect(saved).toBe("saved");
+    expect(ui).toMatchObject({ dirty: false, savePending: false });
+  } finally {
+    session.dispose();
+  }
+});

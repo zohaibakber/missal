@@ -31,36 +31,32 @@ function applyTheme(theme: Theme) {
   root.style.colorScheme = resolved;
 }
 
+function readStoredTheme(storageKey: string, fallback: Theme): Theme {
+  const stored = localStorage.getItem(storageKey);
+  return stored === "light" || stored === "dark" || stored === "system" ? stored : fallback;
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = "system",
   storageKey = "theme",
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(defaultTheme);
-  const [mounted, setMounted] = useState(false);
+  // The renderer only runs on the client, so the stored theme is known on the first render.
+  const [theme, setThemeState] = useState<Theme>(() => readStoredTheme(storageKey, defaultTheme));
 
   useEffect(() => {
-    const stored = localStorage.getItem(storageKey);
-    setThemeState(
-      stored === "light" || stored === "dark" || stored === "system" ? stored : defaultTheme,
-    );
-    setMounted(true);
-  }, [defaultTheme, storageKey]);
-
-  useEffect(() => {
-    if (!mounted) return;
     applyTheme(theme);
     window.electronTheme?.setSource(theme);
-  }, [theme, mounted]);
+  }, [theme]);
 
   useEffect(() => {
-    if (!mounted || theme !== "system") return;
+    if (theme !== "system") return;
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => applyTheme("system");
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
-  }, [theme, mounted]);
+  }, [theme]);
 
   const setTheme = (next: Theme) => {
     localStorage.setItem(storageKey, next);

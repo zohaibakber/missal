@@ -31,6 +31,17 @@ export class FirRecord extends Schema.Class<FirRecord>("FirRecord")({
   status: FirStatus,
 }) {}
 
+/** What the FIR list, sidebar and command menu show; the full record loads with each FIR. */
+export class FirSummary extends Schema.Class<FirSummary>("FirSummary")({
+  id: FirId,
+  fir_no: NonEmptyTrimmedString,
+  date: NonEmptyTrimmedString,
+  offence: NonEmptyTrimmedString,
+  incident_date: NonEmptyTrimmedString,
+  arrest_date: TrimmedString,
+  status: FirStatus,
+}) {}
+
 export class FirCreateInput extends Schema.Class<FirCreateInput>("FirCreateInput")({
   fir_no: NonEmptyTrimmedString,
   date: NonEmptyTrimmedString,

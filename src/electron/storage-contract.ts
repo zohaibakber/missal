@@ -9,7 +9,7 @@ import {
   FirValueContext,
   ReorderFirDocumentsInput,
 } from "#/lib/fir-document";
-import { FirCreateInput, FirId, FirRecord, FirUpdateInput } from "#/lib/fir";
+import { FirCreateInput, FirId, FirSummary, FirUpdateInput } from "#/lib/fir";
 import { FirDocumentId, PlaceholderId, TemplateId } from "#/lib/ids";
 import { Placeholder, PlaceholderCreateInput, PlaceholderUpdateInput } from "#/lib/placeholder";
 import { RepositoryError } from "#/lib/storage-errors";
@@ -82,6 +82,9 @@ export const FirDocumentListRequest = Schema.TaggedStruct("FirDocument.listForFi
 export const FirDocumentGetRequest = Schema.TaggedStruct("FirDocument.get", {
   id: FirDocumentId,
 });
+export const FirDocumentGetManyRequest = Schema.TaggedStruct("FirDocument.getMany", {
+  ids: Schema.Array(FirDocumentId),
+});
 export const FirDocumentAddTemplatesRequest = Schema.TaggedStruct("FirDocument.addTemplates", {
   input: AddFirTemplatesInput,
 });
@@ -137,6 +140,7 @@ export const StorageRequest = Schema.Union([
   FirValueContextRequest,
   FirDocumentListRequest,
   FirDocumentGetRequest,
+  FirDocumentGetManyRequest,
   FirDocumentAddTemplatesRequest,
   FirDocumentSaveRequest,
   FirDocumentReorderRequest,
@@ -152,7 +156,8 @@ export const StorageRequest = Schema.Union([
 export type StorageRequest = typeof StorageRequest.Type;
 
 const StorageSuccessResponse = Schema.TaggedStruct("Success", {
-  value: Schema.Unknown,
+  // Optional so a bare `undefined` result survives JSON, which drops the key.
+  value: Schema.optionalKey(Schema.Unknown),
 });
 const StorageFailureResponse = Schema.TaggedStruct("Failure", {
   error: RepositoryError,
@@ -161,16 +166,25 @@ export const StorageResponse = Schema.Union([StorageSuccessResponse, StorageFail
 
 export type StorageResponse = typeof StorageResponse.Type;
 
-export const encodeStorageResponse = Schema.encodeUnknownSync(StorageResponse);
-export const decodeStorageResponse = Schema.decodeUnknownEffect(StorageResponse);
+// Requests and responses cross both hops (renderer → main → worker) as JSON text. A string is copied
+// in one piece, where a document's deep object tree would be cloned node by node on every hop, and
+// main can relay the text without decoding it.
+const StorageRequestJson = Schema.fromJsonString(StorageRequest);
+const StorageResponseJson = Schema.fromJsonString(StorageResponse);
+
+export const encodeStorageRequest = Schema.encodeUnknownSync(StorageRequestJson);
+export const decodeStorageRequest = Schema.decodeUnknownEffect(StorageRequestJson);
+export const encodeStorageResponse = Schema.encodeUnknownSync(StorageResponseJson);
+export const decodeStorageResponse = Schema.decodeUnknownEffect(StorageResponseJson);
 
 export const PlaceholderListResult = Schema.Array(Placeholder);
 export const TemplateListResult = Schema.Array(TemplateSummary);
 export const TemplateRecordResult = TemplateRecord;
 export const TemplateSaveAckResult = TemplateSaveAck;
-export const FirListResult = Schema.Array(FirRecord);
+export const FirListResult = Schema.Array(FirSummary);
 export const FirDocumentListResult = Schema.Array(FirDocumentSummary);
 export const FirDocumentRecordResult = FirDocumentRecord;
+export const FirDocumentRecordListResult = Schema.Array(FirDocumentRecord);
 export const FirDocumentSaveAckResult = FirDocumentSaveAck;
 export const FirPlaceholderValueListResult = Schema.Array(FirPlaceholderValue);
 export const FirValueContextResult = FirValueContext;

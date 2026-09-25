@@ -34,6 +34,7 @@ import {
   SaveGlobalPlaceholdersInput,
 } from "#/lib/global-placeholder";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
+import { whilePending } from "#/lib/utils";
 import { atoms } from "#/state/atoms";
 
 type Draft = typeof GlobalPlaceholderDraft.Type;
@@ -106,20 +107,16 @@ function GlobalValues({ globals }: { globals: readonly GlobalPlaceholder[] }) {
       toast.add({ title: "Give every global placeholder a name", type: "error" });
       return;
     }
-    setSaving(true);
-    try {
-      const exit = await save(decoded.value);
-      if (Exit.isFailure(exit)) {
-        toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
-        return;
-      }
-      const next = draftsFrom(exit.value);
-      setRows(next);
-      setSaved(next);
-      toast.add({ title: "Global values saved", type: "success" });
-    } finally {
-      setSaving(false);
+    const input = decoded.value;
+    const exit = await whilePending(setSaving, () => save(input));
+    if (Exit.isFailure(exit)) {
+      toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
+      return;
     }
+    const next = draftsFrom(exit.value);
+    setRows(next);
+    setSaved(next);
+    toast.add({ title: "Global values saved", type: "success" });
   }
 
   useShortcut("save", () => void submit(), { enabled: dirty && !saving });

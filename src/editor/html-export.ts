@@ -45,63 +45,23 @@ export function envelopePrintPacket(
   return { html: printPacketFromSections(htmlSectionsFrom(sections), title), title };
 }
 
-export function printPacket({ html, title }: PrintPacket) {
-  const existingFrame = document.getElementById("fir-print-frame");
-  existingFrame?.remove();
+// Chromium's reason when the user closes the print dialog without printing.
+const PRINT_CANCELED = "Print job canceled";
 
-  const frame = document.createElement("iframe");
-  frame.id = "fir-print-frame";
-  frame.title = title;
-  frame.setAttribute("aria-hidden", "true");
-  frame.style.position = "fixed";
-  frame.style.insetInlineStart = "-10000px";
-  frame.style.width = "210mm";
-  frame.style.height = "297mm";
-  frame.style.border = "0";
-
-  document.body.append(frame);
-  const frameWindow = frame.contentWindow;
-  const frameDocument = frame.contentDocument ?? frameWindow?.document;
-  if (!frameWindow || !frameDocument) {
-    frame.remove();
-    return false;
+/**
+ * Prints a packet from the hidden window that laid out its preview, so the app's own renderer
+ * never lays the pages out again. Resolves an error message, or null once printed or canceled.
+ */
+export async function printPacket({ html }: PrintPacket): Promise<string | null> {
+  const api = window.electronPrint;
+  if (!api) return "Printing is only available in the Missal desktop app.";
+  try {
+    const result = await api.print(html);
+    if (result.printed || result.failureReason === PRINT_CANCELED) return null;
+    return result.failureReason ?? "Unable to print";
+  } catch {
+    return "Unable to prepare print view";
   }
-
-  frameWindow.addEventListener(
-    "afterprint",
-    () => {
-      window.setTimeout(() => frame.remove(), 500);
-    },
-    { once: true },
-  );
-  frameDocument.open();
-  frameDocument.write(html);
-  frameDocument.close();
-
-  const waitForImages = Promise.all(
-    Array.from(frameDocument.images).map((image) =>
-      image.complete
-        ? Promise.resolve()
-        : new Promise<void>((resolve) => {
-            image.addEventListener("load", () => resolve(), { once: true });
-            image.addEventListener("error", () => resolve(), { once: true });
-          }),
-    ),
-  );
-  // Request fonts after the written document has layout, including fonts in imported runs.
-  frameDocument.body.getBoundingClientRect();
-  const waitForFonts = frameDocument.fonts.ready;
-
-  Promise.all([waitForFonts, waitForImages])
-    .catch(() => undefined)
-    .finally(() => {
-      window.setTimeout(() => {
-        frameWindow.focus();
-        frameWindow.print();
-      }, 50);
-    });
-
-  return true;
 }
 
 function htmlSectionsFrom(sections: readonly EnvelopePrintSection[]): PrintPacketSection[] {

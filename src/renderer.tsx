@@ -1,3 +1,5 @@
+// First import: every Schema parser in the renderer is JIT-compiled (interpreted where it can't be).
+import "effect/unstable/schema/SchemaJITCompiler/enable";
 import { RegistryProvider } from "@effect/atom-react";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";

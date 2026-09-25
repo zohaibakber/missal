@@ -7,7 +7,8 @@ declare global {
     electronTheme?: ElectronThemeApi;
     electronPrint?: ElectronPrintApi;
     electronStorage?: {
-      request: (payload: unknown) => Promise<unknown>;
+      /** Sends one JSON-encoded storage request; resolves with the JSON response. */
+      request: (payload: string) => Promise<string>;
     };
   }
 }

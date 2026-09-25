@@ -24,6 +24,7 @@ import { toast } from "#/components/ui/toast";
 import type { DesktopTheme } from "#/desktop-window";
 import { type AppSettings, FieldMarkers } from "#/lib/settings";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
+import { whilePending } from "#/lib/utils";
 import { atoms } from "#/state/atoms";
 
 export const Route = createFileRoute("/settings")({
@@ -110,17 +111,13 @@ function FieldMarkersForm({ settings }: { settings: AppSettings }) {
 
   async function submit() {
     if (saving || !dirty || Exit.isFailure(decoded)) return;
-    setSaving(true);
-    try {
-      const exit = await save(decoded.value);
-      if (Exit.isFailure(exit)) {
-        toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
-        return;
-      }
-      toast.add({ title: "Placeholder markers saved", type: "success" });
-    } finally {
-      setSaving(false);
+    const markers = decoded.value;
+    const exit = await whilePending(setSaving, () => save(markers));
+    if (Exit.isFailure(exit)) {
+      toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
+      return;
     }
+    toast.add({ title: "Placeholder markers saved", type: "success" });
   }
 
   return (

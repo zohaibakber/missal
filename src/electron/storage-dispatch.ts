@@ -1,7 +1,8 @@
-import { Effect, Layer, Match, Schema } from "effect";
+import { Cause, Effect, Layer, Match, Option, Schema } from "effect";
 import {
   GlobalPlaceholderListResult,
   FirDocumentListResult,
+  FirDocumentRecordListResult,
   FirDocumentRecordResult,
   FirDocumentSaveAckResult,
   FirListResult,
@@ -10,6 +11,7 @@ import {
   PlaceholderListResult,
   StorageRequest,
   type StorageResponse,
+  decodeStorageRequest,
   encodeStorageResponse,
   TemplateListResult,
   TemplateRecordResult,
@@ -140,6 +142,13 @@ const handleStorageRequest = Effect.fnUntraced(function* (request: StorageReques
         const repository = yield* FirDocumentRepository;
         return Schema.encodeUnknownSync(FirDocumentRecordResult)(yield* repository.get(id));
       }),
+    "FirDocument.getMany": ({ ids }) =>
+      Effect.gen(function* () {
+        const repository = yield* FirDocumentRepository;
+        return Schema.encodeUnknownSync(FirDocumentRecordListResult)(
+          yield* repository.getMany(ids),
+        );
+      }),
     "FirDocument.addTemplates": ({ input }) =>
       Effect.gen(function* () {
         const repository = yield* FirDocumentRepository;
@@ -205,9 +214,15 @@ function encodeResponse(response: StorageResponse) {
   return encodeStorageResponse(response);
 }
 
-export const dispatchStorageRequest = (payload: unknown) =>
+const requestFailed = () =>
+  new StorageError({
+    message: "Storage operation failed",
+    operation: "storage.request",
+  });
+
+export const dispatchStorageRequest = (payload: string) =>
   Effect.gen(function* () {
-    const request = yield* Schema.decodeUnknownEffect(StorageRequest)(payload).pipe(
+    const request = yield* decodeStorageRequest(payload).pipe(
       Effect.mapError(
         () =>
           new StorageError({
@@ -224,15 +239,7 @@ export const dispatchStorageRequest = (payload: unknown) =>
     }),
     Effect.catchDefect((defect) => {
       console.error("Missal storage defect", defect);
-      return Effect.succeed(
-        encodeResponse({
-          _tag: "Failure",
-          error: new StorageError({
-            message: "Storage operation failed",
-            operation: "storage.request",
-          }),
-        }),
-      );
+      return Effect.succeed(encodeResponse({ _tag: "Failure", error: requestFailed() }));
     }),
   );
 
@@ -246,6 +253,19 @@ export const storageHandlers = (config: StorageWorkerConfig) =>
         "Storage.request": ({ payload }) =>
           Effect.flatMap(database, (context) =>
             dispatchStorageRequest(payload).pipe(Effect.provide(context)),
+          ).pipe(
+            // The database never opened; answer with the reason instead of failing the RPC.
+            Effect.catchCause((cause) =>
+              Effect.succeed(
+                encodeResponse({
+                  _tag: "Failure",
+                  error: Option.getOrElse(
+                    Option.filter(Cause.findErrorOption(cause), Schema.is(StorageError)),
+                    requestFailed,
+                  ),
+                }),
+              ),
+            ),
           ),
       });
     }),

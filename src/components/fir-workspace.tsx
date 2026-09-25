@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { Cause, Exit, Match, Option } from "effect";
@@ -91,14 +91,9 @@ import { toast } from "#/components/ui/toast";
 import { envelopePrintPacket, printPacket, type PrintPacket } from "#/editor/html-export";
 import type { EditorSessionHandle } from "#/editor/session";
 import { useShortcut } from "#/hooks/use-shortcut";
-import { catalogFieldPresentation, type FieldDisplayMode } from "#/lib/field";
-import {
-  FirDocumentSaveInput,
-  ReorderFirDocumentsInput,
-  type FirDocumentSummary,
-} from "#/lib/fir-document";
+import type { FieldDisplayMode } from "#/lib/field";
+import { ReorderFirDocumentsInput, type FirDocumentSummary } from "#/lib/fir-document";
 import { parseFirDocumentId, type FirDocumentId, type FirId } from "#/lib/ids";
-import { indexPlaceholders } from "#/lib/placeholder";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
 import { atoms } from "#/state/atoms";
 
@@ -111,22 +106,18 @@ type FirWorkspaceProps = {
 
 export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspaceProps) {
   const navigate = useNavigate();
-  const firResult = useAtomValue(atoms.firByIdAtom(firId));
-  const documentsResult = useAtomValue(atoms.firDocumentsAtom(firId));
   const valueContextResult = useAtomValue(atoms.firValueContextAtom(firId));
-  const placeholderIndexResult = useAtomValue(atoms.placeholderIndexAtom);
+  const documentsResult = useAtomValue(atoms.firDocumentsAtom(firId));
   const removeFir = useAtomSet(atoms.removeFirAtom, { mode: "promiseExit" });
   const loadPrintDocuments = useAtomSet(atoms.loadPrintDocumentsAtom, { mode: "promiseExit" });
   const saveDocument = useAtomSet(atoms.saveFirDocumentAtom, { mode: "promiseExit" });
-  const reorderDocuments = useAtomSet(atoms.reorderFirDocumentsAtom, { mode: "promiseExit" });
-  const removeDocument = useAtomSet(atoms.removeFirDocumentAtom, { mode: "promiseExit" });
+  const reorderDocuments = useAtomSet(atoms.reorderFirDocumentsAtom(firId), {
+    mode: "promiseExit",
+  });
+  const removeDocument = useAtomSet(atoms.removeFirDocumentAtom(firId), { mode: "promiseExit" });
   const documents = AsyncResult.isSuccess(documentsResult)
     ? documentsResult.value
     : EMPTY_DOCUMENTS;
-  const placeholderIndex = AsyncResult.isSuccess(placeholderIndexResult)
-    ? placeholderIndexResult.value
-    : indexPlaceholders([]);
-  const valueContext = AsyncResult.isSuccess(valueContextResult) ? valueContextResult.value : null;
   const requestedDocumentId = documentIdParam ? parseFirDocumentId(documentIdParam) : undefined;
   const activeId =
     (requestedDocumentId && documents.some((document) => document.id === requestedDocumentId)
@@ -142,50 +133,19 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
   const [dirty, setDirty] = useState(false);
   const [savePending, setSavePending] = useState(false);
   const [displayMode, setDisplayMode] = useState<FieldDisplayMode>("values");
-  const [outputIds, setOutputIds] = useState<ReadonlySet<FirDocumentId>>(() => new Set());
+  // Documents print unless excluded, so ones added later print by default.
+  const [excludedIds, setExcludedIds] = useState<ReadonlySet<FirDocumentId>>(() => new Set());
   const [isDeleteFirOpen, setIsDeleteFirOpen] = useState(false);
   const [pendingId, setPendingId] = useState<FirDocumentId | null>(null);
-  const [revision, setRevision] = useState(activeDocument?.revision);
   const [editorEpoch, setEditorEpoch] = useState(0);
   const sessionRef = useRef<EditorSessionHandle | null>(null);
-  const loadedIdRef = useRef<FirDocumentId | null>(null);
-  const previousDocumentIds = useRef<ReadonlySet<FirDocumentId>>(new Set());
 
-  const presentation = useMemo(
-    () =>
-      valueContext
-        ? valueContext.toPresentation(displayMode)
-        : catalogFieldPresentation(placeholderIndex, displayMode),
-    [displayMode, placeholderIndex, valueContext],
-  );
-
-  useEffect(() => {
-    if (!activeDocument) {
-      return;
-    }
-
-    if (loadedIdRef.current !== activeDocument.id) {
-      loadedIdRef.current = activeDocument.id;
-      setRevision(activeDocument.revision);
-      setDirty(false);
-    }
-  }, [activeDocument]);
-
-  useEffect(() => {
-    const previous = previousDocumentIds.current;
-    const nextIds = new Set(documents.map((document) => document.id));
-    setOutputIds(
-      (current) => new Set([...nextIds].filter((id) => current.has(id) || !previous.has(id))),
-    );
-    previousDocumentIds.current = nextIds;
-  }, [documents]);
-
-  if (AsyncResult.isInitial(firResult) || AsyncResult.isInitial(documentsResult)) {
+  if (AsyncResult.isInitial(valueContextResult) || AsyncResult.isInitial(documentsResult)) {
     return <FirWorkspaceSkeleton />;
   }
 
-  if (AsyncResult.isFailure(firResult)) {
-    return Option.match(Cause.findErrorOption(firResult.cause), {
+  if (AsyncResult.isFailure(valueContextResult)) {
+    return Option.match(Cause.findErrorOption(valueContextResult.cause), {
       onNone: () => <FirWorkspaceError />,
       onSome: (error) =>
         Match.value(error).pipe(
@@ -197,8 +157,13 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
 
   if (AsyncResult.isFailure(documentsResult)) return <FirWorkspaceError />;
 
-  const fir = firResult.value;
+  const valueContext = valueContextResult.value;
+  const fir = valueContext.fir;
+  const presentation = valueContext.toPresentation(displayMode);
   const printTitle = `FIR ${fir.fir_no}`;
+  const printIds = documents
+    .filter((document) => !excludedIds.has(document.id))
+    .map((document) => document.id);
 
   function selectDocument(id: FirDocumentId) {
     if (id === activeId) {
@@ -220,35 +185,20 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
 
   async function persistActive() {
     const session = sessionRef.current;
-    if (!activeDocument || !session || revision === undefined) {
+    const current = activeDocument;
+    if (!current || !session) {
       return false;
     }
 
-    if (!session.tryBeginSave()) {
-      return false;
-    }
-
-    const captured = session.captureEnvelope();
-    try {
-      const exit = await saveDocument(
-        new FirDocumentSaveInput({
-          document: captured.envelope,
-          expectedRevision: revision,
-          id: activeDocument.id,
-        }),
-      );
-
+    const saved = await session.runSave(async (captured) => {
+      const exit = await saveDocument({ current, document: captured.envelope });
       if (Exit.isFailure(exit)) {
         toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
-        return false;
+        return { saved: false, value: false };
       }
-
-      session.markSaved(captured.contentRevision);
-      setRevision(exit.value.revision);
-      return true;
-    } finally {
-      session.endSave();
-    }
+      return { saved: true, value: true };
+    });
+    return saved === true;
   }
 
   async function handleSave() {
@@ -266,7 +216,6 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
         return;
       }
     } else {
-      loadedIdRef.current = null;
       setEditorEpoch((epoch) => epoch + 1);
       setDirty(false);
     }
@@ -307,7 +256,6 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
     }
 
     if (id === activeId) {
-      loadedIdRef.current = null;
       setDirty(false);
     }
   }
@@ -325,15 +273,14 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
 
   /** Gathers the documents marked for printing, using the live editor state for the open one. */
   async function buildPrintPacket(): Promise<PrintPacket | null> {
-    const selected = documents.filter((document) => outputIds.has(document.id));
-    if (!selected.length) {
+    if (!printIds.length) {
       toast.add({ title: "Select at least one document to print", type: "warning" });
       return null;
     }
 
     const captured =
       activeDocument && sessionRef.current ? sessionRef.current.captureEnvelope() : null;
-    const result = await loadPrintDocuments(selected.map((document) => document.id));
+    const result = await loadPrintDocuments(printIds);
     if (Exit.isFailure(result)) {
       toast.add({ title: getRepositoryErrorMessage(result), type: "error" });
       return null;
@@ -350,7 +297,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
   }
 
   async function openPrintPreview() {
-    if (!outputIds.size) {
+    if (!printIds.length) {
       toast.add({ title: "Select at least one document to print", type: "warning" });
       return;
     }
@@ -361,10 +308,11 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
     else setPreviewOpen(false);
   }
 
-  function handlePrint(packet: PrintPacket) {
+  async function handlePrint(packet: PrintPacket) {
     setPreviewOpen(false);
-    if (!printPacket(packet)) {
-      toast.add({ title: "Unable to prepare print view", type: "error" });
+    const failure = await printPacket(packet);
+    if (failure) {
+      toast.add({ title: failure, type: "error" });
     }
   }
 
@@ -374,7 +322,16 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
     if (next) selectDocument(next.id);
   }
 
-  const printCount = outputIds.size;
+  function setPrinted(id: FirDocumentId, printed: boolean) {
+    setExcludedIds((current) => {
+      const next = new Set(current);
+      if (printed) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const printCount = printIds.length;
 
   return (
     <Pane>
@@ -389,79 +346,9 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
         }
       />
       <UnsavedChanges isDirty={() => dirty && pendingId === null} />
-      <PaneHeader>
-        <PaneTitle className="flex-none">FIR {fir.fir_no}</PaneTitle>
-        <FirStatusBadge status={fir.status} />
-        <span
-          lang="ur"
-          dir="rtl"
-          className="hidden min-w-0 truncate text-ur text-muted-foreground lg:block"
-        >
-          {fir.offence}
-        </span>
-        <PaneActions>
-          <IconAction
-            label="Edit FIR details"
-            shortcut="editFir"
-            onClick={() => setDetailsOpen(true)}
-          >
-            <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
-          </IconAction>
-          <IconAction
-            label={
-              printCount
-                ? `Print ${printCount} ${printCount === 1 ? "document" : "documents"}…`
-                : "Print…"
-            }
-            shortcut="print"
-            disabled={!printCount}
-            onClick={() => void openPrintPreview()}
-          >
-            <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
-          </IconAction>
-          <DropdownMenu>
-            <Hint label="More actions">
-              <DropdownMenuTrigger
-                render={
-                  <Button size="icon-sm" type="button" variant="ghost" aria-label="More actions" />
-                }
-              >
-                <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
-              </DropdownMenuTrigger>
-            </Hint>
-            <DropdownMenuContent align="end" className="w-72">
-              <DropdownMenuGroup>
-                <DropdownMenuSwitchItem
-                  checked={displayMode === "labels"}
-                  onCheckedChange={(checked) => setDisplayMode(checked ? "labels" : "values")}
-                >
-                  <HugeiconsIcon icon={TextFontIcon} strokeWidth={2} />
-                  Show field names
-                  <DropdownMenuShortcut>
-                    <ShortcutKbd id="toggleFieldNames" />
-                  </DropdownMenuShortcut>
-                </DropdownMenuSwitchItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => setIsDeleteFirOpen(true)} variant="destructive">
-                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                  Delete FIR
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {activeDocument ? (
-            <Hint label="Save document" shortcut="save">
-              <SaveButton dirty={dirty} pending={savePending} onClick={() => void handleSave()} />
-            </Hint>
-          ) : null}
-        </PaneActions>
-      </PaneHeader>
-
       <SplitView id="fir-workspace">
         <SplitViewList>
-          <SplitViewListHeader className="h-10">
+          <SplitViewListHeader>
             <SplitViewListTitle className="text-xs text-muted-foreground">
               Documents
               {documents.length ? (
@@ -483,19 +370,12 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
                     key={document.id}
                     title={document.title}
                     active={document.id === activeId}
-                    printed={outputIds.has(document.id)}
+                    printed={!excludedIds.has(document.id)}
                     canMoveUp={index > 0}
                     canMoveDown={index < documents.length - 1}
                     canRemove={!(dirty && document.id === activeId)}
                     onSelect={() => selectDocument(document.id)}
-                    onPrintedChange={(checked) =>
-                      setOutputIds((current) => {
-                        const next = new Set(current);
-                        if (checked) next.add(document.id);
-                        else next.delete(document.id);
-                        return next;
-                      })
-                    }
+                    onPrintedChange={(checked) => setPrinted(document.id, checked)}
                     onMove={(offset) => void handleReorder(index, index + offset)}
                     onRemove={() => void handleRemoveDocument(document.id)}
                   />
@@ -514,44 +394,128 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
           ) : null}
         </SplitViewList>
         <SplitViewDetail>
-          {activeDocument && revision !== undefined ? (
-            <DocumentEditor
-              aria-label={activeDocument.title}
-              document={activeDocument.document}
-              onDirtyChange={setDirty}
-              onSavePendingChange={setSavePending}
-              onSessionReady={(session) => {
-                sessionRef.current = session;
-              }}
-              placeholderIndex={presentation.catalog}
-              presentation={presentation}
-              sessionKey={`${activeDocument.id}:${editorEpoch}`}
-            />
-          ) : documents.length ? (
-            <EditorSkeleton />
-          ) : (
-            <div className="flex h-full bg-canvas">
-              <Empty>
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <HugeiconsIcon icon={LegalDocument01Icon} strokeWidth={2} />
-                  </EmptyMedia>
-                  <EmptyTitle>Start with a template</EmptyTitle>
-                  <EmptyDescription>
-                    Each template becomes a document filled with this FIR's details.
-                  </EmptyDescription>
-                </EmptyHeader>
-                <EmptyContent>
-                  <Hint label="Add templates" shortcut="addTemplates">
-                    <Button variant="outline" size="sm" onClick={() => setAddTemplatesOpen(true)}>
-                      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
-                      Add templates
-                    </Button>
+          {/* As on the template page: the editor column carries the actions, then the FIR. */}
+          <Pane>
+            <PaneHeader>
+              <PaneActions className="ms-0 me-auto">
+                {activeDocument ? (
+                  <Hint label="Save document" shortcut="save">
+                    <SaveButton
+                      dirty={dirty}
+                      pending={savePending}
+                      onClick={() => void handleSave()}
+                    />
                   </Hint>
-                </EmptyContent>
-              </Empty>
-            </div>
-          )}
+                ) : null}
+                <IconAction
+                  label={
+                    printCount
+                      ? `Print ${printCount} ${printCount === 1 ? "document" : "documents"}…`
+                      : "Print…"
+                  }
+                  shortcut="print"
+                  disabled={!printCount}
+                  onClick={() => void openPrintPreview()}
+                >
+                  <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
+                </IconAction>
+                <IconAction
+                  label="Edit FIR details"
+                  shortcut="editFir"
+                  onClick={() => setDetailsOpen(true)}
+                >
+                  <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
+                </IconAction>
+                <DropdownMenu>
+                  <Hint label="More actions">
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          size="icon-sm"
+                          type="button"
+                          variant="ghost"
+                          aria-label="More actions"
+                        />
+                      }
+                    >
+                      <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+                    </DropdownMenuTrigger>
+                  </Hint>
+                  <DropdownMenuContent align="start" className="w-72">
+                    <DropdownMenuGroup>
+                      <DropdownMenuSwitchItem
+                        checked={displayMode === "labels"}
+                        onCheckedChange={(checked) => setDisplayMode(checked ? "labels" : "values")}
+                      >
+                        <HugeiconsIcon icon={TextFontIcon} strokeWidth={2} />
+                        Show field names
+                        <DropdownMenuShortcut>
+                          <ShortcutKbd id="toggleFieldNames" />
+                        </DropdownMenuShortcut>
+                      </DropdownMenuSwitchItem>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                      <DropdownMenuItem
+                        onClick={() => setIsDeleteFirOpen(true)}
+                        variant="destructive"
+                      >
+                        <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                        Delete FIR
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </PaneActions>
+              <span
+                lang="ur"
+                dir="rtl"
+                className="hidden min-w-0 truncate text-ur text-muted-foreground lg:block"
+              >
+                {fir.offence}
+              </span>
+              <FirStatusBadge status={fir.status} />
+              <PaneTitle className="flex-none">FIR {fir.fir_no}</PaneTitle>
+            </PaneHeader>
+            {activeDocument ? (
+              <DocumentEditor
+                aria-label={activeDocument.title}
+                document={activeDocument.document}
+                onDirtyChange={setDirty}
+                onSavePendingChange={setSavePending}
+                onSessionReady={(session) => {
+                  sessionRef.current = session;
+                }}
+                placeholderIndex={presentation.catalog}
+                presentation={presentation}
+                sessionKey={`${activeDocument.id}:${editorEpoch}`}
+              />
+            ) : documents.length ? (
+              <EditorSkeleton />
+            ) : (
+              <div className="flex h-full bg-canvas">
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <HugeiconsIcon icon={LegalDocument01Icon} strokeWidth={2} />
+                    </EmptyMedia>
+                    <EmptyTitle>Start with a template</EmptyTitle>
+                    <EmptyDescription>
+                      Each template becomes a document filled with this FIR's details.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    <Hint label="Add templates" shortcut="addTemplates">
+                      <Button variant="outline" size="sm" onClick={() => setAddTemplatesOpen(true)}>
+                        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+                        Add templates
+                      </Button>
+                    </Hint>
+                  </EmptyContent>
+                </Empty>
+              </div>
+            )}
+          </Pane>
         </SplitViewDetail>
       </SplitView>
 
@@ -564,7 +528,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
         packet={previewPacket}
         description={`${printCount} ${printCount === 1 ? "document" : "documents"}`}
         onPrint={() => {
-          if (previewPacket) handlePrint(previewPacket);
+          if (previewPacket) void handlePrint(previewPacket);
         }}
       />
 
@@ -782,24 +746,24 @@ export function FirNotFound() {
 function FirWorkspaceSkeleton() {
   return (
     <Pane aria-busy="true">
-      <PaneHeader>
-        <Skeleton className="h-4 w-40" />
-        <Skeleton className="h-5 w-20" />
-        <PaneActions>
-          <Skeleton className="h-7 w-16" />
-        </PaneActions>
-      </PaneHeader>
       <div className="flex min-h-0 flex-1">
-        <div className="flex w-66 flex-col gap-1 border-e">
-          <div className="h-10 border-b" />
+        <div className="flex w-66 flex-col border-e">
+          <div className="h-12 border-b" />
           <div className="flex flex-col gap-1 p-2">
             <Skeleton className="h-9" />
             <Skeleton className="h-9" />
           </div>
         </div>
-        <div className="flex-1">
+        <Pane>
+          <PaneHeader>
+            <PaneActions className="ms-0 me-auto">
+              <Skeleton className="h-7 w-16" />
+            </PaneActions>
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-4 w-40" />
+          </PaneHeader>
           <EditorSkeleton />
-        </div>
+        </Pane>
       </div>
     </Pane>
   );
