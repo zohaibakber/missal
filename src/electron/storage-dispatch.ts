@@ -18,7 +18,9 @@ import {
   TemplateSaveAckResult,
 } from "#/electron/storage-contract";
 import { StorageRpcs, type StorageWorkerConfig } from "#/electron/storage-rpc";
+import { applyStorageInitFault } from "#/electron/storage-faults";
 import { storageLayer } from "#/electron/storage-runtime";
+import { perfMark, perfNow, perfTimed } from "#/lib/perf-marks";
 import { FirRecord } from "#/lib/fir";
 import { Placeholder } from "#/lib/placeholder";
 import { AppSettings } from "#/lib/settings";
@@ -222,6 +224,7 @@ const requestFailed = () =>
 
 export const dispatchStorageRequest = (payload: string) =>
   Effect.gen(function* () {
+    const decodeStarted = perfNow();
     const request = yield* decodeStorageRequest(payload).pipe(
       Effect.mapError(
         () =>
@@ -231,11 +234,23 @@ export const dispatchStorageRequest = (payload: string) =>
           }),
       ),
     );
-    return yield* handleStorageRequest(request);
+    perfMark("storage.decode", { startedAt: decodeStarted, bytesIn: payload });
+    const executeStarted = perfNow();
+    const value = yield* handleStorageRequest(request);
+    perfMark("storage.execute", { startedAt: executeStarted, bytesIn: payload });
+    return value;
   }).pipe(
     Effect.match({
-      onFailure: (error) => encodeResponse({ _tag: "Failure", error }),
-      onSuccess: (value) => encodeResponse({ _tag: "Success", value }),
+      onFailure: (error) => {
+        perfMark("storage.request", { errorCategory: error._tag });
+        return perfTimed(
+          "storage.encode",
+          () => encodeResponse({ _tag: "Failure", error }),
+          error._tag,
+        );
+      },
+      onSuccess: (value) =>
+        perfTimed("storage.encode", () => encodeResponse({ _tag: "Success", value })),
     }),
     Effect.catchDefect((defect) => {
       console.error("Missal storage defect", defect);
@@ -246,7 +261,9 @@ export const dispatchStorageRequest = (payload: string) =>
 export const storageHandlers = (config: StorageWorkerConfig) =>
   StorageRpcs.toLayer(
     Effect.gen(function* () {
-      const database = yield* Effect.exit(Layer.build(storageLayer(config)));
+      const database = yield* Effect.exit(
+        applyStorageInitFault.pipe(Effect.andThen(() => Layer.build(storageLayer(config)))),
+      );
 
       return StorageRpcs.of({
         "Storage.open": () => Effect.asVoid(database),

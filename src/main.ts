@@ -12,6 +12,7 @@ import {
 } from "./desktop-window";
 import { closePrintWindow, printPacket, renderPrintPdf } from "./electron/print-pdf";
 import { registerStorageIpc } from "./electron/storage-ipc-main";
+import { dumpPerfMarksOnQuit, perfMark } from "./lib/perf-marks";
 import type { StorageHost } from "./electron/storage-worker-client";
 
 const RENDERER_SCHEME = "missal";
@@ -91,9 +92,12 @@ const createWindow = () => {
   });
 
   appWindows.add(mainWindow);
+  perfMark("window.created");
   mainWindow.once("ready-to-show", () => {
+    perfMark("window.ready-to-show");
     mainWindow.show();
   });
+  mainWindow.webContents.once("did-finish-load", () => perfMark("window.did-finish-load"));
   mainWindow.once("closed", () => {
     appWindows.delete(mainWindow);
     if (appWindows.size === 0) closePrintWindow();
@@ -166,6 +170,7 @@ const registerDesktopIntegration = () => {
 };
 
 const startApp = () => {
+  process.env.MISSAL_PACKAGED = app.isPackaged ? "1" : "0";
   // Auto-update does nothing in development or outside Windows.
   updateElectronApp({
     updateSource: {
@@ -178,6 +183,7 @@ const startApp = () => {
   let disposingStorage = false;
 
   void app.whenReady().then(() => {
+    perfMark("app.ready");
     protocol.handle(RENDERER_SCHEME, handleRendererProtocol);
     registerDesktopIntegration();
     createWindow();
@@ -200,6 +206,14 @@ const startApp = () => {
       });
     });
     registerStorageIpc(storage);
+    void storage.then(
+      (host) =>
+        void host.ready.then(
+          () => perfMark("storage.ready"),
+          () => perfMark("storage.ready", { errorCategory: "startup" }),
+        ),
+      () => perfMark("storage.ready", { errorCategory: "startup" }),
+    );
     storage
       .then((host) => host.ready)
       .catch((error: unknown) => {
@@ -230,6 +244,7 @@ const startApp = () => {
   });
 
   app.on("before-quit", (event) => {
+    dumpPerfMarksOnQuit();
     if (!storage || disposingStorage) {
       return;
     }
