@@ -9,3 +9,4 @@ out
 .tanstack
 __unconfig*
 todos.json
+.perf/
