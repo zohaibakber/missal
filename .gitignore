@@ -9,3 +9,5 @@ out
 .tanstack
 __unconfig*
 todos.json
+.perf/
+.bundled-templates-staging

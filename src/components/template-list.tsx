@@ -1,6 +1,6 @@
 import { useDeferredValue, useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Add01Icon, Cancel01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";

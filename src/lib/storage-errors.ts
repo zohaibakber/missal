@@ -34,11 +34,35 @@ export class StorageError extends Schema.TaggedError<StorageError>()("StorageErr
   message: Schema.String,
 }) {}
 
+export class StorageBusy extends Schema.TaggedError<StorageBusy>()("StorageBusy", {
+  operation: Schema.String,
+  message: Schema.String,
+}) {}
+
+export class StorageUnavailable extends Schema.TaggedError<StorageUnavailable>()(
+  "StorageUnavailable",
+  {
+    operation: Schema.String,
+    message: Schema.String,
+  },
+) {}
+
+export class StorageUnknownOutcome extends Schema.TaggedError<StorageUnknownOutcome>()(
+  "StorageUnknownOutcome",
+  {
+    operation: Schema.String,
+    message: Schema.String,
+  },
+) {}
+
 export const RepositoryError = Schema.Union([
   EntityNotFound,
   EntityConflict,
   EntityInUse,
   StorageError,
+  StorageBusy,
+  StorageUnavailable,
+  StorageUnknownOutcome,
 ]);
 
 export type RepositoryError = typeof RepositoryError.Type;
@@ -58,6 +82,9 @@ export function getRepositoryErrorMessage(
             : `${field} is already in use`,
         EntityInUse: ({ entity }) => `${entity} is in use and cannot be deleted`,
         StorageError: ({ message }) => message,
+        StorageBusy: ({ message }) => message,
+        StorageUnavailable: ({ message }) => message,
+        StorageUnknownOutcome: ({ message }) => message,
       }),
   });
 }

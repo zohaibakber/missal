@@ -1,6 +1,6 @@
 import { expect, it } from "@effect/vitest";
 import { Cause, Effect, Exit } from "effect";
-import { RpcTest } from "effect/unstable/rpc";
+import { RpcTest } from "effect/rpc";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";

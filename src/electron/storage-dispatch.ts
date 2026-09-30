@@ -18,11 +18,14 @@ import {
   TemplateSaveAckResult,
 } from "#/electron/storage-contract";
 import { StorageRpcs, type StorageWorkerConfig } from "#/electron/storage-rpc";
+import { applyStorageInitFault } from "#/electron/storage-faults";
 import { storageLayer } from "#/electron/storage-runtime";
+import { perfMark, perfNow } from "#/lib/perf-marks";
 import { FirRecord } from "#/lib/fir";
 import { Placeholder } from "#/lib/placeholder";
 import { AppSettings } from "#/lib/settings";
 import { StorageError } from "#/lib/storage-errors";
+import { TemplatePackStatus } from "#/lib/bundled-templates";
 import { FirPlaceholderValue, TemplateSummary } from "#/lib/templates";
 import {
   FirDocumentRepository,
@@ -99,10 +102,20 @@ const handleStorageRequest = Effect.fnUntraced(function* (request: StorageReques
         yield* repository.remove(id);
         return undefined;
       }),
+    "Template.packStatus": () =>
+      Effect.gen(function* () {
+        const repository = yield* TemplateRepository;
+        return Schema.encodeUnknownSync(TemplatePackStatus)(yield* repository.packStatus);
+      }),
     "Fir.list": () =>
       Effect.gen(function* () {
         const repository = yield* FirRepository;
         return Schema.encodeUnknownSync(FirListResult)(yield* repository.list);
+      }),
+    "Fir.recent": ({ limit }) =>
+      Effect.gen(function* () {
+        const repository = yield* FirRepository;
+        return Schema.encodeUnknownSync(FirListResult)(yield* repository.recent(limit));
       }),
     "Fir.get": ({ id }) =>
       Effect.gen(function* () {
@@ -211,7 +224,14 @@ const handleStorageRequest = Effect.fnUntraced(function* (request: StorageReques
 });
 
 function encodeResponse(response: StorageResponse) {
-  return encodeStorageResponse(response);
+  const started = perfNow();
+  const encoded = encodeStorageResponse(response);
+  perfMark("storage.encode", {
+    startedAt: started,
+    chars: encoded.length,
+    errorCategory: response._tag === "Failure" ? response.error._tag : undefined,
+  });
+  return encoded;
 }
 
 const requestFailed = () =>
@@ -222,6 +242,7 @@ const requestFailed = () =>
 
 export const dispatchStorageRequest = (payload: string) =>
   Effect.gen(function* () {
+    const decodeStarted = perfNow();
     const request = yield* decodeStorageRequest(payload).pipe(
       Effect.mapError(
         () =>
@@ -231,7 +252,11 @@ export const dispatchStorageRequest = (payload: string) =>
           }),
       ),
     );
-    return yield* handleStorageRequest(request);
+    perfMark("storage.decode", { startedAt: decodeStarted, chars: payload.length });
+    const executeStarted = perfNow();
+    const value = yield* handleStorageRequest(request);
+    perfMark(`storage.execute.${request._tag}`, { startedAt: executeStarted });
+    return value;
   }).pipe(
     Effect.match({
       onFailure: (error) => encodeResponse({ _tag: "Failure", error }),
@@ -246,7 +271,9 @@ export const dispatchStorageRequest = (payload: string) =>
 export const storageHandlers = (config: StorageWorkerConfig) =>
   StorageRpcs.toLayer(
     Effect.gen(function* () {
-      const database = yield* Effect.exit(Layer.build(storageLayer(config)));
+      const database = yield* Effect.exit(
+        applyStorageInitFault.pipe(Effect.andThen(() => Layer.build(storageLayer(config)))),
+      );
 
       return StorageRpcs.of({
         "Storage.open": () => Effect.asVoid(database),

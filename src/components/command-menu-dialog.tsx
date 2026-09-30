@@ -1,7 +1,6 @@
 import { Fragment, useDeferredValue, useState, type ComponentProps } from "react";
-import { defaultFilter } from "cmdk";
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { useNavigate } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -33,6 +32,7 @@ import { useSidebar } from "#/components/ui/sidebar";
 import type { FirSummary } from "#/lib/fir";
 import type { ShortcutId } from "#/lib/shortcuts";
 import type { TemplateSummary } from "#/lib/templates";
+import { topCommandMatches } from "#/lib/command-search";
 import { atoms } from "#/state/atoms";
 
 type HugeIcon = ComponentProps<typeof HugeiconsIcon>["icon"];
@@ -61,20 +61,8 @@ const themeCommands = [
   { icon: ComputerIcon, title: "System theme", value: "system" },
 ] as const;
 
-const MAX_RESULTS = 20;
-
 const firValue = (fir: FirSummary) => `fir ${fir.fir_no} ${fir.offence} ${fir.id}`;
 const templateValue = (template: TemplateSummary) => `template ${template.name} ${template.id}`;
-
-function topMatches<T>(items: readonly T[], search: string, value: (item: T) => string) {
-  if (!search) return items.slice(0, MAX_RESULTS);
-  return items
-    .map((item) => ({ item, score: defaultFilter(value(item), search) }))
-    .filter((match) => match.score > 0)
-    .toSorted((first, second) => second.score - first.score)
-    .slice(0, MAX_RESULTS)
-    .map((match) => match.item);
-}
 
 export function CommandMenuDialog({
   open,
@@ -100,10 +88,10 @@ function CommandMenuContent({ close }: { close: () => void }) {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const firMatches = AsyncResult.isSuccess(firs)
-    ? topMatches(firs.value, deferredSearch, firValue)
+    ? topCommandMatches(firs.value, deferredSearch, firValue)
     : [];
   const templateMatches = AsyncResult.isSuccess(templates)
-    ? topMatches(templates.value, deferredSearch, templateValue)
+    ? topCommandMatches(templates.value, deferredSearch, templateValue)
     : [];
 
   function run(action: () => void) {

@@ -1,5 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Exit, Schema } from "effect";
 import { useForm } from "@tanstack/react-form";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";

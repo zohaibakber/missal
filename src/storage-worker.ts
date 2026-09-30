@@ -1,9 +1,9 @@
 // First import: every Schema parser in the worker is JIT-compiled (interpreted where it can't be).
-import "effect/unstable/schema/SchemaJITCompiler/enable";
+import "effect/schema/SchemaJITCompiler/enable";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeWorkerRunner from "@effect/platform-node/NodeWorkerRunner";
 import { Effect, Layer } from "effect";
-import { RpcServer, RpcWorker } from "effect/unstable/rpc";
+import { RpcServer, RpcWorker } from "effect/rpc";
 import { storageHandlers } from "#/electron/storage-dispatch";
 import { StorageRpcs, StorageWorkerConfig } from "#/electron/storage-rpc";
 

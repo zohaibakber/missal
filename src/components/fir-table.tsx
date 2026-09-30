@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { SortingState } from "@tanstack/react-table";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Exit } from "effect";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {

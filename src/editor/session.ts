@@ -72,6 +72,18 @@ function editorUiDefaults(): EditorUiState {
   };
 }
 
+function sameUi(left: EditorUiState, right: EditorUiState) {
+  return (
+    left.phase === right.phase &&
+    left.pageLayout === right.pageLayout &&
+    left.dirty === right.dirty &&
+    left.empty === right.empty &&
+    left.canUndo === right.canUndo &&
+    left.canRedo === right.canRedo &&
+    left.savePending === right.savePending
+  );
+}
+
 export function attachEditorSession(
   editor: LexicalEditor,
   options: {
@@ -84,6 +96,7 @@ export function attachEditorSession(
   const ui: EditorUiState = editorUiDefaults();
   let contentRevision = 0;
   let disposed = false;
+  let published: EditorUiState | undefined;
   const history = createEmptyHistoryState();
   const presentation = new FieldPresentationController(editor, options.presentation);
   const getFieldMarkers = options.getFieldMarkers ?? (() => DEFAULT_FIELD_MARKERS);
@@ -134,9 +147,10 @@ export function attachEditorSession(
   ];
 
   function notify() {
-    if (!disposed) {
-      options.onUiChange?.({ ...ui });
-    }
+    if (disposed) return;
+    if (published && sameUi(published, ui)) return;
+    published = { ...ui };
+    options.onUiChange?.(published);
   }
 
   function setPhase(phase: EditorPhase) {

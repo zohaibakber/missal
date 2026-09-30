@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Cause, Exit, Match, Option } from "effect";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -129,6 +129,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
   const [addTemplatesOpen, setAddTemplatesOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPacket, setPreviewPacket] = useState<PrintPacket | null>(null);
+  const printOwnerId = useId();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [savePending, setSavePending] = useState(false);
@@ -309,7 +310,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
 
   async function handlePrint(packet: PrintPacket) {
     setPreviewOpen(false);
-    const failure = await printPacket(packet);
+    const failure = await printPacket(packet, printOwnerId);
     if (failure) {
       toast.add({ title: failure, type: "error" });
     }
@@ -522,6 +523,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
       <PrintPreview
         open={previewOpen}
         onOpenChange={setPreviewOpen}
+        ownerId={printOwnerId}
         title={printTitle}
         packet={previewPacket}
         description={`${printCount} ${printCount === 1 ? "document" : "documents"}`}

@@ -1,6 +1,6 @@
 import { Array, Cause, Effect, Match, Option } from "effect";
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core/errors";
-import { isSqlError } from "effect/unstable/sql/SqlError";
+import { isSqlError } from "effect/sql/SqlError";
 import {
   EntityConflict,
   EntityNotFound,

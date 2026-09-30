@@ -1,7 +1,7 @@
 import type { SaveGlobalPlaceholdersInput } from "#/lib/global-placeholder";
 import { Effect } from "effect";
-import { AsyncResult, Atom, Reactivity } from "effect/unstable/reactivity";
-import type { DocumentEnvelope } from "#/lib/document-format";
+import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
+import { projectDocument, type DocumentEnvelope } from "#/lib/document-format";
 import type { FirCreateInput, FirId, FirUpdateInput } from "#/lib/fir";
 import type { FirDocumentId, TemplateId } from "#/lib/ids";
 import {
@@ -11,12 +11,19 @@ import {
 } from "#/lib/placeholder";
 import {
   FirDocumentRecord,
+  FirDocumentSaveAck,
   FirDocumentSaveInput,
   type AddFirTemplatesInput,
   type FirDocumentSummary,
   type ReorderFirDocumentsInput,
 } from "#/lib/fir-document";
-import { TemplateRecord, TemplateUpdateInput, type TemplateCreateInput } from "#/lib/templates";
+import type { RepositoryError } from "#/lib/storage-errors";
+import {
+  TemplateRecord,
+  TemplateSaveAck,
+  TemplateUpdateInput,
+  type TemplateCreateInput,
+} from "#/lib/templates";
 import { DEFAULT_FIELD_MARKERS, type FieldMarkers } from "#/lib/settings";
 import {
   FirDocumentRepository,
@@ -28,7 +35,7 @@ import {
 } from "#/repositories/index";
 import { appRuntime } from "#/state/app-runtime";
 
-const LATEST_LIMIT = 5;
+const RECENT_FIR_LIMIT = 5;
 const IDLE_TTL = "1 minute";
 
 /**
@@ -41,6 +48,36 @@ function overridable<A>(source: Atom.Atom<A>) {
     (ctx, value: A) => ctx.setSelf(value),
     (refresh) => refresh(source),
   );
+}
+
+function settleRevisionWrite<A, B extends { readonly revision: number }, R>(
+  write: Effect.Effect<A, RepositoryError, R>,
+  expectedRevision: number,
+  read: Effect.Effect<B, RepositoryError, R>,
+  matchesStored: (record: B) => boolean,
+  fromStored: (record: B) => A,
+) {
+  return Effect.catchTag(write, "StorageUnknownOutcome", (unknown) =>
+    read.pipe(
+      Effect.mapError(() => unknown),
+      Effect.flatMap((record) =>
+        record.revision === expectedRevision + 1 && matchesStored(record)
+          ? Effect.succeed(fromStored(record))
+          : Effect.fail(unknown),
+      ),
+    ),
+  );
+}
+
+function storedAck<R extends TemplateRecord | FirDocumentRecord>(record: R) {
+  const { fieldCount, previewText } = projectDocument(record.document);
+  return {
+    fieldCount,
+    id: record.id as R["id"],
+    previewText,
+    revision: record.revision,
+    updatedAt: record.updatedAt,
+  };
 }
 
 function reorderedDocuments(
@@ -69,7 +106,7 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
 
   const settingsAtom = runtime
     .atom(Effect.flatMap(SettingsRepository, (repository) => repository.get))
-    .pipe(runtime.factory.withReactivity(["settings"]), Atom.keepAlive);
+    .pipe(runtime.factory.withReactivity(["settings", "field-markers"]), Atom.keepAlive);
 
   const fieldMarkersAtom = Atom.map(settingsAtom, (result) =>
     AsyncResult.isSuccess(result) ? result.value.fieldMarkers : DEFAULT_FIELD_MARKERS,
@@ -78,11 +115,25 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
   const saveFieldMarkersAtom = runtime.fn(
     (fieldMarkers: FieldMarkers) =>
       Effect.flatMap(SettingsRepository, (repository) => repository.saveFieldMarkers(fieldMarkers)),
-    { reactivityKeys: ["settings"] },
+    { reactivityKeys: ["field-markers"] },
   );
 
   const templatesAtom = runtime
-    .atom(Effect.flatMap(TemplateRepository, (repository) => repository.list))
+    .atom(
+      Effect.gen(function* () {
+        const repository = yield* TemplateRepository;
+        const status = yield* repository.packStatus;
+        const templates = yield* repository.list;
+        // The background installer can create fields after the catalog was cached.
+        yield* Reactivity.invalidate(["placeholders"]);
+        if (status._tag === "Synchronizing") {
+          yield* Effect.forkDetach(
+            Effect.sleep("200 millis").pipe(Effect.andThen(Reactivity.invalidate(["templates"]))),
+          );
+        }
+        return templates;
+      }),
+    )
     .pipe(runtime.factory.withReactivity(["templates"]), Atom.keepAlive);
 
   // The body is keyed apart from the list: saving refreshes the list, not every open body.
@@ -98,14 +149,14 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     .atom(Effect.flatMap(FirRepository, (repository) => repository.list))
     .pipe(runtime.factory.withReactivity(["firs"]), Atom.keepAlive);
 
-  const latestFirsAtom = Atom.mapResult(firsAtom, (firs) =>
-    firs.toSorted((first, second) => second.id - first.id).slice(0, LATEST_LIMIT),
-  );
+  const recentFirsAtom = runtime
+    .atom(Effect.flatMap(FirRepository, (repository) => repository.recent(RECENT_FIR_LIMIT)))
+    .pipe(runtime.factory.withReactivity(["firs"]), Atom.keepAlive);
 
   const firByIdAtom = Atom.family((firId: FirId) =>
     runtime
       .atom(Effect.flatMap(FirRepository, (repository) => repository.get(firId)))
-      .pipe(runtime.factory.withReactivity(["firs", `fir:${firId}`]), Atom.setIdleTTL(IDLE_TTL)),
+      .pipe(runtime.factory.withReactivity([`fir:${firId}`]), Atom.setIdleTTL(IDLE_TTL)),
   );
 
   const firValueContextAtom = Atom.family((firId: FirId) =>
@@ -115,7 +166,6 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
         runtime.factory.withReactivity([
           "placeholders",
           "settings",
-          "fir-values",
           `fir-values:${firId}`,
           `fir:${firId}`,
         ]),
@@ -128,7 +178,7 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     Atom.optimistic(
       runtime
         .atom(Effect.flatMap(FirDocumentRepository, (repository) => repository.listForFir(firId)))
-        .pipe(runtime.factory.withReactivity(["fir-documents", `fir-documents:${firId}`])),
+        .pipe(runtime.factory.withReactivity([`fir-documents:${firId}`])),
     ).pipe(Atom.setIdleTTL(IDLE_TTL)),
   );
 
@@ -172,13 +222,20 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
       get: Atom.FnContext,
     ) {
       const repository = yield* TemplateRepository;
-      const ack = yield* repository.save(
-        new TemplateUpdateInput({
-          document,
-          expectedRevision: current.revision,
-          id: current.id,
-          name,
-        }),
+      const ack = yield* settleRevisionWrite(
+        repository.save(
+          new TemplateUpdateInput({
+            document,
+            expectedRevision: current.revision,
+            id: current.id,
+            name,
+          }),
+        ),
+        current.revision,
+        repository.get(current.id),
+        (record) =>
+          record.name === name && JSON.stringify(record.document) === JSON.stringify(document),
+        (record) => new TemplateSaveAck(storedAck(record)),
       );
       get.set(
         templateByIdAtom(current.id),
@@ -218,7 +275,7 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
 
   const removeFirAtom = runtime.fn((id: FirId) =>
     Effect.flatMap(FirRepository, (repository) => repository.remove(id)).pipe(
-      Reactivity.mutation(["firs", `fir:${id}`, "fir-values", "fir-documents"]),
+      Reactivity.mutation(["firs", `fir:${id}`, `fir-values:${id}`, `fir-documents:${id}`]),
     ),
   );
 
@@ -238,8 +295,18 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
       get: Atom.FnContext,
     ) {
       const repository = yield* FirDocumentRepository;
-      const ack = yield* repository.save(
-        new FirDocumentSaveInput({ document, expectedRevision: current.revision, id: current.id }),
+      const ack = yield* settleRevisionWrite(
+        repository.save(
+          new FirDocumentSaveInput({
+            document,
+            expectedRevision: current.revision,
+            id: current.id,
+          }),
+        ),
+        current.revision,
+        repository.get(current.id),
+        (record) => JSON.stringify(record.document) === JSON.stringify(document),
+        (record) => new FirDocumentSaveAck(storedAck(record)),
       );
       get.set(
         firDocumentByIdAtom(current.id),
@@ -299,7 +366,7 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     templatesAtom,
     templateByIdAtom,
     firsAtom,
-    latestFirsAtom,
+    recentFirsAtom,
     firByIdAtom,
     firValueContextAtom,
     firDocumentsAtom,
