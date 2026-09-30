@@ -1,0 +1,82 @@
+{
+  "purpose": "Local format and allocation study, not application performance acceptance",
+  "environment": {
+    "platform": "Linux-7.2.7-arch1-1-x86_64-with-glibc2.44",
+    "python": "3.14.7"
+  },
+  "limitations": [
+    "Synthetic fixture repeats the current corpus; it is not 100 distinct templates",
+    "Warm local filesystem; no Windows or slow-storage measurements",
+    "Minimal SQLite table; no Effect, Drizzle, schema validation, field remapping, or projections",
+    "Copy/decompression timings exclude fsync, atomic publication, migrations, and app startup",
+    "One sample per mode; timings are exploratory, not statistically established",
+    "Process memory uses Linux VmHWM after exec; other platforms report no memory sample"
+  ],
+  "corpus": {
+    "templateCount": 1,
+    "manifestBytes": 194,
+    "totalDocumentBytes": 856792,
+    "totalPerDocumentGzipBytes": 23294,
+    "largestDocumentBytes": 856792
+  },
+  "fixture": {
+    "templateCount": 100,
+    "batchSize": 4,
+    "jsonBytes": 85679200,
+    "perDocumentGzipBytes": 2329400,
+    "seedBytes": 85819392,
+    "gzipSeedBytes": 2388168
+  },
+  "measurements": [
+    {
+      "mode": "eager-json",
+      "milliseconds": 2447.07,
+      "initialRssKiB": 21888,
+      "peakRssKiB": 457640,
+      "additionalPeakRssKiB": 435752,
+      "outputBytes": 85819392,
+      "templateCount": 100,
+      "outputSha256": null
+    },
+    {
+      "mode": "bounded-json",
+      "milliseconds": 3150.27,
+      "initialRssKiB": 21868,
+      "peakRssKiB": 43032,
+      "additionalPeakRssKiB": 21164,
+      "outputBytes": 85819392,
+      "templateCount": 100,
+      "outputSha256": null
+    },
+    {
+      "mode": "bounded-gzip-json",
+      "milliseconds": 3013.03,
+      "initialRssKiB": 21896,
+      "peakRssKiB": 42160,
+      "additionalPeakRssKiB": 20264,
+      "outputBytes": 85819392,
+      "templateCount": 100,
+      "outputSha256": null
+    },
+    {
+      "mode": "copy-seed",
+      "milliseconds": 429.62,
+      "initialRssKiB": 21908,
+      "peakRssKiB": 23812,
+      "additionalPeakRssKiB": 1904,
+      "outputBytes": 85819392,
+      "templateCount": 100,
+      "outputSha256": "24564c0dff71078cc103fa78336b682ea488e8c368d5b84081f7ccb6aed81751"
+    },
+    {
+      "mode": "inflate-seed",
+      "milliseconds": 484.59,
+      "initialRssKiB": 21948,
+      "peakRssKiB": 25776,
+      "additionalPeakRssKiB": 3828,
+      "outputBytes": 85819392,
+      "templateCount": 100,
+      "outputSha256": "24564c0dff71078cc103fa78336b682ea488e8c368d5b84081f7ccb6aed81751"
+    }
+  ]
+}

@@ -12,7 +12,7 @@ import { createDefaultPlaceholders, indexPlaceholders } from "#/lib/placeholder"
 import { printPacketFromSections } from "#/lib/output";
 
 const catalog = createDefaultPlaceholders();
-const fir = new FirRecord({
+const firFields = {
   NIC: "12345-1234567-1",
   accused: ["accused"],
   arrest_date: "",
@@ -26,12 +26,13 @@ const fir = new FirRecord({
   status: "Open",
   witness: [],
   zimni: [],
-});
+} as const;
+const fir = new FirRecord(firFields);
 
 it("resolves FIR properties and uses global values even when legacy FIR overrides exist", () => {
   const policeStation = catalog.find((field) => field.label === "تھانہ نام");
   const district = catalog.find((field) => field.label === "ضلع نام");
-  const firNo = catalog.find((field) => field.label === "ایف آئی آر نمبر");
+  const firNo = catalog.find((field) => field.label === "مقدمہ نمبر");
 
   expect(policeStation && district && firNo).toBeTruthy();
   if (!policeStation || !district || !firNo) {
@@ -115,7 +116,7 @@ it("projects field references from a serialized envelope without walking live ed
 
 it("shows catalog labels without a FIR and values when a FIR is present", () => {
   const index = indexPlaceholders(catalog);
-  const firNo = catalog.find((field) => field.label === "ایف آئی آر نمبر");
+  const firNo = catalog.find((field) => field.label === "مقدمہ نمبر");
   expect(firNo).toBeTruthy();
   if (!firNo) {
     return;
@@ -124,7 +125,7 @@ it("shows catalog labels without a FIR and values when a FIR is present", () => 
   const reference = { _tag: "CatalogField" as const, id: firNo.id };
   const labels = catalogFieldPresentation(index, "labels");
   expect(fieldDisplayText(reference, labels)).toEqual({
-    text: "ایف آئی آر نمبر",
+    text: "مقدمہ نمبر",
     unresolved: false,
   });
 
@@ -156,4 +157,18 @@ it("builds a print packet without walking a live editor", () => {
   expect(html).toContain("two");
   expect(html).toContain("missal-print-break");
   expect(html).toContain("missal-page-break");
+});
+
+it("resolves one entry of a list property by its position", () => {
+  const second = catalog.find((field) => field.label === "گواہان 2");
+  if (!second) throw new Error("Missing second witness field");
+  const withWitnesses = new FirRecord({ ...firFields, witness: ["اول", "دوم"] });
+  expect(resolveFieldValue(second, withWitnesses, [], {})).toEqual({
+    _tag: "Resolved",
+    text: "دوم",
+  });
+  expect(resolveFieldValue(second, fir, [], {})).toEqual({
+    _tag: "Unresolved",
+    label: "گواہان 2",
+  });
 });

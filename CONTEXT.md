@@ -12,6 +12,10 @@ _Avoid_: case, record, row, document
 Reusable Urdu rich text that contains linked fields. Copying a template onto a FIR creates a FIR document; later template edits do not change that copy.
 _Avoid_: form, letter, layout
 
+**Bundled template**:
+A Template shipped with the app from a Word file in `templates/`. Installed on launch and updated until the user edits it; one the user deletes stays deleted.
+_Avoid_: default template, seed template, preset
+
 **FIR document**:
 One independently edited document attached to a FIR, created by copying a template's body. A FIR can have several. Field values stay linked to the FIR, not to the document body.
 _Avoid_: template instance, attachment, file, the FIR itself

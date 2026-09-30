@@ -19,6 +19,7 @@
     "prepare": "vp config",
     "db:generate": "drizzle-kit generate",
     "db:generate-seed": "drizzle-kit generate --custom --name seed-initial-data",
+    "templates:build": "electron scripts/template-pack/build.mjs",
     "publish": "electron-forge publish"
   },
   "dependencies": {

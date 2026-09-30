@@ -5,6 +5,7 @@ import { StorageError } from "#/lib/storage-errors";
 export const StorageWorkerConfig = Schema.Struct({
   databasePath: Schema.String,
   migrationsFolder: Schema.String,
+  bundledTemplatesFolder: Schema.optionalKey(Schema.String),
 });
 
 export type StorageWorkerConfig = typeof StorageWorkerConfig.Type;

@@ -191,8 +191,18 @@ export function measureLineHeightRatio(fontFamily: string): number | undefined {
   probe.remove();
   const ratio = height > 0 ? height / 100 : undefined;
   // A fallback font's metrics would be wrong for good; only remember real measurements.
-  if (document.fonts.check(`100px ${fontFamily}`)) lineHeightRatios.set(key, ratio);
+  if ("fonts" in document && document.fonts.check(`100px ${fontFamily}`)) {
+    lineHeightRatios.set(key, ratio);
+  }
   return ratio;
+}
+
+/** Word's single-line height as a multiple of font size, for the first font in `fontFamily`. */
+export function wordLineRatio(fontFamily: string): number | undefined {
+  const bundled = BUNDLED_FONTS.find(
+    (font) => primaryFamily(font.family) === primaryFamily(fontFamily),
+  );
+  return bundled?.lineRatio ?? measureLineHeightRatio(fontFamily);
 }
 
 export async function prepareFontsFor(html: string) {

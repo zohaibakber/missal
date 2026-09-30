@@ -32,16 +32,16 @@ it("converts all pasted names across paragraphs and tables without dropping surr
   try {
     insertSanitizedHtml(
       editor,
-      '<p dir="rtl">مقدمہ @ایف آئی آر نمبر@</p><p><strong>تاریخ @تاریخ ایف آئی آر@ جرم @جرم@ آخر</strong></p>' +
-        "<table><tr><td><p>ای میل a@b.pk @تھانہ نام@ @نامعلوم@</p></td></tr></table>",
+      '<p dir="rtl">مقدمہ «مقدمہ_نمبر»</p><p><strong>تاریخ «Date_FIR» جرم «جرم_» آخر</strong></p>' +
+        "<table><tr><td><p>ای میل a@b.pk «تھانہ نام» «نامعلوم»</p></td></tr></table>",
     );
     const state = editor.getEditorState().toJSON();
     const serialized = JSON.stringify(state);
     expect(serialized.match(/"type":"field"/g)).toHaveLength(4);
     expect(serialized.match(/"_tag":"CatalogField"/g)).toHaveLength(4);
-    expect(serialized).toContain("@نامعلوم@");
+    expect(serialized).toContain("«نامعلوم»");
     expect(serialized).toContain("a@b.pk");
-    expect(serialized).not.toContain("@جرم@");
+    expect(serialized).not.toContain("«جرم_»");
     expect(root.querySelectorAll("strong").length).toBeGreaterThan(0);
     expect(root.querySelector("table")).not.toBeNull();
     expect(editor.getEditorState().read(() => $getRoot().getTextContent())).toContain(" آخر");
@@ -65,8 +65,8 @@ it("finds names between custom markers", () => {
     reference: { _tag: "CatalogField", id: 5 },
   });
   expect(findPlaceholderToken("@ضلع نام@", markers, catalog)).toBeUndefined();
-  expect(findPlaceholderToken("x@y @جرم@", DEFAULT_FIELD_MARKERS, catalog)).toMatchObject({
-    start: 4,
+  expect(findPlaceholderToken("x« «جرم»", DEFAULT_FIELD_MARKERS, catalog)).toMatchObject({
+    start: 3,
   });
 });
 

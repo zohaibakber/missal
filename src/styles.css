@@ -331,6 +331,11 @@
   font-weight: inherit;
 }
 
+/* Word formatting on the host often sets a text colour; the value keeps the field colour on screen. */
+.missal-field-value {
+  color: var(--field);
+}
+
 .missal-field-unresolved {
   color: var(--field);
   text-decoration: underline dashed color-mix(in oklch, var(--field) 55%, transparent);

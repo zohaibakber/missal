@@ -23,16 +23,16 @@ it("saves arbitrary global placeholders atomically and resolves the same values 
       Effect.flatMap(PlaceholderRepository, (repo) => repo.listGlobals),
     );
     expect(initial.map((field) => field.label)).toEqual(
-      expect.arrayContaining(["تفتیشی افسر", "تھانہ نام", "ضلع نام", "SHO نام", "DSP نام"]),
+      expect.arrayContaining(["تفتیشی", "تھانہ نام", "ضلع نام", "SHO نام", "DSP نام"]),
     );
-    const officer = initial.find((field) => field.label === "تفتیشی افسر");
+    const officer = initial.find((field) => field.label === "تفتیشی");
     if (!officer) throw new Error("Missing global officer");
     const saved = await runtime.runPromise(
       Effect.flatMap(PlaceholderRepository, (repo) =>
         repo.saveGlobals(
           Schema.decodeUnknownSync(SaveGlobalPlaceholdersInput)({
             entries: [
-              { _tag: "Existing", id: officer.id, label: "تفتیشی افسر", value: "علی" },
+              { _tag: "Existing", id: officer.id, label: "تفتیشی", value: "علی" },
               { _tag: "New", label: "دفتر کا پتہ", value: "لاہور\nمرکزی دفتر" },
             ],
           }),

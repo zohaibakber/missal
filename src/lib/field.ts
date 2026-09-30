@@ -49,6 +49,8 @@ const PLACEHOLDER_KEY_TO_FIR_PROPERTY = {
 
 export const FirPropertySource = Schema.TaggedStruct("FirProperty", {
   property: FirPropertyName,
+  /** 1-based entry of a list property, e.g. the second witness. Absent means every entry. */
+  index: Schema.optionalKey(Schema.Int.pipe(Schema.check(Schema.isGreaterThan(0)))),
 });
 
 export type FirPropertySource = typeof FirPropertySource.Type;
@@ -96,12 +98,11 @@ export type ResolvedFieldValue =
   | { readonly _tag: "Resolved"; readonly text: string }
   | { readonly _tag: "Unresolved"; readonly label: string };
 
-export function fieldSourceForSeedKey(key: string): FieldSource {
+export function fieldSourceForSeedKey(key: string, index?: number): FieldSource {
   if (key in PLACEHOLDER_KEY_TO_FIR_PROPERTY) {
-    return FirPropertySource.make({
-      property:
-        PLACEHOLDER_KEY_TO_FIR_PROPERTY[key as keyof typeof PLACEHOLDER_KEY_TO_FIR_PROPERTY],
-    });
+    const property =
+      PLACEHOLDER_KEY_TO_FIR_PROPERTY[key as keyof typeof PLACEHOLDER_KEY_TO_FIR_PROPERTY];
+    return FirPropertySource.make(index === undefined ? { property } : { property, index });
   }
 
   if (SHARED_SETTING_KEYS.some((setting) => setting === key)) {
@@ -164,9 +165,15 @@ function resolveFieldValueFromMap(
   sharedSettings: Record<string, string>,
 ): ResolvedFieldValue {
   return Match.valueTags(field.source, {
-    FirProperty: ({ property }) => {
+    FirProperty: ({ property, index }) => {
       const value = fir[property];
-      return resolvedOrMissing(typeof value === "string" ? value : value.join("\n"), field.label);
+      const text =
+        typeof value === "string"
+          ? value
+          : index === undefined
+            ? value.join("\n")
+            : (value[index - 1] ?? "");
+      return resolvedOrMissing(text, field.label);
     },
     SharedSetting: ({ setting }) => {
       return resolvedOrMissing(sharedSettings[setting] ?? "", field.label);

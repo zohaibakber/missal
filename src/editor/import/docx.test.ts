@@ -1,7 +1,16 @@
 /** @vitest-environment jsdom */
 import { expect, it } from "vitest";
 import JSZip from "jszip";
-import { importDocx, normalizeComplexScriptFormatting } from "#/editor/import/docx";
+import {
+  importDocx,
+  joinSplitFieldTokens,
+  mergeFieldsToTokens,
+  normalizeComplexScriptFormatting,
+  withWordLineHeight,
+} from "#/editor/import/docx";
+import { URDU_FONT_WINDOWS_LINE_RATIO } from "#/lib/output";
+import { createDefaultPlaceholders, indexPlaceholders } from "#/lib/placeholder";
+import { DEFAULT_FIELD_MARKERS } from "#/lib/settings";
 
 const NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
@@ -62,7 +71,10 @@ it("imports page geometry, RTL table content, and explicit page breaks from a DO
   const file = new File([buffer], "example.docx");
   // jsdom's File lacks Blob.arrayBuffer; provide its real bytes for the browser boundary.
   file.arrayBuffer = async () => buffer;
-  const result = await importDocx(file);
+  const result = await importDocx(file, {
+    markers: DEFAULT_FIELD_MARKERS,
+    index: indexPlaceholders(createDefaultPlaceholders()),
+  });
   const dom = new DOMParser().parseFromString(result.html, "text/html");
   expect(result.pageLayout.widthMm).toBeCloseTo(210, 0);
   expect(result.pageLayout.marginTopMm).toBeCloseTo(12.7, 2);
@@ -74,4 +86,94 @@ it("imports page geometry, RTL table content, and explicit page breaks from a DO
   expect(dom.body.textContent).toContain("{{ملزم}}");
   expect(dom.body.textContent).toContain("اگلا صفحہ");
   expect(document.querySelector("iframe")).toBeNull();
+});
+
+it("moves a known field name split across differently formatted runs into its first run", () => {
+  const xml = `<w:document xmlns:w="${NS}"><w:body><w:p>
+    <w:r><w:rPr><w:rtl/></w:rPr><w:t xml:space="preserve">مورخہ: «</w:t></w:r>
+    <w:r><w:rPr><w:rtl w:val="0"/></w:rPr><w:t>Date</w:t></w:r>
+    <w:r><w:rPr><w:rtl w:val="0"/></w:rPr><w:t>_</w:t></w:r>
+    <w:r><w:rPr><w:rtl w:val="0"/></w:rPr><w:t>FIR</w:t></w:r>
+    <w:r><w:rPr><w:rtl/></w:rPr><w:t xml:space="preserve">» اور «نامعلوم</w:t></w:r>
+    <w:r><w:t>»</w:t></w:r>
+  </w:p></w:body></w:document>`;
+  const parsed = new DOMParser().parseFromString(
+    joinSplitFieldTokens(
+      xml,
+      DEFAULT_FIELD_MARKERS,
+      indexPlaceholders(createDefaultPlaceholders()),
+    ),
+    "application/xml",
+  );
+  const texts = [...parsed.getElementsByTagNameNS(NS, "t")].map((text) => text.textContent);
+  expect(texts).toEqual(["مورخہ: «Date_FIR»", "", "", "", " اور «نامعلوم", "»"]);
+});
+
+const run = (text: string, properties = "") => `<w:r><w:rPr>${properties}</w:rPr>${text}</w:r>`;
+
+it("replaces Word merge fields and their sample values with field tokens", () => {
+  const bold = "<w:b/>";
+  const xml = `<w:document xmlns:w="${NS}"><w:body><w:p>
+    ${run('<w:fldChar w:fldCharType="begin"/>')}
+    ${run('<w:instrText xml:space="preserve"> </w:instrText>')}
+    ${run("<w:instrText>MERGEFIELD</w:instrText>")}
+    ${run('<w:instrText xml:space="preserve"> تھانہ_نام_ \\* MERGEFORMAT</w:instrText>')}
+    ${run('<w:fldChar w:fldCharType="separate"/>')}
+    ${run("<w:t>تھانہ گلشن اقبال</w:t>", bold)}
+    ${run('<w:fldChar w:fldCharType="end"/>')}
+    ${run('<w:t xml:space="preserve"> اور </w:t>')}
+    <w:fldSimple w:instr=' MERGEFIELD "Date FIR" '>${run("<w:t>26.07.2026</w:t>")}</w:fldSimple>
+    ${run('<w:fldChar w:fldCharType="begin"/>')}
+    ${run("<w:instrText>PAGE</w:instrText>")}
+    ${run('<w:fldChar w:fldCharType="separate"/>')}
+    ${run("<w:t>3</w:t>")}
+    ${run('<w:fldChar w:fldCharType="end"/>')}
+  </w:p></w:body></w:document>`;
+  const parsed = new DOMParser().parseFromString(
+    mergeFieldsToTokens(xml, DEFAULT_FIELD_MARKERS),
+    "application/xml",
+  );
+  const texts = [...parsed.getElementsByTagNameNS(NS, "t")].map((text) => text.textContent);
+  expect(texts).toEqual(["«تھانہ_نام_»", " اور ", "«Date FIR»", "3"]);
+  const token = parsed.getElementsByTagNameNS(NS, "t")[0]?.parentElement;
+  expect(token?.getElementsByTagNameNS(NS, "b")).toHaveLength(1);
+  expect(parsed.getElementsByTagNameNS(NS, "instrText")).toHaveLength(1);
+});
+
+it("keeps text inside right-to-left embeddings and lays out right-to-left tables", () => {
+  const xml = `<w:document xmlns:w="${NS}"><w:body>
+    <w:p><w:dir w:val="rtl">${run("<w:t>گواہ</w:t>")}</w:dir></w:p>
+    <w:tbl><w:tblPr><w:bidiVisual/><w:tblInd w:w="-683" w:type="dxa"/></w:tblPr></w:tbl>
+  </w:body></w:document>`;
+  const parsed = new DOMParser().parseFromString(
+    normalizeComplexScriptFormatting(xml),
+    "application/xml",
+  );
+  expect(parsed.getElementsByTagNameNS(NS, "dir")).toHaveLength(0);
+  expect(parsed.getElementsByTagNameNS(NS, "p")[0]?.textContent).toBe("گواہ");
+  expect(parsed.getElementsByTagNameNS(NS, "bidi")).toHaveLength(1);
+  expect(parsed.getElementsByTagNameNS(NS, "tblInd")[0]?.getAttributeNS(NS, "start")).toBe("-683");
+});
+
+it("sizes Word's auto line spacing from the font's own line height", () => {
+  const computed = (autoLine: string, lineHeight: string) =>
+    ({
+      getPropertyValue: (name: string) => (name === "--missal-auto-line" ? autoLine : ""),
+      lineHeight,
+      fontFamily: '"Jameel Noori Nastaleeq"',
+      fontSize: "20px",
+    }) as unknown as CSSStyleDeclaration;
+  const lineHeight = (styles: string) =>
+    new DOMParser().parseFromString(`<p style='${styles}'></p>`, "text/html").querySelector("p")
+      ?.style.lineHeight;
+  const single = Math.round(20 * URDU_FONT_WINDOWS_LINE_RATIO * 100) / 100;
+
+  expect(lineHeight(withWordLineHeight("font-size: 20px", computed("1.08", "21.6px")))).toBe(
+    `${Math.round(1.08 * 20 * URDU_FONT_WINDOWS_LINE_RATIO * 100) / 100}px`,
+  );
+  expect(lineHeight(withWordLineHeight("font-size: 20px", computed("", "normal")))).toBe(
+    `${single}px`,
+  );
+  // Exact spacing is already a length and stays as Word gave it.
+  expect(withWordLineHeight("line-height: 18pt", computed("", "24px"))).toBe("line-height: 18pt");
 });

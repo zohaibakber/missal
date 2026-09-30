@@ -184,19 +184,21 @@ const startApp = () => {
 
     // Effect, RPC and the storage schemas load only after the window exists, so compiling them
     // doesn't delay first paint. The channel is registered now and its requests wait for them.
-    storage = import("./electron/storage-worker-client").then((client) =>
-      client.startStorageWorker({
+    storage = import("./electron/storage-worker-client").then((client) => {
+      const resources = {
+        packaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+        cwd: process.cwd(),
+      };
+      return client.startStorageWorker({
         workerPath: path.join(__dirname, "storage-worker.cjs"),
         config: {
           databasePath: client.resolveDatabasePath(app.getPath("userData")),
-          migrationsFolder: client.resolveMigrationsFolder({
-            packaged: app.isPackaged,
-            resourcesPath: process.resourcesPath,
-            cwd: process.cwd(),
-          }),
+          migrationsFolder: client.resolveResourceFolder("drizzle", resources),
+          bundledTemplatesFolder: client.resolveResourceFolder("bundled-templates", resources),
         },
-      }),
-    );
+      });
+    });
     registerStorageIpc(storage);
     storage
       .then((host) => host.ready)

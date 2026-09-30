@@ -15,14 +15,12 @@ export function resolveDatabasePath(userDataPath: string) {
   return path.join(userDataPath, "missal.sqlite");
 }
 
-export function resolveMigrationsFolder(options: {
-  packaged: boolean;
-  resourcesPath: string;
-  cwd: string;
-}) {
-  return options.packaged
-    ? path.join(options.resourcesPath, "drizzle")
-    : path.join(options.cwd, "drizzle");
+/** A folder shipped with `extraResource`, or the repository's copy in development. */
+export function resolveResourceFolder(
+  name: string,
+  options: { packaged: boolean; resourcesPath: string; cwd: string },
+) {
+  return path.join(options.packaged ? options.resourcesPath : options.cwd, name);
 }
 
 export function makeStorageWorkerRuntime(options: {

@@ -11,7 +11,7 @@ const config: ForgeConfig = {
     asar: true,
     // Packager appends the platform extension (`assets/icon.ico` on Windows).
     icon: "assets/icon",
-    extraResource: ["drizzle"],
+    extraResource: ["drizzle", "bundled-templates"],
   },
   rebuildConfig: {},
   makers: [

@@ -10,7 +10,7 @@ export default defineConfig({
     "*": "vp check --fix",
   },
   fmt: {
-    ignorePatterns: ["src/routeTree.gen.ts"],
+    ignorePatterns: ["src/routeTree.gen.ts", "bundled-templates/**"],
   },
   lint: {
     jsPlugins: ["@shadcn/lint"],

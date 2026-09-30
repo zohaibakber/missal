@@ -187,7 +187,10 @@ export function attachEditorSession(
           import("#/editor/import/docx"),
           import("#/editor/import/convert"),
         ]);
-        const imported = await importDocx(file);
+        const imported = await importDocx(file, {
+          markers: getFieldMarkers(),
+          index: options.getPlaceholderIndex(),
+        });
         if (disposed) {
           throw new Error("The template was closed before the import finished.");
         }

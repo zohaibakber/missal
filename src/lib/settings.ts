@@ -10,7 +10,7 @@ export class FieldMarkers extends Schema.Class<FieldMarkers>("FieldMarkers")({
   close: FieldMarker,
 }) {}
 
-export const DEFAULT_FIELD_MARKERS = new FieldMarkers({ open: "@", close: "@" });
+export const DEFAULT_FIELD_MARKERS = new FieldMarkers({ open: "«", close: "»" });
 
 export class AppSettings extends Schema.Class<AppSettings>("AppSettings")({
   id: SettingsId,
