@@ -333,7 +333,8 @@ export function startStorageWorker(options: {
       healthState = "stopping";
       for (const job of pending) settle(job, unfinishedBody(job));
       Queue.shutdownUnsafe(queue);
-      disposal ??= runtime.runPromise(
+      // Not runtime.runPromise: that fiber lives in the scope this close interrupts.
+      disposal ??= Effect.runPromise(
         runtime.disposeEffect.pipe(
           Effect.timeoutOrElse({
             duration: STORAGE_SHUTDOWN_MS,
