@@ -1,7 +1,7 @@
 import * as NodeWorker from "@effect/platform-node/NodeWorker";
 import { Context, Effect, Layer, ManagedRuntime } from "effect";
-import { RpcClient, RpcWorker } from "effect/unstable/rpc";
-import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";
+import { RpcClient, RpcWorker } from "effect/rpc";
+import type { RpcClientError } from "effect/rpc/RpcClientError";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
 import { StorageRpcs, StorageWorkerConfig } from "#/electron/storage-rpc";

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Cause, Exit, Match, Option } from "effect";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {

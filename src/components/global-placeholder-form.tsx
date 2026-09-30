@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAtomSet, useAtomValue, useAtomRefresh } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Cause, Exit, Option, Schema } from "effect";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";

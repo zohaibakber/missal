@@ -1,6 +1,6 @@
 import type { SaveGlobalPlaceholdersInput } from "#/lib/global-placeholder";
 import { Effect } from "effect";
-import { AsyncResult, Atom, Reactivity } from "effect/unstable/reactivity";
+import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
 import type { DocumentEnvelope } from "#/lib/document-format";
 import type { FirCreateInput, FirId, FirUpdateInput } from "#/lib/fir";
 import type { FirDocumentId, TemplateId } from "#/lib/ids";

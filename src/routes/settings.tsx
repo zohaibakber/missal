@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Exit, Schema } from "effect";
 import { createFileRoute } from "@tanstack/react-router";
 import { FirFieldsSettings } from "#/components/fir-fields-form";
