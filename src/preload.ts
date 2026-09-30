@@ -21,6 +21,8 @@ const electronStorage = {
   request: (payload: string): Promise<string> => ipcRenderer.invoke(STORAGE_CHANNEL, payload),
 };
 
+if (process.env.MISSAL_PERF === "1") contextBridge.exposeInMainWorld("__MISSAL_PERF__", true);
+
 contextBridge.exposeInMainWorld("electronTheme", electronTheme);
 contextBridge.exposeInMainWorld("electronPrint", electronPrint);
 contextBridge.exposeInMainWorld("electronStorage", electronStorage);

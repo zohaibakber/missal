@@ -20,6 +20,9 @@
     "db:generate": "drizzle-kit generate",
     "db:generate-seed": "drizzle-kit generate --custom --name seed-initial-data",
     "templates:build": "electron scripts/template-pack/build.mjs",
+    "perf:fixtures": "node --experimental-strip-types --import ./scripts/performance/register.mjs scripts/performance/fixtures.ts",
+    "perf:bench": "node --experimental-strip-types --import ./scripts/performance/register.mjs scripts/performance/bench.ts",
+    "perf:compare": "node --experimental-strip-types --import ./scripts/performance/register.mjs scripts/performance/compare.ts",
     "publish": "electron-forge publish"
   },
   "dependencies": {
