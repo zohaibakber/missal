@@ -54,13 +54,14 @@ function settleRevisionWrite<A, B extends { readonly revision: number }, R>(
   write: Effect.Effect<A, RepositoryError, R>,
   expectedRevision: number,
   read: Effect.Effect<B, RepositoryError, R>,
+  matchesStored: (record: B) => boolean,
   fromStored: (record: B) => A,
 ) {
   return Effect.catchTag(write, "StorageUnknownOutcome", (unknown) =>
     read.pipe(
       Effect.mapError(() => unknown),
       Effect.flatMap((record) =>
-        record.revision > expectedRevision
+        record.revision === expectedRevision + 1 && matchesStored(record)
           ? Effect.succeed(fromStored(record))
           : Effect.fail(unknown),
       ),
@@ -121,8 +122,10 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     .atom(
       Effect.gen(function* () {
         const repository = yield* TemplateRepository;
-        const templates = yield* repository.list;
         const status = yield* repository.packStatus;
+        const templates = yield* repository.list;
+        // The background installer can create fields after the catalog was cached.
+        yield* Reactivity.invalidate(["placeholders"]);
         if (status._tag === "Synchronizing") {
           yield* Effect.forkDetach(
             Effect.sleep("200 millis").pipe(Effect.andThen(Reactivity.invalidate(["templates"]))),
@@ -230,6 +233,8 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
         ),
         current.revision,
         repository.get(current.id),
+        (record) =>
+          record.name === name && JSON.stringify(record.document) === JSON.stringify(document),
         (record) => new TemplateSaveAck(storedAck(record)),
       );
       get.set(
@@ -300,6 +305,7 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
         ),
         current.revision,
         repository.get(current.id),
+        (record) => JSON.stringify(record.document) === JSON.stringify(document),
         (record) => new FirDocumentSaveAck(storedAck(record)),
       );
       get.set(

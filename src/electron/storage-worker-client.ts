@@ -121,27 +121,36 @@ export function startStorageWorker(options: {
 
     let sent = false;
     const exit = await runtime.runPromiseExit(
-      permit.withPermit(
-        Effect.flatMap(StorageWorker, (worker) => {
-          sent = true;
-          return worker["Storage.request"]({ payload });
-        }).pipe(
+      permit
+        .withPermit(
+          Effect.flatMap(StorageWorker, (worker) => {
+            sent = true;
+            return worker["Storage.request"]({ payload });
+          }),
+        )
+        .pipe(
           Effect.timeoutOrElse({
             duration: policy.deadlineMs,
             orElse: () =>
-              Effect.succeed(
-                policy.write
-                  ? unknownOutcome(policy.operation)
-                  : failure(
-                      new StorageError({
-                        message: "Storage took too long to respond.",
-                        operation: policy.operation,
-                      }),
-                    ),
-              ),
+              Effect.sync(() => {
+                if (!sent) {
+                  return failure(
+                    new StorageBusy({
+                      message: "Storage is busy. Wait a moment and try again.",
+                      operation: policy.operation,
+                    }),
+                  );
+                }
+                if (policy.write) return unknownOutcome(policy.operation);
+                return failure(
+                  new StorageError({
+                    message: "Storage took too long to respond.",
+                    operation: policy.operation,
+                  }),
+                );
+              }),
           }),
         ),
-      ),
     );
     if (Exit.isSuccess(exit)) return exit.value;
     if (policy.write && sent) return unknownOutcome(policy.operation);
