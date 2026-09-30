@@ -229,11 +229,12 @@ const startApp = () => {
         },
       });
     });
-    registerStorageIpc(storage);
+    registerStorageIpc(storage, rendererOrigin());
     storage
       .then((host) => host.ready)
       .then(() => perfMark("storage.ready"))
       .catch((error: unknown) => {
+        if (disposingStorage) return;
         perfMark("storage.ready", { errorCategory: "startup" });
         dialog.showErrorBox(
           "Missal could not open the database",
