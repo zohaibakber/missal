@@ -20,7 +20,7 @@ import {
 import { StorageRpcs, type StorageWorkerConfig } from "#/electron/storage-rpc";
 import { applyStorageInitFault } from "#/electron/storage-faults";
 import { storageLayer } from "#/electron/storage-runtime";
-import { perfMark, perfNow, perfTimed } from "#/lib/perf-marks";
+import { perfMark, perfNow } from "#/lib/perf-marks";
 import { FirRecord } from "#/lib/fir";
 import { Placeholder } from "#/lib/placeholder";
 import { AppSettings } from "#/lib/settings";
@@ -218,7 +218,14 @@ const handleStorageRequest = Effect.fnUntraced(function* (request: StorageReques
 });
 
 function encodeResponse(response: StorageResponse) {
-  return encodeStorageResponse(response);
+  const started = perfNow();
+  const encoded = encodeStorageResponse(response);
+  perfMark("storage.encode", {
+    startedAt: started,
+    chars: encoded.length,
+    errorCategory: response._tag === "Failure" ? response.error._tag : undefined,
+  });
+  return encoded;
 }
 
 const requestFailed = () =>
@@ -239,23 +246,15 @@ export const dispatchStorageRequest = (payload: string) =>
           }),
       ),
     );
-    perfMark("storage.decode", { startedAt: decodeStarted, bytesIn: payload });
+    perfMark("storage.decode", { startedAt: decodeStarted, chars: payload.length });
     const executeStarted = perfNow();
     const value = yield* handleStorageRequest(request);
-    perfMark("storage.execute", { startedAt: executeStarted, bytesIn: payload });
+    perfMark(`storage.execute.${request._tag}`, { startedAt: executeStarted });
     return value;
   }).pipe(
     Effect.match({
-      onFailure: (error) => {
-        perfMark("storage.request", { errorCategory: error._tag });
-        return perfTimed(
-          "storage.encode",
-          () => encodeResponse({ _tag: "Failure", error }),
-          error._tag,
-        );
-      },
-      onSuccess: (value) =>
-        perfTimed("storage.encode", () => encodeResponse({ _tag: "Success", value })),
+      onFailure: (error) => encodeResponse({ _tag: "Failure", error }),
+      onSuccess: (value) => encodeResponse({ _tag: "Success", value }),
     }),
     Effect.catchDefect((defect) => {
       console.error("Missal storage defect", defect);

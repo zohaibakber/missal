@@ -1,31 +1,28 @@
-import { expect, it } from "@effect/vitest";
+import { afterEach, expect, it } from "@effect/vitest";
 import { perfMark, perfNow, snapshotPerfMarks } from "#/lib/perf-marks";
 
-it("records nothing unless performance marks are enabled", () => {
-  const previous = process.env.MISSAL_PERF;
-  delete process.env.MISSAL_PERF;
-  const before = snapshotPerfMarks().marks.length;
-  expect(perfNow()).toBe(0);
-  perfMark("storage.decode", { bytesIn: "متن دستاویز", startedAt: 1 });
-  expect(snapshotPerfMarks().marks.length).toBe(before);
+const previous = process.env.MISSAL_PERF;
+afterEach(() => {
   if (previous === undefined) delete process.env.MISSAL_PERF;
   else process.env.MISSAL_PERF = previous;
 });
 
-it("records operation, duration, and byte size without document text", () => {
-  const previous = process.env.MISSAL_PERF;
+it("records nothing unless performance marks are enabled", () => {
+  delete process.env.MISSAL_PERF;
+  const before = snapshotPerfMarks().marks.length;
+  expect(perfNow()).toBe(0);
+  perfMark("storage.decode", { startedAt: 1, chars: 10 });
+  expect(snapshotPerfMarks().marks.length).toBe(before);
+});
+
+it("records the operation, its duration, and its size", () => {
   process.env.MISSAL_PERF = "1";
-  try {
-    const startedAt = performance.now();
-    perfMark("storage.execute", { startedAt, bytesIn: "سلام", errorCategory: "StorageError" });
-    const mark = snapshotPerfMarks().marks.at(-1);
-    expect(mark?.name).toBe("storage.execute");
-    expect(mark?.errorCategory).toBe("StorageError");
-    expect(mark?.bytesIn).toBe(new TextEncoder().encode("سلام").byteLength);
-    expect(mark && "text" in mark).toBe(false);
-    expect(JSON.stringify(mark)).not.toContain("سلام");
-  } finally {
-    if (previous === undefined) delete process.env.MISSAL_PERF;
-    else process.env.MISSAL_PERF = previous;
-  }
+  const startedAt = perfNow();
+  perfMark("storage.execute", { startedAt, chars: 8, errorCategory: "StorageError" });
+  expect(snapshotPerfMarks().marks.at(-1)).toMatchObject({
+    name: "storage.execute",
+    chars: 8,
+    errorCategory: "StorageError",
+    durationMs: expect.any(Number),
+  });
 });

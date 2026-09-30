@@ -12,7 +12,7 @@ import {
 } from "./desktop-window";
 import { closePrintWindow, printPacket, renderPrintPdf } from "./electron/print-pdf";
 import { registerStorageIpc } from "./electron/storage-ipc-main";
-import { dumpPerfMarksOnQuit, perfMark } from "./lib/perf-marks";
+import { dumpPerfMarks, perfMark } from "./lib/perf-marks";
 import type { StorageHost } from "./electron/storage-worker-client";
 
 const RENDERER_SCHEME = "missal";
@@ -206,17 +206,11 @@ const startApp = () => {
       });
     });
     registerStorageIpc(storage);
-    void storage.then(
-      (host) =>
-        void host.ready.then(
-          () => perfMark("storage.ready"),
-          () => perfMark("storage.ready", { errorCategory: "startup" }),
-        ),
-      () => perfMark("storage.ready", { errorCategory: "startup" }),
-    );
     storage
       .then((host) => host.ready)
+      .then(() => perfMark("storage.ready"))
       .catch((error: unknown) => {
+        perfMark("storage.ready", { errorCategory: "startup" });
         dialog.showErrorBox(
           "Missal could not open the database",
           error instanceof Error ? error.message : "Storage operation failed",
@@ -244,7 +238,7 @@ const startApp = () => {
   });
 
   app.on("before-quit", (event) => {
-    dumpPerfMarksOnQuit();
+    dumpPerfMarks();
     if (!storage || disposingStorage) {
       return;
     }

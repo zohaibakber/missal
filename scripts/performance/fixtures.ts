@@ -1,28 +1,25 @@
+import { parseArgs } from "node:util";
 import { generateFixture, parseFixtureName, repoRootFromHere } from "./fixture.ts";
-import { readArgs } from "./cli.ts";
 
-const { options, positionals } = readArgs(process.argv.slice(2));
-const fixtureName = String(options.fixture ?? positionals[0] ?? "");
-if (!fixtureName || options.help === true) {
+const { values, positionals } = parseArgs({
+  allowPositionals: true,
+  options: { seed: { type: "string", default: "1" }, out: { type: "string" } },
+});
+const seed = Number(values.seed);
+if (positionals.length !== 1 || !Number.isInteger(seed)) {
   console.error(
     "Usage: vp run perf:fixtures -- <small|normal|stress> [--seed 1] [--out .perf/small]",
   );
-  process.exit(options.help === true ? 0 : 2);
-}
-
-const seed = Number(options.seed ?? 1);
-if (!Number.isInteger(seed)) {
-  console.error("--seed must be an integer");
   process.exit(2);
 }
 
 const metadata = await generateFixture({
-  fixture: parseFixtureName(fixtureName),
+  fixture: parseFixtureName(positionals[0] ?? ""),
   seed,
-  outDir: typeof options.out === "string" ? options.out : undefined,
+  outDir: values.out,
   repoRoot: repoRootFromHere(),
 });
-console.log(`${metadata.databasePath}`);
+console.log(metadata.databasePath);
 console.log(`sha256 ${metadata.sha256}`);
 console.log(
   `${metadata.counts.firs} FIRs, ${metadata.counts.bundledTemplates} bundled templates, ${metadata.counts.userTemplates} user templates, ${metadata.byteSizes.database} database bytes`,

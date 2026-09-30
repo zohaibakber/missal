@@ -55,7 +55,7 @@ The normal database was generated and not timed. Copying a 3.7 GB file for each 
 
 ## Follow-up mark points
 
-Opt-in marks (`MISSAL_PERF=1`) currently cover main startup (`app.ready`, `window.created`, `window.ready-to-show`, `window.did-finish-load`, `storage.ready`) and storage decode, execute, and encode byte counts. Still to mark, in code this change does not own:
+Opt-in marks (`MISSAL_PERF=1`) currently cover main startup (`app.ready`, `window.created`, `window.ready-to-show`, `window.did-finish-load`, `storage.ready`) and storage decode, per-request execute, and encode timings with payload sizes. Still to mark, in code this change does not own:
 
 - Editor capture, typing, undo, and save-while-typing
 - DOCX unzip, XML normalization, DOM render, and Lexical conversion

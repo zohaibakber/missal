@@ -1,18 +1,16 @@
 import { readFileSync } from "node:fs";
-import { readArgs } from "./cli.ts";
+import { parseArgs } from "node:util";
 import { compareBench, formatComparison, type BenchReport } from "./stats.ts";
 
-const { options, positionals } = readArgs(process.argv.slice(2));
-const baselinePath = positionals[0];
-const candidatePath = positionals[1];
-if (options.help === true || !baselinePath || !candidatePath) {
+const { positionals } = parseArgs({ allowPositionals: true });
+const [baselinePath, candidatePath] = positionals;
+if (!baselinePath || !candidatePath) {
   console.error("Usage: vp run perf:compare -- <baseline.json> <candidate.json>");
-  process.exit(options.help === true ? 0 : 2);
+  process.exit(2);
 }
 
-const baseline = JSON.parse(readFileSync(baselinePath, "utf8")) as BenchReport;
-const candidate = JSON.parse(readFileSync(candidatePath, "utf8")) as BenchReport;
-const report = compareBench(baseline, candidate);
+const read = (file: string) => JSON.parse(readFileSync(file, "utf8")) as BenchReport;
+const report = compareBench(read(baselinePath), read(candidatePath));
 console.log(formatComparison(report));
 if (report.fixtureMismatch) process.exit(2);
 process.exit(report.regressions.length > 0 ? 1 : 0);

@@ -1,12 +1,12 @@
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { parseArgs } from "node:util";
 import { Effect } from "effect";
 import { makeStorageRuntime } from "#/electron/storage-runtime";
 import { FirDocumentSaveInput } from "#/lib/fir-document";
 import { FirDocumentId } from "#/lib/ids";
 import { FirDocumentRepository, FirRepository, TemplateRepository } from "#/repositories/index";
-import { readArgs } from "./cli";
 import { buildDocument } from "./documents";
 import { collectEnvironment } from "./environment";
 import { parseFixtureName, repoRootFromHere, type FixtureMetadata } from "./fixture";
@@ -20,20 +20,21 @@ type ScenarioResult = {
   readonly p95Ms: number;
 };
 
-const { options, positionals } = readArgs(process.argv.slice(2));
-const fixtureName = String(options.fixture ?? positionals[0] ?? "small");
-if (options.help === true) {
-  console.error(
-    "Usage: vp run perf:bench -- [small|normal|stress] [--samples 10] [--launch-samples 10] [--warmup 2] [--out .perf/small/bench.json]",
-  );
-  process.exit(0);
-}
+const { values: options, positionals } = parseArgs({
+  allowPositionals: true,
+  options: {
+    warmup: { type: "string", default: "2" },
+    samples: { type: "string", default: "10" },
+    "launch-samples": { type: "string", default: "10" },
+    out: { type: "string" },
+  },
+});
 
-const fixture = parseFixtureName(fixtureName);
+const fixture = parseFixtureName(positionals[0] ?? "small");
 const repoRoot = repoRootFromHere();
-const warmup = numberOption(options.warmup, 2);
-const samples = numberOption(options.samples, 10);
-const launchSamples = numberOption(options["launch-samples"], 10);
+const warmup = count(options.warmup);
+const samples = count(options.samples);
+const launchSamples = count(options["launch-samples"]);
 const directory = path.join(repoRoot, ".perf", fixture);
 const metadata = JSON.parse(
   readFileSync(path.join(directory, "fixture.json"), "utf8"),
@@ -135,8 +136,7 @@ const report = {
   environment: collectEnvironment(repoRoot),
   scenarios,
 };
-const output =
-  typeof options.out === "string" ? path.resolve(options.out) : path.join(directory, "bench.json");
+const output = options.out ? path.resolve(options.out) : path.join(directory, "bench.json");
 writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
 console.log(output);
 for (const [name, scenario] of Object.entries(scenarios)) {
@@ -145,11 +145,11 @@ for (const [name, scenario] of Object.entries(scenarios)) {
   );
 }
 
-function numberOption(value: string | boolean | undefined, fallback: number) {
-  if (value === undefined) return fallback;
+function count(value: string) {
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0)
+  if (!Number.isInteger(parsed) || parsed < 0) {
     throw new Error(`Expected a non-negative integer, got ${value}`);
+  }
   return parsed;
 }
 
