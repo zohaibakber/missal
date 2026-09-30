@@ -23,6 +23,7 @@ import { FirRecord } from "#/lib/fir";
 import { Placeholder } from "#/lib/placeholder";
 import { AppSettings } from "#/lib/settings";
 import { StorageError } from "#/lib/storage-errors";
+import { TemplatePackStatus } from "#/lib/bundled-templates";
 import { FirPlaceholderValue, TemplateSummary } from "#/lib/templates";
 import {
   FirDocumentRepository,
@@ -98,6 +99,11 @@ const handleStorageRequest = Effect.fnUntraced(function* (request: StorageReques
         const repository = yield* TemplateRepository;
         yield* repository.remove(id);
         return undefined;
+      }),
+    "Template.packStatus": () =>
+      Effect.gen(function* () {
+        const repository = yield* TemplateRepository;
+        return Schema.encodeUnknownSync(TemplatePackStatus)(yield* repository.packStatus);
       }),
     "Fir.list": () =>
       Effect.gen(function* () {

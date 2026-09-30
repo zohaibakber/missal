@@ -5,7 +5,11 @@ import { createEditor } from "lexical";
 import { EDITOR_HTML_CONFIG } from "#/editor/html-config";
 import { EDITOR_NODES, EDITOR_THEME } from "#/editor/nodes/registry";
 import { attachEditorSession } from "#/editor/session";
-import { fieldNameFromToken, mapDocumentFields } from "#/lib/bundled-templates";
+import {
+  TEMPLATE_CONVERTER_VERSION,
+  fieldNameFromToken,
+  mapDocumentFields,
+} from "#/lib/bundled-templates";
 import { DocumentEnvelope, emptyDocumentEnvelope, projectDocument } from "#/lib/document-format";
 import { catalogFieldPresentation, CustomSource, UnresolvedTokenReference } from "#/lib/field";
 import { PlaceholderId } from "#/lib/ids";
@@ -31,6 +35,7 @@ export type ConvertedTemplate = {
   newFieldNames: string[];
   unconvertedTokens: string[];
   notices: string[];
+  converterVersion: number;
 };
 
 /** Every field token written in the document's paragraphs, headers and footers. */
@@ -55,8 +60,9 @@ async function convertDocx(base64: string, fileName: string): Promise<ConvertedT
   // Names the default catalog lacks become fields here and custom fields when the pack installs.
   const catalog = createDefaultPlaceholders();
   const newFieldNames: string[] = [];
+  let index = indexPlaceholders(catalog);
   for (const token of await tokensIn(bytes)) {
-    if (resolvePlaceholder(token, indexPlaceholders(catalog))) continue;
+    if (resolvePlaceholder(token, index)) continue;
     const label = fieldNameFromToken(token);
     newFieldNames.push(label);
     catalog.push(
@@ -66,8 +72,8 @@ async function convertDocx(base64: string, fileName: string): Promise<ConvertedT
         source: CustomSource.make({}),
       }),
     );
+    index = indexPlaceholders(catalog);
   }
-  const index = indexPlaceholders(catalog);
 
   const editor = createEditor({
     namespace: "template-pack",
@@ -107,6 +113,7 @@ async function convertDocx(base64: string, fileName: string): Promise<ConvertedT
       newFieldNames,
       unconvertedTokens: [...projections.plainText.matchAll(tokenPattern)].map(([token]) => token),
       notices,
+      converterVersion: TEMPLATE_CONVERTER_VERSION,
     };
   } finally {
     session.dispose();

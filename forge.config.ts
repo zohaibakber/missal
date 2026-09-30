@@ -5,6 +5,23 @@ import { VitePlugin } from "@electron-forge/plugin-vite";
 import { PublisherGithub } from "@electron-forge/publisher-github";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
+import { readdirSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = path.dirname(fileURLToPath(import.meta.url));
+const packRoot = path.join(root, "bundled-templates");
+const packEntries = readdirSync(packRoot).sort();
+if (packEntries.join() !== ["bodies", "manifest.json"].join()) {
+  throw new Error(
+    `bundled-templates must ship only manifest.json and bodies/, found ${packEntries.join(", ")}`,
+  );
+}
+for (const file of readdirSync(path.join(packRoot, "bodies"))) {
+  if (!file.endsWith(".json.gz")) {
+    throw new Error(`Unexpected template body ${file}`);
+  }
+}
 
 const config: ForgeConfig = {
   packagerConfig: {

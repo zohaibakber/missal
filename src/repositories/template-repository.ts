@@ -1,4 +1,5 @@
 import { Context, type Effect } from "effect";
+import type { TemplatePackStatus } from "#/lib/bundled-templates";
 import type { RepositoryError } from "#/lib/storage-errors";
 import {
   TemplateCreateInput,
@@ -20,5 +21,6 @@ export class TemplateRepository extends Context.Service<
     ) => Effect.Effect<TemplateSummary, RepositoryError>;
     readonly save: (input: TemplateUpdateInput) => Effect.Effect<TemplateSaveAck, RepositoryError>;
     readonly remove: (id: TemplateId) => Effect.Effect<void, RepositoryError>;
+    readonly packStatus: Effect.Effect<TemplatePackStatus, RepositoryError>;
   }
 >()("missal/TemplateRepository") {}

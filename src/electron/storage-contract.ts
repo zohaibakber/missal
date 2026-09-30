@@ -1,5 +1,5 @@
-import { GlobalPlaceholder, SaveGlobalPlaceholdersInput } from "#/lib/global-placeholder";
 import { Schema } from "effect";
+import { GlobalPlaceholder, SaveGlobalPlaceholdersInput } from "#/lib/global-placeholder";
 import {
   AddFirTemplatesInput,
   FirDocumentRecord,
@@ -58,6 +58,7 @@ export const TemplateSaveRequest = Schema.TaggedStruct("Template.save", {
 export const TemplateRemoveRequest = Schema.TaggedStruct("Template.remove", {
   id: TemplateId,
 });
+export const TemplatePackStatusRequest = Schema.TaggedStruct("Template.packStatus", {});
 
 export const FirListRequest = Schema.TaggedStruct("Fir.list", {});
 export const FirGetRequest = Schema.TaggedStruct("Fir.get", {
@@ -132,6 +133,7 @@ export const StorageRequest = Schema.Union([
   TemplateCreateRequest,
   TemplateSaveRequest,
   TemplateRemoveRequest,
+  TemplatePackStatusRequest,
   FirListRequest,
   FirGetRequest,
   FirCreateRequest,

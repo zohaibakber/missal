@@ -82,7 +82,19 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
   );
 
   const templatesAtom = runtime
-    .atom(Effect.flatMap(TemplateRepository, (repository) => repository.list))
+    .atom(
+      Effect.gen(function* () {
+        const repository = yield* TemplateRepository;
+        const templates = yield* repository.list;
+        const status = yield* repository.packStatus;
+        if (status._tag === "Synchronizing") {
+          yield* Effect.forkDetach(
+            Effect.sleep("200 millis").pipe(Effect.andThen(Reactivity.invalidate(["templates"]))),
+          );
+        }
+        return templates;
+      }),
+    )
     .pipe(runtime.factory.withReactivity(["templates"]), Atom.keepAlive);
 
   // The body is keyed apart from the list: saving refreshes the list, not every open body.
