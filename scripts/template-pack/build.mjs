@@ -1,5 +1,6 @@
 // Converts every Word file in templates/ into bundled-templates/, which ships with the app.
 // Run with `vp run templates:build`; Electron supplies the Chromium the converter needs.
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -81,10 +82,33 @@ async function main() {
     path.join(stagingFolder, "manifest.json"),
     `${JSON.stringify({ packHash, entries }, null, 2)}\n`,
   );
+  const seedCode = await runSeed(stagingFolder);
+  if (seedCode !== 0) {
+    await rm(stagingFolder, { recursive: true, force: true });
+    return 1;
+  }
   await rm(packFolder, { recursive: true, force: true });
   await rename(stagingFolder, packFolder);
   console.log(`Wrote ${entries.length} templates to bundled-templates/`);
   return 0;
+}
+
+function runSeed(staging) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      "node",
+      [
+        "--experimental-strip-types",
+        "--import",
+        path.join(root, "scripts/performance/register.mjs"),
+        path.join(root, "scripts/template-pack/seed.ts"),
+        staging,
+      ],
+      { cwd: root, stdio: "inherit", env: process.env },
+    );
+    child.on("error", reject);
+    child.on("exit", (code) => resolve(code ?? 1));
+  });
 }
 
 app.disableHardwareAcceleration();
