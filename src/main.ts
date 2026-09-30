@@ -5,12 +5,19 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  DESKTOP_PRINT_CANCEL_CHANNEL,
   DESKTOP_PRINT_CHANNEL,
   DESKTOP_PRINT_PDF_CHANNEL,
   DESKTOP_THEME_CHANNEL,
   type DesktopTheme,
 } from "./desktop-window";
-import { closePrintWindow, printPacket, renderPrintPdf } from "./electron/print-pdf";
+import {
+  cancelPrintPreview,
+  closePrintWindow,
+  printPacket,
+  releasePrintOwner,
+  renderPrintPdf,
+} from "./electron/print-pdf";
 import { registerStorageIpc } from "./electron/storage-ipc-main";
 import type { StorageHost } from "./electron/storage-worker-client";
 
@@ -91,11 +98,13 @@ const createWindow = () => {
   });
 
   appWindows.add(mainWindow);
+  const webContentsId = mainWindow.webContents.id;
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
   });
   mainWindow.once("closed", () => {
     appWindows.delete(mainWindow);
+    releasePrintOwner(webContentsId);
     if (appWindows.size === 0) closePrintWindow();
   });
 
@@ -145,23 +154,51 @@ const registerDesktopIntegration = () => {
     if (isDesktopTheme(theme)) nativeTheme.themeSource = theme;
   });
 
-  const printRequest = (event: Electron.IpcMainInvokeEvent, html: unknown) => {
-    const origin = rendererOrigin();
-    const senderUrl = event.senderFrame?.url;
-    if (typeof html !== "string" || !senderUrl || new URL(senderUrl).origin !== origin) {
-      throw new Error("Print request rejected");
-    }
-    return { origin, html };
+  const senderIsRenderer = (senderUrl: string | undefined) => {
+    if (!senderUrl) return false;
+    return new URL(senderUrl).origin === rendererOrigin();
   };
 
-  ipcMain.handle(DESKTOP_PRINT_PDF_CHANNEL, (event, html: unknown) => {
-    const request = printRequest(event, html);
-    return renderPrintPdf(request.origin, request.html);
-  });
+  const readId = (value: unknown) =>
+    typeof value === "string" && value.length > 0 && value.length <= 128 ? value : undefined;
 
-  ipcMain.handle(DESKTOP_PRINT_CHANNEL, (event, html: unknown) => {
-    const request = printRequest(event, html);
-    return printPacket(request.origin, request.html);
+  const readPrintPayload = (payload: unknown) => {
+    if (typeof payload !== "object" || payload === null) return undefined;
+    const record = payload as { ownerId?: unknown; requestId?: unknown; html?: unknown };
+    const ownerId = readId(record.ownerId);
+    const requestId = readId(record.requestId);
+    if (!ownerId || !requestId || typeof record.html !== "string") return undefined;
+    return { ownerId, requestId, html: record.html };
+  };
+
+  const printCall = (event: Electron.IpcMainInvokeEvent, payload: unknown) => {
+    if (!senderIsRenderer(event.senderFrame?.url)) throw new Error("Print request rejected");
+    const body = readPrintPayload(payload);
+    if (!body) throw new Error("Print request rejected");
+    return {
+      origin: rendererOrigin(),
+      owner: { webContentsId: event.sender.id, ownerId: body.ownerId },
+      requestId: body.requestId,
+      html: body.html,
+    };
+  };
+
+  ipcMain.handle(DESKTOP_PRINT_PDF_CHANNEL, (event, payload: unknown) =>
+    renderPrintPdf(printCall(event, payload)),
+  );
+
+  ipcMain.handle(DESKTOP_PRINT_CHANNEL, (event, payload: unknown) =>
+    printPacket(printCall(event, payload)),
+  );
+
+  ipcMain.on(DESKTOP_PRINT_CANCEL_CHANNEL, (event, payload: unknown) => {
+    if (!senderIsRenderer(event.senderFrame?.url)) return;
+    if (typeof payload !== "object" || payload === null) return;
+    const record = payload as { ownerId?: unknown; requestId?: unknown };
+    const ownerId = readId(record.ownerId);
+    const requestId = readId(record.requestId);
+    if (!ownerId || !requestId) return;
+    cancelPrintPreview({ webContentsId: event.sender.id, ownerId }, requestId);
   });
 };
 

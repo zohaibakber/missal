@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
@@ -32,6 +32,14 @@ import {
 import { Spinner } from "#/components/ui/spinner";
 import { useShortcut } from "#/hooks/use-shortcut";
 import type { PrintPacket } from "#/editor/html-export";
+import {
+  PDF_CANVAS_RENDER_CONCURRENCY,
+  PDF_PAGE_METADATA_CONCURRENCY,
+  createPermitPool,
+  mapWithConcurrency,
+  type PermitPool,
+  type PreviewRenderSubscription,
+} from "#/components/print-preview-schedule";
 
 // PDF user space is in points (1/72 in); CSS pixels are 1/96 in.
 const POINTS_TO_CSS_PX = 96 / 72;
@@ -50,57 +58,128 @@ type PageSize = { readonly width: number; readonly height: number };
 
 type PreviewState =
   | { readonly _tag: "Loading" }
-  | { readonly _tag: "Ready"; readonly pdf: PDFDocumentProxy; readonly pages: readonly PageSize[] }
+  | {
+      readonly _tag: "Ready";
+      readonly pdf: PDFDocumentProxy;
+      readonly pages: readonly (PageSize | null)[];
+    }
   | { readonly _tag: "Failed"; readonly message: string };
 
-async function loadPrintPdf(html: string, onTask: (task: PDFDocumentLoadingTask) => void) {
-  const api = window.electronPrint;
-  if (!api) throw new Error("Print preview is only available in the Missal desktop app.");
-  const [data, pdfjs] = await Promise.all([api.renderPdf(html), import("pdfjs-dist")]);
-  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-  const loadingTask = pdfjs.getDocument({ data });
-  onTask(loadingTask);
-  const pdf = await loadingTask.promise;
-  const pages = await Promise.all(
-    Array.from({ length: pdf.numPages }, async (_, index) => {
-      const viewport = (await pdf.getPage(index + 1)).getViewport({ scale: 1 });
-      return { width: viewport.width, height: viewport.height };
-    }),
-  );
-  return { pdf, pages };
+type PdfResource = {
+  task?: PDFDocumentLoadingTask;
+  pdf?: PDFDocumentProxy;
+  published: boolean;
+};
+
+function destroyPdf(pdf?: PDFDocumentProxy, task?: PDFDocumentLoadingTask) {
+  const loadingTask = pdf?.loadingTask ?? task;
+  if (!loadingTask || loadingTask.destroyed) return;
+  // The loading task owns the document and its worker.
+  void loadingTask.destroy().catch(() => undefined);
 }
 
-function usePrintPdf(packet: PrintPacket | null, attempt: number) {
+function usePrintPdf(
+  packet: PrintPacket | null,
+  attempt: number,
+  ownerId: string,
+  active: boolean,
+  renders: React.RefObject<Set<PreviewRenderSubscription>>,
+) {
   const [state, setState] = useState<PreviewState>({ _tag: "Loading" });
+  const generationRef = useRef(0);
 
   useEffect(() => {
-    if (!packet) return;
-    let cancelled = false;
-    let loadingTask: PDFDocumentLoadingTask | undefined;
+    if (!packet || !active) return;
+    const generation = ++generationRef.current;
+    const abort = new AbortController();
+    const requestId = crypto.randomUUID();
+    const resource: PdfResource = { published: false };
     setState({ _tag: "Loading" });
 
-    loadPrintPdf(packet.html, (task) => {
-      if (cancelled) void task.destroy();
-      else loadingTask = task;
-    }).then(
-      ({ pdf, pages }) => {
-        if (!cancelled) setState({ _tag: "Ready", pdf, pages });
-      },
-      (error: unknown) => {
-        if (!cancelled) {
-          setState({
-            _tag: "Failed",
-            message: error instanceof Error ? error.message : "The pages could not be prepared.",
-          });
+    const stale = () => generationRef.current !== generation || abort.signal.aborted;
+
+    void (async () => {
+      try {
+        const api = window.electronPrint;
+        if (!api) throw new Error("Print preview is only available in the Missal desktop app.");
+        const [rendered, pdfjs] = await Promise.all([
+          api.renderPdf({ ownerId, requestId, html: packet.html }),
+          import("pdfjs-dist"),
+        ]);
+        if (stale()) return;
+        if (rendered._tag === "Ignored") return;
+        if (rendered._tag === "Unavailable") {
+          setState({ _tag: "Failed", message: rendered.message });
+          return;
         }
-      },
-    );
+        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+        const loadingTask = pdfjs.getDocument({ data: rendered.pdf });
+        resource.task = loadingTask;
+        const pdf = await loadingTask.promise;
+        resource.pdf = pdf;
+        if (stale()) {
+          resource.pdf = undefined;
+          destroyPdf(pdf, loadingTask);
+          return;
+        }
+        const pageCount = pdf.numPages;
+        const pages: (PageSize | null)[] = Array.from({ length: pageCount }, () => null);
+        resource.published = true;
+        setState({ _tag: "Ready", pdf, pages });
+        await mapWithConcurrency({
+          items: pages.map((_, index) => index),
+          concurrency: PDF_PAGE_METADATA_CONCURRENCY,
+          signal: abort.signal,
+          worker: async (index) => {
+            const viewport = (await pdf.getPage(index + 1)).getViewport({ scale: 1 });
+            return { width: viewport.width, height: viewport.height };
+          },
+          onItem: (index, size) => {
+            if (stale()) return;
+            setState((current) => {
+              if (current._tag !== "Ready" || current.pdf !== pdf) return current;
+              return { ...current, pages: current.pages.with(index, size) };
+            });
+          },
+        });
+      } catch (error: unknown) {
+        if (stale()) return;
+        if (resource.pdf && !resource.published) {
+          const pdf = resource.pdf;
+          const task = resource.task;
+          resource.pdf = undefined;
+          resource.task = undefined;
+          destroyPdf(pdf, task);
+        }
+        setState({
+          _tag: "Failed",
+          message: error instanceof Error ? error.message : "The pages could not be prepared.",
+        });
+      }
+    })();
 
     return () => {
-      cancelled = true;
-      void loadingTask?.destroy();
+      if (generationRef.current === generation) generationRef.current += 1;
+      abort.abort();
+      window.electronPrint?.cancelPreview({ ownerId, requestId });
+      for (const render of renders.current) render.cancel();
+      if (!resource.published) {
+        const pdf = resource.pdf;
+        const task = resource.task;
+        resource.pdf = undefined;
+        resource.task = undefined;
+        destroyPdf(pdf, task);
+      }
     };
-  }, [packet, attempt]);
+  }, [packet, attempt, ownerId, active, renders]);
+
+  const readyPdf = state._tag === "Ready" ? state.pdf : null;
+  useEffect(() => {
+    if (!readyPdf) return;
+    return () => {
+      destroyPdf(readyPdf);
+    };
+  }, [readyPdf]);
 
   return state;
 }
@@ -110,13 +189,17 @@ function PreviewPage({
   pageNumber,
   size,
   scale,
-  root,
+  observe,
+  pool,
+  renders,
 }: {
   pdf: PDFDocumentProxy;
   pageNumber: number;
   size: PageSize;
   scale: number;
-  root: HTMLElement | null;
+  observe: (element: HTMLElement, onVisible: (visible: boolean) => void) => () => void;
+  pool: PermitPool;
+  renders: React.RefObject<Set<PreviewRenderSubscription>>;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -125,41 +208,55 @@ function PreviewPage({
 
   useEffect(() => {
     const frame = frameRef.current;
-    if (!frame || !root) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setVisible(Boolean(entry?.isIntersecting)),
-      {
-        root,
-        rootMargin: "100% 0px",
-      },
-    );
-    observer.observe(frame);
-    return () => observer.disconnect();
-  }, [root]);
+    if (!frame) return;
+    return observe(frame, setVisible);
+  }, [observe]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !visible) return;
+    const abort = new AbortController();
     let task: ReturnType<Awaited<ReturnType<PDFDocumentProxy["getPage"]>>["render"]> | undefined;
-    let cancelled = false;
-
-    void pdf.getPage(pageNumber).then((page) => {
-      if (cancelled) return;
-      const viewport = page.getViewport({ scale: cssScale * window.devicePixelRatio });
-      canvas.width = Math.floor(viewport.width);
-      canvas.height = Math.floor(viewport.height);
-      task = page.render({ canvas, viewport });
-      task.promise.catch(() => undefined);
-    });
-
-    return () => {
-      cancelled = true;
+    let releasePermit: (() => void) | undefined;
+    const cancel = () => {
+      abort.abort();
       task?.cancel();
-      // Release the bitmap once the page scrolls far away.
+      releasePermit?.();
+      releasePermit = undefined;
       canvas.width = 0;
       canvas.height = 0;
     };
-  }, [pdf, pageNumber, cssScale, visible]);
+    const subscription = { cancel };
+    renders.current.add(subscription);
+
+    void (async () => {
+      try {
+        await pool.acquire(abort.signal);
+        if (abort.signal.aborted) {
+          pool.release();
+          return;
+        }
+        releasePermit = () => pool.release();
+        const page = await pdf.getPage(pageNumber);
+        if (abort.signal.aborted) return;
+        const viewport = page.getViewport({ scale: cssScale * window.devicePixelRatio });
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        task = page.render({ canvas, viewport });
+        await task.promise;
+      } catch {
+        // A cancelled or superseded render rejects. Leave the canvas blank.
+      } finally {
+        releasePermit?.();
+        releasePermit = undefined;
+      }
+    })();
+
+    return () => {
+      renders.current.delete(subscription);
+      cancel();
+    };
+  }, [pdf, pageNumber, cssScale, visible, pool, renders]);
 
   return (
     <div
@@ -183,6 +280,7 @@ function PreviewPage({
 type PrintPreviewProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  ownerId: string;
   title: string;
   packet: PrintPacket | null;
   description: string;
@@ -192,6 +290,7 @@ type PrintPreviewProps = {
 export function PrintPreview({
   open,
   onOpenChange,
+  ownerId,
   title,
   packet,
   description,
@@ -204,6 +303,8 @@ export function PrintPreview({
       <DialogContent size="workspace" showCloseButton={false} initialFocus={pagesRef}>
         <PrintPreviewBody
           pagesRef={pagesRef}
+          active={open}
+          ownerId={ownerId}
           title={title}
           packet={packet}
           description={description}
@@ -217,6 +318,8 @@ export function PrintPreview({
 
 function PrintPreviewBody({
   pagesRef,
+  active,
+  ownerId,
   title,
   packet,
   description,
@@ -224,6 +327,8 @@ function PrintPreviewBody({
   onPrint,
 }: {
   pagesRef: React.RefObject<HTMLDivElement | null>;
+  active: boolean;
+  ownerId: string;
   title: string;
   packet: PrintPacket | null;
   description: string;
@@ -231,21 +336,58 @@ function PrintPreviewBody({
   onPrint: () => void;
 }) {
   const [attempt, setAttempt] = useState(0);
-  const state = usePrintPdf(packet, attempt);
+  const renders = useRef(new Set<PreviewRenderSubscription>());
+  const renderPool = useRef(createPermitPool(PDF_CANVAS_RENDER_CONCURRENCY));
+  const state = usePrintPdf(packet, attempt, ownerId, active, renders);
   const [zoom, setZoom] = useState<Zoom>("fit");
   const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
   const [viewportWidth, setViewportWidth] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageDraft, setPageDraft] = useState<string | null>(null);
   const scrollFractionRef = useRef(0);
+  const pageCallbacks = useRef(new Map<Element, (visible: boolean) => void>());
+  const pageObserver = useRef<IntersectionObserver | null>(null);
   const pages = state._tag === "Ready" ? state.pages : [];
-  const widestPage = Math.max(...pages.map((page) => page.width), 1);
+  const measuredPages = pages.flatMap((page) => (page ? [page] : []));
+  const hasMeasuredPage = measuredPages.length > 0;
+  const widestPage = Math.max(...measuredPages.map((page) => page.width), 1);
   const fitScale = Math.min(
     1,
     Math.max(0.25, (viewportWidth - CANVAS_PADDING_PX * 2) / (widestPage * POINTS_TO_CSS_PX)),
   );
   const scale = zoom === "fit" ? fitScale : zoom / 100;
   const zoomPercent = Math.round(scale * 100);
+
+  const observePage = useCallback((element: HTMLElement, onVisible: (visible: boolean) => void) => {
+    pageCallbacks.current.set(element, onVisible);
+    pageObserver.current?.observe(element);
+    return () => {
+      pageCallbacks.current.delete(element);
+      pageObserver.current?.unobserve(element);
+    };
+  }, []);
+
+  const setViewportElement = useCallback(
+    (element: HTMLDivElement | null) => {
+      pagesRef.current = element;
+      setViewport(element);
+      pageObserver.current?.disconnect();
+      pageObserver.current = null;
+      if (!element) return;
+      // One observer for the whole preview, created with the scroll root before page effects run.
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            pageCallbacks.current.get(entry.target)?.(entry.isIntersecting);
+          }
+        },
+        { root: element, rootMargin: "100% 0px" },
+      );
+      pageObserver.current = observer;
+      for (const node of pageCallbacks.current.keys()) observer.observe(node);
+    },
+    [pagesRef],
+  );
 
   useEffect(() => {
     if (!viewport) return;
@@ -340,26 +482,35 @@ function PrintPreviewBody({
       </header>
 
       <div
-        ref={(element) => {
-          pagesRef.current = element;
-          setViewport(element);
-        }}
+        ref={setViewportElement}
         tabIndex={-1}
         className="relative min-h-0 flex-1 overflow-auto bg-canvas outline-none"
         onScroll={trackCurrentPage}
       >
-        {state._tag === "Ready" ? (
+        {state._tag === "Ready" && hasMeasuredPage ? (
           <div className="flex min-w-fit flex-col items-center gap-6 px-12 py-9">
-            {pages.map((size, index) => (
-              <PreviewPage
-                key={index}
-                pdf={state.pdf}
-                pageNumber={index + 1}
-                size={size}
-                scale={scale}
-                root={viewport}
-              />
-            ))}
+            {pages.map((size, index) =>
+              size ? (
+                <PreviewPage
+                  key={index}
+                  pdf={state.pdf}
+                  pageNumber={index + 1}
+                  size={size}
+                  scale={scale}
+                  observe={observePage}
+                  pool={renderPool.current}
+                  renders={renders}
+                />
+              ) : (
+                <div
+                  key={index}
+                  data-page={index + 1}
+                  aria-busy="true"
+                  aria-label={`Page ${index + 1}`}
+                  className="h-32 w-[min(100%,36rem)] shrink-0 bg-white/80"
+                />
+              ),
+            )}
           </div>
         ) : state._tag === "Failed" ? (
           <Empty className="h-full">

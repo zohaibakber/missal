@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { Exit } from "effect";
@@ -168,6 +168,7 @@ function TemplateEditorWorkspace({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPacket, setPreviewPacket] = useState<PrintPacket | null>(null);
+  const printOwnerId = useId();
   const allowNavigationRef = useRef(false);
   const sessionRef = useRef<EditorSessionHandle | null>(null);
   const loadedKeyRef = useRef<string | number | null>(null);
@@ -295,7 +296,7 @@ function TemplateEditorWorkspace({
   }
 
   async function handlePrint(packet: PrintPacket) {
-    const failure = await printPacket(packet);
+    const failure = await printPacket(packet, printOwnerId);
     if (failure) {
       toast.add({ title: failure, type: "error" });
     }
@@ -413,6 +414,7 @@ function TemplateEditorWorkspace({
       <PrintPreview
         open={previewOpen}
         onOpenChange={setPreviewOpen}
+        ownerId={printOwnerId}
         title={printTitle}
         packet={previewPacket}
         description="Placeholders show their names"
