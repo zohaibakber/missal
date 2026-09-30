@@ -386,7 +386,7 @@ function assertIsolated(directory: string) {
   }
 }
 
-async function withFrozenClock<T>(millis: number, run: () => Promise<T>) {
+export async function withFrozenClock<T>(millis: number, run: () => Promise<T>) {
   // `new Date()` reads the system clock, not `Date.now()`, and Drizzle stamps migrations that way.
   const OriginalDate = Date;
   class FrozenDate extends OriginalDate {

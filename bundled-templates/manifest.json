@@ -6,5 +6,9 @@
       "bodyHash": "9766cf57c289b970e655bf710440a1eb8253bc650e95e1ba236bd222ad138594",
       "bytes": 858135
     }
-  ]
+  ],
+  "seed": {
+    "bytes": 974848,
+    "sha256": "58f5754eb32d828434ed16e407b11c3928b75a0ece52dcce8dc94be31dd90a9e"
+  }
 }

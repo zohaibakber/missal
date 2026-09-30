@@ -5,11 +5,22 @@ import {
   TemplatePackStatusStoreLive,
 } from "#/electron/bundled-templates";
 import { DatabasePath, MigrationsFolder } from "#/electron/database";
+import { publishFreshProfile } from "#/electron/fresh-profile";
 import { ElectronDatabaseLive } from "#/electron/repositories";
 import type { StorageWorkerConfig } from "#/electron/storage-rpc";
 import { TemplatePackPartialFailure, TemplatePackSynchronizing } from "#/lib/bundled-templates";
 
 export function storageLayer(config: StorageWorkerConfig) {
+  // Without a seed the database opens empty and the background installer fills it.
+  return Layer.unwrap(
+    Effect.tryPromise(() => publishFreshProfile(config)).pipe(
+      Effect.catch((error) => Effect.logWarning("Bundled seed database was not used", error)),
+      Effect.as(openStorageLayer(config)),
+    ),
+  );
+}
+
+function openStorageLayer(config: StorageWorkerConfig) {
   const database = ElectronDatabaseLive.pipe(
     Layer.provide(Layer.succeed(DatabasePath, config.databasePath)),
     Layer.provide(Layer.succeed(MigrationsFolder, config.migrationsFolder)),

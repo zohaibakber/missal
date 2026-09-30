@@ -5,6 +5,7 @@ import { normalizePlaceholderName } from "#/lib/placeholder";
 import { NonEmptyTrimmedString } from "#/lib/schema";
 
 export const TEMPLATE_PACK_MANIFEST = "manifest.json";
+export const TEMPLATE_PACK_SEED = "seed.sqlite.gz";
 export const TEMPLATE_PACK_BATCH_TEMPLATES = 4;
 /** Uncompressed bytes decoded per batch; a larger single document is rejected unread. */
 export const TEMPLATE_PACK_BATCH_BYTES = 4 * 1024 * 1024;
@@ -17,11 +18,17 @@ export class TemplatePackEntry extends Schema.Class<TemplatePackEntry>("Template
   bytes: Schema.Int,
 }) {}
 
+export class TemplatePackSeed extends Schema.Class<TemplatePackSeed>("TemplatePackSeed")({
+  bytes: Schema.Int,
+  sha256: Schema.String,
+}) {}
+
 export class TemplatePackManifest extends Schema.Class<TemplatePackManifest>(
   "TemplatePackManifest",
 )({
   packHash: Schema.String,
   entries: Schema.Array(TemplatePackEntry),
+  seed: Schema.optionalKey(TemplatePackSeed),
 }) {}
 
 export const TemplatePackIdle = Schema.TaggedStruct("Idle", {});
