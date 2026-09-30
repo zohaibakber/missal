@@ -180,3 +180,142 @@ it("holds the save lock around runSave and only marks a successful save", async 
     session.dispose();
   }
 });
+
+function typeInto(editor: ReturnType<typeof createEditor>, text: string) {
+  editor.update(
+    () => {
+      $getRoot()
+        .selectEnd()
+        .insertNodes([$createTextNode(text)]);
+    },
+    { discrete: true, tag: HISTORY_PUSH_TAG },
+  );
+}
+
+it("publishes the dirty transition once across repeated typing", async () => {
+  const editor = createEditor({
+    namespace: "dirty-publish",
+    nodes: [...EDITOR_NODES],
+    theme: EDITOR_THEME,
+    onError: (error) => {
+      throw error;
+    },
+  });
+  const root = document.createElement("div");
+  document.body.append(root);
+  editor.setRootElement(root);
+  const index = indexPlaceholders([]);
+  const published: EditorUiState[] = [];
+  const session = attachEditorSession(editor, {
+    getPlaceholderIndex: () => index,
+    presentation: catalogFieldPresentation(index, "values"),
+    onUiChange: (value) => {
+      published.push(value);
+    },
+  });
+  try {
+    session.loadEnvelope(emptyDocumentEnvelope());
+    typeInto(editor, "ا");
+    await vi.waitFor(() => expect(published.at(-1)).toMatchObject({ canUndo: true, dirty: true }));
+    const settled = published.length;
+
+    typeInto(editor, "ب");
+    typeInto(editor, "پ");
+    typeInto(editor, "ت");
+    expect(published.length).toBe(settled);
+    expect(published.at(-1)).toMatchObject({ canRedo: false, canUndo: true, dirty: true });
+    expect(session.captureEnvelope().contentRevision).toBeGreaterThan(1);
+  } finally {
+    session.dispose();
+    editor.setRootElement(null);
+    root.remove();
+  }
+});
+
+it("leaves the document dirty when typing continues during a save", async () => {
+  const editor = createEditor({
+    namespace: "save-while-typing",
+    nodes: [...EDITOR_NODES],
+    theme: EDITOR_THEME,
+    onError: (error) => {
+      throw error;
+    },
+  });
+  const root = document.createElement("div");
+  document.body.append(root);
+  editor.setRootElement(root);
+  const index = indexPlaceholders([]);
+  let ui: EditorUiState | undefined;
+  const session = attachEditorSession(editor, {
+    getPlaceholderIndex: () => index,
+    presentation: catalogFieldPresentation(index, "values"),
+    onUiChange: (value) => {
+      ui = value;
+    },
+  });
+  try {
+    session.loadEnvelope(emptyDocumentEnvelope());
+    typeInto(editor, "پہلا");
+    await vi.waitFor(() => expect(ui?.dirty).toBe(true));
+
+    const saved = await session.runSave(async (captured) => {
+      typeInto(editor, " مسودہ");
+      expect(session.captureEnvelope().contentRevision).toBeGreaterThan(captured.contentRevision);
+      return { saved: true, value: "saved" };
+    });
+
+    expect(saved).toBe("saved");
+    expect(ui).toMatchObject({ dirty: true, savePending: false });
+    expect(editor.getEditorState().read(() => $getRoot().getTextContent())).toBe("پہلا مسودہ");
+  } finally {
+    session.dispose();
+    editor.setRootElement(null);
+    root.remove();
+  }
+});
+
+it("publishes toolbar state when undo or saving changes", async () => {
+  const editor = createEditor({
+    namespace: "toolbar-publish",
+    nodes: [...EDITOR_NODES],
+    theme: EDITOR_THEME,
+    onError: (error) => {
+      throw error;
+    },
+  });
+  const root = document.createElement("div");
+  document.body.append(root);
+  editor.setRootElement(root);
+  const index = indexPlaceholders([]);
+  const published: EditorUiState[] = [];
+  const session = attachEditorSession(editor, {
+    getPlaceholderIndex: () => index,
+    presentation: catalogFieldPresentation(index, "values"),
+    onUiChange: (value) => {
+      published.push(value);
+    },
+  });
+  try {
+    session.loadEnvelope(emptyDocumentEnvelope());
+    typeInto(editor, "پہلا");
+    typeInto(editor, " دوسرا");
+    await vi.waitFor(() => expect(published.at(-1)).toMatchObject({ canUndo: true, dirty: true }));
+    const typed = published.length;
+
+    editor.dispatchCommand(UNDO_COMMAND, undefined);
+    await vi.waitFor(() => expect(published.length).toBeGreaterThan(typed));
+    expect(published.at(-1)).toMatchObject({ canRedo: true, canUndo: true });
+
+    const beforeSave = published.length;
+    expect(session.tryBeginSave()).toBe(true);
+    expect(published.at(-1)?.savePending).toBe(true);
+    expect(published.length).toBe(beforeSave + 1);
+    session.endSave();
+    expect(published.at(-1)).toMatchObject({ dirty: true, savePending: false });
+    expect(published.length).toBe(beforeSave + 2);
+  } finally {
+    session.dispose();
+    editor.setRootElement(null);
+    root.remove();
+  }
+});

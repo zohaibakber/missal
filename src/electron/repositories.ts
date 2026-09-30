@@ -352,6 +352,19 @@ const DrizzleFirRepositoryLive = Layer.effect(
       (effect) => mapQuery("fir.list", effect),
     )();
 
+    // Same summary projection and descending-id order as list, stopped after `limit` rows.
+    const recent = Effect.fn("FirRepository.recent")(
+      function* (limit: number) {
+        const rows = yield* db
+          .select(firSummaryColumns)
+          .from(firRecords)
+          .orderBy(desc(firRecords.id))
+          .limit(limit);
+        return yield* decodeFirSummaries(rows);
+      },
+      (effect) => mapQuery("fir.recent", effect),
+    );
+
     const get = Effect.fn("FirRepository.get")(
       function* (id) {
         const rows = yield* db.select().from(firRecords).where(eq(firRecords.id, id));
@@ -432,7 +445,7 @@ const DrizzleFirRepositoryLive = Layer.effect(
       (effect) => mapQuery("fir.valueContext", effect),
     );
 
-    return FirRepository.of({ list, get, create, update, remove, getValueContext });
+    return FirRepository.of({ list, recent, get, create, update, remove, getValueContext });
   }),
 );
 
