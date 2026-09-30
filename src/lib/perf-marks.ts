@@ -4,7 +4,7 @@ import path from "node:path";
 const PERF_MARK_LIMIT = 2048;
 
 // Names, sizes, and error tags only: marks must never carry document text.
-export type PerfMark = {
+type PerfMark = {
   readonly name: string;
   readonly id: number;
   readonly atMs: number;
@@ -44,13 +44,12 @@ export function perfMark(
   if (marks.length > PERF_MARK_LIMIT) marks.shift();
 }
 
-export function snapshotPerfMarks() {
-  return { maxEntries: PERF_MARK_LIMIT, dropped: sequence - marks.length, marks: [...marks] };
-}
-
 export function dumpPerfMarks() {
   if (!perfEnabled()) return;
   const file = process.env.MISSAL_PERF_LOG ?? path.join(process.cwd(), ".perf", "perf-marks.json");
   mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify(snapshotPerfMarks(), null, 2)}\n`);
+  writeFileSync(
+    file,
+    `${JSON.stringify({ maxEntries: PERF_MARK_LIMIT, dropped: sequence - marks.length, marks }, null, 2)}\n`,
+  );
 }

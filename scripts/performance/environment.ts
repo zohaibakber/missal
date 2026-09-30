@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { cpus, freemem, platform, release, totalmem } from "node:os";
 import path from "node:path";
 
-export type EnvironmentMetadata = {
+type EnvironmentMetadata = {
   readonly cpuModel: string;
   readonly cores: number;
   readonly totalRamBytes: number;

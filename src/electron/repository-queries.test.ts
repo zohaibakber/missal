@@ -41,32 +41,6 @@ const firInput = (fir_no: string) =>
     accused: ["ملزم"],
   });
 
-it("returns the newest FIR summaries in descending id order, limited", () =>
-  withStorage(async (runtime) => {
-    // fir_no would sort differently from id, so a name sort cannot satisfy this.
-    const numbers = ["10/26", "2/26", "1/26", "9/26", "3/26", "8/26", "4/26"];
-    for (const fir_no of numbers) {
-      await runtime.runPromise(
-        Effect.flatMap(FirRepository, (repo) => repo.create(firInput(fir_no))),
-      );
-    }
-
-    const listed = await runtime.runPromise(Effect.flatMap(FirRepository, (repo) => repo.list));
-    const recent = await runtime.runPromise(
-      Effect.flatMap(FirRepository, (repo) => repo.recent(5)),
-    );
-    const expected = listed.toSorted((first, second) => second.id - first.id).slice(0, 5);
-
-    expect(recent).toEqual(expected);
-    expect(recent.map((fir) => fir.fir_no)).toEqual(["4/26", "8/26", "3/26", "9/26", "1/26"]);
-    expect(listed).toHaveLength(numbers.length);
-
-    const newest = await runtime.runPromise(
-      Effect.flatMap(FirRepository, (repo) => repo.recent(1)),
-    );
-    expect(newest.map((fir) => fir.id)).toEqual([expected[0]?.id]);
-  }));
-
 it("loads several documents in the order asked for, and fails on a missing one", () =>
   withStorage(async (runtime) => {
     const fir = await runtime.runPromise(

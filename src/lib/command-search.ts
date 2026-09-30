@@ -1,13 +1,13 @@
 import { defaultFilter } from "cmdk";
 
-export const COMMAND_MATCH_LIMIT = 20;
+const COMMAND_MATCH_LIMIT = 20;
 
 export function topCommandMatches<T>(
   items: readonly T[],
   search: string,
   value: (item: T) => string,
-  limit = COMMAND_MATCH_LIMIT,
 ): T[] {
+  const limit = COMMAND_MATCH_LIMIT;
   if (!search) return items.slice(0, limit);
 
   const top: { readonly item: T; readonly score: number }[] = [];

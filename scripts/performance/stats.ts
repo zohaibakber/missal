@@ -1,4 +1,4 @@
-export const SCREENING_THRESHOLD = 0.1;
+const SCREENING_THRESHOLD = 0.1;
 
 const sorted = (samples: readonly number[]) => {
   if (samples.length === 0) throw new Error("No samples");
@@ -19,7 +19,7 @@ export function percentile(samples: readonly number[], rank: number) {
   return values[index - 1] ?? 0;
 }
 
-export type MetricComparison = {
+type MetricComparison = {
   readonly name: string;
   readonly baselineMedian: number;
   readonly baselineP95: number;
@@ -36,7 +36,7 @@ const pastThreshold = (baseline: number, candidate: number) =>
 
 // A change counts only when it exceeds both the samples' own p95-median spread and the
 // screening threshold.
-export function compareMetric(
+function compareMetric(
   name: string,
   baseline: readonly number[],
   candidate: readonly number[],
@@ -62,7 +62,7 @@ export function compareMetric(
   };
 }
 
-export type ScenarioSamples = {
+type ScenarioSamples = {
   readonly samplesMs: readonly number[];
   readonly heapDeltaBytes: readonly number[];
   readonly rssDeltaBytes: readonly number[];

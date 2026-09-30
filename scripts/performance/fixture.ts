@@ -32,7 +32,7 @@ import { mulberry32, pickInt, pickItem } from "./prng";
 const FROZEN_EPOCH_MS = 1_700_000_000_000;
 const CUSTOM_FIELD = "خانہ نمبر";
 
-export const FIXTURE_PROFILES = {
+const FIXTURE_PROFILES = {
   small: {
     firs: 100,
     bundledTemplates: 100,
@@ -59,7 +59,7 @@ export const FIXTURE_PROFILES = {
   },
 } as const;
 
-export type FixtureName = keyof typeof FIXTURE_PROFILES;
+type FixtureName = keyof typeof FIXTURE_PROFILES;
 
 const OFFENCES = ["چوری 379 PPC", "ڈکیتی 392 PPC", "نقب زنی", "قتل 302 PPC", "زیادتی"] as const;
 const NAMES = ["محمد علی", "فاطمہ بی بی", "احمد خان", "عائدہ نور", "John Smith"] as const;

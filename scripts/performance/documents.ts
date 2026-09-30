@@ -35,7 +35,7 @@ export type NodeCounts = {
   image: number;
 };
 
-export type ImageSize = { readonly width: number; readonly height: number };
+type ImageSize = { readonly width: number; readonly height: number };
 
 export type BuiltDocument = {
   readonly envelope: DocumentEnvelope;
