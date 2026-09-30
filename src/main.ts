@@ -19,6 +19,7 @@ import {
   renderPrintPdf,
 } from "./electron/print-pdf";
 import { registerStorageIpc } from "./electron/storage-ipc-main";
+import { STORAGE_SHUTDOWN_MS } from "./electron/storage-limits";
 import { dumpPerfMarks, perfMark } from "./lib/perf-marks";
 import type { StorageHost } from "./electron/storage-worker-client";
 
@@ -229,11 +230,14 @@ const startApp = () => {
         },
       });
     });
-    registerStorageIpc(storage);
+    registerStorageIpc(storage, rendererOrigin());
     storage
-      .then((host) => host.ready)
-      .then(() => perfMark("storage.ready"))
+      .then(async (host) => {
+        await host.ready;
+        if (host.health() === "ready") perfMark("storage.ready");
+      })
       .catch((error: unknown) => {
+        if (disposingStorage) return;
         perfMark("storage.ready", { errorCategory: "startup" });
         dialog.showErrorBox(
           "Missal could not open the database",
@@ -269,11 +273,16 @@ const startApp = () => {
 
     event.preventDefault();
     disposingStorage = true;
-    void storage
-      .then((host) => host.dispose())
-      .finally(() => {
-        app.quit();
+    const finished = storage.then((host) => host.dispose()).catch(() => undefined);
+    void new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, STORAGE_SHUTDOWN_MS);
+      void finished.finally(() => {
+        clearTimeout(timer);
+        resolve();
       });
+    }).finally(() => {
+      app.quit();
+    });
   });
 };
 
