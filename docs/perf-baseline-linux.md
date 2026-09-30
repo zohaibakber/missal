@@ -61,8 +61,8 @@ The shipped pack is the one Word template in `bundled-templates/`. The synthetic
 
 | Pack          | Templates | Seed gzip | Uncompressed seed and published database | Seed median | Seed p95 | Installer median | Installer p95 |
 | ------------- | --------: | --------: | ---------------------------------------: | ----------: | -------: | ---------------: | ------------: |
-| Shipped       |         1 |  35,422 B |                                 974,848 B |    24.71 ms | 29.06 ms |         34.93 ms |      40.55 ms |
-| Synthetic 100 |       100 | 560,726 B |                              16,453,632 B |    76.11 ms | 90.66 ms |        385.27 ms |     408.84 ms |
+| Shipped       |         1 |  35,422 B |                                974,848 B |    24.71 ms | 29.06 ms |         34.93 ms |      40.55 ms |
+| Synthetic 100 |       100 | 560,726 B |                             16,453,632 B |    76.11 ms | 90.66 ms |        385.27 ms |     408.84 ms |
 
 The published database is the same size as the uncompressed seed, which is the closed snapshot copied into the profile. On this warm Linux page cache the 100-template seed reaches a full list in about a fifth of the background installer's time.
 
