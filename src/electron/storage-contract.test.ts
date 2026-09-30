@@ -7,18 +7,9 @@ import {
 } from "#/electron/storage-contract";
 
 it("accepts a recent-FIR limit from 1 to 50", () => {
-  expect(Schema.decodeUnknownExit(FirRecentRequest)({ _tag: "Fir.recent", limit: 1 })._tag).toBe(
-    "Success",
-  );
-  expect(Schema.decodeUnknownExit(FirRecentRequest)({ _tag: "Fir.recent", limit: 50 })._tag).toBe(
-    "Success",
-  );
-  expect(Schema.decodeUnknownExit(FirRecentRequest)({ _tag: "Fir.recent", limit: 0 })._tag).toBe(
-    "Failure",
-  );
-  expect(Schema.decodeUnknownExit(FirRecentRequest)({ _tag: "Fir.recent", limit: 51 })._tag).toBe(
-    "Failure",
-  );
+  const decode = (limit: number) =>
+    Schema.decodeUnknownExit(FirRecentRequest)({ _tag: "Fir.recent", limit })._tag;
+  expect([1, 50, 0, 51].map(decode)).toEqual(["Success", "Success", "Failure", "Failure"]);
 });
 
 it.effect("keeps an empty success, whose value JSON drops", () =>

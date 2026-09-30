@@ -352,7 +352,6 @@ const DrizzleFirRepositoryLive = Layer.effect(
       (effect) => mapQuery("fir.list", effect),
     )();
 
-    // Same summary projection and descending-id order as list, stopped after `limit` rows.
     const recent = Effect.fn("FirRepository.recent")(
       function* (limit: number) {
         const rows = yield* db

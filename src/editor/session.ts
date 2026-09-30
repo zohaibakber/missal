@@ -72,35 +72,10 @@ function editorUiDefaults(): EditorUiState {
   };
 }
 
-function samePhase(left: EditorPhase, right: EditorPhase) {
-  if (left === right) return true;
-  if (left._tag !== right._tag) return false;
-  if (left._tag === "Importing" && right._tag === "Importing") {
-    return left.progress === right.progress;
-  }
-  if (left._tag === "Failed" && right._tag === "Failed") {
-    return left.message === right.message;
-  }
-  return true;
-}
-
-function samePageLayout(left: PageLayout | undefined, right: PageLayout | undefined) {
-  if (left === right) return true;
-  if (!left || !right) return false;
+function sameUi(left: EditorUiState, right: EditorUiState) {
   return (
-    left.widthMm === right.widthMm &&
-    left.heightMm === right.heightMm &&
-    left.marginTopMm === right.marginTopMm &&
-    left.marginRightMm === right.marginRightMm &&
-    left.marginBottomMm === right.marginBottomMm &&
-    left.marginLeftMm === right.marginLeftMm
-  );
-}
-
-function sameVisibleUi(left: EditorUiState, right: EditorUiState) {
-  return (
-    samePhase(left.phase, right.phase) &&
-    samePageLayout(left.pageLayout, right.pageLayout) &&
+    left.phase === right.phase &&
+    left.pageLayout === right.pageLayout &&
     left.dirty === right.dirty &&
     left.empty === right.empty &&
     left.canUndo === right.canUndo &&
@@ -121,7 +96,6 @@ export function attachEditorSession(
   const ui: EditorUiState = editorUiDefaults();
   let contentRevision = 0;
   let disposed = false;
-  // Listeners see toolbar and document state. Content revision stays internal.
   let published: EditorUiState | undefined;
   const history = createEmptyHistoryState();
   const presentation = new FieldPresentationController(editor, options.presentation);
@@ -174,16 +148,8 @@ export function attachEditorSession(
 
   function notify() {
     if (disposed) return;
-    if (published && sameVisibleUi(published, ui)) return;
-    published = {
-      canRedo: ui.canRedo,
-      canUndo: ui.canUndo,
-      dirty: ui.dirty,
-      empty: ui.empty,
-      pageLayout: ui.pageLayout,
-      phase: ui.phase,
-      savePending: ui.savePending,
-    };
+    if (published && sameUi(published, ui)) return;
+    published = { ...ui };
     options.onUiChange?.(published);
   }
 

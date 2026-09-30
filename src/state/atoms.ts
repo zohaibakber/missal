@@ -78,7 +78,6 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
   const saveFieldMarkersAtom = runtime.fn(
     (fieldMarkers: FieldMarkers) =>
       Effect.flatMap(SettingsRepository, (repository) => repository.saveFieldMarkers(fieldMarkers)),
-    // Markers share the settings row, but not shared placeholder values or a FIR value context.
     { reactivityKeys: ["field-markers"] },
   );
 
@@ -99,7 +98,6 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     .atom(Effect.flatMap(FirRepository, (repository) => repository.list))
     .pipe(runtime.factory.withReactivity(["firs"]), Atom.keepAlive);
 
-  // Descending id, the same order the sidebar used to get by sorting the full list.
   const recentFirsAtom = runtime
     .atom(Effect.flatMap(FirRepository, (repository) => repository.recent(RECENT_FIR_LIMIT)))
     .pipe(runtime.factory.withReactivity(["firs"]), Atom.keepAlive);
@@ -107,7 +105,6 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
   const firByIdAtom = Atom.family((firId: FirId) =>
     runtime
       .atom(Effect.flatMap(FirRepository, (repository) => repository.get(firId)))
-      // "firs" refreshes the lists. An existing record changes only with its own id.
       .pipe(runtime.factory.withReactivity([`fir:${firId}`]), Atom.setIdleTTL(IDLE_TTL)),
   );
 
@@ -220,7 +217,6 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
 
   const removeFirAtom = runtime.fn((id: FirId) =>
     Effect.flatMap(FirRepository, (repository) => repository.remove(id)).pipe(
-      // Cascade deletes this FIR's documents and values, not another FIR's.
       Reactivity.mutation(["firs", `fir:${id}`, `fir-values:${id}`, `fir-documents:${id}`]),
     ),
   );
