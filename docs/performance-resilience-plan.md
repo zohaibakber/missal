@@ -165,11 +165,7 @@ Exit condition: a second run reproduces the baseline closely enough to distingui
 
 The repository currently contains one authored Word template and one compiled envelope. The compiled JSON is 856,792 bytes, about 837 KiB, with no embedded images. Gzip reduces that envelope to 23,294 bytes. One hundred similarly sized envelopes total about 81.7 MiB uncompressed or 2.2 MiB as individually compressed documents. This is a sizing estimate based on the current template, not a claim about 100 distinct authored templates.
 
-A repeatable [format-study script](../scripts/performance/template-pack-study.py) compares eager JSON installation, bounded JSON installation, compressed deltas, and seed copying. The [raw results](template-pack-study.json) record the synthetic corpus, environment, and limitations.
-
-```bash
-python scripts/performance/template-pack-study.py --count 100 --batch-size 4 --output docs/template-pack-study.json
-```
+A one-off format study compared eager JSON installation, bounded JSON installation, compressed deltas, and seed copying against the old one-file-per-template pack. The [raw results](template-pack-study.json) record the synthetic corpus, environment, and limitations.
 
 The local exploratory run produced these results:
 

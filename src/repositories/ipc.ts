@@ -45,6 +45,7 @@ import {
   TemplateListResult,
   TemplateRecordResult,
   TemplateRemoveRequest,
+  TemplatePackStatusRequest,
   TemplateSaveAckResult,
   TemplateSaveRequest,
   TemplateSearchRequest,
@@ -53,6 +54,7 @@ import { FirRecord } from "#/lib/fir";
 import { Placeholder } from "#/lib/placeholder";
 import { AppSettings } from "#/lib/settings";
 import { StorageError } from "#/lib/storage-errors";
+import { TemplatePackStatus } from "#/lib/bundled-templates";
 import { FirPlaceholderValue, TemplateSummary } from "#/lib/templates";
 import {
   FirDocumentRepository,
@@ -209,6 +211,12 @@ const IpcTemplateRepositoryLive = Layer.effect(
         ),
       remove: (id) =>
         ipcExit(storage, TemplateRemoveRequest.make({ id }), Schema.Undefined, "template.remove"),
+      packStatus: ipcExit(
+        storage,
+        TemplatePackStatusRequest.make({}),
+        TemplatePackStatus,
+        "template.packStatus",
+      ),
     });
   }),
 );

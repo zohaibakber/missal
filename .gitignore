@@ -10,3 +10,4 @@ out
 __unconfig*
 todos.json
 .perf/
+.bundled-templates-staging

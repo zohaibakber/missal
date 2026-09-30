@@ -5,8 +5,10 @@ import { mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { Effect, Schema } from "effect";
+import { gzipSync } from "node:zlib";
+import { Effect, Schedule, Schema } from "effect";
 import { makeStorageRuntime } from "#/electron/storage-runtime";
+import { templatePackBodyPath } from "#/lib/bundled-templates";
 import { DocumentEnvelope } from "#/lib/document-format";
 import { createEmptyFirRecord, FirCreateInput } from "#/lib/fir";
 import { AddFirTemplatesInput } from "#/lib/fir-document";
@@ -155,17 +157,15 @@ export async function generateFixture(options: {
   }
 
   const pack = path.join(directory, "pack");
-  mkdirSync(pack, { recursive: true });
-  const index = [];
-  for (const entry of bundled) {
-    const sourceHash = createHash("sha256").update(`${options.seed}:${entry.name}`).digest("hex");
-    writeFileSync(
-      path.join(pack, `${entry.name}.json`),
-      `${JSON.stringify(entry.built.envelope)}\n`,
-    );
-    index.push({ name: entry.name, sourceHash });
-  }
-  writeFileSync(path.join(pack, "index.json"), `${JSON.stringify(index)}\n`);
+  mkdirSync(path.join(pack, "bodies"), { recursive: true });
+  const entries = bundled.map((entry) => {
+    const json = Buffer.from(JSON.stringify(entry.built.envelope));
+    const bodyHash = createHash("sha256").update(json).digest("hex");
+    writeFileSync(path.join(pack, templatePackBodyPath(bodyHash)), gzipSync(json));
+    return { name: entry.name, bodyHash, bytes: json.byteLength };
+  });
+  const packHash = createHash("sha256").update(JSON.stringify(entries)).digest("hex");
+  writeFileSync(path.join(pack, "manifest.json"), `${JSON.stringify({ packHash, entries })}\n`);
 
   const databasePath = path.join(directory, "missal.sqlite");
   const metadata = await withFrozenClock(FROZEN_EPOCH_MS + (options.seed % 1000), async () => {
@@ -177,10 +177,17 @@ export async function generateFixture(options: {
     try {
       const stored = await runtime.runPromise(
         Effect.gen(function* () {
+          const templates = yield* TemplateRepository;
+          const packStatus = yield* templates.packStatus.pipe(
+            Effect.repeat({
+              until: (status) => status._tag !== "Synchronizing",
+              schedule: Schedule.spaced("50 millis"),
+            }),
+          );
+          if (packStatus._tag !== "Ready") throw new Error("Fixture template pack did not install");
           const placeholders = yield* Effect.flatMap(PlaceholderRepository, (repo) => repo.list);
           const custom = placeholders.find((placeholder) => placeholder.label === CUSTOM_FIELD);
-          const bundledRows = yield* Effect.flatMap(TemplateRepository, (repo) => repo.list);
-          const templates = yield* TemplateRepository;
+          const bundledRows = yield* templates.list;
           const userIds: TemplateId[] = [];
           for (let index = 0; index < profile.userTemplates; index += 1) {
             const pages = pickInt(random, profile.pageMin, profile.pageMax);

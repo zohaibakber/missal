@@ -1,6 +1,8 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
 import { Schema } from "effect";
+import { TemplatePackManifest, templatePackBodyPath } from "#/lib/bundled-templates";
 import { DocumentEnvelope } from "#/lib/document-format";
 
 const FIELD_LABELS = [
@@ -58,13 +60,14 @@ let corpus: SourceCorpus | undefined;
 export function loadSourceCorpus(repoRoot: string): SourceCorpus {
   if (corpus) return corpus;
   const folder = path.join(repoRoot, "bundled-templates");
-  const fileName = readdirSync(folder)
-    .filter((file) => file.endsWith(".json") && file !== "index.json")
-    .sort()[0];
-  if (!fileName) throw new Error("bundled-templates has no document envelope");
-  const file = path.join(folder, fileName);
+  const manifest = Schema.decodeUnknownSync(TemplatePackManifest)(
+    JSON.parse(readFileSync(path.join(folder, "manifest.json"), "utf8")) as unknown,
+  );
+  const entry = manifest.entries[0];
+  if (!entry) throw new Error("bundled-templates has no document envelope");
+  const file = path.join(folder, templatePackBodyPath(entry.bodyHash));
   const envelope = Schema.decodeUnknownSync(DocumentEnvelope)(
-    JSON.parse(readFileSync(file, "utf8")) as unknown,
+    JSON.parse(gunzipSync(readFileSync(file)).toString("utf8")) as unknown,
   );
   const root = (envelope.state as { root?: { children?: unknown[] } }).root;
   const children = root?.children;

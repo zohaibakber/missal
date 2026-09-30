@@ -1,5 +1,5 @@
 import { globalPlaceholderOperations } from "#/electron/global-placeholders";
-import { Effect, HashMap, Layer, Option, Schema } from "effect";
+import { Effect, HashMap, Layer, Option, Ref, Schema } from "effect";
 import { and, asc, count, desc, eq, inArray, like, or } from "drizzle-orm";
 import {
   appSettings,
@@ -15,6 +15,7 @@ import {
   templates,
 } from "#/electron/database-schema";
 import { MissalDrizzle, MissalDrizzleLive } from "#/electron/database";
+import { TemplatePackStatusStore } from "#/electron/bundled-templates";
 import {
   constraintKind,
   decodeStored,
@@ -317,7 +318,10 @@ const DrizzleTemplateRepositoryLive = Layer.effect(
       (effect) => mapQuery("template.remove", effect),
     );
 
-    return TemplateRepository.of({ list, search, get, create, save, remove });
+    const status = yield* TemplatePackStatusStore;
+    const packStatus = Ref.get(status);
+
+    return TemplateRepository.of({ list, search, get, create, save, remove, packStatus });
   }),
 );
 

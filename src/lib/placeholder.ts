@@ -18,7 +18,7 @@ export function normalizePlaceholderName(name: string) {
  * How a name is looked up. Word merge fields cannot hold spaces, so templates write
  * `«تھانہ_نام_»` or `«گواہان2»` for the fields named "تھانہ نام" and "گواہان 2".
  */
-function placeholderLookupKey(name: string) {
+export function placeholderLookupKey(name: string) {
   return name.replace(/[\s_\u200c]+/g, "");
 }
 

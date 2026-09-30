@@ -4,21 +4,45 @@ import { FieldReference } from "#/lib/field";
 import { normalizePlaceholderName } from "#/lib/placeholder";
 import { NonEmptyTrimmedString } from "#/lib/schema";
 
-/** Lists the templates in a pack folder; each one's document is stored in `<name>.json`. */
-export const BUNDLED_TEMPLATES_INDEX = "index.json";
+export const TEMPLATE_PACK_MANIFEST = "manifest.json";
+export const TEMPLATE_PACK_BATCH_TEMPLATES = 4;
+/** Uncompressed bytes decoded per batch; a larger single document is rejected unread. */
+export const TEMPLATE_PACK_BATCH_BYTES = 4 * 1024 * 1024;
 
-export class BundledTemplateEntry extends Schema.Class<BundledTemplateEntry>(
-  "BundledTemplateEntry",
-)({
+export class TemplatePackEntry extends Schema.Class<TemplatePackEntry>("TemplatePackEntry")({
+  /** Source-file identity. Renaming the Word file installs a new template. */
   name: NonEmptyTrimmedString,
-  /** SHA-256 of the Word file the document was converted from. */
-  sourceHash: Schema.String,
+  /** SHA-256 of the uncompressed envelope JSON, and the body's file name. */
+  bodyHash: Schema.String,
+  bytes: Schema.Int,
 }) {}
 
-export const BundledTemplateIndex = Schema.Array(BundledTemplateEntry);
+export class TemplatePackManifest extends Schema.Class<TemplatePackManifest>(
+  "TemplatePackManifest",
+)({
+  packHash: Schema.String,
+  entries: Schema.Array(TemplatePackEntry),
+}) {}
 
-export function bundledTemplateFileName(name: string) {
-  return `${name}.json`;
+export const TemplatePackIdle = Schema.TaggedStruct("Idle", {});
+export const TemplatePackSynchronizing = Schema.TaggedStruct("Synchronizing", {
+  done: Schema.Int,
+  total: Schema.Int,
+});
+export const TemplatePackReady = Schema.TaggedStruct("Ready", {});
+export const TemplatePackPartialFailure = Schema.TaggedStruct("PartialFailure", {
+  message: Schema.String,
+});
+export const TemplatePackStatus = Schema.Union([
+  TemplatePackIdle,
+  TemplatePackSynchronizing,
+  TemplatePackReady,
+  TemplatePackPartialFailure,
+]);
+export type TemplatePackStatus = typeof TemplatePackStatus.Type;
+
+export function templatePackBodyPath(bodyHash: string) {
+  return `bodies/${bodyHash}.json.gz`;
 }
 
 /** The field name a Word merge field stands for: `چالانی_ضمنی_نمبر_` is "چالانی ضمنی نمبر". */

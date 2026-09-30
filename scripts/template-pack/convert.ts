@@ -55,8 +55,9 @@ async function convertDocx(base64: string, fileName: string): Promise<ConvertedT
   // Names the default catalog lacks become fields here and custom fields when the pack installs.
   const catalog = createDefaultPlaceholders();
   const newFieldNames: string[] = [];
+  let index = indexPlaceholders(catalog);
   for (const token of await tokensIn(bytes)) {
-    if (resolvePlaceholder(token, indexPlaceholders(catalog))) continue;
+    if (resolvePlaceholder(token, index)) continue;
     const label = fieldNameFromToken(token);
     newFieldNames.push(label);
     catalog.push(
@@ -66,8 +67,8 @@ async function convertDocx(base64: string, fileName: string): Promise<ConvertedT
         source: CustomSource.make({}),
       }),
     );
+    index = indexPlaceholders(catalog);
   }
-  const index = indexPlaceholders(catalog);
 
   const editor = createEditor({
     namespace: "template-pack",

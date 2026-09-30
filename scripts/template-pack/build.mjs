@@ -1,14 +1,16 @@
 // Converts every Word file in templates/ into bundled-templates/, which ships with the app.
 // Run with `vp run templates:build`; Electron supplies the Chromium the converter needs.
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 import { app, BrowserWindow } from "electron";
 import { build } from "vite";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const sourceFolder = path.join(root, "templates");
 const packFolder = path.join(root, "bundled-templates");
+const stagingFolder = path.join(root, ".bundled-templates-staging");
 
 async function bundleConverter() {
   const output = await build({
@@ -40,9 +42,10 @@ async function main() {
   await window.loadURL("data:text/html;charset=utf-8,<!doctype html><html><body></body></html>");
   await window.webContents.executeJavaScript(await bundleConverter());
 
-  await rm(packFolder, { recursive: true, force: true });
-  await mkdir(packFolder, { recursive: true });
-  const index = [];
+  // Converted into a staging folder so a failed build keeps the current pack.
+  await rm(stagingFolder, { recursive: true, force: true });
+  await mkdir(path.join(stagingFolder, "bodies"), { recursive: true });
+  const entries = [];
   let problems = 0;
   for (const file of sources) {
     const name = path.basename(file, ".docx").trim();
@@ -50,11 +53,13 @@ async function main() {
     const converted = await window.webContents.executeJavaScript(
       `convertDocx(${JSON.stringify(bytes.toString("base64"))}, ${JSON.stringify(file)})`,
     );
+    const json = Buffer.from(JSON.stringify(converted.document));
+    const bodyHash = createHash("sha256").update(json).digest("hex");
     await writeFile(
-      path.join(packFolder, `${name}.json`),
-      `${JSON.stringify(converted.document)}\n`,
+      path.join(stagingFolder, "bodies", `${bodyHash}.json.gz`),
+      gzipSync(json, { level: 6 }),
     );
-    index.push({ name, sourceHash: createHash("sha256").update(bytes).digest("hex") });
+    entries.push({ name, bodyHash, bytes: json.byteLength });
 
     console.log(`${name}: ${converted.fieldNames.length} fields`);
     if (converted.newFieldNames.length > 0) {
@@ -66,9 +71,20 @@ async function main() {
       console.error(`  not converted: ${converted.unconvertedTokens.join(" ")}`);
     }
   }
-  await writeFile(path.join(packFolder, "index.json"), `${JSON.stringify(index, null, 2)}\n`);
-  console.log(`Wrote ${index.length} templates to bundled-templates/`);
-  return problems === 0 ? 0 : 1;
+  if (problems > 0) {
+    await rm(stagingFolder, { recursive: true, force: true });
+    return 1;
+  }
+
+  const packHash = createHash("sha256").update(JSON.stringify(entries)).digest("hex");
+  await writeFile(
+    path.join(stagingFolder, "manifest.json"),
+    `${JSON.stringify({ packHash, entries }, null, 2)}\n`,
+  );
+  await rm(packFolder, { recursive: true, force: true });
+  await rename(stagingFolder, packFolder);
+  console.log(`Wrote ${entries.length} templates to bundled-templates/`);
+  return 0;
 }
 
 app.disableHardwareAcceleration();

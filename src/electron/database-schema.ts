@@ -47,10 +47,19 @@ export const templates = sqliteTable(
 
 export const bundledTemplates = sqliteTable("bundled_templates", {
   name: text("name").primaryKey(),
-  sourceHash: text("source_hash").notNull(),
+  bodyHash: text("body_hash").notNull(),
   templateId: integer("template_id").references(() => templates.id, { onDelete: "set null" }),
   templateRevision: integer("template_revision").notNull(),
 });
+
+export const templatePackState = sqliteTable(
+  "template_pack_state",
+  {
+    id: text("id").primaryKey(),
+    packHash: text("pack_hash").notNull(),
+  },
+  (table) => [check("template_pack_state_id_current", sql`${table.id} = 'current'`)],
+);
 
 export const firRecords = sqliteTable(
   "fir_records",
