@@ -53,6 +53,19 @@ Heap and RSS deltas are stored per sample in the raw bench JSON. On this run the
 
 The normal database was generated and not timed. Copying a 3.7 GB file for each launch sample would measure disk copy more than migration.
 
+## Fresh-profile template list
+
+`vp run perf:fresh` on commit `e9adf0da9793b5844e19ab37c664979cb51b571c`. Working tree patch hash `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` (empty diff). Same machine as the tables above; free RAM when this run finished was 4,262,023,168 bytes. Warmup 2, then 10 samples, alternating a seed open and an installer open. Schema JIT is enabled, matching the storage worker. Each sample creates a new profile, constructs `makeStorageRuntime`, and stops when pack status is `Ready` and `TemplateRepository.list` returns every template. The clock includes seed publication. It does not include Electron process launch or renderer paint. Raw samples are in gitignored `.perf/fresh-profile.json`.
+
+The shipped pack is the one Word template in `bundled-templates/`. The synthetic pack is 100 templates composed the same way as the small fixture (seed `1`, 1–5 pages, one extra linked field per page, Urdu source envelope). Both seeds are built by `scripts/template-pack/seed.ts`. The installer column uses the same bodies and manifest with the seed removed, so the background installer fills an empty database.
+
+| Pack          | Templates | Seed gzip | Uncompressed seed and published database | Seed median | Seed p95 | Installer median | Installer p95 |
+| ------------- | --------: | --------: | ---------------------------------------: | ----------: | -------: | ---------------: | ------------: |
+| Shipped       |         1 |  35,422 B |                                 974,848 B |    24.71 ms | 29.06 ms |         34.93 ms |      40.55 ms |
+| Synthetic 100 |       100 | 560,726 B |                              16,453,632 B |    76.11 ms | 90.66 ms |        385.27 ms |     408.84 ms |
+
+The published database is the same size as the uncompressed seed, which is the closed snapshot copied into the profile. On this warm Linux page cache the 100-template seed reaches a full list in about a fifth of the background installer's time.
+
 ## Follow-up mark points
 
 Opt-in marks (`MISSAL_PERF=1`) currently cover main startup (`app.ready`, `window.created`, `window.ready-to-show`, `window.did-finish-load`, `storage.ready`) and storage decode, per-request execute, and encode timings with payload sizes. Still to mark, in code this change does not own:
