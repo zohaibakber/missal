@@ -1,7 +1,7 @@
 import type { SaveGlobalPlaceholdersInput } from "#/lib/global-placeholder";
 import { Effect } from "effect";
 import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
-import type { DocumentEnvelope } from "#/lib/document-format";
+import { projectDocument, type DocumentEnvelope } from "#/lib/document-format";
 import type { FirCreateInput, FirId, FirUpdateInput } from "#/lib/fir";
 import type { FirDocumentId, TemplateId } from "#/lib/ids";
 import {
@@ -11,12 +11,19 @@ import {
 } from "#/lib/placeholder";
 import {
   FirDocumentRecord,
+  FirDocumentSaveAck,
   FirDocumentSaveInput,
   type AddFirTemplatesInput,
   type FirDocumentSummary,
   type ReorderFirDocumentsInput,
 } from "#/lib/fir-document";
-import { TemplateRecord, TemplateUpdateInput, type TemplateCreateInput } from "#/lib/templates";
+import type { RepositoryError } from "#/lib/storage-errors";
+import {
+  TemplateRecord,
+  TemplateSaveAck,
+  TemplateUpdateInput,
+  type TemplateCreateInput,
+} from "#/lib/templates";
 import { DEFAULT_FIELD_MARKERS, type FieldMarkers } from "#/lib/settings";
 import {
   FirDocumentRepository,
@@ -41,6 +48,46 @@ function overridable<A>(source: Atom.Atom<A>) {
     (ctx, value: A) => ctx.setSelf(value),
     (refresh) => refresh(source),
   );
+}
+
+function settleRevisionWrite<A, B extends { readonly revision: number }, R>(
+  write: Effect.Effect<A, RepositoryError, R>,
+  expectedRevision: number,
+  read: Effect.Effect<B, RepositoryError, R>,
+  fromStored: (record: B) => A,
+) {
+  return Effect.catchTag(write, "StorageUnknownOutcome", (unknown) =>
+    read.pipe(
+      Effect.flatMap((record) =>
+        record.revision > expectedRevision
+          ? Effect.succeed(fromStored(record))
+          : Effect.fail(unknown),
+      ),
+      Effect.catchCause(() => Effect.fail(unknown)),
+    ),
+  );
+}
+
+function templateAck(record: TemplateRecord) {
+  const projection = projectDocument(record.document);
+  return new TemplateSaveAck({
+    fieldCount: projection.fieldCount,
+    id: record.id,
+    previewText: projection.previewText,
+    revision: record.revision,
+    updatedAt: record.updatedAt,
+  });
+}
+
+function firDocumentAck(record: FirDocumentRecord) {
+  const projection = projectDocument(record.document);
+  return new FirDocumentSaveAck({
+    fieldCount: projection.fieldCount,
+    id: record.id,
+    previewText: projection.previewText,
+    revision: record.revision,
+    updatedAt: record.updatedAt,
+  });
 }
 
 function reorderedDocuments(
@@ -183,13 +230,18 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
       get: Atom.FnContext,
     ) {
       const repository = yield* TemplateRepository;
-      const ack = yield* repository.save(
-        new TemplateUpdateInput({
-          document,
-          expectedRevision: current.revision,
-          id: current.id,
-          name,
-        }),
+      const ack = yield* settleRevisionWrite(
+        repository.save(
+          new TemplateUpdateInput({
+            document,
+            expectedRevision: current.revision,
+            id: current.id,
+            name,
+          }),
+        ),
+        current.revision,
+        repository.get(current.id),
+        templateAck,
       );
       get.set(
         templateByIdAtom(current.id),
@@ -249,8 +301,17 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
       get: Atom.FnContext,
     ) {
       const repository = yield* FirDocumentRepository;
-      const ack = yield* repository.save(
-        new FirDocumentSaveInput({ document, expectedRevision: current.revision, id: current.id }),
+      const ack = yield* settleRevisionWrite(
+        repository.save(
+          new FirDocumentSaveInput({
+            document,
+            expectedRevision: current.revision,
+            id: current.id,
+          }),
+        ),
+        current.revision,
+        repository.get(current.id),
+        firDocumentAck,
       );
       get.set(
         firDocumentByIdAtom(current.id),
