@@ -1,6 +1,7 @@
 import { $generateHtmlFromNodes } from "@lexical/html";
 import { createEditor } from "lexical";
 import { Match } from "effect";
+import { PRINT_CANCELED } from "#/desktop-window";
 import { EDITOR_HTML_CONFIG } from "#/editor/html-config";
 import { EDITOR_NODES, EDITOR_THEME } from "#/editor/nodes/registry";
 import { loadEnvelopeIntoEditor } from "#/editor/envelope";
@@ -44,13 +45,11 @@ export function envelopePrintPacket(
   return { html: printPacketFromSections(htmlSectionsFrom(sections), title), title };
 }
 
-const PRINT_CANCELED = "Print job canceled";
-
-export async function printPacket({ html }: PrintPacket): Promise<string | null> {
+export async function printPacket({ html }: PrintPacket, ownerId: string): Promise<string | null> {
   const api = window.electronPrint;
   if (!api) return "Printing is only available in the Missal desktop app.";
   try {
-    const result = await api.print(html);
+    const result = await api.print({ ownerId, requestId: crypto.randomUUID(), html });
     if (result.printed || result.failureReason === PRINT_CANCELED) return null;
     return result.failureReason ?? "Unable to print";
   } catch {

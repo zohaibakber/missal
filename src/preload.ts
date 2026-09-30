@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import {
+  DESKTOP_PRINT_CANCEL_CHANNEL,
   DESKTOP_PRINT_CHANNEL,
   DESKTOP_PRINT_PDF_CHANNEL,
   DESKTOP_THEME_CHANNEL,
@@ -13,8 +14,9 @@ const electronTheme: ElectronThemeApi = {
 };
 
 const electronPrint: ElectronPrintApi = {
-  renderPdf: (html) => ipcRenderer.invoke(DESKTOP_PRINT_PDF_CHANNEL, html),
-  print: (html) => ipcRenderer.invoke(DESKTOP_PRINT_CHANNEL, html),
+  renderPdf: (request) => ipcRenderer.invoke(DESKTOP_PRINT_PDF_CHANNEL, request),
+  print: (request) => ipcRenderer.invoke(DESKTOP_PRINT_CHANNEL, request),
+  cancelPreview: (request) => ipcRenderer.send(DESKTOP_PRINT_CANCEL_CHANNEL, request),
 };
 
 const electronStorage = {
