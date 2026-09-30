@@ -104,6 +104,11 @@ const handleStorageRequest = Effect.fnUntraced(function* (request: StorageReques
         const repository = yield* FirRepository;
         return Schema.encodeUnknownSync(FirListResult)(yield* repository.list);
       }),
+    "Fir.recent": ({ limit }) =>
+      Effect.gen(function* () {
+        const repository = yield* FirRepository;
+        return Schema.encodeUnknownSync(FirListResult)(yield* repository.recent(limit));
+      }),
     "Fir.get": ({ id }) =>
       Effect.gen(function* () {
         const repository = yield* FirRepository;

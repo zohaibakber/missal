@@ -7,6 +7,7 @@ export class FirRepository extends Context.Service<
   FirRepository,
   {
     readonly list: Effect.Effect<readonly FirSummary[], RepositoryError>;
+    readonly recent: (limit: number) => Effect.Effect<readonly FirSummary[], RepositoryError>;
     readonly get: (id: FirId) => Effect.Effect<FirRecord, RepositoryError>;
     readonly create: (input: FirCreateInput) => Effect.Effect<FirRecord, RepositoryError>;
     readonly update: (input: FirUpdateInput) => Effect.Effect<FirRecord, RepositoryError>;

@@ -23,6 +23,7 @@ import {
   FirPlaceholderValueListResult,
   FirPlaceholderValueRemoveRequest,
   FirPlaceholderValueUpsertRequest,
+  FirRecentRequest,
   FirRemoveRequest,
   FirUpdateRequest,
   FirValueContextRequest,
@@ -219,6 +220,8 @@ const IpcFirRepositoryLive = Layer.effect(
 
     return FirRepository.of({
       list: ipcExit(storage, FirListRequest.make({}), FirListResult, "fir.list"),
+      recent: (limit) =>
+        ipcExit(storage, FirRecentRequest.make({ limit }), FirListResult, "fir.recent"),
       get: (id) => ipcExit(storage, FirGetRequest.make({ id }), FirRecord, "fir.get"),
       create: (input) =>
         ipcExit(storage, FirCreateRequest.make({ input }), FirRecord, "fir.create"),

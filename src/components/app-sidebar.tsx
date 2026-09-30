@@ -66,7 +66,7 @@ function NavMain() {
 }
 
 function RecentFirs() {
-  const firs = useAtomValue(atoms.latestFirsAtom);
+  const firs = useAtomValue(atoms.recentFirsAtom);
   const pathname = usePathname();
 
   if (AsyncResult.isFailure(firs)) return null;

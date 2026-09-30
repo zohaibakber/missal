@@ -60,6 +60,11 @@ export const TemplateRemoveRequest = Schema.TaggedStruct("Template.remove", {
 });
 
 export const FirListRequest = Schema.TaggedStruct("Fir.list", {});
+// The sidebar asks for five rows. Keep the request bounded so a caller cannot pull the whole catalog.
+const FirRecentLimit = Schema.Int.pipe(Schema.check(Schema.isBetween({ minimum: 1, maximum: 50 })));
+export const FirRecentRequest = Schema.TaggedStruct("Fir.recent", {
+  limit: FirRecentLimit,
+});
 export const FirGetRequest = Schema.TaggedStruct("Fir.get", {
   id: FirId,
 });
@@ -133,6 +138,7 @@ export const StorageRequest = Schema.Union([
   TemplateSaveRequest,
   TemplateRemoveRequest,
   FirListRequest,
+  FirRecentRequest,
   FirGetRequest,
   FirCreateRequest,
   FirUpdateRequest,

@@ -28,7 +28,7 @@ import {
 } from "#/repositories/index";
 import { appRuntime } from "#/state/app-runtime";
 
-const LATEST_LIMIT = 5;
+const RECENT_FIR_LIMIT = 5;
 const IDLE_TTL = "1 minute";
 
 /**
@@ -98,9 +98,10 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     .atom(Effect.flatMap(FirRepository, (repository) => repository.list))
     .pipe(runtime.factory.withReactivity(["firs"]), Atom.keepAlive);
 
-  const latestFirsAtom = Atom.mapResult(firsAtom, (firs) =>
-    firs.toSorted((first, second) => second.id - first.id).slice(0, LATEST_LIMIT),
-  );
+  // Descending id, the same order the sidebar used to get by sorting the full list.
+  const recentFirsAtom = runtime
+    .atom(Effect.flatMap(FirRepository, (repository) => repository.recent(RECENT_FIR_LIMIT)))
+    .pipe(runtime.factory.withReactivity(["firs"]), Atom.keepAlive);
 
   const firByIdAtom = Atom.family((firId: FirId) =>
     runtime
@@ -299,7 +300,7 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     templatesAtom,
     templateByIdAtom,
     firsAtom,
-    latestFirsAtom,
+    recentFirsAtom,
     firByIdAtom,
     firValueContextAtom,
     firDocumentsAtom,
