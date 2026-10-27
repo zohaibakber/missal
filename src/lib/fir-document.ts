@@ -7,7 +7,7 @@ import {
 } from "#/lib/field";
 import { FirRecord } from "#/lib/fir";
 import { DocumentRevision, FirDocumentId, FirId, TemplateId } from "#/lib/ids";
-import { indexPlaceholders, Placeholder } from "#/lib/placeholder";
+import { indexFields, Placeholder } from "#/lib/placeholder";
 import { IsoDateTimeString, NonEmptyTrimmedString } from "#/lib/schema";
 import { FirPlaceholderValue } from "#/lib/templates";
 
@@ -76,7 +76,7 @@ export class FirValueContext extends Schema.Class<FirValueContext>("FirValueCont
 }) {
   toPresentation(displayMode: FieldDisplayMode): FieldPresentationContext {
     return {
-      catalog: indexPlaceholders(this.catalog),
+      catalog: indexFields(this.catalog),
       displayMode,
       fir: this.fir,
       overrideValues: overrideValuesFrom(this.overrides),

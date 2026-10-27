@@ -58,7 +58,6 @@ const LAYOUT_PROPERTIES = new Set([
   "widows",
 ]);
 
-// CSSOM expands shorthands (`border`, `margin`, `text-decoration`) into longhands when iterated.
 const LONGHAND_FAMILIES = /^(?:border|margin|padding|text-decoration)-/;
 
 function isRetained(property: string, textOnly: boolean) {
@@ -67,7 +66,6 @@ function isRetained(property: string, textOnly: boolean) {
   return !textOnly && (LAYOUT_PROPERTIES.has(property) || LONGHAND_FAMILIES.test(property));
 }
 
-// Sanitized once when a saved document is parsed and when set, so rendering can apply it directly.
 const importedStyleState = createState("importedStyle", {
   parse: (value: unknown) => (typeof value === "string" ? retainedStyle(value) : ""),
 });

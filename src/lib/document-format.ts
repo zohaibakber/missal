@@ -145,6 +145,7 @@ function visitSerializedNode(
 function fieldReferenceKey(reference: FieldReference) {
   return Match.valueTags(reference, {
     CatalogField: ({ id }) => `id:${id}`,
+    FirField: ({ property, index }) => `fir:${property}:${index ?? ""}`,
     UnresolvedToken: ({ text }) => `token:${text}`,
   });
 }

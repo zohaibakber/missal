@@ -37,16 +37,16 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Tooltip, TooltipTrigger, TooltipContent } from "#/components/ui/tooltip";
 import { Kbd, KbdGroup } from "#/components/ui/kbd";
-import { formatForDisplay, type Hotkey } from "@tanstack/react-hotkeys";
+import { formatForDisplay, type HotkeyChord } from "@tanstack/react-hotkeys";
 
 type ToolbarIcon = ComponentProps<typeof HugeiconsIcon>["icon"];
 const formats = [
   { value: "bold", label: "Bold", keys: "Mod+B", icon: TextBoldIcon },
   { value: "italic", label: "Italic", keys: "Mod+I", icon: TextItalicIcon },
   { value: "underline", label: "Underline", keys: "Mod+U", icon: TextUnderlineIcon },
-] satisfies { value: TextFormatType; label: string; keys: Hotkey; icon: ToolbarIcon }[];
+] satisfies { value: TextFormatType; label: string; keys: HotkeyChord; icon: ToolbarIcon }[];
 
-function TooltipLabel({ label, keys }: { label: string; keys?: Hotkey }) {
+function TooltipLabel({ label, keys }: { label: string; keys?: HotkeyChord }) {
   return (
     <>
       {label}
@@ -72,7 +72,7 @@ function ToolbarButton({
   keys,
   icon,
   ...props
-}: ComponentProps<typeof Button> & { label: string; keys?: Hotkey; icon: ToolbarIcon }) {
+}: ComponentProps<typeof Button> & { label: string; keys?: HotkeyChord; icon: ToolbarIcon }) {
   return (
     <Tooltip>
       <TooltipTrigger

@@ -9,7 +9,7 @@ import {
   withWordLineHeight,
 } from "#/editor/import/docx";
 import { URDU_FONT_WINDOWS_LINE_RATIO } from "#/lib/output";
-import { createDefaultPlaceholders, indexPlaceholders } from "#/lib/placeholder";
+import { indexFields } from "#/lib/placeholder";
 import { DEFAULT_FIELD_MARKERS } from "#/lib/settings";
 
 const NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -69,11 +69,10 @@ it("imports page geometry, RTL table content, and explicit page breaks from a DO
   );
   const buffer = await archive.generateAsync({ type: "arraybuffer" });
   const file = new File([buffer], "example.docx");
-  // jsdom's File lacks Blob.arrayBuffer; provide its real bytes for the browser boundary.
   file.arrayBuffer = async () => buffer;
   const result = await importDocx(file, {
     markers: DEFAULT_FIELD_MARKERS,
-    index: indexPlaceholders(createDefaultPlaceholders()),
+    index: indexFields([]),
   });
   const dom = new DOMParser().parseFromString(result.html, "text/html");
   expect(result.pageLayout.widthMm).toBeCloseTo(210, 0);
@@ -98,11 +97,7 @@ it("moves a known field name split across differently formatted runs into its fi
     <w:r><w:t>»</w:t></w:r>
   </w:p></w:body></w:document>`;
   const parsed = new DOMParser().parseFromString(
-    joinSplitFieldTokens(
-      xml,
-      DEFAULT_FIELD_MARKERS,
-      indexPlaceholders(createDefaultPlaceholders()),
-    ),
+    joinSplitFieldTokens(xml, DEFAULT_FIELD_MARKERS, indexFields([])),
     "application/xml",
   );
   const texts = [...parsed.getElementsByTagNameNS(NS, "t")].map((text) => text.textContent);
@@ -174,6 +169,5 @@ it("sizes Word's auto line spacing from the font's own line height", () => {
   expect(lineHeight(withWordLineHeight("font-size: 20px", computed("", "normal")))).toBe(
     `${single}px`,
   );
-  // Exact spacing is already a length and stays as Word gave it.
   expect(withWordLineHeight("line-height: 18pt", computed("", "24px"))).toBe("line-height: 18pt");
 });

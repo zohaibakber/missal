@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Folder01Icon,

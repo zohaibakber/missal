@@ -12,10 +12,6 @@ _Avoid_: case, record, row, document
 Reusable Urdu rich text that contains linked fields. Copying a template onto a FIR creates a FIR document; later template edits do not change that copy.
 _Avoid_: form, letter, layout
 
-**Bundled template**:
-A Template shipped with the app from a Word file in `templates/`. Installed on launch and updated until the user edits it; one the user deletes stays deleted.
-_Avoid_: default template, seed template, preset
-
 **FIR document**:
 One independently edited document attached to a FIR, created by copying a template's body. A FIR can have several. Field values stay linked to the FIR, not to the document body.
 _Avoid_: template instance, attachment, file, the FIR itself
@@ -25,11 +21,11 @@ The versioned serialized document body stored for a template or FIR document. Ca
 _Avoid_: HTML, CKEditor content, editor state
 
 **Field**:
-A catalog token that can appear in a template or FIR document. It has a stable ID, one unique name, and a source binding: a FIR property, a shared setting, or a custom FIR-specific value. Templates refer to it by writing the name between the field markers chosen in Settings (default `@name@`). Renaming it does not change the source binding or existing documents, which store the ID.
+A token that can appear in a template or FIR document, written between the field markers chosen in Settings (default `«name»`). FIR fields are defined in code and read a FIR property. Stored fields are a shared setting or a custom FIR-specific value; documents refer to them by ID, so renaming one keeps it linked.
 _Avoid_: variable, tag, merge field
 
 **Placeholder**:
-The stored catalog row for a Field. Storage, IPC, and seeds still use this name.
+The stored catalog row for a shared-setting or custom Field. Storage and RPC still use this name.
 _Avoid_: extra value, overlay (those are FIR-specific field values)
 
 **Placeholder value**:
@@ -45,5 +41,5 @@ The storage seam React and atoms call; Electron main implements it with SQLite.
 _Avoid_: database client, collection, localStorage
 
 **SQLite file**:
-The one app database at `userData/missal.sqlite`, reached only from Electron main.
+The one app database at `userData/missal.sqlite`, reached only from the storage worker.
 _Avoid_: IndexedDB, browser storage, second database

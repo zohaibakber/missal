@@ -9,13 +9,12 @@
   font-display: swap;
 }
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (@media (prefers-color-scheme: dark));
 
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: "Inter Variable", "Jameel Noori Nastaleeq", sans-serif;
   --font-urdu: "Jameel Noori Nastaleeq", serif;
-  /* UI text in Urdu: Latin letters and digits stay in Inter, Urdu script falls through to Nastaleeq. */
   --font-urdu-ui: "Inter Variable", "Jameel Noori Nastaleeq", sans-serif;
   --text-ur: 0.9375rem;
   --text-ur--line-height: 2rem;
@@ -74,7 +73,7 @@
 }
 
 :root {
-  /* Matches TITLEBAR_HEIGHT in main.ts (the native caption button overlay). */
+  color-scheme: light dark;
   --titlebar-height: 2.75rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.17 0 0);
@@ -120,48 +119,51 @@
   --status-closed: oklch(0.65 0.14 160);
 }
 
-.dark {
-  --background: oklch(0.195 0 0);
-  --foreground: oklch(0.96 0 0);
-  --card: oklch(0.225 0 0);
-  --card-foreground: oklch(0.96 0 0);
-  --popover: oklch(0.225 0 0);
-  --popover-foreground: oklch(0.96 0 0);
-  --primary: oklch(0.93 0 0);
-  --primary-foreground: oklch(0.2 0 0);
-  --secondary: oklch(0.26 0 0);
-  --secondary-foreground: oklch(0.96 0 0);
-  --muted: oklch(0.255 0 0);
-  --muted-foreground: oklch(0.68 0 0);
-  --accent: oklch(0.27 0 0);
-  --accent-foreground: oklch(0.96 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.55 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.155 0 0);
-  --sidebar-foreground: oklch(0.8 0 0);
-  --sidebar-primary: oklch(0.93 0 0);
-  --sidebar-primary-foreground: oklch(0.2 0 0);
-  --sidebar-accent: oklch(1 0 0 / 7%);
-  --sidebar-accent-foreground: oklch(0.97 0 0);
-  --sidebar-border: oklch(1 0 0 / 7%);
-  --sidebar-ring: oklch(0.55 0 0);
-  --canvas: oklch(0.165 0 0);
-  --paper: oklch(0.225 0 0);
-  --paper-foreground: oklch(0.94 0 0);
-  --paper-shadow:
-    0 0 0 1px oklch(1 0 0 / 7%), 0 1px 2px oklch(0 0 0 / 30%), 0 16px 40px -16px oklch(0 0 0 / 60%);
-  --field: oklch(0.76 0.12 255);
-  --status-open: oklch(0.8 0.15 75);
-  --status-investigating: oklch(0.7 0.14 255);
-  --status-challan: oklch(0.7 0.15 295);
-  --status-closed: oklch(0.74 0.13 160);
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.195 0 0);
+    --foreground: oklch(0.96 0 0);
+    --card: oklch(0.225 0 0);
+    --card-foreground: oklch(0.96 0 0);
+    --popover: oklch(0.225 0 0);
+    --popover-foreground: oklch(0.96 0 0);
+    --primary: oklch(0.93 0 0);
+    --primary-foreground: oklch(0.2 0 0);
+    --secondary: oklch(0.26 0 0);
+    --secondary-foreground: oklch(0.96 0 0);
+    --muted: oklch(0.255 0 0);
+    --muted-foreground: oklch(0.68 0 0);
+    --accent: oklch(0.27 0 0);
+    --accent-foreground: oklch(0.96 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 8%);
+    --input: oklch(1 0 0 / 12%);
+    --ring: oklch(0.55 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.155 0 0);
+    --sidebar-foreground: oklch(0.8 0 0);
+    --sidebar-primary: oklch(0.93 0 0);
+    --sidebar-primary-foreground: oklch(0.2 0 0);
+    --sidebar-accent: oklch(1 0 0 / 7%);
+    --sidebar-accent-foreground: oklch(0.97 0 0);
+    --sidebar-border: oklch(1 0 0 / 7%);
+    --sidebar-ring: oklch(0.55 0 0);
+    --canvas: oklch(0.165 0 0);
+    --paper: oklch(0.225 0 0);
+    --paper-foreground: oklch(0.94 0 0);
+    --paper-shadow:
+      0 0 0 1px oklch(1 0 0 / 7%), 0 1px 2px oklch(0 0 0 / 30%),
+      0 16px 40px -16px oklch(0 0 0 / 60%);
+    --field: oklch(0.76 0.12 255);
+    --status-open: oklch(0.8 0.15 75);
+    --status-investigating: oklch(0.7 0.14 255);
+    --status-challan: oklch(0.7 0.15 295);
+    --status-closed: oklch(0.74 0.13 160);
+  }
 }
 
 @layer base {
@@ -185,7 +187,6 @@
   .select-text * {
     user-select: text;
   }
-  /* Editable text keeps the I-beam; the body's arrow would otherwise be inherited. */
   input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]),
   textarea,
   [contenteditable="true"] {
@@ -195,14 +196,10 @@
   img {
     -webkit-user-drag: none;
   }
-  /* Attribute (not :lang) so the rule sets the font where Urdu UI begins and children inherit;
-     the document editor declares its own print-matching font. */
   [lang="ur"]:not(.missal-editor-input *) {
     font-family: var(--font-urdu-ui);
-    /* Scale the Nastaleeq fallback to Inter's x-height so mixed Urdu/Latin labels balance. */
     font-size-adjust: from-font;
   }
-  /* Synthetic bold smears Nastaleeq; keep Urdu labels at their natural weight in UI chrome. */
   [data-slot="sidebar-menu-button"] :lang(ur),
   [data-slot="badge"]:lang(ur) {
     font-weight: 400;
@@ -276,8 +273,6 @@
   font-family: var(--font-urdu);
   font-size: 1.25rem;
   line-height: 2.4;
-  /* Jameel Noori's ccmp shapes a space between Urdu letters to zero width in Chromium; restore
-     the font's own space width (0.25em) so words don't run together. Keep in sync with output.ts. */
   word-spacing: 0.25em;
   text-align: right;
   unicode-bidi: plaintext;
@@ -331,7 +326,6 @@
   font-weight: inherit;
 }
 
-/* Word formatting on the host often sets a text colour; the value keeps the field colour on screen. */
 .missal-field-value {
   color: var(--field);
 }

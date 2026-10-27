@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Exit } from "effect";
 import { useNavigate } from "@tanstack/react-router";
 import { Add01Icon, LegalDocument01Icon } from "@hugeicons/core-free-icons";

@@ -44,7 +44,7 @@ export const features = tableFeatures({
 export type DataTableFeatures = typeof features;
 
 declare module "@tanstack/react-table" {
-  // oxlint-disable-next-line no-unused-vars -- generics must match the declaration being merged.
+  // oxlint-disable-next-line no-unused-vars
   interface ColumnMeta<
     TFeatures extends TableFeatures,
     TData extends RowData,

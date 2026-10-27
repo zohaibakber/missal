@@ -47,7 +47,6 @@ export function collectStyles(
     if (value && value !== "auto" && (value !== "normal" || keepNormal.has(property)))
       result.setProperty(property, value);
   }
-  // Paragraph and cell heights are content-dependent. Keep only authored dimensions.
   for (const property of ["width", "height", "min-width", "max-width"]) {
     const value = element.style.getPropertyValue(property);
     if (value && value !== "auto") result.setProperty(property, value);

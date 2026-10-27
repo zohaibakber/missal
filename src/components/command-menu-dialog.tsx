@@ -1,7 +1,7 @@
 import { Fragment, useDeferredValue, useState, type ComponentProps } from "react";
 import { defaultFilter } from "cmdk";
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { useNavigate } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {

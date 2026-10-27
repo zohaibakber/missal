@@ -17,14 +17,6 @@ const EMPTY_LAYOUT: VirtualRowsLayout = { items: [], totalSize: 0 };
 
 const virtualizerOptions = { observeElementRect, observeElementOffset, scrollToFn: elementScroll };
 
-/**
- * Fixed-height row virtualization on `@tanstack/virtual-core`, shaped for React Compiler.
- *
- * `useVirtualizer` from `@tanstack/react-virtual` returns one mutable object whose getters change
- * under a stable identity, so the compiler skips any component calling it. Here each layout is
- * published as state, and only the stable `scrollToIndex` method is shared. Rows all have
- * `rowHeight`, so nothing is measured (TanStack's guidance for fixed-size rows).
- */
 export function useVirtualRows({
   count,
   scrollElement,
@@ -63,7 +55,6 @@ export function useVirtualRows({
       getScrollElement: () => scrollElement,
       estimateSize: () => rowHeight,
       overscan,
-      // Scroll-driven changes render synchronously so fast scrolling never shows blank rows.
       onChange: (instance, sync) => {
         if (sync) flushSync(() => publish(instance));
         else publish(instance);

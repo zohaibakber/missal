@@ -1,12 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useSequenceShortcut, useShortcut } from "#/hooks/use-shortcut";
+import { useShortcut } from "#/hooks/use-shortcut";
 
 export function useAppShortcuts() {
   const navigate = useNavigate();
 
-  useSequenceShortcut("goHome", () => void navigate({ to: "/" }));
-  useSequenceShortcut("goTemplates", () => void navigate({ to: "/templates" }));
-  useSequenceShortcut("goSettings", () => void navigate({ to: "/settings" }));
+  useShortcut("goHome", () => void navigate({ to: "/" }));
+  useShortcut("goTemplates", () => void navigate({ to: "/templates" }));
+  useShortcut("goSettings", () => void navigate({ to: "/settings" }));
   useShortcut("newFir", () => void navigate({ to: "/new" }));
   useShortcut("newTemplate", () => void navigate({ to: "/templates/new" }));
 

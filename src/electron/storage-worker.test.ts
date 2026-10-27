@@ -1,33 +1,51 @@
+import * as BrowserWorker from "@effect/platform-browser/BrowserWorker";
 import { expect, it } from "@effect/vitest";
-import { Cause, Effect, Exit } from "effect";
-import { RpcTest } from "effect/unstable/rpc";
+import { Cause, Effect, Exit, Layer, Schema } from "effect";
+import { RpcClient, RpcTest } from "effect/rpc";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { storageHandlers } from "#/electron/storage-dispatch";
+import { MessageChannel } from "node:worker_threads";
+import { storageControlHandlers } from "#/electron/storage-handlers";
+import { StorageControlRpcs } from "#/electron/storage-control-rpc";
 import { StorageRpcs } from "#/electron/storage-rpc";
+import { FirCreateInput, createEmptyFirRecord } from "#/lib/fir";
 
 const databasePath = () => join(mkdtempSync(join(tmpdir(), "missal-worker-")), "test.sqlite");
 
-it.live("opens the database and serves encoded storage requests", () =>
+it.live("serves repository procedures to a renderer over its port", () =>
   Effect.gen(function* () {
-    const client = yield* RpcTest.makeClient(StorageRpcs);
-    yield* client["Storage.open"]();
+    const control = yield* RpcTest.makeClient(StorageControlRpcs);
+    yield* control["Storage.open"]();
+    const { port1, port2 } = new MessageChannel();
+    yield* control["Storage.connect"]({ port: port1 });
 
-    const request = (payload: unknown) =>
-      client["Storage.request"]({ payload: JSON.stringify(payload) }).pipe(
-        Effect.map((response): unknown => JSON.parse(response)),
-      );
-
-    expect(yield* request({ _tag: "Fir.list" })).toEqual({ _tag: "Success", value: [] });
-    expect(yield* request({ _tag: "Nope" })).toMatchObject({
-      _tag: "Failure",
-      error: { _tag: "StorageError", operation: "storage.decode" },
-    });
-    expect(yield* client["Storage.request"]({ payload: "{not json" })).toContain("storage.decode");
+    const protocol = yield* Layer.build(
+      RpcClient.layerProtocolWorker({ size: 1 }).pipe(
+        Layer.provide(BrowserWorker.layer(() => port2 as unknown as MessagePort)),
+      ),
+    );
+    const renderer = yield* RpcClient.make(StorageRpcs).pipe(Effect.provideContext(protocol));
+    expect(yield* renderer["Fir.list"]()).toEqual([]);
+    const created = yield* renderer["Fir.create"](
+      Schema.decodeUnknownSync(FirCreateInput)({
+        ...createEmptyFirRecord(),
+        fir_no: "12/26",
+        date: "12-09-2026",
+        incident_date: "12-09-2026",
+        offence: "test",
+        accused: ["test"],
+      }),
+    );
+    expect(yield* renderer["Fir.get"](created.id)).toEqual(created);
+    const missing = yield* Effect.flip(renderer["Fir.get"](created.id + 1));
+    expect(missing).toMatchObject({ _tag: "EntityNotFound", entity: "fir" });
   }).pipe(
     Effect.provide(
-      storageHandlers({ databasePath: databasePath(), migrationsFolder: resolve("drizzle") }),
+      storageControlHandlers({
+        databasePath: databasePath(),
+        migrationsFolder: resolve("drizzle"),
+      }),
     ),
     Effect.scoped,
   ),
@@ -35,22 +53,21 @@ it.live("opens the database and serves encoded storage requests", () =>
 
 it.live("reports a database that cannot be opened", () =>
   Effect.gen(function* () {
-    const client = yield* RpcTest.makeClient(StorageRpcs);
-    const exit = yield* Effect.exit(client["Storage.open"]());
+    const control = yield* RpcTest.makeClient(StorageControlRpcs);
+    const exit = yield* Effect.exit(control["Storage.open"]());
 
     expect(Exit.isFailure(exit) && String(Cause.squash(exit.cause))).toContain(
       "/nonexistent/drizzle",
     );
-    const response = yield* client["Storage.request"]({
-      payload: JSON.stringify({ _tag: "Fir.list" }),
-    });
-    expect(JSON.parse(response)).toMatchObject({
-      _tag: "Failure",
-      error: { _tag: "StorageError" },
-    });
+    const { port1 } = new MessageChannel();
+    const connected = yield* Effect.exit(control["Storage.connect"]({ port: port1 }));
+    expect(Exit.isFailure(connected)).toBe(true);
   }).pipe(
     Effect.provide(
-      storageHandlers({ databasePath: databasePath(), migrationsFolder: "/nonexistent/drizzle" }),
+      storageControlHandlers({
+        databasePath: databasePath(),
+        migrationsFolder: "/nonexistent/drizzle",
+      }),
     ),
     Effect.scoped,
   ),

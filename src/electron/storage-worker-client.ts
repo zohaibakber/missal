@@ -1,66 +1,46 @@
 import * as NodeWorker from "@effect/platform-node/NodeWorker";
-import { Context, Effect, Layer, ManagedRuntime } from "effect";
-import { RpcClient, RpcWorker } from "effect/unstable/rpc";
-import type { RpcClientError } from "effect/unstable/rpc/RpcClientError";
-import path from "node:path";
-import { Worker } from "node:worker_threads";
-import { StorageRpcs, StorageWorkerConfig } from "#/electron/storage-rpc";
+import { Context, Effect, Layer } from "effect";
+import { RpcClient, RpcWorker } from "effect/rpc";
+import type { MessagePortMain } from "electron";
+import { MessageChannel, type MessagePort, Worker } from "node:worker_threads";
+import { StorageControlRpcs, StorageWorkerConfig } from "#/electron/storage-control-rpc";
+
+const pipePorts = (renderer: MessagePortMain, worker: MessagePort) => {
+  renderer.on("message", (event) => worker.postMessage(event.data));
+  worker.on("message", (data) => renderer.postMessage(data));
+  renderer.once("close", () => worker.close());
+  worker.once("close", () => renderer.close());
+  renderer.start();
+};
 
 export class StorageWorker extends Context.Service<
   StorageWorker,
-  RpcClient.FromGroup<typeof StorageRpcs, RpcClientError>
->()("missal/StorageWorker") {}
-
-export function resolveDatabasePath(userDataPath: string) {
-  return path.join(userDataPath, "missal.sqlite");
-}
-
-/** A folder shipped with `extraResource`, or the repository's copy in development. */
-export function resolveResourceFolder(
-  name: string,
-  options: { packaged: boolean; resourcesPath: string; cwd: string },
-) {
-  return path.join(options.packaged ? options.resourcesPath : options.cwd, name);
-}
-
-export function makeStorageWorkerRuntime(options: {
-  workerPath: string;
-  config: StorageWorkerConfig;
-}) {
-  const layer = Layer.effect(StorageWorker, RpcClient.make(StorageRpcs)).pipe(
-    Layer.provide(RpcClient.layerProtocolWorker({ size: 1 })),
-    Layer.provide(NodeWorker.layer(() => new Worker(options.workerPath))),
-    Layer.provide(
-      RpcWorker.layerInitialMessage(StorageWorkerConfig, Effect.succeed(options.config)),
-    ),
-  );
-
-  return ManagedRuntime.make(layer);
-}
-
-export type StorageHost = {
-  readonly ready: Promise<void>;
-  readonly request: (payload: string) => Promise<string>;
-  readonly dispose: () => Promise<void>;
-};
-
-export function startStorageWorker(options: {
-  workerPath: string;
-  config: StorageWorkerConfig;
-}): StorageHost {
-  const runtime = makeStorageWorkerRuntime(options);
-  const ready = runtime.runPromise(
-    Effect.flatMap(StorageWorker, (worker) => worker["Storage.open"]()),
-  );
-
-  return {
-    ready,
-    request: async (payload) => {
-      await ready;
-      return runtime.runPromise(
-        Effect.flatMap(StorageWorker, (worker) => worker["Storage.request"]({ payload })),
-      );
-    },
-    dispose: () => runtime.dispose(),
-  };
+  {
+    readonly open: Effect.Effect<void, unknown>;
+    readonly connect: (renderer: MessagePortMain) => Effect.Effect<void, unknown>;
+  }
+>()("missal/StorageWorker") {
+  static readonly layer = (options: { workerPath: string; config: StorageWorkerConfig }) =>
+    Layer.effect(
+      StorageWorker,
+      Effect.map(RpcClient.make(StorageControlRpcs), (client) =>
+        StorageWorker.of({
+          open: client["Storage.open"](),
+          connect: (renderer) =>
+            Effect.suspend(() => {
+              const { port1, port2 } = new MessageChannel();
+              pipePorts(renderer, port2);
+              return client["Storage.connect"]({
+                port: port1,
+              });
+            }),
+        }),
+      ),
+    ).pipe(
+      Layer.provide(RpcClient.layerProtocolWorker({ size: 1 })),
+      Layer.provide(NodeWorker.layer(() => new Worker(options.workerPath))),
+      Layer.provide(
+        RpcWorker.layerInitialMessage(StorageWorkerConfig, Effect.succeed(options.config)),
+      ),
+    );
 }

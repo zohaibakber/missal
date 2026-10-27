@@ -3,10 +3,6 @@ import type { PageLayout } from "#/lib/document-format";
 
 export const URDU_FONT_FAMILY = "Jameel Noori Nastaleeq";
 export const URDU_FONT_URL = "/Jameel%20Noori%20Nastaleeq.woff2";
-/**
- * Word's single-line height for the bundled font, (usWinAscent + usWinDescent) / unitsPerEm from
- * its Windows metrics. Kept here so a Word import needn't download the font to read three numbers.
- */
 export const URDU_FONT_WINDOWS_LINE_RATIO = (2570 + 900) / 2048;
 
 function escapeOutputHtml(value: string) {
@@ -21,8 +17,6 @@ type SectionPage = { readonly name: string; readonly layout: PageLayout };
 
 function documentSectionHtml(html: string, startOnNewPage: boolean, page?: SectionPage) {
   const pageClass = startOnNewPage ? " missal-print-break" : "";
-  // Side margins are padding, not @page margins: Chromium clips anything drawn in the page margin,
-  // and Word documents often indent text and tables into it.
   const pageStyle = page
     ? ` style="page: ${escapeOutputHtml(page.name)}; padding: 0 ${page.layout.marginRightMm}mm 0 ${page.layout.marginLeftMm}mm"`
     : "";
@@ -53,7 +47,7 @@ function printablePacketHtml(content: string, title: string, pageRules = "") {
         font-family: "Jameel Noori Nastaleeq", serif;
         font-size: 20px;
         line-height: 2.4;
-        word-spacing: 0.25em; /* Jameel Noori collapses spaces in Chromium; see styles.css. */
+        word-spacing: 0.25em;
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
       }

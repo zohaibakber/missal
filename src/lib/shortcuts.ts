@@ -1,7 +1,7 @@
 import type { Hotkey } from "@tanstack/react-hotkeys";
 
 export type Shortcut = {
-  keys: Hotkey | readonly Hotkey[];
+  keys: Hotkey;
   label: string;
   group: ShortcutGroup;
 };

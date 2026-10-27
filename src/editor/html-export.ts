@@ -47,10 +47,8 @@ export function envelopePrintPacket(
 const PRINT_CANCELED = "Print job canceled";
 
 export async function printPacket({ html }: PrintPacket): Promise<string | null> {
-  const api = window.electronPrint;
-  if (!api) return "Printing is only available in the Missal desktop app.";
   try {
-    const result = await api.print(html);
+    const result = await window.electronPrint.print(html);
     if (result.printed || result.failureReason === PRINT_CANCELED) return null;
     return result.failureReason ?? "Unable to print";
   } catch {

@@ -1,9 +1,21 @@
+export const DESKTOP_PREFERENCES_CHANNEL = "desktop:preferences";
 export const DESKTOP_THEME_CHANNEL = "desktop:set-theme";
+export const DESKTOP_LAYOUT_CHANNEL = "desktop:set-layout";
 
 export type DesktopTheme = "dark" | "light" | "system";
 
-export type ElectronThemeApi = {
-  setSource: (source: DesktopTheme) => void;
+export type DesktopPreferences = {
+  readonly theme: DesktopTheme;
+  readonly layouts: Readonly<Record<string, string>>;
+};
+
+export type ElectronPreferencesApi = {
+  readonly theme: DesktopTheme;
+  readonly setTheme: (theme: DesktopTheme) => void;
+  readonly layoutStorage: {
+    readonly getItem: (key: string) => string | null;
+    readonly setItem: (key: string, value: string) => void;
+  };
 };
 
 export const DESKTOP_PRINT_PDF_CHANNEL = "desktop:print-pdf";

@@ -1,45 +1,42 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, protocol } from "electron";
-import squirrelStartup from "electron-squirrel-startup";
-import { updateElectronApp, UpdateSourceType } from "update-electron-app";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  MessageChannelMain,
+  nativeTheme,
+  net,
+  protocol,
+} from "electron";
+import { autoUpdater } from "electron-updater";
+import { Schema } from "effect";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  DESKTOP_LAYOUT_CHANNEL,
+  DESKTOP_PREFERENCES_CHANNEL,
   DESKTOP_PRINT_CHANNEL,
   DESKTOP_PRINT_PDF_CHANNEL,
   DESKTOP_THEME_CHANNEL,
-  type DesktopTheme,
 } from "./desktop-window";
-import { closePrintWindow, printPacket, renderPrintPdf } from "./electron/print-pdf";
-import { registerStorageIpc } from "./electron/storage-ipc-main";
-import type { StorageHost } from "./electron/storage-worker-client";
+import { type DesktopRuntime, startDesktopRuntime } from "./electron/desktop-runtime";
+import { DesktopTheme, type PreferencesStore } from "./electron/preferences";
+import { STORAGE_CONNECT_CHANNEL, STORAGE_PORT_CHANNEL } from "./electron/storage-channel";
 
+const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 const RENDERER_SCHEME = "missal";
-const RENDERER_HOST = "renderer";
-// Matches --titlebar-height in styles.css.
+const RENDERER_ORIGIN = DEV_SERVER_URL ? new URL(DEV_SERVER_URL).origin : "missal://renderer";
+const RENDERER_ROOT = path.join(__dirname, "../dist");
 const TITLEBAR_HEIGHT = 44;
-const TITLEBAR_COLOR = "#01000000";
-const TITLEBAR_LIGHT_SYMBOL_COLOR = "#404040";
-const TITLEBAR_DARK_SYMBOL_COLOR = "#d4d4d4";
 
-// Matches --sidebar in styles.css so the window never flashes a different shade behind the chrome.
 const windowBackground = () => (nativeTheme.shouldUseDarkColors ? "#0c0c0c" : "#f5f5f5");
 
-const titleBarOptions = (): Pick<
-  Electron.BrowserWindowConstructorOptions,
-  "titleBarOverlay" | "titleBarStyle"
-> => {
-  return {
-    titleBarStyle: "hidden",
-    titleBarOverlay: {
-      color: TITLEBAR_COLOR,
-      height: TITLEBAR_HEIGHT,
-      symbolColor: nativeTheme.shouldUseDarkColors
-        ? TITLEBAR_DARK_SYMBOL_COLOR
-        : TITLEBAR_LIGHT_SYMBOL_COLOR,
-    },
-  };
-};
+const titleBarOverlay = () => ({
+  color: "#01000000",
+  height: TITLEBAR_HEIGHT,
+  symbolColor: nativeTheme.shouldUseDarkColors ? "#d4d4d4" : "#404040",
+});
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -55,24 +52,13 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-// App windows only: the hidden print window has no title bar overlay and must not keep the app open.
 const appWindows = new Set<BrowserWindow>();
-
-const updateWindowAppearance = (window: BrowserWindow) => {
-  if (window.isDestroyed()) return;
-
-  window.setBackgroundColor(windowBackground());
-  window.setTitleBarOverlay({
-    color: TITLEBAR_COLOR,
-    height: TITLEBAR_HEIGHT,
-    symbolColor: nativeTheme.shouldUseDarkColors
-      ? TITLEBAR_DARK_SYMBOL_COLOR
-      : TITLEBAR_LIGHT_SYMBOL_COLOR,
-  });
-};
+let desktop: DesktopRuntime | undefined;
+let preferences: PreferencesStore["Service"] | undefined;
+let disposing = false;
 
 const createWindow = () => {
-  const mainWindow = new BrowserWindow({
+  const window = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 800,
@@ -81,7 +67,8 @@ const createWindow = () => {
     autoHideMenuBar: true,
     backgroundColor: windowBackground(),
     title: "Missal",
-    ...titleBarOptions(),
+    titleBarStyle: "hidden",
+    titleBarOverlay: titleBarOverlay(),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -90,162 +77,126 @@ const createWindow = () => {
     },
   });
 
-  appWindows.add(mainWindow);
-  mainWindow.once("ready-to-show", () => {
-    mainWindow.show();
+  appWindows.add(window);
+  window.once("ready-to-show", () => window.show());
+  window.once("closed", () => {
+    appWindows.delete(window);
+    if (appWindows.size === 0) desktop?.closePrintWindow();
   });
-  mainWindow.once("closed", () => {
-    appWindows.delete(mainWindow);
-    if (appWindows.size === 0) closePrintWindow();
-  });
-
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    void mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-    return;
-  }
-
-  void mainWindow.loadURL(`${RENDERER_SCHEME}://${RENDERER_HOST}/`);
+  void window.loadURL(DEV_SERVER_URL ?? `${RENDERER_ORIGIN}/`);
 };
 
-const isFile = (filePath: string) =>
-  fs.stat(filePath).then(
+const serveRenderer = async (request: Request) => {
+  const { pathname } = new URL(request.url);
+  const filePath = path.join(RENDERER_ROOT, decodeURIComponent(pathname));
+  if (path.relative(RENDERER_ROOT, filePath).startsWith("..")) {
+    return new Response("Forbidden", { status: 403 });
+  }
+  const isFile = await fs.stat(filePath).then(
     (stats) => stats.isFile(),
     () => false,
   );
-
-const handleRendererProtocol = async (request: Request) => {
-  const url = new URL(request.url);
-  const rendererRoot = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
-  const requestedPath = url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname);
-  const filePath = path.normalize(path.join(rendererRoot, requestedPath));
-  const isInsideRenderer =
-    filePath === rendererRoot || filePath.startsWith(`${rendererRoot}${path.sep}`);
-
-  if (!isInsideRenderer) {
-    return new Response("Forbidden", { status: 403 });
-  }
-
-  const fallback = path.join(rendererRoot, "index.html");
-  const resolved = (await isFile(filePath)) ? filePath : fallback;
-
-  return net.fetch(pathToFileURL(resolved).toString());
+  return net.fetch(pathToFileURL(isFile ? filePath : path.join(RENDERER_ROOT, "index.html")).href);
 };
 
-const isDesktopTheme = (theme: unknown): theme is DesktopTheme => {
-  return theme === "dark" || theme === "light" || theme === "system";
-};
+const fromRenderer = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) =>
+  event.senderFrame?.origin === RENDERER_ORIGIN;
 
-const rendererOrigin = () =>
-  MAIN_WINDOW_VITE_DEV_SERVER_URL
-    ? new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL).origin
-    : `${RENDERER_SCHEME}://${RENDERER_HOST}`;
-
-const registerDesktopIntegration = () => {
-  ipcMain.on(DESKTOP_THEME_CHANNEL, (_event, theme: unknown) => {
-    if (isDesktopTheme(theme)) nativeTheme.themeSource = theme;
-  });
-
-  const printRequest = (event: Electron.IpcMainInvokeEvent, html: unknown) => {
-    const origin = rendererOrigin();
-    const senderUrl = event.senderFrame?.url;
-    if (typeof html !== "string" || !senderUrl || new URL(senderUrl).origin !== origin) {
+const printHtml =
+  <A>(run: (runtime: DesktopRuntime, html: string) => Promise<A>) =>
+  (event: Electron.IpcMainInvokeEvent, html: unknown) => {
+    if (!desktop || typeof html !== "string" || !fromRenderer(event)) {
       throw new Error("Print request rejected");
     }
-    return { origin, html };
+    return run(desktop, html);
   };
 
-  ipcMain.handle(DESKTOP_PRINT_PDF_CHANNEL, (event, html: unknown) => {
-    const request = printRequest(event, html);
-    return renderPrintPdf(request.origin, request.html);
-  });
+const isDesktopTheme = Schema.is(DesktopTheme);
 
-  ipcMain.handle(DESKTOP_PRINT_CHANNEL, (event, html: unknown) => {
-    const request = printRequest(event, html);
-    return printPacket(request.origin, request.html);
-  });
-};
+if (app.isPackaged) void autoUpdater.checkForUpdatesAndNotify();
 
-const startApp = () => {
-  // Auto-update does nothing in development or outside Windows.
-  updateElectronApp({
-    updateSource: {
-      type: UpdateSourceType.ElectronPublicUpdateService,
-      repo: "zohaibakber/missal",
+void app.whenReady().then(async () => {
+  protocol.handle(RENDERER_SCHEME, serveRenderer);
+  const userData = app.getPath("userData");
+  const runtime = startDesktopRuntime({
+    workerPath: path.join(__dirname, "storage-worker.cjs"),
+    rendererOrigin: RENDERER_ORIGIN,
+    preferencesDirectory: userData,
+    config: {
+      databasePath: path.join(userData, "missal.sqlite"),
+      migrationsFolder: path.join(
+        app.isPackaged ? process.resourcesPath : process.cwd(),
+        "drizzle",
+      ),
     },
   });
-
-  let storage: Promise<StorageHost> | undefined;
-  let disposingStorage = false;
-
-  void app.whenReady().then(() => {
-    protocol.handle(RENDERER_SCHEME, handleRendererProtocol);
-    registerDesktopIntegration();
-    createWindow();
-
-    // Effect, RPC and the storage schemas load only after the window exists, so compiling them
-    // doesn't delay first paint. The channel is registered now and its requests wait for them.
-    storage = import("./electron/storage-worker-client").then((client) => {
-      const resources = {
-        packaged: app.isPackaged,
-        resourcesPath: process.resourcesPath,
-        cwd: process.cwd(),
-      };
-      return client.startStorageWorker({
-        workerPath: path.join(__dirname, "storage-worker.cjs"),
-        config: {
-          databasePath: client.resolveDatabasePath(app.getPath("userData")),
-          migrationsFolder: client.resolveResourceFolder("drizzle", resources),
-          bundledTemplatesFolder: client.resolveResourceFolder("bundled-templates", resources),
-        },
-      });
-    });
-    registerStorageIpc(storage);
-    storage
-      .then((host) => host.ready)
-      .catch((error: unknown) => {
-        dialog.showErrorBox(
-          "Missal could not open the database",
-          error instanceof Error ? error.message : "Storage operation failed",
-        );
-        app.quit();
-      });
+  desktop = runtime;
+  runtime.ready.catch((error: unknown) => {
+    dialog.showErrorBox(
+      "Missal could not open the database",
+      error instanceof Error ? error.message : "Storage operation failed",
+    );
+    app.quit();
   });
+  preferences = await runtime.preferences;
+  nativeTheme.themeSource = preferences.current().theme;
+  createWindow();
+});
 
-  nativeTheme.on("updated", () => {
-    for (const window of appWindows) {
-      updateWindowAppearance(window);
-    }
-  });
+ipcMain.on(DESKTOP_PREFERENCES_CHANNEL, (event) => {
+  event.returnValue = fromRenderer(event) ? preferences?.current() : null;
+});
 
-  app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
-      app.quit();
-    }
-  });
+ipcMain.on(DESKTOP_THEME_CHANNEL, (event, theme: unknown) => {
+  if (!desktop || !fromRenderer(event) || !isDesktopTheme(theme)) return;
+  nativeTheme.themeSource = theme;
+  desktop.updatePreferences((current) => ({ ...current, theme }));
+});
 
-  app.on("activate", () => {
-    if (appWindows.size === 0) {
-      createWindow();
-    }
-  });
+ipcMain.on(DESKTOP_LAYOUT_CHANNEL, (event, id: unknown, layout: unknown) => {
+  if (!desktop || !fromRenderer(event) || typeof id !== "string" || typeof layout !== "string") {
+    return;
+  }
+  desktop.updatePreferences((current) => ({
+    ...current,
+    layouts: { ...current.layouts, [id]: layout },
+  }));
+});
 
-  app.on("before-quit", (event) => {
-    if (!storage || disposingStorage) {
-      return;
-    }
+ipcMain.on(STORAGE_CONNECT_CHANNEL, (event) => {
+  if (!desktop || !fromRenderer(event)) return;
+  const { port1, port2 } = new MessageChannelMain();
+  event.sender.postMessage(STORAGE_PORT_CHANNEL, null, [port2]);
+  void desktop.connect(port1);
+});
 
-    event.preventDefault();
-    disposingStorage = true;
-    void storage
-      .then((host) => host.dispose())
-      .finally(() => {
-        app.quit();
-      });
-  });
-};
+ipcMain.handle(
+  DESKTOP_PRINT_PDF_CHANNEL,
+  printHtml((runtime, html) => runtime.renderPdf(html)),
+);
+ipcMain.handle(
+  DESKTOP_PRINT_CHANNEL,
+  printHtml((runtime, html) => runtime.print(html)),
+);
 
-if (squirrelStartup) {
-  app.quit();
-} else {
-  startApp();
-}
+nativeTheme.on("updated", () => {
+  for (const window of appWindows) {
+    window.setBackgroundColor(windowBackground());
+    window.setTitleBarOverlay(titleBarOverlay());
+  }
+});
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
+});
+
+app.on("activate", () => {
+  if (appWindows.size === 0) createWindow();
+});
+
+app.on("before-quit", (event) => {
+  if (!desktop || disposing) return;
+  event.preventDefault();
+  disposing = true;
+  void desktop.dispose().finally(() => app.quit());
+});

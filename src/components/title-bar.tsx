@@ -10,7 +10,6 @@ import { useShortcut } from "#/hooks/use-shortcut";
 
 type HistoryNavigation = EventTarget & { canGoBack: boolean; canGoForward: boolean };
 
-// Chromium's Navigation API tracks same-document history, so it knows about forward entries too.
 const historyNavigation = (window as { navigation?: HistoryNavigation }).navigation;
 
 function subscribe(onChange: () => void) {

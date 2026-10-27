@@ -1,6 +1,9 @@
-import { Array, Cause, Effect, Match, Option } from "effect";
+import { Array, Cause, Effect, Match, Option, Schema } from "effect";
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core/errors";
-import { isSqlError } from "effect/unstable/sql/SqlError";
+import { isSqlError, type SqlError } from "effect/sql/SqlError";
+import type { MissalDrizzle } from "#/electron/database";
+import { appSettings } from "#/electron/database-schema";
+import { AppSettings, DEFAULT_SETTINGS } from "#/lib/settings";
 import {
   EntityConflict,
   EntityNotFound,
@@ -23,31 +26,23 @@ const failStorage = (operation: string) =>
 export const failQuery = (operation: string) => (_error: EffectDrizzleQueryError) =>
   failStorage(operation);
 
-export const isDrizzleQueryError = (error: unknown): error is EffectDrizzleQueryError =>
-  typeof error === "object" &&
-  error !== null &&
-  "_tag" in error &&
-  error._tag === "EffectDrizzleQueryError";
+export const mapQuery = <A, E, R>(
+  operation: string,
+  effect: Effect.Effect<A, E | EffectDrizzleQueryError, R>,
+) =>
+  Effect.catchIf(effect, Schema.is(EffectDrizzleQueryError), () =>
+    Effect.fail(failStorage(operation)),
+  );
 
-const isSqlErrorTag = (error: unknown): error is { readonly _tag: "SqlError" } =>
-  typeof error === "object" && error !== null && "_tag" in error && error._tag === "SqlError";
-
-export const mapQuery = <A, E, R>(operation: string, effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(Effect.catchIf(isDrizzleQueryError, () => failStorage(operation))) as Effect.Effect<
-    A,
-    Exclude<E, EffectDrizzleQueryError> | StorageError,
-    R
-  >;
-
-export const mapTransaction = <A, E, R>(operation: string, effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(
-    Effect.catchIf(isDrizzleQueryError, () => failStorage(operation)),
-    Effect.catchIf(isSqlErrorTag, () => failStorage(operation)),
-  ) as Effect.Effect<
-    A,
-    Exclude<E, EffectDrizzleQueryError | { readonly _tag: "SqlError" }> | StorageError,
-    R
-  >;
+export const mapTransaction = <A, E, R>(
+  operation: string,
+  effect: Effect.Effect<A, E | EffectDrizzleQueryError | SqlError, R>,
+) =>
+  Effect.catchIf(
+    effect,
+    (error) => Schema.is(EffectDrizzleQueryError)(error) || isSqlError(error),
+    () => Effect.fail(failStorage(operation)),
+  );
 
 export const recoverUnique =
   (operation: string, entity: EntityKind, field: string, value: string) =>
@@ -125,3 +120,34 @@ export const constraintKind = (error: EffectDrizzleQueryError) =>
         Match.orElse(() => undefined),
       ),
   });
+
+type SettingsQueries = Pick<MissalDrizzle["Service"], "select" | "insert">;
+
+const decodeSettings = decodeStored(Schema.decodeUnknownEffect(AppSettings), "settings.decode");
+
+export const readSettings = (db: SettingsQueries) =>
+  db
+    .select()
+    .from(appSettings)
+    .pipe(
+      Effect.flatMap((rows) =>
+        Option.match(Array.head(rows), {
+          onNone: () => Effect.succeed(DEFAULT_SETTINGS),
+          onSome: decodeSettings,
+        }),
+      ),
+    );
+
+export const writeSettings = (
+  db: SettingsQueries,
+  values: Omit<typeof appSettings.$inferInsert, "id">,
+) =>
+  db
+    .insert(appSettings)
+    .values(values)
+    .onConflictDoUpdate({ target: appSettings.id, set: values })
+    .returning()
+    .pipe(
+      Effect.flatMap((rows) => requireRow(rows, missingWrite("settings.save"))),
+      Effect.flatMap(decodeSettings),
+    );

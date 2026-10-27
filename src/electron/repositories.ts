@@ -2,7 +2,6 @@ import { globalPlaceholderOperations } from "#/electron/global-placeholders";
 import { Effect, HashMap, Layer, Option, Schema } from "effect";
 import { and, asc, count, desc, eq, inArray, like, or } from "drizzle-orm";
 import {
-  appSettings,
   firDocumentRecordColumns,
   firDocumentSummaryColumns,
   firDocuments,
@@ -19,10 +18,11 @@ import {
   constraintKind,
   decodeStored,
   failQuery,
-  isDrizzleQueryError,
   likeNeedle,
   mapQuery,
   mapTransaction,
+  readSettings,
+  writeSettings,
   missingWrite,
   notFound,
   recoverUnique,
@@ -41,7 +41,6 @@ import {
 } from "#/lib/fir-document";
 import { DocumentRevision, type FirId, type PlaceholderId, TemplateId } from "#/lib/ids";
 import { Placeholder, PlaceholderCreateInput, PlaceholderUpdateInput } from "#/lib/placeholder";
-import { AppSettings } from "#/lib/settings";
 import { EntityInUse, type EntityNotFound, type StorageError } from "#/lib/storage-errors";
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core/errors";
 import {
@@ -119,7 +118,6 @@ const decodeFirPlaceholderValue = decodeStored(
   Schema.decodeUnknownEffect(FirPlaceholderValue),
   "firPlaceholderValue.decode",
 );
-const decodeSettings = decodeStored(Schema.decodeUnknownEffect(AppSettings), "settings.decode");
 
 const DrizzlePlaceholderRepositoryLive = Layer.effect(
   PlaceholderRepository,
@@ -141,8 +139,8 @@ const DrizzlePlaceholderRepositoryLive = Layer.effect(
           .values({ label: input.label, source: CustomSource.make({}) })
           .returning()
           .pipe(
-            Effect.catchIf(
-              isDrizzleQueryError,
+            Effect.catchTag(
+              "EffectDrizzleQueryError",
               recoverUnique("placeholder.create", "placeholder", "name", input.label),
             ),
           );
@@ -160,8 +158,8 @@ const DrizzlePlaceholderRepositoryLive = Layer.effect(
           .where(eq(placeholders.id, input.id))
           .returning()
           .pipe(
-            Effect.catchIf(
-              isDrizzleQueryError,
+            Effect.catchTag(
+              "EffectDrizzleQueryError",
               recoverUnique("placeholder.update", "placeholder", "name", input.label),
             ),
           );
@@ -293,7 +291,7 @@ const DrizzleTemplateRepositoryLive = Layer.effect(
             id: templates.id,
           })
           .pipe(
-            Effect.catchIf(isDrizzleQueryError, (error) =>
+            Effect.catchTag("EffectDrizzleQueryError", (error) =>
               Effect.gen(function* () {
                 if (constraintKind(error) === "constraint") {
                   const usage = yield* db
@@ -406,15 +404,7 @@ const DrizzleFirRepositoryLive = Layer.effect(
           .from(firPlaceholderValues)
           .where(eq(firPlaceholderValues.firId, id))
           .pipe(Effect.flatMap(decodeFirPlaceholderValues));
-        const settingsEffect = db
-          .select()
-          .from(appSettings)
-          .where(eq(appSettings.id, "default"))
-          .pipe(
-            Effect.flatMap((rows) => requireRow(rows, missingWrite("settings.get"))),
-            Effect.flatMap(decodeSettings),
-          );
-        // One SQLite connection serves every query, so running these concurrently gains nothing.
+        const settingsEffect = readSettings(db);
         const [fir, catalog, overrides, settings] = yield* Effect.all([
           firEffect,
           catalogEffect,
@@ -733,9 +723,8 @@ const DrizzleFirPlaceholderValueRepositoryLive = Layer.effect(
             })
             .returning()
             .pipe(
-              // Foreign keys already reject a missing FIR or placeholder; only then look up which.
-              Effect.catchIf(
-                isDrizzleQueryError,
+              Effect.catchTag(
+                "EffectDrizzleQueryError",
                 recoverMissingOwner(input.firId, input.placeholderId),
               ),
             );
@@ -773,47 +762,14 @@ const DrizzleSettingsRepositoryLive = Layer.effect(
     const db = yield* MissalDrizzle;
 
     return SettingsRepository.of({
-      get: Effect.fn("SettingsRepository.get")(
-        function* () {
-          const rows = yield* db.select().from(appSettings).where(eq(appSettings.id, "default"));
-          const row = yield* requireRow(rows, missingWrite("settings.get"));
-          return yield* decodeSettings(row);
-        },
-        (effect) => mapQuery("settings.get", effect),
-      )(),
-
-      save: Effect.fn("SettingsRepository.save")(
-        function* (sharedPlaceholders) {
-          const timestamp = yield* nowIso;
-          const rows = yield* db
-            .update(appSettings)
-            .set({
-              sharedPlaceholders: { ...sharedPlaceholders },
-              updatedAt: timestamp,
-            })
-            .where(eq(appSettings.id, "default"))
-            .returning();
-          const row = yield* requireRow(rows, missingWrite("settings.save"));
-          return yield* decodeSettings(row);
-        },
-        (effect) => mapQuery("settings.save", effect),
-      ),
-
-      saveFieldMarkers: Effect.fn("SettingsRepository.saveFieldMarkers")(
-        function* (fieldMarkers) {
-          const rows = yield* db
-            .update(appSettings)
-            .set({
-              fieldMarkers: { open: fieldMarkers.open, close: fieldMarkers.close },
-              updatedAt: yield* nowIso,
-            })
-            .where(eq(appSettings.id, "default"))
-            .returning();
-          const row = yield* requireRow(rows, missingWrite("settings.saveFieldMarkers"));
-          return yield* decodeSettings(row);
-        },
-        (effect) => mapQuery("settings.saveFieldMarkers", effect),
-      ),
+      get: mapQuery("settings.get", readSettings(db)),
+      save: (sharedPlaceholders) =>
+        mapQuery(
+          "settings.save",
+          writeSettings(db, { sharedPlaceholders: { ...sharedPlaceholders } }),
+        ),
+      saveFieldMarkers: ({ open, close }) =>
+        mapQuery("settings.saveFieldMarkers", writeSettings(db, { fieldMarkers: { open, close } })),
     });
   }),
 );

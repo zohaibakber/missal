@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { SortingState } from "@tanstack/react-table";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Exit } from "effect";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -123,7 +123,6 @@ export function FirsPane() {
 function FirBrowser({ data }: { data: readonly FirSummary[] }) {
   const navigate = useNavigate();
   const table = useDataTable({ columns: firColumns, data: [...data], initialSorting });
-  // Targets outlive their `open` flags so the sheet and dialog keep their content while closing.
   const [editing, setEditing] = useState<FirId | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [deleting, setDeleting] = useState<readonly FirSummary[]>([]);

@@ -1,5 +1,5 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Exit, Schema } from "effect";
 import { useForm } from "@tanstack/react-form";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
@@ -35,6 +35,7 @@ import {
   PlaceholderName,
   PlaceholderUpdateInput,
 } from "#/lib/placeholder";
+import { FIR_FIELDS } from "#/lib/field";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
 import { atoms } from "#/state/atoms";
 
@@ -43,7 +44,7 @@ export function FirFieldsSettings() {
   if (AsyncResult.isSuccess(result)) {
     return (
       <FirFieldsForm
-        placeholders={result.value.filter((field) => field.source._tag !== "SharedSetting")}
+        placeholders={result.value.filter((field) => field.source._tag === "Custom")}
       />
     );
   }
@@ -75,7 +76,6 @@ function FirFieldsForm({ placeholders }: { placeholders: readonly Placeholder[] 
   const form = useForm({
     defaultValues: initialValues(),
     onSubmit: async ({ value }) => {
-      // Reset only after all writes succeed. Keep each successful row's identity on a partial failure.
       for (const item of value.placeholders) {
         if (placeholders.find((original) => original.id === item.id)?.label === item.label)
           continue;
@@ -123,6 +123,11 @@ function FirFieldsForm({ placeholders }: { placeholders: readonly Placeholder[] 
           Filled in from each FIR's details. Write a name in a template like{" "}
           <PlaceholderToken name="جرم" />. Renaming one keeps it linked in every template.
         </FieldDescription>
+        <div dir="rtl" lang="ur" className="flex flex-wrap gap-2">
+          {FIR_FIELDS.map(({ label }) => (
+            <PlaceholderToken key={label} name={label} />
+          ))}
+        </div>
         <PlaceholderList>
           <form.Field name="placeholders" mode="array">
             {(arrayField) =>

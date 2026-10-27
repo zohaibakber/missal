@@ -25,8 +25,6 @@ import {
 
 export type DataTableInstance<TData extends RowData> = ReactTable<DataTableFeatures, TData>;
 
-// Every row is one h-10 line (cell text truncates, and Urdu's line height fits), so virtual rows
-// use this fixed height instead of measuring each one.
 const ROW_HEIGHT = 40;
 const OVERSCAN_ROWS = 12;
 
@@ -72,7 +70,6 @@ export function DataTable<TData extends RowData>({
   dir,
   lang,
 }: DataTableProps<TData>) {
-  // State, not a ref: the rows' virtualizer reads it during layout, before a parent ref is attached.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
   const selecting = table.getIsSomeRowsSelected() || table.getIsAllRowsSelected();
 

@@ -96,7 +96,6 @@ function ToastDescription({ className, ...props }: ToastPrimitive.Description.Pr
   );
 }
 
-// JSX defaults are resolved in the body: React Compiler can't compile JSX parameter defaults.
 function ToastAction({ className, render, ...props }: ToastPrimitive.Action.Props) {
   return (
     <ToastPrimitive.Action

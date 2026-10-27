@@ -1,11 +1,11 @@
 import type { SaveGlobalPlaceholdersInput } from "#/lib/global-placeholder";
 import { Effect } from "effect";
-import { AsyncResult, Atom, Reactivity } from "effect/unstable/reactivity";
+import { AsyncResult, Atom, Reactivity } from "effect/reactivity";
 import type { DocumentEnvelope } from "#/lib/document-format";
 import type { FirCreateInput, FirId, FirUpdateInput } from "#/lib/fir";
 import type { FirDocumentId, TemplateId } from "#/lib/ids";
 import {
-  indexPlaceholders,
+  indexFields,
   type PlaceholderCreateInput,
   type PlaceholderUpdateInput,
 } from "#/lib/placeholder";
@@ -31,10 +31,6 @@ import { appRuntime } from "#/state/app-runtime";
 const LATEST_LIMIT = 5;
 const IDLE_TTL = "1 minute";
 
-/**
- * A read-through cache that a mutation can overwrite with what it just stored, so saving a
- * document doesn't download the same body straight back. Refreshing re-reads the source.
- */
 function overridable<A>(source: Atom.Atom<A>) {
   return Atom.writable(
     (get) => get(source),
@@ -65,7 +61,7 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     { reactivityKeys: ["placeholders", "settings"] },
   );
 
-  const placeholderIndexAtom = Atom.mapResult(placeholdersAtom, indexPlaceholders);
+  const fieldIndexAtom = Atom.mapResult(placeholdersAtom, indexFields);
 
   const settingsAtom = runtime
     .atom(Effect.flatMap(SettingsRepository, (repository) => repository.get))
@@ -85,7 +81,6 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     .atom(Effect.flatMap(TemplateRepository, (repository) => repository.list))
     .pipe(runtime.factory.withReactivity(["templates"]), Atom.keepAlive);
 
-  // The body is keyed apart from the list: saving refreshes the list, not every open body.
   const templateByIdAtom = Atom.family((templateId: TemplateId) =>
     overridable(
       runtime
@@ -123,7 +118,6 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
       ),
   );
 
-  // Optimistic, so reordering or removing a document updates the list before storage answers.
   const firDocumentsAtom = Atom.family((firId: FirId) =>
     Atom.optimistic(
       runtime
@@ -292,7 +286,7 @@ function makeAppAtoms(runtime: Atom.AtomRuntime<AppRepositories>) {
     globalPlaceholdersAtom,
     saveGlobalPlaceholdersAtom,
     placeholdersAtom,
-    placeholderIndexAtom,
+    fieldIndexAtom,
     settingsAtom,
     fieldMarkersAtom,
     saveFieldMarkersAtom,

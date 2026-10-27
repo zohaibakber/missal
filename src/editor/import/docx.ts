@@ -3,13 +3,13 @@ import { collectStyles, cssLengthMm } from "#/editor/import/computed-style";
 import { createPageBreakMarker } from "#/editor/import/page-breaks";
 import { wordLineRatio } from "#/editor/import/word-html";
 import { findPlaceholderToken } from "#/editor/recognition";
-import type { PlaceholderIndex } from "#/lib/placeholder";
+import type { FieldIndex } from "#/lib/placeholder";
 import type { FieldMarkers } from "#/lib/settings";
 
 const WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 export async function importDocx(
   file: File,
-  fields: { markers: FieldMarkers; index: PlaceholderIndex },
+  fields: { markers: FieldMarkers; index: FieldIndex },
 ): Promise<{
   html: string;
   pageLayout: PageLayout;
@@ -77,7 +77,6 @@ export async function importDocx(
     const output = doc.createElement("div");
     for (const [index, page] of pages.entries()) {
       if (index > 0) output.append(createPageBreakMarker(doc));
-      // Snapshot before writing styles: changing a parent must not change its descendants' measurements.
       const styled = [...page.querySelectorAll<HTMLElement>("*")].map((element) => {
         const computed = view.getComputedStyle(element);
         return { element, styles: withWordLineHeight(collectStyles(element, computed), computed) };
@@ -94,7 +93,6 @@ export async function importDocx(
           notices.push("An image could not be embedded and was omitted.");
         }
       }
-      // Snapshot first: appending a child moves it out of the live `children` collection.
       for (const child of Array.from(page.children)) {
         if (
           child.tagName === "ARTICLE" ||
@@ -115,11 +113,6 @@ export async function importDocx(
 
 const AUTO_LINE = "--missal-auto-line";
 
-/**
- * docx-preview writes Word's "auto" line spacing as a multiple of the font size, but Word
- * multiplies the font's own single-line height, which for Nastaleeq is far taller. Tag those
- * multiples so they can be rescaled per font; any other line height clears the tag.
- */
 function markAutoLineHeights(doc: Document) {
   const mark = (css: string) =>
     css.replace(/line-height\s*:\s*([^;}"]+)/g, (declaration, value: string) => {
@@ -165,13 +158,11 @@ function samePageLayout(left: PageLayout, right: PageLayout): boolean {
 export function normalizeComplexScriptFormatting(xml: string): string {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.querySelector("parsererror")) throw new Error("This DOCX contains invalid document XML.");
-  // docx-preview drops text inside bidi embeddings; the runs carry their own direction anyway.
   for (const name of ["dir", "bdo"]) {
     for (const embedding of Array.from(doc.getElementsByTagNameNS(WORD_NS, name))) {
       embedding.replaceWith(...embedding.childNodes);
     }
   }
-  // docx-preview ignores right-to-left table layout and reads indents from the wrong attribute.
   for (const table of doc.getElementsByTagNameNS(WORD_NS, "tblPr")) {
     const children = [...table.children];
     const visual = children.find((child) => child.localName === "bidiVisual");
@@ -221,11 +212,6 @@ const MERGE_FIELD = /^\s*MERGEFIELD\s+(?:"([^"]+)"|(\S+))/i;
 
 type OpenField = { instruction: string; inResult: boolean; runs: Element[]; result: Element[] };
 
-/**
- * Mail-merge templates hold `MERGEFIELD name` fields whose shown text is a sample record's value.
- * Replaces each with `<open>name<close>` in the sample's formatting so it imports as a field, not as
- * someone's data.
- */
 export function mergeFieldsToTokens(xml: string, markers: FieldMarkers): string {
   if (!xml.includes("MERGEFIELD")) return xml;
   const doc = new DOMParser().parseFromString(xml, "application/xml");
@@ -244,7 +230,6 @@ export function mergeFieldsToTokens(xml: string, markers: FieldMarkers): string 
     return run;
   };
 
-  // Snapshot the live collections: replacing fields removes elements from them.
   for (const simple of Array.from(doc.getElementsByTagNameNS(WORD_NS, "fldSimple"))) {
     const match = MERGE_FIELD.exec(simple.getAttributeNS(WORD_NS, "instr") ?? "");
     const name = match?.[1] ?? match?.[2];
@@ -253,7 +238,6 @@ export function mergeFieldsToTokens(xml: string, markers: FieldMarkers): string 
     simple.replaceWith(tokenRun(runs[0], token(name)));
   }
 
-  // Complex fields: begin, instruction runs, separate, result runs, end. Fields may nest.
   const open: OpenField[] = [];
   for (const run of Array.from(doc.getElementsByTagNameNS(WORD_NS, "r"))) {
     const marker = child(run, "fldChar")?.getAttributeNS(WORD_NS, "fldCharType");
@@ -272,7 +256,6 @@ export function mergeFieldsToTokens(xml: string, markers: FieldMarkers): string 
       const name = match?.[1] ?? match?.[2];
       const parent = open.at(-1);
       const paragraph = closestParagraph(run);
-      // Leave fields that span paragraphs or sit inside another field's instruction.
       if (
         !name ||
         (parent && !parent.inResult) ||
@@ -300,21 +283,15 @@ export function mergeFieldsToTokens(xml: string, markers: FieldMarkers): string 
   return new XMLSerializer().serializeToString(doc);
 }
 
-/**
- * Word splits text into runs freely, e.g. `«`, `Date`, `_`, `FIR`, `»` with different direction
- * flags. Moves each known field token into the run holding its opening marker so it imports as
- * one piece of text and becomes a field.
- */
 export function joinSplitFieldTokens(
   xml: string,
   markers: FieldMarkers,
-  index: PlaceholderIndex,
+  index: FieldIndex,
 ): string {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.querySelector("parsererror")) throw new Error("This DOCX contains invalid document XML.");
   let changed = false;
   for (const paragraph of doc.getElementsByTagNameNS(WORD_NS, "p")) {
-    // Text boxes nest paragraphs inside runs; each paragraph only handles its own text.
     const texts = [...paragraph.getElementsByTagNameNS(WORD_NS, "t")].filter(
       (text) => closestParagraph(text) === paragraph,
     );
@@ -345,7 +322,6 @@ export function joinSplitFieldTokens(
         text.textContent = value.slice(0, from) + token + value.slice(to);
         text.setAttribute("xml:space", "preserve");
       }
-      // The paragraph's text is unchanged; only the pieces after the first now start at the end.
       for (let piece = first + 1; piece <= last; piece += 1) starts[piece] = match.end;
       changed = true;
     }

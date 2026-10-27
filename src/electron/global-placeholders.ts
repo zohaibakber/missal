@@ -2,23 +2,21 @@ import { randomUUID } from "node:crypto";
 import { Effect, Schema } from "effect";
 import { eq } from "drizzle-orm";
 import type { MissalDrizzle } from "#/electron/database";
-import { appSettings, placeholders } from "#/electron/database-schema";
+import { placeholders } from "#/electron/database-schema";
 import {
   decodeStored,
-  isDrizzleQueryError,
   mapQuery,
   mapTransaction,
-  missingWrite,
   notFound,
+  readSettings,
   recoverUnique,
   requireRow,
+  writeSettings,
 } from "#/electron/repository-helpers";
 import { GlobalPlaceholder, SaveGlobalPlaceholdersInput } from "#/lib/global-placeholder";
 import { SharedSettingSource } from "#/lib/field";
 import { Placeholder } from "#/lib/placeholder";
-import { AppSettings } from "#/lib/settings";
 import { StorageError } from "#/lib/storage-errors";
-import { nowIso } from "#/lib/time";
 
 export function globalPlaceholderOperations(db: MissalDrizzle["Service"]) {
   const listGlobals = Effect.gen(function* () {
@@ -27,11 +25,7 @@ export function globalPlaceholderOperations(db: MissalDrizzle["Service"]) {
       Schema.decodeUnknownEffect(Schema.Array(Placeholder)),
       "globalPlaceholder.list",
     )(rows);
-    const settingsRows = yield* db.select().from(appSettings).where(eq(appSettings.id, "default"));
-    const settings = yield* decodeStored(
-      Schema.decodeUnknownEffect(AppSettings),
-      "globalPlaceholder.settings",
-    )(yield* requireRow(settingsRows, missingWrite("settings.get")));
+    const settings = yield* readSettings(db);
     return catalog.flatMap((field) =>
       field.source._tag === "SharedSetting"
         ? [
@@ -49,14 +43,7 @@ export function globalPlaceholderOperations(db: MissalDrizzle["Service"]) {
     function* (input: SaveGlobalPlaceholdersInput) {
       yield* db.transaction(
         Effect.fnUntraced(function* (tx) {
-          const settingsRows = yield* tx
-            .select()
-            .from(appSettings)
-            .where(eq(appSettings.id, "default"));
-          const settings = yield* decodeStored(
-            Schema.decodeUnknownEffect(AppSettings),
-            "globalPlaceholder.settings",
-          )(yield* requireRow(settingsRows, missingWrite("settings.get")));
+          const settings = yield* readSettings(tx);
           const values = { ...settings.sharedPlaceholders };
           for (const entry of input.entries) {
             if (entry._tag === "New") {
@@ -65,8 +52,8 @@ export function globalPlaceholderOperations(db: MissalDrizzle["Service"]) {
                 .insert(placeholders)
                 .values({ label: entry.label, source: SharedSettingSource.make({ setting }) })
                 .pipe(
-                  Effect.catchIf(
-                    isDrizzleQueryError,
+                  Effect.catchTag(
+                    "EffectDrizzleQueryError",
                     recoverUnique("globalPlaceholder.save", "placeholder", "name", entry.label),
                   ),
                 );
@@ -91,18 +78,15 @@ export function globalPlaceholderOperations(db: MissalDrizzle["Service"]) {
                 .set({ label: entry.label })
                 .where(eq(placeholders.id, entry.id))
                 .pipe(
-                  Effect.catchIf(
-                    isDrizzleQueryError,
+                  Effect.catchTag(
+                    "EffectDrizzleQueryError",
                     recoverUnique("globalPlaceholder.save", "placeholder", "name", entry.label),
                   ),
                 );
               values[field.source.setting] = entry.value;
             }
           }
-          yield* tx
-            .update(appSettings)
-            .set({ sharedPlaceholders: values, updatedAt: yield* nowIso })
-            .where(eq(appSettings.id, "default"));
+          yield* writeSettings(tx, { sharedPlaceholders: values });
         }),
       );
       return yield* listGlobals;

@@ -2,7 +2,7 @@ import { HashMap, Match, Option, Schema } from "effect";
 import { NonEmptyTrimmedString } from "#/lib/schema";
 import type { FirRecord } from "#/lib/fir";
 import { PlaceholderId } from "#/lib/ids";
-import type { Placeholder, PlaceholderIndex } from "#/lib/placeholder";
+import type { FieldIndex, Placeholder } from "#/lib/placeholder";
 
 const FIR_PROPERTY_NAMES = [
   "fir_no",
@@ -15,45 +15,20 @@ const FIR_PROPERTY_NAMES = [
   "zimni",
   "NIC",
   "mobile",
-  "investigation_officer",
 ] as const;
 
 const FirPropertyName = Schema.Literals(FIR_PROPERTY_NAMES);
 
 type FirPropertyName = typeof FirPropertyName.Type;
 
-const SHARED_SETTING_KEYS = [
-  "investigation_officer",
-  "police_station",
-  "district",
-  "sho_name",
-  "dsp_name",
-] as const;
-
 const SharedSettingKey = NonEmptyTrimmedString;
 
-type SharedSettingKey = typeof SharedSettingKey.Type;
-
-const PLACEHOLDER_KEY_TO_FIR_PROPERTY = {
-  fir_no: "fir_no",
-  date: "date",
-  incident_date: "incident_date",
-  arrest_date: "arrest_date",
-  offence: "offence",
-  accused: "accused",
-  witness: "witness",
-  zimni: "zimni",
-  nic: "NIC",
-  mobile: "mobile",
-} as const satisfies Record<string, FirPropertyName>;
-
-export const FirPropertySource = Schema.TaggedStruct("FirProperty", {
+export const FirFieldReference = Schema.TaggedStruct("FirField", {
   property: FirPropertyName,
-  /** 1-based entry of a list property, e.g. the second witness. Absent means every entry. */
   index: Schema.optionalKey(Schema.Int.pipe(Schema.check(Schema.isGreaterThan(0)))),
 });
 
-export type FirPropertySource = typeof FirPropertySource.Type;
+export type FirFieldReference = typeof FirFieldReference.Type;
 
 export const SharedSettingSource = Schema.TaggedStruct("SharedSetting", {
   setting: SharedSettingKey,
@@ -65,7 +40,7 @@ export const CustomSource = Schema.TaggedStruct("Custom", {});
 
 export type CustomSource = typeof CustomSource.Type;
 
-export const FieldSource = Schema.Union([FirPropertySource, SharedSettingSource, CustomSource]);
+export const FieldSource = Schema.Union([SharedSettingSource, CustomSource]);
 
 export type FieldSource = typeof FieldSource.Type;
 
@@ -81,7 +56,11 @@ export const UnresolvedTokenReference = Schema.TaggedStruct("UnresolvedToken", {
 
 export type UnresolvedTokenReference = typeof UnresolvedTokenReference.Type;
 
-export const FieldReference = Schema.Union([CatalogFieldReference, UnresolvedTokenReference]);
+export const FieldReference = Schema.Union([
+  CatalogFieldReference,
+  FirFieldReference,
+  UnresolvedTokenReference,
+]);
 
 export type FieldReference = typeof FieldReference.Type;
 
@@ -89,31 +68,30 @@ export const FieldDisplayMode = Schema.Literals(["labels", "values"]);
 
 export type FieldDisplayMode = typeof FieldDisplayMode.Type;
 
-export class FieldOverride extends Schema.Class<FieldOverride>("FieldOverride")({
-  placeholderId: PlaceholderId,
-  value: Schema.String,
-}) {}
+const firField = (label: string, property: FirPropertyName, index?: number) => ({
+  label,
+  reference: FirFieldReference.make(index === undefined ? { property } : { property, index }),
+});
 
-export type ResolvedFieldValue =
-  | { readonly _tag: "Resolved"; readonly text: string }
-  | { readonly _tag: "Unresolved"; readonly label: string };
-
-export function fieldSourceForSeedKey(key: string, index?: number): FieldSource {
-  if (key in PLACEHOLDER_KEY_TO_FIR_PROPERTY) {
-    const property =
-      PLACEHOLDER_KEY_TO_FIR_PROPERTY[key as keyof typeof PLACEHOLDER_KEY_TO_FIR_PROPERTY];
-    return FirPropertySource.make(index === undefined ? { property } : { property, index });
-  }
-
-  if (SHARED_SETTING_KEYS.some((setting) => setting === key)) {
-    return SharedSettingSource.make({ setting: key });
-  }
-
-  return CustomSource.make({});
-}
+export const FIR_FIELDS = [
+  firField("مقدمہ نمبر", "fir_no"),
+  firField("Date FIR", "date"),
+  firField("تاریخ ووقت وقوعہ", "incident_date"),
+  firField("تاریخ گرفتاری", "arrest_date"),
+  firField("جرم", "offence"),
+  firField("نام ملزم و سکونت", "accused"),
+  firField("گواہان", "witness"),
+  firField("گواہان 1", "witness", 1),
+  firField("گواہان 2", "witness", 2),
+  firField("ضمنی", "zimni"),
+  firField("ضمنی 1", "zimni", 1),
+  firField("ضمنی 2", "zimni", 2),
+  firField("شناختی کارڈ", "NIC"),
+  firField("موبائل", "mobile"),
+];
 
 export type FieldPresentationContext = {
-  catalog: PlaceholderIndex;
+  catalog: FieldIndex;
   fir: FirRecord | null;
   overrideValues: HashMap.HashMap<PlaceholderId, string>;
   sharedSettings: Record<string, string>;
@@ -137,7 +115,7 @@ export function overrideValuesFrom(
 }
 
 export function catalogFieldPresentation(
-  catalog: PlaceholderIndex,
+  catalog: FieldIndex,
   displayMode: FieldDisplayMode = "labels",
 ): FieldPresentationContext {
   return {
@@ -149,39 +127,15 @@ export function catalogFieldPresentation(
   };
 }
 
-export function resolveFieldValue(
-  field: Placeholder,
-  fir: FirRecord,
-  overrides: readonly FieldOverride[],
-  sharedSettings: Record<string, string>,
-): ResolvedFieldValue {
-  return resolveFieldValueFromMap(field, fir, overrideValuesFrom(overrides), sharedSettings);
-}
+const firFieldLabel = ({ property, index }: FirFieldReference) =>
+  FIR_FIELDS.find(({ reference }) => reference.property === property && reference.index === index)
+    ?.label ?? property;
 
-function resolveFieldValueFromMap(
-  field: Placeholder,
-  fir: FirRecord,
-  overrideValues: HashMap.HashMap<PlaceholderId, string>,
-  sharedSettings: Record<string, string>,
-): ResolvedFieldValue {
-  return Match.valueTags(field.source, {
-    FirProperty: ({ property, index }) => {
-      const value = fir[property];
-      const text =
-        typeof value === "string"
-          ? value
-          : index === undefined
-            ? value.join("\n")
-            : (value[index - 1] ?? "");
-      return resolvedOrMissing(text, field.label);
-    },
-    SharedSetting: ({ setting }) => {
-      return resolvedOrMissing(sharedSettings[setting] ?? "", field.label);
-    },
-    Custom: () => {
-      const override = Option.getOrUndefined(HashMap.get(overrideValues, field.id));
-      return resolvedOrMissing(override ?? "", field.label);
-    },
+export function fieldLabel(reference: FieldReference, catalog: FieldIndex) {
+  return Match.valueTags(reference, {
+    UnresolvedToken: ({ text }) => text,
+    FirField: firFieldLabel,
+    CatalogField: ({ id }) => Option.getOrUndefined(HashMap.get(catalog.byId, id))?.label,
   });
 }
 
@@ -191,30 +145,35 @@ export function fieldDisplayText(
 ): FieldDisplayText {
   return Match.valueTags(reference, {
     UnresolvedToken: ({ text }) => ({ text, unresolved: true }),
+    FirField: (field) => present(firFieldLabel(field), context, (fir) => firValue(fir, field)),
     CatalogField: ({ id }) => {
       const field = Option.getOrUndefined(HashMap.get(context.catalog.byId, id));
-      if (!field) {
-        return { text: String(id), unresolved: true };
-      }
-
-      if (context.displayMode === "labels" || !context.fir) {
-        return { text: field.label, unresolved: false };
-      }
-
-      const resolved = resolveFieldValueFromMap(
-        field,
-        context.fir,
-        context.overrideValues,
-        context.sharedSettings,
-      );
-
-      return resolved._tag === "Unresolved"
-        ? { text: resolved.label, unresolved: true }
-        : { text: resolved.text, unresolved: false };
+      return field
+        ? present(field.label, context, () => placeholderValue(field, context))
+        : { text: String(id), unresolved: true };
     },
   });
 }
 
-function resolvedOrMissing(value: string, label: string): ResolvedFieldValue {
-  return value.trim() ? { _tag: "Resolved", text: value } : { _tag: "Unresolved", label };
+function present(
+  label: string,
+  context: FieldPresentationContext,
+  value: (fir: FirRecord) => string,
+): FieldDisplayText {
+  if (context.displayMode === "labels" || !context.fir) return { text: label, unresolved: false };
+  const text = value(context.fir);
+  return text.trim() ? { text, unresolved: false } : { text: label, unresolved: true };
+}
+
+function firValue(fir: FirRecord, { property, index }: FirFieldReference) {
+  const value = fir[property];
+  if (typeof value === "string") return value;
+  return index === undefined ? value.join("\n") : (value[index - 1] ?? "");
+}
+
+function placeholderValue(field: Placeholder, context: FieldPresentationContext) {
+  return Match.valueTags(field.source, {
+    SharedSetting: ({ setting }) => context.sharedSettings[setting] ?? "",
+    Custom: () => Option.getOrElse(HashMap.get(context.overrideValues, field.id), () => ""),
+  });
 }

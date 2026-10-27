@@ -7,7 +7,7 @@ import {
   type LexicalEditor,
   type LexicalNode,
 } from "lexical";
-import DOMPurify from "isomorphic-dompurify";
+import DOMPurify from "dompurify";
 import { materializeClipboardPageBreaks } from "#/editor/import/page-breaks";
 import { measureLineHeightRatio, normalizeWordHtml } from "#/editor/import/word-html";
 import { $isPageBreakNode } from "#/editor/nodes/page-break-node";

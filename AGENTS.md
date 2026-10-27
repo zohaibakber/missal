@@ -10,6 +10,10 @@ Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.de
 
 `vp <name>` runs a built-in command. `vp run <name>` runs a `package.json` script or a `vite.config.ts` task. Scripts cannot overwrite built-ins, so `vp dev` and `vp run dev` may do different things. Check `package.json` and `vite.config.ts` first, and run `vp run <name>` when the project defines a script or task with that name.
 
+## Running Scripts
+
+Run TypeScript and JavaScript files with `vpx <file>`, for example `vpx ./scripts/seed.ts --dry-run`. It handles enums, decorators, JSX, and tsconfig `paths`, so do not add `tsx` or `ts-node` to run scripts. `vpx --watch <file>` reruns the file when a file it uses changes, in place of `tsx watch`. `vp node <file>` runs plain Node.js.
+
 ## Tool Versions
 
 Run `vp toolchain` to show versions and relationships in the active Vite+
@@ -28,6 +32,8 @@ release. Add a tool name to select part of the graph. For example, run
 
 # Missal
 
-Missal is an Electron desktop app. Run it with `vp run dev` (or `vp run start`), which starts Electron Forge. Do not use `vp dev` — that is Vite+'s built-in web server, not the product.
+Missal is an Electron-only desktop app. `vp dev` builds main, preload and the storage worker through `vite-plugin-electron` and launches Electron with the renderer on the Vite dev server. `vp build` writes `dist` and `dist-electron`. `vp run package`, `vp run make` and `vp run release` hand those to `electron-builder` (`electron-builder.yml`).
 
-Vite+ still owns `vp check`, `vp test`, and `vp fmt`. Electron Forge owns `dev`, `package`, and `make`.
+The renderer talks to the SQLite storage worker through Effect RPC (`StorageRpcs` in `src/electron/storage-rpc.ts`) over a MessagePort that main relays. Add a storage operation by adding a repository method, an `Rpc` with that method's argument as payload, a handler in `storage-handlers.ts`, and a client mapping in `src/repositories/rpc.ts`.
+
+Code has no comments. Tests exist only where behavior cannot be checked by running the app.

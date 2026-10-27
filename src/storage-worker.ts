@@ -1,18 +1,17 @@
-// First import: every Schema parser in the worker is JIT-compiled (interpreted where it can't be).
-import "effect/unstable/schema/SchemaJITCompiler/enable";
+import "effect/schema/SchemaJITCompiler/enable";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeWorkerRunner from "@effect/platform-node/NodeWorkerRunner";
 import { Effect, Layer } from "effect";
-import { RpcServer, RpcWorker } from "effect/unstable/rpc";
-import { storageHandlers } from "#/electron/storage-dispatch";
-import { StorageRpcs, StorageWorkerConfig } from "#/electron/storage-rpc";
+import { RpcServer, RpcWorker } from "effect/rpc";
+import { storageControlHandlers } from "#/electron/storage-handlers";
+import { StorageControlRpcs, StorageWorkerConfig } from "#/electron/storage-control-rpc";
 
-const HandlersLive = Layer.unwrap(
-  Effect.map(RpcWorker.initialMessage(StorageWorkerConfig).pipe(Effect.orDie), storageHandlers),
-);
-
-RpcServer.layer(StorageRpcs).pipe(
-  Layer.provide(HandlersLive),
+RpcServer.layer(StorageControlRpcs).pipe(
+  Layer.provide(
+    Layer.unwrap(
+      Effect.map(RpcWorker.initialMessage(StorageWorkerConfig), storageControlHandlers),
+    ).pipe(Layer.orDie),
+  ),
   Layer.provide(RpcServer.layerProtocolWorkerRunner),
   Layer.provide(NodeWorkerRunner.layer),
   Layer.launch,

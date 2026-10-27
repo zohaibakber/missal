@@ -10,7 +10,7 @@ import {
 } from "lexical";
 import type { DocumentEnvelope, PageLayout } from "#/lib/document-format";
 import type { FieldPresentationContext } from "#/lib/field";
-import type { PlaceholderIndex } from "#/lib/placeholder";
+import type { FieldIndex } from "#/lib/placeholder";
 import { DEFAULT_FIELD_MARKERS, type FieldMarkers } from "#/lib/settings";
 import { captureEditorEnvelope, loadEnvelopeIntoEditor } from "#/editor/envelope";
 import { $generateNodesFromDOM } from "@lexical/html";
@@ -75,7 +75,7 @@ function editorUiDefaults(): EditorUiState {
 export function attachEditorSession(
   editor: LexicalEditor,
   options: {
-    getPlaceholderIndex: () => PlaceholderIndex;
+    getFieldIndex: () => FieldIndex;
     getFieldMarkers?: () => FieldMarkers;
     presentation: FieldPresentationContext;
     onUiChange?: (ui: EditorUiState) => void;
@@ -91,12 +91,11 @@ export function attachEditorSession(
     registerImportedStyleRendering(editor),
     registerHistory(editor, history, 300, Date.now, undefined, HISTORY_MAX_DEPTH),
     presentation.attach(),
-    registerFieldRecognition(editor, options.getPlaceholderIndex, getFieldMarkers),
-    registerCompletedTokenConversion(editor, options.getPlaceholderIndex, getFieldMarkers),
-    registerFieldReveal(editor, options.getPlaceholderIndex, getFieldMarkers),
+    registerFieldRecognition(editor, options.getFieldIndex, getFieldMarkers),
+    registerCompletedTokenConversion(editor, options.getFieldIndex, getFieldMarkers),
+    registerFieldReveal(editor, options.getFieldIndex, getFieldMarkers),
     registerClipboardImport(editor, {
       onPageLayout: (pageLayout) => {
-        // The first Word paste defines the page; later pastes don't reflow an existing layout.
         if (ui.pageLayout) return;
         ui.pageLayout = pageLayout;
         notify();
@@ -189,7 +188,7 @@ export function attachEditorSession(
         ]);
         const imported = await importDocx(file, {
           markers: getFieldMarkers(),
-          index: options.getPlaceholderIndex(),
+          index: options.getFieldIndex(),
         });
         if (disposed) {
           throw new Error("The template was closed before the import finished.");

@@ -1,0 +1,35 @@
+appId: com.zohaibakber.missal
+productName: Missal
+directories:
+  output: release/${version}
+files:
+  - dist
+  - dist-electron
+extraResources:
+  - drizzle
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch: x64
+  artifactName: ${productName}-${version}-Setup.${ext}
+nsis:
+  oneClick: true
+  perMachine: false
+  deleteAppDataOnUninstall: false
+linux:
+  icon: assets/icon.png
+  target: AppImage
+  category: Office
+publish:
+  provider: github
+  owner: zohaibakber
+  repo: missal
+  releaseType: draft
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true

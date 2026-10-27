@@ -31,7 +31,6 @@ export function normalizeWordHtml(
   const doc = new DOMParser().parseFromString(html, "text/html");
   inlineStylesheets(doc);
 
-  // Resolve everything before writing, because writing through CSSOM drops the mso-* declarations.
   const spacing = [...doc.body.querySelectorAll<HTMLElement>("[style]")].flatMap((element) => {
     const percent = /^(\d+(?:\.\d+)?)%$/.exec(element.style.lineHeight)?.[1];
     const family = percent ? effectiveFontFamily(element) : undefined;
@@ -76,7 +75,6 @@ export function normalizeWordHtml(
     block.style.lineHeight = singleLine ? String(Math.round(singleLine * 1000) / 1000) : "normal";
   }
 
-  // Word's "Auto" paragraph spacing is 14pt and has no CSS equivalent.
   for (const { block, side } of autoSpaced) block.style.setProperty(`margin-${side}`, "14pt");
 
   return doc.body.innerHTML;
@@ -148,7 +146,7 @@ function matchesSafely(element: Element, selector: string) {
   try {
     return element.matches(selector);
   } catch {
-    return false; // Word emits a few selectors browsers can't parse (e.g. `@list` levels).
+    return false;
   }
 }
 
@@ -190,14 +188,12 @@ export function measureLineHeightRatio(fontFamily: string): number | undefined {
   const height = probe.getBoundingClientRect().height;
   probe.remove();
   const ratio = height > 0 ? height / 100 : undefined;
-  // A fallback font's metrics would be wrong for good; only remember real measurements.
   if ("fonts" in document && document.fonts.check(`100px ${fontFamily}`)) {
     lineHeightRatios.set(key, ratio);
   }
   return ratio;
 }
 
-/** Word's single-line height as a multiple of font size, for the first font in `fontFamily`. */
 export function wordLineRatio(fontFamily: string): number | undefined {
   const bundled = BUNDLED_FONTS.find(
     (font) => primaryFamily(font.family) === primaryFamily(fontFamily),

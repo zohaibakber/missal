@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Cause, Exit, Match, Option } from "effect";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -133,7 +133,6 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
   const [dirty, setDirty] = useState(false);
   const [savePending, setSavePending] = useState(false);
   const [displayMode, setDisplayMode] = useState<FieldDisplayMode>("values");
-  // Documents print unless excluded, so ones added later print by default.
   const [excludedIds, setExcludedIds] = useState<ReadonlySet<FirDocumentId>>(() => new Set());
   const [isDeleteFirOpen, setIsDeleteFirOpen] = useState(false);
   const [pendingId, setPendingId] = useState<FirDocumentId | null>(null);
@@ -484,7 +483,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
                 onSessionReady={(session) => {
                   sessionRef.current = session;
                 }}
-                placeholderIndex={presentation.catalog}
+                fieldIndex={presentation.catalog}
                 presentation={presentation}
                 sessionKey={`${activeDocument.id}:${editorEpoch}`}
               />

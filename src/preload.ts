@@ -1,15 +1,29 @@
 import { contextBridge, ipcRenderer } from "electron";
 import {
+  DESKTOP_LAYOUT_CHANNEL,
+  DESKTOP_PREFERENCES_CHANNEL,
   DESKTOP_PRINT_CHANNEL,
   DESKTOP_PRINT_PDF_CHANNEL,
   DESKTOP_THEME_CHANNEL,
+  type DesktopPreferences,
+  type ElectronPreferencesApi,
   type ElectronPrintApi,
-  type ElectronThemeApi,
 } from "./desktop-window";
-import { STORAGE_CHANNEL } from "./electron/storage-channel";
+import { STORAGE_CONNECT_CHANNEL, STORAGE_PORT_CHANNEL } from "./electron/storage-channel";
 
-const electronTheme: ElectronThemeApi = {
-  setSource: (source) => ipcRenderer.send(DESKTOP_THEME_CHANNEL, source),
+const preferences: DesktopPreferences = ipcRenderer.sendSync(DESKTOP_PREFERENCES_CHANNEL);
+const layouts = { ...preferences.layouts };
+
+const electronPreferences: ElectronPreferencesApi = {
+  theme: preferences.theme,
+  setTheme: (theme) => ipcRenderer.send(DESKTOP_THEME_CHANNEL, theme),
+  layoutStorage: {
+    getItem: (key) => layouts[key] ?? null,
+    setItem: (key, value) => {
+      layouts[key] = value;
+      ipcRenderer.send(DESKTOP_LAYOUT_CHANNEL, key, value);
+    },
+  },
 };
 
 const electronPrint: ElectronPrintApi = {
@@ -17,10 +31,12 @@ const electronPrint: ElectronPrintApi = {
   print: (html) => ipcRenderer.invoke(DESKTOP_PRINT_CHANNEL, html),
 };
 
-const electronStorage = {
-  request: (payload: string): Promise<string> => ipcRenderer.invoke(STORAGE_CHANNEL, payload),
-};
+ipcRenderer.on(STORAGE_PORT_CHANNEL, (event) => {
+  window.postMessage(STORAGE_PORT_CHANNEL, window.location.origin, event.ports);
+});
 
-contextBridge.exposeInMainWorld("electronTheme", electronTheme);
+contextBridge.exposeInMainWorld("electronPreferences", electronPreferences);
 contextBridge.exposeInMainWorld("electronPrint", electronPrint);
-contextBridge.exposeInMainWorld("electronStorage", electronStorage);
+contextBridge.exposeInMainWorld("electronStorage", {
+  connect: () => ipcRenderer.send(STORAGE_CONNECT_CHANNEL),
+});

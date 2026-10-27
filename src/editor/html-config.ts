@@ -15,7 +15,7 @@ import { $applyImportedStyle, $setImportedStyle, retainedStyle } from "#/editor/
 function createImportMap(): DOMConversionMap {
   const converters = new Map<string, NonNullable<DOMConversionMap[string]>[]>();
   for (const node of EDITOR_NODES) {
-    node.getType(); // Materialize static converters declared through Lexical's $config API.
+    node.getType();
     for (const [tag, convert] of Object.entries(node.importDOM?.() ?? {})) {
       if (!convert) continue;
       const entries = converters.get(tag) ?? [];
@@ -65,10 +65,6 @@ function createImportMap(): DOMConversionMap {
   return result;
 }
 
-/**
- * A run's text style is its ancestors' inline text styles, innermost last so it wins. Computed from
- * the DOM because Lexical's per-tag `forChild` hooks collapse nested elements with the same tag.
- */
 function inheritedTextStyle(text: Text) {
   const styles: string[] = [];
   for (let element = text.parentElement; element; element = element.parentElement) {
@@ -88,7 +84,6 @@ const exports: DOMExportOutputMap = new Map(
         after: (element) => {
           const result = output.after ? output.after(element) : element;
           if (result instanceof HTMLElement) {
-            // Lexical supplies arbitrary cell widths even when none were stored.
             if ($isTableCellNode(node) && node.getWidth() === undefined)
               result.style.removeProperty("width");
             $applyImportedStyle(node, result);

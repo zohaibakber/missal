@@ -33,9 +33,7 @@ import { Spinner } from "#/components/ui/spinner";
 import { useShortcut } from "#/hooks/use-shortcut";
 import type { PrintPacket } from "#/editor/html-export";
 
-// PDF user space is in points (1/72 in); CSS pixels are 1/96 in.
 const POINTS_TO_CSS_PX = 96 / 72;
-// Keep in sync with the page list's gap-6 / px-12.
 const PAGE_GAP_PX = 24;
 const CANVAS_PADDING_PX = 48;
 const ZOOM_STEPS = [50, 75, 100, 125, 150, 200] as const;
@@ -54,9 +52,10 @@ type PreviewState =
   | { readonly _tag: "Failed"; readonly message: string };
 
 async function loadPrintPdf(html: string, onTask: (task: PDFDocumentLoadingTask) => void) {
-  const api = window.electronPrint;
-  if (!api) throw new Error("Print preview is only available in the Missal desktop app.");
-  const [data, pdfjs] = await Promise.all([api.renderPdf(html), import("pdfjs-dist")]);
+  const [data, pdfjs] = await Promise.all([
+    window.electronPrint.renderPdf(html),
+    import("pdfjs-dist"),
+  ]);
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
   const loadingTask = pdfjs.getDocument({ data });
   onTask(loadingTask);
@@ -155,7 +154,6 @@ function PreviewPage({
     return () => {
       cancelled = true;
       task?.cancel();
-      // Release the bitmap once the page scrolls far away.
       canvas.width = 0;
       canvas.height = 0;
     };
@@ -276,7 +274,6 @@ function PrintPreviewBody({
   }
 
   useLayoutEffect(() => {
-    // Through the ref: the element held in state is read-only to React Compiler.
     const element = pagesRef.current;
     if (element) element.scrollTop = scrollFractionRef.current * element.scrollHeight;
   }, [pagesRef, scale, viewport]);

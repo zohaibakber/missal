@@ -1,13 +1,13 @@
 /// <reference types="vite/client" />
 
-import type { ElectronPrintApi, ElectronThemeApi } from "./desktop-window";
+import type { ElectronPreferencesApi, ElectronPrintApi } from "./desktop-window";
 
 declare global {
   interface Window {
-    electronTheme?: ElectronThemeApi;
-    electronPrint?: ElectronPrintApi;
-    electronStorage?: {
-      request: (payload: string) => Promise<string>;
+    electronPreferences: ElectronPreferencesApi;
+    electronPrint: ElectronPrintApi;
+    electronStorage: {
+      connect: () => void;
     };
   }
 }

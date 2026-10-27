@@ -19,7 +19,7 @@ import {
 } from "#/editor/session";
 import { EDITOR_HTML_CONFIG } from "#/editor/html-config";
 import type { DocumentEnvelope, PageLayout } from "#/lib/document-format";
-import type { PlaceholderIndex } from "#/lib/placeholder";
+import type { FieldIndex } from "#/lib/placeholder";
 import { EditorToolbar } from "#/components/editor-toolbar";
 import { cn } from "#/lib/utils";
 import { atoms } from "#/state/atoms";
@@ -34,7 +34,7 @@ type DocumentEditorProps = {
   className?: string;
   document: DocumentEnvelope;
   sessionKey: string | number;
-  placeholderIndex: PlaceholderIndex;
+  fieldIndex: FieldIndex;
   presentation: FieldPresentationContext;
   onPageLayoutChange?: (layout: PageLayout | undefined) => void;
   onDirtyChange?: (dirty: boolean) => void;
@@ -46,7 +46,7 @@ type DocumentEditorProps = {
 
 function SessionPlugins({
   document: envelope,
-  placeholderIndex,
+  fieldIndex,
   presentation,
   onPageLayoutChange,
   onDirtyChange,
@@ -56,12 +56,11 @@ function SessionPlugins({
 }: Omit<DocumentEditorProps, "aria-label" | "className" | "editable" | "sessionKey">) {
   const [editor] = useLexicalComposerContext();
   const fieldMarkers = useAtomValue(atoms.fieldMarkersAtom);
-  // The session loads the first envelope and presentation; later presentations are pushed below.
   const [initialEnvelope] = useState(envelope);
   const [initialPresentation] = useState(presentation);
   const sessionRef = useRef<EditorSessionHandle | null>(null);
 
-  const getPlaceholderIndex = useEffectEvent(() => placeholderIndex);
+  const getFieldIndex = useEffectEvent(() => fieldIndex);
   const getFieldMarkers = useEffectEvent(() => fieldMarkers);
   const reportUi = useEffectEvent((ui: EditorUiState) => {
     onDirtyChange?.(ui.dirty);
@@ -75,7 +74,7 @@ function SessionPlugins({
 
   useEffect(() => {
     const session = attachEditorSession(editor, {
-      getPlaceholderIndex: () => getPlaceholderIndex(),
+      getFieldIndex: () => getFieldIndex(),
       getFieldMarkers: () => getFieldMarkers(),
       onUiChange: (ui) => reportUi(ui),
       presentation: initialPresentation,
@@ -102,7 +101,6 @@ const MM_TO_PX = 96 / 25.4;
 const DEFAULT_PAGE_WIDTH_MM = 210;
 const CANVAS_GUTTER_PX = 48;
 
-/** Writes a CSS variable instead of state so resizing never re-renders the editor. */
 function usePageFit(pageWidthMm: number) {
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -114,8 +112,6 @@ function usePageFit(pageWidthMm: number) {
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return;
       const zoom = `${Math.max(Math.min(1, (entry.contentRect.width - CANVAS_GUTTER_PX) / pageWidthPx), 0.25)}`;
-      // Next frame, and only on change: rescaling can toggle the scrollbar and resize the canvas,
-      // which inside this callback would loop ("ResizeObserver loop completed…").
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         if (canvas.style.getPropertyValue("--page-zoom") !== zoom) {
@@ -138,7 +134,7 @@ export function DocumentEditor({
   className,
   document: envelope,
   editable = true,
-  placeholderIndex,
+  fieldIndex,
   presentation,
   sessionKey,
   onDirtyChange,
@@ -200,7 +196,7 @@ export function DocumentEditor({
           onHistoryChange={onHistoryChange}
           onSavePendingChange={onSavePendingChange}
           onSessionReady={onSessionReady}
-          placeholderIndex={placeholderIndex}
+          fieldIndex={fieldIndex}
           presentation={presentation}
         />
       </div>

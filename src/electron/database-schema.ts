@@ -45,13 +45,6 @@ export const templates = sqliteTable(
   (table) => [index("templates_updated_at_idx").on(table.updatedAt)],
 );
 
-export const bundledTemplates = sqliteTable("bundled_templates", {
-  name: text("name").primaryKey(),
-  sourceHash: text("source_hash").notNull(),
-  templateId: integer("template_id").references(() => templates.id, { onDelete: "set null" }),
-  templateRevision: integer("template_revision").notNull(),
-});
-
 export const firRecords = sqliteTable(
   "fir_records",
   {
@@ -125,15 +118,15 @@ export const firPlaceholderValues = sqliteTable(
 export const appSettings = sqliteTable(
   "app_settings",
   {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey().default("default"),
     sharedPlaceholders: text("shared_placeholders", { mode: "json" })
       .notNull()
-      .$type<Record<string, string>>(),
+      .$type<Record<string, string>>()
+      .default({}),
     fieldMarkers: text("field_markers", { mode: "json" })
       .notNull()
       .$type<Pick<FieldMarkers, "open" | "close">>()
       .default({ open: "«", close: "»" }),
-    updatedAt: text("updated_at").notNull(),
   },
   (table) => [check("app_settings_id_default", sql`${table.id} = 'default'`)],
 );

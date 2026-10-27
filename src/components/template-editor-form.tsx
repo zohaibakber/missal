@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Exit } from "effect";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "#/components/ui/toast";
@@ -53,7 +53,7 @@ import { Skeleton } from "#/components/ui/skeleton";
 import { catalogFieldPresentation } from "#/lib/field";
 import { emptyDocumentEnvelope, projectDocument } from "#/lib/document-format";
 import { type TemplateId } from "#/lib/ids";
-import { indexPlaceholders, type PlaceholderIndex } from "#/lib/placeholder";
+import { indexFields, type FieldIndex } from "#/lib/placeholder";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
 import { whilePending } from "#/lib/utils";
 import { TemplateCreateInput, type TemplateRecord } from "#/lib/templates";
@@ -75,20 +75,20 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
 }
 
 function CreateTemplateForm() {
-  const placeholderIndexResult = useAtomValue(atoms.placeholderIndexAtom);
-  const placeholderIndex = AsyncResult.isSuccess(placeholderIndexResult)
-    ? placeholderIndexResult.value
-    : indexPlaceholders([]);
+  const fieldIndexResult = useAtomValue(atoms.fieldIndexAtom);
+  const fieldIndex = AsyncResult.isSuccess(fieldIndexResult)
+    ? fieldIndexResult.value
+    : indexFields([]);
 
-  return <TemplateEditorWorkspace placeholderIndex={placeholderIndex} selectedTemplate={null} />;
+  return <TemplateEditorWorkspace fieldIndex={fieldIndex} selectedTemplate={null} />;
 }
 
 function EditTemplateForm({ templateId }: { templateId: TemplateId }) {
-  const placeholderIndexResult = useAtomValue(atoms.placeholderIndexAtom);
+  const fieldIndexResult = useAtomValue(atoms.fieldIndexAtom);
   const templateResult = useAtomValue(atoms.templateByIdAtom(templateId));
-  const placeholderIndex = AsyncResult.isSuccess(placeholderIndexResult)
-    ? placeholderIndexResult.value
-    : indexPlaceholders([]);
+  const fieldIndex = AsyncResult.isSuccess(fieldIndexResult)
+    ? fieldIndexResult.value
+    : indexFields([]);
 
   if (AsyncResult.isFailure(templateResult)) {
     return <TemplateNotFound />;
@@ -110,10 +110,7 @@ function EditTemplateForm({ templateId }: { templateId: TemplateId }) {
   }
 
   return (
-    <TemplateEditorWorkspace
-      placeholderIndex={placeholderIndex}
-      selectedTemplate={templateResult.value}
-    />
+    <TemplateEditorWorkspace fieldIndex={fieldIndex} selectedTemplate={templateResult.value} />
   );
 }
 
@@ -147,10 +144,10 @@ export function TemplateNotFound() {
 }
 
 function TemplateEditorWorkspace({
-  placeholderIndex,
+  fieldIndex,
   selectedTemplate,
 }: {
-  placeholderIndex: PlaceholderIndex;
+  fieldIndex: FieldIndex;
   selectedTemplate: TemplateRecord | null;
 }) {
   const navigate = useNavigate();
@@ -159,7 +156,6 @@ function TemplateEditorWorkspace({
   const removeTemplate = useAtomSet(atoms.removeTemplateAtom, { mode: "promiseExit" });
   const [name, setName] = useState("");
   const [contentDirty, setContentDirty] = useState(false);
-  // A save caches the saved template, so the selected record is always the stored one.
   const dirty = contentDirty || name !== (selectedTemplate?.name ?? "");
   const [savePending, setSavePending] = useState(false);
   const [importPending, setImportPending] = useState(false);
@@ -171,10 +167,7 @@ function TemplateEditorWorkspace({
   const allowNavigationRef = useRef(false);
   const sessionRef = useRef<EditorSessionHandle | null>(null);
   const loadedKeyRef = useRef<string | number | null>(null);
-  const presentation = useMemo(
-    () => catalogFieldPresentation(placeholderIndex),
-    [placeholderIndex],
-  );
+  const presentation = useMemo(() => catalogFieldPresentation(fieldIndex), [fieldIndex]);
   const sessionKey = selectedTemplate?.id ?? "new";
 
   useEffect(() => {
@@ -405,7 +398,7 @@ function TemplateEditorWorkspace({
         onSessionReady={(session) => {
           sessionRef.current = session;
         }}
-        placeholderIndex={placeholderIndex}
+        fieldIndex={fieldIndex}
         presentation={presentation}
         sessionKey={sessionKey}
       />

@@ -10,7 +10,7 @@ function SplitView({ id, children }: { id: string; children: ReactNode }) {
   const layout = useDefaultLayout({
     id: `split-view:${id}`,
     panelIds: [LIST_PANEL_ID, DETAIL_PANEL_ID],
-    storage: localStorage,
+    storage: window.electronPreferences.layoutStorage,
   });
 
   return (

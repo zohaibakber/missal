@@ -1,4 +1,3 @@
-import { HashMap, Option } from "effect";
 import {
   $createTextNode,
   $getNearestNodeFromDOMNode,
@@ -14,25 +13,20 @@ import {
   type LexicalEditor,
 } from "lexical";
 import { $createFieldNode, $isFieldNode } from "#/editor/nodes/field-node";
-import { CatalogFieldReference, type FieldReference } from "#/lib/field";
-import type { PlaceholderIndex } from "#/lib/placeholder";
-import { resolveFieldReference, resolvePlaceholder } from "#/lib/placeholder";
+import { fieldLabel, type FieldReference } from "#/lib/field";
+import type { FieldIndex } from "#/lib/placeholder";
+import { resolveField, resolveFieldReference } from "#/lib/placeholder";
 import type { FieldMarkers } from "#/lib/settings";
 import { $copyTextStyleToField, $getImportedStyle } from "#/editor/imported-style";
 
-/** Longest name looked for between markers; keeps a stray marker from swallowing a paragraph. */
 const MAX_NAME_LENGTH = 80;
 
 type TokenMatch = { start: number; end: number; reference: FieldReference };
 
-/**
- * Finds the first `<open>name<close>` whose name is a known placeholder. Unknown names stay as
- * text so ordinary uses of the marker (an email address, say) are never turned into fields.
- */
 export function findPlaceholderToken(
   text: string,
   markers: FieldMarkers,
-  index: PlaceholderIndex,
+  index: FieldIndex,
   from = 0,
 ): TokenMatch | undefined {
   for (let open = text.indexOf(markers.open, from); open !== -1;) {
@@ -41,14 +35,8 @@ export function findPlaceholderToken(
     if (close === -1) return undefined;
     const name = text.slice(nameStart, close);
     if (name.length <= MAX_NAME_LENGTH && !name.includes("\n")) {
-      const placeholder = resolvePlaceholder(name, index);
-      if (placeholder) {
-        return {
-          start: open,
-          end: close + markers.close.length,
-          reference: CatalogFieldReference.make({ id: placeholder.id }),
-        };
-      }
+      const reference = resolveField(name, index);
+      if (reference) return { start: open, end: close + markers.close.length, reference };
     }
     open = text.indexOf(markers.open, open + 1);
   }
@@ -57,7 +45,7 @@ export function findPlaceholderToken(
 
 export function registerFieldRecognition(
   editor: LexicalEditor,
-  getIndex: () => PlaceholderIndex,
+  getIndex: () => FieldIndex,
   getMarkers: () => FieldMarkers,
 ) {
   return editor.registerCommand(
@@ -94,15 +82,10 @@ export function registerFieldRecognition(
   );
 }
 
-/**
- * The first token in `node` that should become a field. A token holding the caret is skipped:
- * it is being edited, e.g. after a double-click revealed its markers, and converts once the caret
- * leaves.
- */
 function $findConvertibleToken(
   node: TextNode,
   markers: FieldMarkers,
-  index: PlaceholderIndex,
+  index: FieldIndex,
 ): TokenMatch | undefined {
   const text = node.getTextContent();
   const selection = $getSelection();
@@ -120,7 +103,7 @@ function $findConvertibleToken(
 
 export function registerCompletedTokenConversion(
   editor: LexicalEditor,
-  getIndex: () => PlaceholderIndex,
+  getIndex: () => FieldIndex,
   getMarkers: () => FieldMarkers,
 ) {
   const unregisterTransform = editor.registerNodeTransform(TextNode, (node) => {
@@ -140,7 +123,6 @@ export function registerCompletedTokenConversion(
     tokenNode.replace(field);
   });
 
-  // Moving the caret doesn't re-run transforms, so revisit the text it just left.
   const unregisterLeave = editor.registerUpdateListener(({ editorState, prevEditorState }) => {
     const previous = caretOf(prevEditorState);
     const current = caretOf(editorState);
@@ -175,7 +157,7 @@ function caretOf(state: EditorState) {
 
 export function registerFieldReveal(
   editor: LexicalEditor,
-  getIndex: () => PlaceholderIndex,
+  getIndex: () => FieldIndex,
   getMarkers: () => FieldMarkers,
 ) {
   let root: HTMLElement | null = null;
@@ -190,11 +172,7 @@ export function registerFieldReveal(
     editor.update(() => {
       const field = $getNearestNodeFromDOMNode(host);
       if (!$isFieldNode(field)) return;
-      const reference = field.getReference();
-      const name =
-        reference._tag === "UnresolvedToken"
-          ? reference.text
-          : Option.getOrUndefined(HashMap.get(getIndex().byId, reference.id))?.label;
+      const name = fieldLabel(field.getReference(), getIndex());
       if (!name) return;
       const { open, close } = getMarkers();
       const text = $createTextNode(`${open}${name}${close}`).setStyle($getImportedStyle(field));
