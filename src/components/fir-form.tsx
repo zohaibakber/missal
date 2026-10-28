@@ -5,7 +5,7 @@ import { Exit, Schema } from "effect";
 import { Add01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FirDatePickerInput } from "#/components/fir-date-picker-input";
-import { FirStatusDot } from "#/components/fir-status-badge";
+import { FirStatusIcon } from "#/components/fir-status-badge";
 import { Hint } from "#/components/hint";
 import { SaveStatus } from "#/components/pane";
 import { UnsavedChanges } from "#/components/unsaved-changes";
@@ -16,7 +16,6 @@ import {
   FieldGroup,
   FieldLabel,
   FieldLegend,
-  FieldSeparator,
   FieldSet,
 } from "#/components/ui/field";
 import { Input } from "#/components/ui/input";
@@ -40,10 +39,11 @@ import { useShortcut } from "#/hooks/use-shortcut";
 import { formatDate } from "#/lib/date";
 import {
   createEmptyFirRecord,
+  FIR_LABELS,
+  FIR_STATUS_LABELS,
   FIR_STATUS_OPTIONS,
   FirCreateInput,
   FirUpdateInput,
-  getFirStatusLabel,
   type FirFormValues,
   type FirRecord,
 } from "#/lib/fir";
@@ -239,55 +239,94 @@ function FirFormSubmit({ children }: { children: ReactNode }) {
 const repeatableSections = [
   {
     name: "accused",
-    label: "ملزمان",
-    entry: "ملزم",
-    add: "Add accused",
+    label: FIR_LABELS.accused,
+    entry: "Accused",
     placeholder: "نام، ولدیت اور سکونت",
     required: true,
   },
   {
     name: "witness",
-    label: "گواہان",
-    entry: "گواہ",
-    add: "Add witness",
+    label: FIR_LABELS.witness,
+    entry: "Witness",
     placeholder: "نام اور تفصیل",
     required: false,
   },
   {
     name: "zimni",
-    label: "ضمنی",
-    entry: "ضمنی",
-    add: "Add zimni",
+    label: FIR_LABELS.zimni,
+    entry: "Zimni",
     placeholder: "ضمنی کی تفصیل",
     required: false,
   },
 ] as const;
+
+const dateFields = [
+  { name: "date", label: FIR_LABELS.date },
+  { name: "incident_date", label: FIR_LABELS.incident_date },
+  { name: "arrest_date", label: FIR_LABELS.arrest_date },
+] as const;
+
+const textFields = [
+  { name: "NIC", label: FIR_LABELS.NIC, placeholder: "35202-1234567-1", urdu: false },
+  { name: "mobile", label: FIR_LABELS.mobile, placeholder: "0300-1234567", urdu: false },
+  {
+    name: "investigation_officer",
+    label: FIR_LABELS.investigation_officer,
+    placeholder: "",
+    urdu: true,
+  },
+] as const;
+
+function FormSection({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className="grid gap-x-8 gap-y-3 border-t py-6 first:border-t-0 first:pt-0 @2xl:grid-cols-[10rem_minmax(0,1fr)]">
+      <h2 className="text-ur-lg @2xl:pt-1">{title}</h2>
+      <div className={cn("grid gap-4", className)}>{children}</div>
+    </section>
+  );
+}
+
+function RequiredMark() {
+  return (
+    <span aria-hidden="true" className="text-muted-foreground">
+      *
+    </span>
+  );
+}
 
 function FirFormFields({ className }: { className?: string }) {
   const { form, formId, fir } = useFirForm();
   const id = (name: string) => `${formId}-${name}`;
 
   return (
-    <div dir="rtl" lang="ur" className={cn("missal-fir-form flex flex-col gap-8", className)}>
-      <FieldGroup className="grid gap-x-5 gap-y-5 sm:grid-cols-2">
+    <div dir="rtl" lang="ur" className={cn("missal-fir-form @container", className)}>
+      <FormSection title="مقدمہ" className="@lg:grid-cols-2">
         <form.Field
           name="fir_no"
           children={(field) => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
             return (
               <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={id("fir-no")}>ایف آئی آر نمبر</FieldLabel>
+                <FieldLabel htmlFor={id("fir-no")}>
+                  {FIR_LABELS.fir_no} <RequiredMark />
+                </FieldLabel>
                 <Input
                   autoFocus={!fir}
-                  dir="ltr"
-                  className="text-end"
                   id={id("fir-no")}
                   name={field.name}
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
                   aria-invalid={isInvalid}
-                  placeholder="23/26"
+                  placeholder="412/2026"
                 />
                 <FieldError errors={field.state.meta.errors} />
               </Field>
@@ -298,7 +337,7 @@ function FirFormFields({ className }: { className?: string }) {
           name="status"
           children={(field) => (
             <Field>
-              <FieldLabel htmlFor={id("status")}>حالت</FieldLabel>
+              <FieldLabel htmlFor={id("status")}>{FIR_LABELS.status}</FieldLabel>
               <Select
                 name={field.name}
                 value={field.state.value}
@@ -308,19 +347,19 @@ function FirFormFields({ className }: { className?: string }) {
               >
                 <SelectTrigger id={id("status")} className="w-full">
                   <SelectValue>
-                    <span className="flex items-center gap-2 text-ur">
-                      <FirStatusDot status={field.state.value} />
-                      {getFirStatusLabel(field.state.value)}
+                    <span className="flex items-center gap-2">
+                      <FirStatusIcon status={field.state.value} />
+                      {FIR_STATUS_LABELS[field.state.value]}
                     </span>
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent align="start" alignItemWithTrigger={false} dir="rtl">
+                <SelectContent align="start" alignItemWithTrigger={false}>
                   <SelectGroup>
                     {FIR_STATUS_OPTIONS.map((status) => (
                       <SelectItem key={status} value={status}>
-                        <span className="flex items-center gap-2 text-ur">
-                          <FirStatusDot status={status} />
-                          {getFirStatusLabel(status)}
+                        <span className="flex items-center gap-2">
+                          <FirStatusIcon status={status} />
+                          {FIR_STATUS_LABELS[status]}
                         </span>
                       </SelectItem>
                     ))}
@@ -330,13 +369,33 @@ function FirFormFields({ className }: { className?: string }) {
             </Field>
           )}
         />
-        {(
-          [
-            { name: "date", label: "ایف آئی آر کی تاریخ" },
-            { name: "incident_date", label: "تاریخ وقوعہ" },
-            { name: "arrest_date", label: "تاریخ گرفتاری" },
-          ] as const
-        ).map((date) => (
+        <form.Field
+          name="offence"
+          children={(field) => {
+            const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+            return (
+              <Field data-invalid={isInvalid} className="@lg:col-span-2">
+                <FieldLabel htmlFor={id("offence")}>
+                  {FIR_LABELS.offence} <RequiredMark />
+                </FieldLabel>
+                <Input
+                  id={id("offence")}
+                  name={field.name}
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => field.handleChange(event.target.value)}
+                  aria-invalid={isInvalid}
+                  placeholder="چوری ۳۷۹ ت پ"
+                />
+                <FieldError errors={field.state.meta.errors} />
+              </Field>
+            );
+          }}
+        />
+      </FormSection>
+
+      <FormSection title="تاریخیں" className="@lg:grid-cols-3">
+        {dateFields.map((date) => (
           <form.Field
             key={date.name}
             name={date.name}
@@ -344,7 +403,10 @@ function FirFormFields({ className }: { className?: string }) {
               const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
               return (
                 <Field data-invalid={isInvalid}>
-                  <FieldLabel htmlFor={id(date.name)}>{date.label}</FieldLabel>
+                  <FieldLabel htmlFor={id(date.name)}>
+                    {date.label}
+                    {date.name === "arrest_date" ? null : <RequiredMark />}
+                  </FieldLabel>
                   <FirDatePickerInput
                     id={id(date.name)}
                     name={field.name}
@@ -360,47 +422,30 @@ function FirFormFields({ className }: { className?: string }) {
             }}
           />
         ))}
-        <form.Field
-          name="offence"
-          children={(field) => {
-            const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
-            return (
-              <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={id("offence")}>جرم</FieldLabel>
+      </FormSection>
+
+      <FormSection title="دیگر تفصیلات" className="@lg:grid-cols-2">
+        {textFields.map((text) => (
+          <form.Field
+            key={text.name}
+            name={text.name}
+            children={(field) => (
+              <Field className={text.urdu ? "@lg:col-span-2" : undefined}>
+                <FieldLabel htmlFor={id(text.name)}>{text.label}</FieldLabel>
                 <Input
-                  id={id("offence")}
+                  id={id(text.name)}
+                  inputMode={text.urdu ? undefined : "numeric"}
                   name={field.name}
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
-                  aria-invalid={isInvalid}
-                  placeholder="411/379"
+                  placeholder={text.placeholder}
                 />
-                <FieldError errors={field.state.meta.errors} />
               </Field>
-            );
-          }}
-        />
-        <form.Field
-          name="NIC"
-          children={(field) => (
-            <Field>
-              <FieldLabel htmlFor={id("nic")}>شناختی کارڈ نمبر</FieldLabel>
-              <Input
-                dir="ltr"
-                className="text-end"
-                inputMode="numeric"
-                id={id("nic")}
-                name={field.name}
-                value={field.state.value}
-                onBlur={field.handleBlur}
-                onChange={(event) => field.handleChange(event.target.value)}
-                placeholder="3520288701547"
-              />
-            </Field>
-          )}
-        />
-      </FieldGroup>
+            )}
+          />
+        ))}
+      </FormSection>
 
       {repeatableSections.map((section) => (
         <form.Field
@@ -415,10 +460,9 @@ function FirFormFields({ className }: { className?: string }) {
           }}
         >
           {(arrayField) => (
-            <>
-              <FieldSeparator />
+            <FormSection title={section.label}>
               <FieldSet>
-                <FieldLegend variant="label">{section.label}</FieldLegend>
+                <FieldLegend className="sr-only">{section.label}</FieldLegend>
                 <FieldGroup className="gap-2">
                   {arrayField.state.value.map((_, index) => (
                     <form.Field key={index} name={`${section.name}[${index}]`}>
@@ -454,7 +498,7 @@ function FirFormFields({ className }: { className?: string }) {
                                     size="icon-xs"
                                     variant="ghost"
                                     type="button"
-                                    aria-label={`Remove ${section.entry} ${index + 1}`}
+                                    aria-label={`Remove ${section.entry.toLowerCase()} ${index + 1}`}
                                     onClick={() => arrayField.removeValue(index)}
                                   >
                                     <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
@@ -473,9 +517,10 @@ function FirFormFields({ className }: { className?: string }) {
                   type="button"
                   variant="subtle"
                   size="sm"
-                  className="-me-2.5 self-start"
                   dir="ltr"
                   lang="en"
+                  aria-label={`Add ${section.entry.toLowerCase()}`}
+                  className="-me-2 self-start"
                   onClick={() => {
                     const index = arrayField.state.value.length;
                     arrayField.pushValue("");
@@ -485,10 +530,10 @@ function FirFormFields({ className }: { className?: string }) {
                   }}
                 >
                   <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
-                  {section.add}
+                  Add
                 </Button>
               </FieldSet>
-            </>
+            </FormSection>
           )}
         </form.Field>
       ))}

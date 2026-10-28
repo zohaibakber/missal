@@ -54,7 +54,7 @@ export function DataTableSearch<TData extends RowData>({
   });
 
   return (
-    <InputGroup className={cn("h-7 w-56", className)}>
+    <InputGroup className={cn("h-7 w-64", className)}>
       <InputGroupAddon align="inline-start">
         <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
       </InputGroupAddon>
@@ -120,21 +120,36 @@ export function DataTableFacetedFilter<TData extends RowData>({
 
   return (
     <Popover>
-      <Hint label={selected.size ? `${title} · ${selected.size} selected` : title}>
+      <Hint label={`Filter by ${title.toLowerCase()}`}>
         <PopoverTrigger
           render={
             <Button
-              variant={selected.size ? "secondary" : "subtle"}
-              size="icon-sm"
+              variant={selected.size ? "secondary" : "ghost"}
+              size={selected.size ? "sm" : "icon-sm"}
               type="button"
-              aria-label={title}
+              aria-label={`Filter by ${title.toLowerCase()}`}
             />
           }
         >
-          <HugeiconsIcon icon={FilterHorizontalIcon} strokeWidth={2} />
+          <HugeiconsIcon
+            icon={FilterHorizontalIcon}
+            strokeWidth={2}
+            data-icon={selected.size ? "inline-start" : undefined}
+          />
+          {selected.size ? (
+            <span className="flex items-center gap-0.5">
+              {options
+                .filter((option) => selected.has(option.value))
+                .map((option) => (
+                  <span key={option.value} className="flex">
+                    {option.icon}
+                  </span>
+                ))}
+            </span>
+          ) : null}
         </PopoverTrigger>
       </Hint>
-      <PopoverContent className="w-56" align="start" dir={dir}>
+      <PopoverContent className="w-56" align="end" dir={dir}>
         <Command>
           <CommandInput placeholder={title} />
           <CommandList>
@@ -202,12 +217,12 @@ export function DataTableViewOptions<TData extends RowData>({ table }: TableProp
     <DropdownMenu>
       <Hint label="Columns">
         <DropdownMenuTrigger
-          render={<Button variant="subtle" size="icon-sm" type="button" aria-label="Columns" />}
+          render={<Button variant="ghost" size="icon-sm" type="button" aria-label="Columns" />}
         >
           <HugeiconsIcon icon={LayoutThreeColumnIcon} strokeWidth={2} />
         </DropdownMenuTrigger>
       </Hint>
-      <DropdownMenuContent align="start" className="w-44">
+      <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Show columns</DropdownMenuLabel>
           {columns.map((column) => (

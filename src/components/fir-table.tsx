@@ -21,9 +21,11 @@ import {
 } from "#/components/data-table-toolbar";
 import { EditFirSheetById } from "#/components/edit-fir-sheet";
 import { firColumns, FirRowActionsContext, type FirRowActions } from "#/components/fir-columns";
-import { FirStatusDot } from "#/components/fir-status-badge";
+import { FirStatusIcon } from "#/components/fir-status-badge";
 import { Hint } from "#/components/hint";
+import { AppBreadcrumb } from "#/components/app-breadcrumb";
 import { Pane, PaneActions, PaneBody, PaneHeader, PaneStatusBar } from "#/components/pane";
+import { ShortcutKbd } from "#/components/shortcut-kbd";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +44,7 @@ import {
 } from "#/components/ui/context-menu";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -50,7 +53,7 @@ import {
 import { Skeleton } from "#/components/ui/skeleton";
 import { Spinner } from "#/components/ui/spinner";
 import { toast } from "#/components/ui/toast";
-import { FIR_STATUS_OPTIONS, getFirStatusLabel, type FirId, type FirSummary } from "#/lib/fir";
+import { FIR_STATUS_LABELS, FIR_STATUS_OPTIONS, type FirId, type FirSummary } from "#/lib/fir";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
 import { whilePending } from "#/lib/utils";
 import { atoms } from "#/state/atoms";
@@ -60,11 +63,11 @@ const initialSorting: SortingState = [{ desc: true, id: "fir_no" }];
 const statusOptions = FIR_STATUS_OPTIONS.map((status) => ({
   value: status,
   label: (
-    <span lang="ur" dir="rtl">
-      {getFirStatusLabel(status)}
+    <span lang="ur" dir="rtl" className="text-ur-sm">
+      {FIR_STATUS_LABELS[status]}
     </span>
   ),
-  icon: <FirStatusDot status={status} />,
+  icon: <FirStatusIcon status={status} />,
 }));
 
 function NewFirButton() {
@@ -78,6 +81,10 @@ function NewFirButton() {
   );
 }
 
+function FirsBreadcrumb() {
+  return <AppBreadcrumb crumbs={[{ label: "FIRs" }]} />;
+}
+
 export function FirsPane() {
   const firs = useAtomValue(atoms.firsAtom);
 
@@ -88,6 +95,7 @@ export function FirsPane() {
   return (
     <Pane>
       <PaneHeader>
+        <FirsBreadcrumb />
         <PaneActions>
           <NewFirButton />
         </PaneActions>
@@ -100,10 +108,14 @@ export function FirsPane() {
                 <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} />
               </EmptyMedia>
               <EmptyTitle>No FIRs yet</EmptyTitle>
-              <EmptyDescription>
-                Create an FIR, then add templates to write its documents.
-              </EmptyDescription>
             </EmptyHeader>
+            <EmptyContent>
+              <Button nativeButton={false} render={<Link to="/new" />}>
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+                New FIR
+                <ShortcutKbd id="newFir" />
+              </Button>
+            </EmptyContent>
           </Empty>
         ) : AsyncResult.isFailure(firs) ? (
           <Empty>
@@ -146,8 +158,10 @@ function FirBrowser({ data }: { data: readonly FirSummary[] }) {
     <FirRowActionsContext value={actions}>
       <Pane>
         <PaneHeader>
-          <div className="flex min-w-0 items-center gap-1">
-            <DataTableSearch table={table} placeholder="Search FIRs" />
+          <FirsBreadcrumb />
+          <DataTableSearch table={table} placeholder="Search FIRs" />
+          <PaneActions>
+            <DataTableResetFilters table={table} />
             <DataTableFacetedFilter
               table={table}
               columnId="status"
@@ -156,9 +170,6 @@ function FirBrowser({ data }: { data: readonly FirSummary[] }) {
               dir="rtl"
             />
             <DataTableViewOptions table={table} />
-            <DataTableResetFilters table={table} />
-          </div>
-          <PaneActions>
             <NewFirButton />
           </PaneActions>
         </PaneHeader>
@@ -168,7 +179,7 @@ function FirBrowser({ data }: { data: readonly FirSummary[] }) {
           lang="ur"
           onRowActivate={open}
           rowContextMenu={(fir) => (
-            <div dir="ltr" lang="en">
+            <>
               <ContextMenuGroup>
                 <ContextMenuItem onClick={() => open(fir)}>
                   <HugeiconsIcon icon={ArrowUpRight01Icon} strokeWidth={2} />
@@ -186,32 +197,33 @@ function FirBrowser({ data }: { data: readonly FirSummary[] }) {
                   Delete
                 </ContextMenuItem>
               </ContextMenuGroup>
-            </div>
-          )}
-          empty={<p className="text-center text-muted-foreground">No FIRs match.</p>}
-        />
-        <PaneStatusBar>
-          {selected.length ? (
-            <>
-              <span className="text-foreground">{selected.length} selected</span>
-              <Button variant="subtle" size="xs" onClick={() => table.resetRowSelection()}>
-                Clear
-              </Button>
-              <Button
-                variant="destructive"
-                size="xs"
-                className="ms-auto"
-                onClick={() => actions.remove(selected)}
-              >
-                Delete {selected.length === 1 ? "FIR" : `${selected.length} FIRs`}
-              </Button>
             </>
-          ) : visibleCount === data.length ? (
-            `${data.length} ${data.length === 1 ? "FIR" : "FIRs"}`
-          ) : (
-            `${visibleCount} of ${data.length} FIRs`
           )}
-        </PaneStatusBar>
+          empty={<p className="text-center text-muted-foreground">No matching FIRs</p>}
+        />
+        {selected.length || visibleCount !== data.length ? (
+          <PaneStatusBar>
+            {selected.length ? (
+              <>
+                <span className="text-foreground">{selected.length} selected</span>
+                <Button variant="subtle" size="xs" onClick={() => table.resetRowSelection()}>
+                  Clear
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="xs"
+                  className="ms-auto"
+                  onClick={() => actions.remove(selected)}
+                >
+                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} data-icon="inline-start" />
+                  Delete {selected.length === 1 ? "FIR" : `${selected.length} FIRs`}
+                </Button>
+              </>
+            ) : (
+              `${visibleCount} of ${data.length} FIRs`
+            )}
+          </PaneStatusBar>
+        ) : null}
       </Pane>
       {editing ? (
         <EditFirSheetById firId={editing} open={editOpen} onOpenChange={setEditOpen} />

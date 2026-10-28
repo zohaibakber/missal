@@ -25,7 +25,7 @@ import {
 
 export type DataTableInstance<TData extends RowData> = ReactTable<DataTableFeatures, TData>;
 
-const ROW_HEIGHT = 40;
+const ROW_HEIGHT = 44;
 const OVERSCAN_ROWS = 12;
 
 export function useDataTable<TData extends RowData>({
@@ -89,7 +89,9 @@ export function DataTable<TData extends RowData>({
                 const sorted = header.column.getIsSorted();
                 return (
                   <TableHead
-                    columnWidth={header.column.getSize()}
+                    columnWidth={
+                      header.column.columnDef.meta?.grow ? undefined : header.column.getSize()
+                    }
                     key={header.id}
                     aria-sort={
                       sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : undefined

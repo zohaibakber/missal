@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router";
 import { FirForm, FirFormFields, FirFormStatus, FirFormSubmit } from "#/components/fir-form";
-import { Pane, PaneActions, PaneBody, PaneHeader, PaneTitle } from "#/components/pane";
+import { AppBreadcrumb } from "#/components/app-breadcrumb";
+import { Pane, PaneActions, PaneBody, PaneHeader } from "#/components/pane";
 import { Button } from "#/components/ui/button";
 
 export const Route = createFileRoute("/new")({
@@ -20,7 +21,7 @@ function RouteComponent() {
     >
       <Pane>
         <PaneHeader>
-          <PaneTitle>New FIR</PaneTitle>
+          <AppBreadcrumb crumbs={[{ label: "FIRs", to: "/" }, { label: "New FIR" }]} />
           <PaneActions>
             <FirFormStatus />
             <Button type="button" variant="subtle" size="sm" onClick={() => router.history.back()}>
@@ -30,7 +31,7 @@ function RouteComponent() {
           </PaneActions>
         </PaneHeader>
         <PaneBody>
-          <div className="mx-auto w-full max-w-2xl px-6 py-10">
+          <div className="mx-auto w-full max-w-3xl px-8 py-10">
             <FirFormFields />
           </div>
         </PaneBody>

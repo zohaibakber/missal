@@ -14,11 +14,11 @@ export function normalizePlaceholderName(name: string) {
   return name.trim().replace(/\s+/g, " ");
 }
 
-function lookupKey(name: string) {
+export function fieldLookupKey(name: string) {
   return name.replace(/[\s_\u200c]+/g, "");
 }
 
-const firFieldNames = new Set(FIR_FIELDS.map(({ label }) => lookupKey(label)));
+const firFieldNames = new Set(FIR_FIELDS.map(({ label }) => fieldLookupKey(label)));
 
 export const PlaceholderName = Schema.String.pipe(
   Schema.decode(
@@ -27,7 +27,7 @@ export const PlaceholderName = Schema.String.pipe(
   Schema.check(Schema.isNonEmpty()),
   Schema.check(
     Schema.makeFilter(
-      (name) => !firFieldNames.has(lookupKey(name)) || "This name belongs to an FIR field",
+      (name) => !firFieldNames.has(fieldLookupKey(name)) || "This name belongs to an FIR field",
     ),
   ),
 );
@@ -60,11 +60,11 @@ export function indexFields(placeholders: readonly Placeholder[]): FieldIndex {
   return {
     byId: HashMap.fromIterable(placeholders.map((placeholder) => [placeholder.id, placeholder])),
     byName: HashMap.fromIterable<string, FieldReference>([
-      ...FIR_FIELDS.map(({ label, reference }) => [lookupKey(label), reference] as const),
+      ...FIR_FIELDS.map(({ label, reference }) => [fieldLookupKey(label), reference] as const),
       ...placeholders.map(
         (placeholder) =>
           [
-            lookupKey(placeholder.label),
+            fieldLookupKey(placeholder.label),
             CatalogFieldReference.make({ id: placeholder.id }),
           ] as const,
       ),
@@ -73,7 +73,7 @@ export function indexFields(placeholders: readonly Placeholder[]): FieldIndex {
 }
 
 export function resolveField(token: string, index: FieldIndex) {
-  const key = lookupKey(token);
+  const key = fieldLookupKey(token);
   return key ? Option.getOrUndefined(HashMap.get(index.byName, key)) : undefined;
 }
 

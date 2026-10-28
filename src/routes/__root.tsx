@@ -1,4 +1,5 @@
 import { AppSidebar } from "#/components/app-sidebar";
+import { AppBreadcrumbProvider } from "#/components/app-breadcrumb";
 import { KeyboardShortcutsProvider } from "#/components/keyboard-shortcuts";
 import { TitleBar } from "#/components/title-bar";
 import { ThemeProvider } from "#/components/theme-provider";
@@ -62,15 +63,17 @@ function RootComponent() {
         <TooltipProvider>
           <DirectionProvider direction="ltr">
             <KeyboardShortcutsProvider>
-              <SidebarProvider className="h-svh min-h-0 flex-col overflow-hidden">
-                <TitleBar />
-                <div className="flex min-h-0 flex-1">
-                  <AppSidebar />
-                  <SidebarInset className="min-h-0 overflow-hidden">
-                    <Outlet />
-                  </SidebarInset>
-                </div>
-              </SidebarProvider>
+              <AppBreadcrumbProvider>
+                <SidebarProvider className="h-svh min-h-0 flex-col overflow-hidden">
+                  <TitleBar />
+                  <div className="flex min-h-0 flex-1">
+                    <AppSidebar />
+                    <SidebarInset className="min-h-0 overflow-hidden">
+                      <Outlet />
+                    </SidebarInset>
+                  </div>
+                </SidebarProvider>
+              </AppBreadcrumbProvider>
             </KeyboardShortcutsProvider>
           </DirectionProvider>
         </TooltipProvider>

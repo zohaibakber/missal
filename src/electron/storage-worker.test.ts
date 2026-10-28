@@ -45,6 +45,7 @@ it.live("serves repository procedures to a renderer over its port", () =>
       storageControlHandlers({
         databasePath: databasePath(),
         migrationsFolder: resolve("drizzle"),
+        templatesFolder: resolve("templates"),
       }),
     ),
     Effect.scoped,
@@ -67,6 +68,7 @@ it.live("reports a database that cannot be opened", () =>
       storageControlHandlers({
         databasePath: databasePath(),
         migrationsFolder: "/nonexistent/drizzle",
+        templatesFolder: resolve("templates"),
       }),
     ),
     Effect.scoped,

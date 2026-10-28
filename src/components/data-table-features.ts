@@ -51,5 +51,6 @@ declare module "@tanstack/react-table" {
     TValue extends CellData,
   > {
     label?: string;
+    grow?: boolean;
   }
 }

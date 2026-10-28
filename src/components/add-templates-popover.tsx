@@ -48,13 +48,13 @@ export function AddTemplatesPopover({
       <Hint label="Add templates" shortcut="addTemplates">
         <PopoverTrigger
           render={
-            <Button type="button" variant="ghost" size="icon-sm" aria-label="Add templates" />
+            <Button type="button" variant="ghost" size="icon-xs" aria-label="Add templates" />
           }
         >
           <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
         </PopoverTrigger>
       </Hint>
-      <PopoverContent align="start" className="w-80">
+      <PopoverContent align="end" className="w-80">
         <TemplateChecklist
           firId={firId}
           onAdded={(id) => {
@@ -125,7 +125,7 @@ function TemplateChecklist({ firId, onAdded }: TemplateChecklistProps) {
           {AsyncResult.isInitial(result) ? "Loading…" : "No templates found."}
         </CommandEmpty>
         {templates.length ? (
-          <CommandGroup>
+          <CommandGroup dir="rtl">
             {templates.map((template) => {
               const isAttached = attached.has(template.id);
               return (
@@ -137,7 +137,7 @@ function TemplateChecklist({ firId, onAdded }: TemplateChecklistProps) {
                   onSelect={() => toggle(template.id)}
                 >
                   <HugeiconsIcon icon={LegalDocument01Icon} strokeWidth={2} />
-                  <span lang="ur" dir="rtl" className="min-w-0 flex-1 truncate text-ur">
+                  <span lang="ur" className="min-w-0 flex-1 truncate text-ur">
                     {template.name}
                   </span>
                   {isAttached ? <span className="text-xs text-muted-foreground">Added</span> : null}

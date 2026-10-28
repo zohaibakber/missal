@@ -1,5 +1,6 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
+import { HashMap } from "effect";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -11,7 +12,7 @@ import { TablePlugin } from "@lexical/react/LexicalTablePlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { HorizontalRulePlugin } from "@lexical/react/LexicalHorizontalRulePlugin";
 import { EDITOR_NODES, EDITOR_THEME } from "#/editor/nodes/registry";
-import type { FieldPresentationContext } from "#/lib/field";
+import { FIR_FIELDS, type FieldPresentationContext } from "#/lib/field";
 import {
   attachEditorSession,
   type EditorSessionHandle,
@@ -20,13 +21,32 @@ import {
 import { EDITOR_HTML_CONFIG } from "#/editor/html-config";
 import type { DocumentEnvelope, PageLayout } from "#/lib/document-format";
 import type { FieldIndex } from "#/lib/placeholder";
-import { EditorToolbar } from "#/components/editor-toolbar";
+import { EditorToolbar, type InsertableFieldGroup } from "#/components/editor-toolbar";
 import { cn } from "#/lib/utils";
 import { atoms } from "#/state/atoms";
 
-function EditableToolbar() {
+function fieldGroups(fieldIndex: FieldIndex): InsertableFieldGroup[] {
+  const placeholders = [...HashMap.values(fieldIndex.byId)];
+  return [
+    { heading: "FIR", labels: FIR_FIELDS.map((field) => field.label) },
+    {
+      heading: "Global",
+      labels: placeholders
+        .filter((placeholder) => placeholder.source._tag !== "Custom")
+        .map((placeholder) => placeholder.label),
+    },
+    {
+      heading: "Custom",
+      labels: placeholders
+        .filter((placeholder) => placeholder.source._tag === "Custom")
+        .map((placeholder) => placeholder.label),
+    },
+  ];
+}
+
+function EditableToolbar({ fieldIndex }: { fieldIndex: FieldIndex }) {
   const editable = useLexicalEditable();
-  return editable ? <EditorToolbar /> : null;
+  return editable ? <EditorToolbar fieldGroups={fieldGroups(fieldIndex)} /> : null;
 }
 
 type DocumentEditorProps = {
@@ -159,7 +179,7 @@ export function DocumentEditor({
       }}
     >
       <div className={cn("missal-editor relative flex h-full min-h-0 min-w-0 flex-col", className)}>
-        <EditableToolbar />
+        <EditableToolbar fieldIndex={fieldIndex} />
         <div ref={canvasRef} className="min-h-0 flex-1 overflow-auto bg-canvas">
           <RichTextPlugin
             contentEditable={

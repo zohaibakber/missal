@@ -14,7 +14,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
-  DESKTOP_LAYOUT_CHANNEL,
   DESKTOP_PREFERENCES_CHANNEL,
   DESKTOP_PRINT_CHANNEL,
   DESKTOP_PRINT_PDF_CHANNEL,
@@ -30,7 +29,7 @@ const RENDERER_ORIGIN = DEV_SERVER_URL ? new URL(DEV_SERVER_URL).origin : "missa
 const RENDERER_ROOT = path.join(__dirname, "../dist");
 const TITLEBAR_HEIGHT = 44;
 
-const windowBackground = () => (nativeTheme.shouldUseDarkColors ? "#0c0c0c" : "#f5f5f5");
+const windowBackground = () => (nativeTheme.shouldUseDarkColors ? "#0d0e11" : "#f3f4f7");
 
 const titleBarOverlay = () => ({
   color: "#01000000",
@@ -118,16 +117,15 @@ if (app.isPackaged) void autoUpdater.checkForUpdatesAndNotify();
 void app.whenReady().then(async () => {
   protocol.handle(RENDERER_SCHEME, serveRenderer);
   const userData = app.getPath("userData");
+  const resources = app.isPackaged ? process.resourcesPath : process.cwd();
   const runtime = startDesktopRuntime({
     workerPath: path.join(__dirname, "storage-worker.cjs"),
     rendererOrigin: RENDERER_ORIGIN,
     preferencesDirectory: userData,
     config: {
       databasePath: path.join(userData, "missal.sqlite"),
-      migrationsFolder: path.join(
-        app.isPackaged ? process.resourcesPath : process.cwd(),
-        "drizzle",
-      ),
+      migrationsFolder: path.join(resources, "drizzle"),
+      templatesFolder: path.join(resources, "templates"),
     },
   });
   desktop = runtime;
@@ -151,16 +149,6 @@ ipcMain.on(DESKTOP_THEME_CHANNEL, (event, theme: unknown) => {
   if (!desktop || !fromRenderer(event) || !isDesktopTheme(theme)) return;
   nativeTheme.themeSource = theme;
   desktop.updatePreferences((current) => ({ ...current, theme }));
-});
-
-ipcMain.on(DESKTOP_LAYOUT_CHANNEL, (event, id: unknown, layout: unknown) => {
-  if (!desktop || !fromRenderer(event) || typeof id !== "string" || typeof layout !== "string") {
-    return;
-  }
-  desktop.updatePreferences((current) => ({
-    ...current,
-    layouts: { ...current.layouts, [id]: layout },
-  }));
 });
 
 ipcMain.on(STORAGE_CONNECT_CHANNEL, (event) => {

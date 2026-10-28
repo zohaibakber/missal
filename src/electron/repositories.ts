@@ -1,3 +1,4 @@
+import { BundledTemplatesLive } from "#/electron/bundled-templates";
 import { globalPlaceholderOperations } from "#/electron/global-placeholders";
 import { Effect, HashMap, Layer, Option, Schema } from "effect";
 import { and, asc, count, desc, eq, inArray, like, or } from "drizzle-orm";
@@ -783,4 +784,7 @@ const ElectronRepositoriesLive = Layer.mergeAll(
   DrizzleSettingsRepositoryLive,
 );
 
-export const ElectronDatabaseLive = Layer.provideMerge(ElectronRepositoriesLive, MissalDrizzleLive);
+export const ElectronDatabaseLive = Layer.provideMerge(
+  ElectronRepositoriesLive,
+  Layer.provideMerge(BundledTemplatesLive, MissalDrizzleLive),
+);

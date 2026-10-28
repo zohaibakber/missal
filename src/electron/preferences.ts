@@ -8,12 +8,11 @@ export const DesktopTheme = Schema.Literals(["dark", "light", "system"]);
 
 const Preferences = Schema.Struct({
   theme: DesktopTheme,
-  layouts: Schema.Record(Schema.String, Schema.String),
 });
 
 const PREFERENCES_FILE = "preferences.json";
 
-const defaults: DesktopPreferences = { theme: "system", layouts: {} };
+const defaults: DesktopPreferences = { theme: "system" };
 
 export class PreferencesStore extends Context.Service<
   PreferencesStore,

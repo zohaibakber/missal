@@ -61,7 +61,7 @@ function PlaceholderListActions({
 function PlaceholderToken({ name }: { name: string }) {
   const { open, close } = useAtomValue(atoms.fieldMarkersAtom);
   return (
-    <code dir="rtl" lang="ur" className="rounded bg-muted px-1 font-mono text-foreground">
+    <code dir="rtl" lang="ur" className="rounded bg-muted px-1.5 text-foreground">
       {open}
       {name}
       {close}

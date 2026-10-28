@@ -3,7 +3,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { Delete02Icon, Edit02Icon, MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { type DataTableFeatures } from "#/components/data-table-features";
-import { FirStatusBadge } from "#/components/fir-status-badge";
+import { FirStatusLabel } from "#/components/fir-status-badge";
 import { Button } from "#/components/ui/button";
 import { Checkbox } from "#/components/ui/checkbox";
 import {
@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { formatDate } from "#/lib/date";
-import type { FirSummary } from "#/lib/fir";
+import { FIR_LABELS, type FirSummary } from "#/lib/fir";
 
 export type FirRowActions = {
   edit: (fir: FirSummary) => void;
@@ -48,7 +48,7 @@ function FirRowMenu({ fir }: { fir: FirSummary }) {
       >
         <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44" dir="ltr">
+      <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={() => edit(fir)}>
             <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
@@ -73,7 +73,7 @@ const revealClassName =
 const columnHelper = createColumnHelper<DataTableFeatures, FirSummary>();
 
 const dateCell = (value: string | null | undefined) => (
-  <div dir="ltr" className="text-end tabular-nums">
+  <div className="text-muted-foreground tabular-nums">
     {value ? formatDate(value) : <span className="text-muted-foreground">—</span>}
   </div>
 );
@@ -111,44 +111,45 @@ export const firColumns = columnHelper.columns([
     ),
   }),
   columnHelper.accessor("fir_no", {
-    header: "ایف آئی آر نمبر",
-    meta: { label: "FIR no." },
-    size: 150,
+    header: FIR_LABELS.fir_no,
+    meta: { label: FIR_LABELS.fir_no },
+    size: 120,
     cell: ({ row }) => (
-      <div dir="ltr" className="truncate text-end font-medium">
-        {row.original.fir_no}
-      </div>
+      <div className="truncate font-medium tabular-nums">{row.original.fir_no}</div>
     ),
   }),
   columnHelper.accessor("offence", {
-    header: "جرم",
-    meta: { label: "Offence" },
-    size: 180,
-    cell: ({ row }) => <div className="truncate text-ur">{row.original.offence}</div>,
+    header: FIR_LABELS.offence,
+    meta: { label: FIR_LABELS.offence, grow: true },
+    cell: ({ row }) => (
+      <div lang="ur" className="truncate text-ur">
+        {row.original.offence}
+      </div>
+    ),
   }),
   columnHelper.accessor("status", {
-    header: "حالت",
-    meta: { label: "Status" },
-    size: 120,
+    header: FIR_LABELS.status,
+    meta: { label: FIR_LABELS.status },
+    size: 172,
     filterFn: "oneOf",
-    cell: ({ row }) => <FirStatusBadge status={row.original.status} />,
+    cell: ({ row }) => <FirStatusLabel status={row.original.status} className="max-w-full" />,
   }),
   columnHelper.accessor("date", {
-    header: "تاریخ ایف آئی آر",
-    meta: { label: "FIR date" },
-    size: 110,
+    header: FIR_LABELS.date,
+    meta: { label: FIR_LABELS.date },
+    size: 124,
     cell: ({ row }) => dateCell(row.original.date),
   }),
   columnHelper.accessor("incident_date", {
-    header: "تاریخ وقوعہ",
-    meta: { label: "Incident date" },
-    size: 110,
+    header: FIR_LABELS.incident_date,
+    meta: { label: FIR_LABELS.incident_date },
+    size: 124,
     cell: ({ row }) => dateCell(row.original.incident_date),
   }),
   columnHelper.accessor("arrest_date", {
-    header: "تاریخ گرفتاری",
-    meta: { label: "Arrest date" },
-    size: 110,
+    header: FIR_LABELS.arrest_date,
+    meta: { label: FIR_LABELS.arrest_date },
+    size: 124,
     cell: ({ row }) => dateCell(row.original.arrest_date),
   }),
   columnHelper.display({

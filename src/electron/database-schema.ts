@@ -127,6 +127,7 @@ export const appSettings = sqliteTable(
       .notNull()
       .$type<Pick<FieldMarkers, "open" | "close">>()
       .default({ open: "«", close: "»" }),
+    bundledTemplatesVersion: integer("bundled_templates_version").notNull().default(0),
   },
   (table) => [check("app_settings_id_default", sql`${table.id} = 'default'`)],
 );

@@ -5,7 +5,7 @@ import { Cause, Exit, Option, Schema } from "effect";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "#/components/ui/button";
-import { Field, FieldDescription, FieldLabel, FieldLegend, FieldSet } from "#/components/ui/field";
+import { Field, FieldLabel, FieldLegend, FieldSet } from "#/components/ui/field";
 import {
   PlaceholderList,
   PlaceholderListActions,
@@ -26,6 +26,7 @@ import {
   EmptyContent,
 } from "#/components/ui/empty";
 import { Skeleton } from "#/components/ui/skeleton";
+import { SettingsSection } from "#/components/settings-section";
 import { UnsavedChanges } from "#/components/unsaved-changes";
 import { toast } from "#/components/ui/toast";
 import {
@@ -122,71 +123,78 @@ function GlobalValues({ globals }: { globals: readonly GlobalPlaceholder[] }) {
   useShortcut("save", () => void submit(), { enabled: dirty && !saving });
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submit();
-      }}
+    <SettingsSection
+      title="Global values"
+      description={
+        <>
+          The same value in every FIR, like <PlaceholderToken name="تھانہ نام" />
+        </>
+      }
     >
-      <UnsavedChanges isDirty={() => dirty} />
-      <FieldSet>
-        <FieldLegend>Global values</FieldLegend>
-        <FieldDescription>
-          Set once and used by every FIR wherever the placeholder appears in a template, written
-          like <PlaceholderToken name="تھانہ نام" />.
-        </FieldDescription>
-        <PlaceholderList>
-          {rows.map((row, index) => (
-            <Field key={row._tag === "Existing" ? row.id : `new-${index}`} data-disabled={saving}>
-              <FieldLabel className="sr-only" htmlFor={`global-value-${index}`}>
-                Value for {row.label || "new placeholder"}
-              </FieldLabel>
-              <InputGroup>
-                <InputGroupInput
-                  id={`global-label-${index}`}
-                  aria-label={`Placeholder name ${index + 1}`}
-                  required
-                  disabled={saving}
-                  value={row.label}
-                  placeholder="نام"
-                  onChange={(event) => change(index, "label", event.target.value)}
-                />
-                <span aria-hidden className="h-4 w-px shrink-0 bg-border" />
-                <InputGroupInput
-                  id={`global-value-${index}`}
-                  disabled={saving}
-                  value={row.value}
-                  placeholder="قدر درج کریں"
-                  onChange={(event) => change(index, "value", event.target.value)}
-                />
-                {row._tag === "New" ? (
-                  <InputGroupAddon align="inline-end">
-                    <InputGroupButton
-                      size="icon-xs"
-                      disabled={saving}
-                      aria-label="Remove new global placeholder"
-                      onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
-                    >
-                      <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
-                    </InputGroupButton>
-                  </InputGroupAddon>
-                ) : null}
-              </InputGroup>
-            </Field>
-          ))}
-        </PlaceholderList>
-        <PlaceholderListActions
-          addLabel="Add global value"
-          dirty={dirty}
-          saving={saving}
-          onReset={() => setRows(saved)}
-          onAdd={() => {
-            const index = rows.length;
-            setRows((current) => [...current, { _tag: "New", label: "", value: "" }]);
-            requestAnimationFrame(() => document.getElementById(`global-label-${index}`)?.focus());
-          }}
-        />
-      </FieldSet>
-    </form>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <UnsavedChanges isDirty={() => dirty} />
+        <FieldSet>
+          <FieldLegend className="sr-only">Global values</FieldLegend>
+          <PlaceholderList>
+            {rows.map((row, index) => (
+              <Field key={row._tag === "Existing" ? row.id : `new-${index}`} data-disabled={saving}>
+                <FieldLabel className="sr-only" htmlFor={`global-value-${index}`}>
+                  Value for {row.label || "new placeholder"}
+                </FieldLabel>
+                <InputGroup>
+                  <InputGroupInput
+                    id={`global-label-${index}`}
+                    aria-label={`Field name ${index + 1}`}
+                    required
+                    disabled={saving}
+                    value={row.label}
+                    placeholder="نام"
+                    onChange={(event) => change(index, "label", event.target.value)}
+                  />
+                  <span aria-hidden className="h-4 w-px shrink-0 bg-border" />
+                  <InputGroupInput
+                    id={`global-value-${index}`}
+                    disabled={saving}
+                    value={row.value}
+                    placeholder="قدر"
+                    onChange={(event) => change(index, "value", event.target.value)}
+                  />
+                  {row._tag === "New" ? (
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupButton
+                        size="icon-xs"
+                        disabled={saving}
+                        aria-label="Remove new global placeholder"
+                        onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
+                      >
+                        <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  ) : null}
+                </InputGroup>
+              </Field>
+            ))}
+          </PlaceholderList>
+          <PlaceholderListActions
+            addLabel="Add value"
+            dirty={dirty}
+            saving={saving}
+            onReset={() => setRows(saved)}
+            onAdd={() => {
+              const index = rows.length;
+              setRows((current) => [...current, { _tag: "New", label: "", value: "" }]);
+              requestAnimationFrame(() =>
+                document.getElementById(`global-label-${index}`)?.focus(),
+              );
+            }}
+          />
+        </FieldSet>
+      </form>
+    </SettingsSection>
   );
 }

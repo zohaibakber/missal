@@ -5,19 +5,12 @@ import { Exit, Schema } from "effect";
 import { createFileRoute } from "@tanstack/react-router";
 import { FirFieldsSettings } from "#/components/fir-fields-form";
 import { GlobalPlaceholderForm } from "#/components/global-placeholder-form";
+import { AppBreadcrumb } from "#/components/app-breadcrumb";
 import { Pane, PaneBody } from "#/components/pane";
+import { SettingsSection } from "#/components/settings-section";
 import { useTheme } from "#/components/theme-provider";
 import { Button } from "#/components/ui/button";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSeparator,
-  FieldSet,
-} from "#/components/ui/field";
+import { Field, FieldError, FieldLabel } from "#/components/ui/field";
 import { InputGroup, InputGroupInput, InputGroupText } from "#/components/ui/input-group";
 import { RadioGroup, RadioGroupItem } from "#/components/ui/radio-group";
 import { toast } from "#/components/ui/toast";
@@ -42,13 +35,12 @@ function RouteComponent() {
 
   return (
     <Pane>
+      <AppBreadcrumb crumbs={[{ label: "Settings" }]} />
       <PaneBody>
-        <FieldGroup className="mx-auto w-full max-w-2xl px-6 py-8">
-          <FieldSet>
-            <FieldLegend>Appearance</FieldLegend>
-            <FieldDescription>System follows your Windows light or dark setting.</FieldDescription>
+        <div className="@container mx-auto w-full max-w-4xl px-8 py-10">
+          <SettingsSection title="Theme">
             <RadioGroup
-              className="flex w-auto flex-row gap-4 pt-2"
+              className="flex w-auto flex-row gap-4"
               name="theme"
               onValueChange={(value) => {
                 if (value === "system" || value === "light" || value === "dark") {
@@ -79,14 +71,11 @@ function RouteComponent() {
                 </Field>
               ))}
             </RadioGroup>
-          </FieldSet>
-          <FieldSeparator />
+          </SettingsSection>
           <FieldMarkersSetting />
-          <FieldSeparator />
           <GlobalPlaceholderForm />
-          <FieldSeparator />
           <FirFieldsSettings />
-        </FieldGroup>
+        </div>
       </PaneBody>
     </Pane>
   );
@@ -120,29 +109,31 @@ function FieldMarkersForm({ settings }: { settings: AppSettings }) {
   }
 
   return (
-    <FieldSet>
-      <FieldLegend>Placeholder markers</FieldLegend>
-      <FieldDescription>
-        The signs typed around a placeholder name in a template. With these markers, type{" "}
-        <code dir="rtl" lang="ur" className="rounded bg-muted px-1 font-mono text-foreground">
-          {open}
-          جرم
-          {close}
-        </code>{" "}
-        to insert the جرم placeholder.
-      </FieldDescription>
+    <SettingsSection
+      title="Field markers"
+      description={
+        <>
+          Type a name between them to insert a field, like{" "}
+          <code dir="rtl" lang="ur" className="rounded bg-muted px-1.5 text-foreground">
+            {open}
+            جرم
+            {close}
+          </code>
+        </>
+      }
+    >
       <form
-        className="flex flex-col items-start gap-2 pt-2"
+        className="flex items-start gap-2"
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
         }}
       >
-        <Field data-invalid={invalid}>
+        <Field data-invalid={invalid} className="w-48">
           <FieldLabel className="sr-only" htmlFor="field-marker-open">
-            Markers
+            Field markers
           </FieldLabel>
-          <InputGroup dir="rtl" className="w-48">
+          <InputGroup dir="rtl">
             <InputGroupInput
               id="field-marker-open"
               aria-label="Before name"
@@ -164,17 +155,15 @@ function FieldMarkersForm({ settings }: { settings: AppSettings }) {
               onChange={(event) => setClose(event.target.value.trim())}
             />
           </InputGroup>
-          {invalid ? (
-            <FieldError>
-              Use one to three symbols, such as @ or #. No letters or numbers.
-            </FieldError>
-          ) : null}
+          {invalid ? <FieldError>Use 1–3 symbols, no letters or numbers.</FieldError> : null}
         </Field>
-        <Button type="submit" size="sm" disabled={!dirty || invalid || saving}>
-          Update
-        </Button>
+        {dirty ? (
+          <Button type="submit" size="sm" className="mt-0.5" disabled={invalid || saving}>
+            Save
+          </Button>
+        ) : null}
       </form>
-    </FieldSet>
+    </SettingsSection>
   );
 }
 

@@ -60,6 +60,18 @@ const LAYOUT_PROPERTIES = new Set([
 
 const LONGHAND_FAMILIES = /^(?:border|margin|padding|text-decoration)-/;
 
+const DEFAULT_VALUES: Record<string, ReadonlySet<string>> = {
+  color: new Set(["rgb(0, 0, 0)", "black", "#000000", "#000", "windowtext"]),
+  "background-color": new Set([
+    "rgb(255, 255, 255)",
+    "white",
+    "#ffffff",
+    "#fff",
+    "transparent",
+    "rgba(0, 0, 0, 0)",
+  ]),
+};
+
 function isRetained(property: string, textOnly: boolean) {
   if (TEXT_PROPERTIES.has(property)) return true;
   if (property.startsWith("text-decoration-")) return true;
@@ -77,7 +89,11 @@ export function retainedStyle(cssText: string, textOnly = false): string {
   source.cssText = cssText;
   for (const property of source) {
     const value = source.getPropertyValue(property);
-    if (isRetained(property, textOnly) && !/url\s*\(|expression\s*\(|var\s*\(/i.test(value)) {
+    if (
+      isRetained(property, textOnly) &&
+      !DEFAULT_VALUES[property]?.has(value.toLowerCase()) &&
+      !/url\s*\(|expression\s*\(|var\s*\(/i.test(value)
+    ) {
       result.setProperty(property, value);
     }
   }

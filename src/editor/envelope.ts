@@ -14,7 +14,7 @@ export function captureEditorEnvelope(editor: LexicalEditor, pageLayout?: PageLa
   return new DocumentEnvelope({
     format: DOCUMENT_FORMAT,
     ...(pageLayout ? { pageLayout } : {}),
-    state: editor.getEditorState().toJSON(),
+    state: JSON.parse(JSON.stringify(editor.getEditorState().toJSON())),
     version: DOCUMENT_FORMAT_VERSION,
   });
 }

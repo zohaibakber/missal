@@ -1,5 +1,4 @@
-import { createContext, use, useState, type ComponentProps, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import type { ComponentProps } from "react";
 import { Tick02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "#/components/ui/button";
@@ -127,34 +126,9 @@ function SaveButton({
   );
 }
 
-type ActionsSlot = {
-  target: HTMLElement | null;
-  setTarget: (element: HTMLElement | null) => void;
-};
-
-const PaneActionsSlotContext = createContext<ActionsSlot | null>(null);
-
-function PaneActionsProvider({ children }: { children: ReactNode }) {
-  const [target, setTarget] = useState<HTMLElement | null>(null);
-  return <PaneActionsSlotContext value={{ target, setTarget }}>{children}</PaneActionsSlotContext>;
-}
-
-function PaneActionsOutlet(props: Omit<ComponentProps<typeof PaneActions>, "ref">) {
-  const slot = use(PaneActionsSlotContext);
-  return <PaneActions ref={slot?.setTarget} {...props} />;
-}
-
-function PaneActionsPortal({ children }: { children: ReactNode }) {
-  const target = use(PaneActionsSlotContext)?.target;
-  return target ? createPortal(children, target) : null;
-}
-
 export {
   Pane,
   PaneActions,
-  PaneActionsOutlet,
-  PaneActionsPortal,
-  PaneActionsProvider,
   PaneBody,
   PaneHeader,
   PaneStatusBar,

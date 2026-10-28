@@ -4,10 +4,11 @@ import { AsyncResult } from "effect/reactivity";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Add01Icon, Cancel01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { IconAction } from "#/components/icon-action";
+import { Hint } from "#/components/hint";
+import { Button } from "#/components/ui/button";
 import { ShortcutKbd } from "#/components/shortcut-kbd";
-import { SplitViewListHeader } from "#/components/split-view";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
+import { RailHeader } from "#/components/rail-layout";
+import { Empty, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
 import {
   InputGroup,
   InputGroupAddon,
@@ -49,15 +50,16 @@ export function TemplateList() {
 
   return (
     <>
-      <SplitViewListHeader className="ps-2">
+      <RailHeader className="h-12 border-b ps-2 pe-2">
         <InputGroup className="h-7 flex-1">
           <InputGroupAddon align="inline-start">
             <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />
           </InputGroupAddon>
           <InputGroupInput
             ref={searchRef}
+            dir="auto"
             aria-label="Search templates"
-            placeholder="Search"
+            placeholder="Search templates"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={(event) => {
@@ -93,15 +95,18 @@ export function TemplateList() {
             )}
           </InputGroupAddon>
         </InputGroup>
-        <IconAction
-          label="New template"
-          shortcut="newTemplate"
-          nativeButton={false}
-          render={<Link to="/templates/new" />}
-        >
-          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-        </IconAction>
-      </SplitViewListHeader>
+        <Hint label="New template" shortcut="newTemplate">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="New template"
+            nativeButton={false}
+            render={<Link to="/templates/new" />}
+          >
+            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+          </Button>
+        </Hint>
+      </RailHeader>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {AsyncResult.isSuccess(result) ? (
           filtered.length ? (
@@ -148,10 +153,7 @@ export function TemplateList() {
           ) : (
             <Empty size="sm">
               <EmptyHeader>
-                <EmptyTitle>{query ? "No matches" : "No templates yet"}</EmptyTitle>
-                <EmptyDescription>
-                  {query ? "Try a different name." : "Create one or import a Word file."}
-                </EmptyDescription>
+                <EmptyTitle>{query ? "No matching templates" : "No templates yet"}</EmptyTitle>
               </EmptyHeader>
             </Empty>
           )

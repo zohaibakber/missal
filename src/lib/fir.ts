@@ -1,4 +1,4 @@
-import { Match, Schema } from "effect";
+import { Schema } from "effect";
 import { FirId } from "#/lib/ids";
 import { NonEmptyTrimmedString, TrimmedString } from "#/lib/schema";
 
@@ -72,23 +72,27 @@ export class FirUpdateInput extends Schema.Class<FirUpdateInput>("FirUpdateInput
   status: FirStatus,
 }) {}
 
-export const getFirStatusColor = (status: FirRecord["status"]) =>
-  Match.value(status).pipe(
-    Match.when("Open", () => "bg-status-open"),
-    Match.when("Under Investigation", () => "bg-status-investigating"),
-    Match.when("Challan Submitted", () => "bg-status-challan"),
-    Match.when("Closed", () => "bg-status-closed"),
-    Match.exhaustive,
-  );
+export const FIR_STATUS_LABELS = {
+  Open: "زیر التوا",
+  "Under Investigation": "زیر تفتیش",
+  "Challan Submitted": "چالان جمع",
+  Closed: "بند",
+} as const satisfies Record<FirStatus, string>;
 
-export const getFirStatusLabel = (status: FirRecord["status"]) =>
-  Match.value(status).pipe(
-    Match.when("Open", () => "زیر التوا"),
-    Match.when("Under Investigation", () => "زیر تفتیش"),
-    Match.when("Challan Submitted", () => "چالان جمع"),
-    Match.when("Closed", () => "بند"),
-    Match.exhaustive,
-  );
+export const FIR_LABELS = {
+  fir_no: "ایف آئی آر نمبر",
+  offence: "جرم",
+  status: "حالت",
+  date: "تاریخ ایف آئی آر",
+  incident_date: "تاریخ وقوعہ",
+  arrest_date: "تاریخ گرفتاری",
+  accused: "ملزمان",
+  witness: "گواہان",
+  zimni: "ضمنی",
+  NIC: "شناختی کارڈ نمبر",
+  mobile: "موبائل نمبر",
+  investigation_officer: "تفتیشی افسر",
+} as const;
 
 export type FirFormValues = {
   fir_no: string;

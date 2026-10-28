@@ -11,14 +11,7 @@ import {
 } from "#/components/placeholder-list";
 import { UnsavedChanges } from "#/components/unsaved-changes";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "#/components/ui/empty";
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from "#/components/ui/field";
+import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from "#/components/ui/field";
 import { Input } from "#/components/ui/input";
 import {
   InputGroup,
@@ -27,6 +20,7 @@ import {
   InputGroupInput,
 } from "#/components/ui/input-group";
 import { Skeleton } from "#/components/ui/skeleton";
+import { SettingsSection } from "#/components/settings-section";
 import { toast } from "#/components/ui/toast";
 import { useShortcut } from "#/hooks/use-shortcut";
 import {
@@ -109,128 +103,129 @@ function FirFieldsForm({ placeholders }: { placeholders: readonly Placeholder[] 
   const originals = new Map(placeholders.map((placeholder) => [placeholder.id, placeholder]));
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        void form.handleSubmit();
-      }}
+    <SettingsSection
+      title="FIR fields"
+      description="Filled from each FIR. Add custom fields below; renaming keeps templates linked."
     >
-      <UnsavedChanges isDirty={() => form.state.isDirty} />
-      <FieldSet>
-        <FieldLegend>FIR fields</FieldLegend>
-        <FieldDescription>
-          Filled in from each FIR's details. Write a name in a template like{" "}
-          <PlaceholderToken name="جرم" />. Renaming one keeps it linked in every template.
-        </FieldDescription>
-        <div dir="rtl" lang="ur" className="flex flex-wrap gap-2">
-          {FIR_FIELDS.map(({ label }) => (
-            <PlaceholderToken key={label} name={label} />
-          ))}
-        </div>
-        <PlaceholderList>
-          <form.Field name="placeholders" mode="array">
-            {(arrayField) =>
-              arrayField.state.value.map((item, index) => (
-                <form.Field
-                  key={item.id}
-                  name={`placeholders[${index}].label`}
-                  validators={{ onBlur: validateLabel, onSubmit: validateLabel }}
-                >
-                  {(field) => {
-                    const invalid = field.state.meta.isTouched && !field.state.meta.isValid;
-                    return (
-                      <Field data-invalid={invalid}>
-                        <FieldLabel className="sr-only" htmlFor={`placeholder-${item.id}`}>
-                          {originals.get(item.id)?.label ?? item.label}
-                        </FieldLabel>
-                        <Input
-                          id={`placeholder-${item.id}`}
-                          name={field.name}
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onChange={(event) => field.handleChange(event.target.value)}
-                          aria-invalid={invalid}
-                        />
-                        <FieldError errors={field.state.meta.errors} />
-                      </Field>
-                    );
-                  }}
-                </form.Field>
-              ))
-            }
-          </form.Field>
-          <form.Field name="additions" mode="array">
-            {(arrayField) =>
-              arrayField.state.value.map((_, index) => (
-                <form.Field
-                  key={index}
-                  name={`additions[${index}].label`}
-                  validators={{ onBlur: validateLabel, onSubmit: validateLabel }}
-                >
-                  {(field) => {
-                    const invalid = field.state.meta.isTouched && !field.state.meta.isValid;
-                    return (
-                      <Field data-invalid={invalid}>
-                        <FieldLabel className="sr-only" htmlFor={`new-placeholder-${index}`}>
-                          New placeholder {index + 1}
-                        </FieldLabel>
-                        <InputGroup>
-                          <InputGroupInput
-                            id={`new-placeholder-${index}`}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void form.handleSubmit();
+        }}
+      >
+        <UnsavedChanges isDirty={() => form.state.isDirty} />
+        <FieldSet>
+          <FieldLegend className="sr-only">FIR fields</FieldLegend>
+          <div className="flex flex-wrap gap-1.5">
+            {FIR_FIELDS.map(({ label }) => (
+              <PlaceholderToken key={label} name={label} />
+            ))}
+          </div>
+          <PlaceholderList>
+            <form.Field name="placeholders" mode="array">
+              {(arrayField) =>
+                arrayField.state.value.map((item, index) => (
+                  <form.Field
+                    key={item.id}
+                    name={`placeholders[${index}].label`}
+                    validators={{ onBlur: validateLabel, onSubmit: validateLabel }}
+                  >
+                    {(field) => {
+                      const invalid = field.state.meta.isTouched && !field.state.meta.isValid;
+                      return (
+                        <Field data-invalid={invalid}>
+                          <FieldLabel className="sr-only" htmlFor={`placeholder-${item.id}`}>
+                            {originals.get(item.id)?.label ?? item.label}
+                          </FieldLabel>
+                          <Input
+                            id={`placeholder-${item.id}`}
                             name={field.name}
                             value={field.state.value}
-                            placeholder="نام"
                             onBlur={field.handleBlur}
                             onChange={(event) => field.handleChange(event.target.value)}
                             aria-invalid={invalid}
                           />
-                          <InputGroupAddon align="inline-end">
-                            <InputGroupButton
-                              size="icon-xs"
-                              onClick={() => arrayField.removeValue(index)}
-                              aria-label={`Remove new placeholder ${index + 1}`}
-                            >
-                              <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
-                            </InputGroupButton>
-                          </InputGroupAddon>
-                        </InputGroup>
-                        <FieldError errors={field.state.meta.errors} />
-                      </Field>
+                          <FieldError errors={field.state.meta.errors} />
+                        </Field>
+                      );
+                    }}
+                  </form.Field>
+                ))
+              }
+            </form.Field>
+            <form.Field name="additions" mode="array">
+              {(arrayField) =>
+                arrayField.state.value.map((_, index) => (
+                  <form.Field
+                    key={index}
+                    name={`additions[${index}].label`}
+                    validators={{ onBlur: validateLabel, onSubmit: validateLabel }}
+                  >
+                    {(field) => {
+                      const invalid = field.state.meta.isTouched && !field.state.meta.isValid;
+                      return (
+                        <Field data-invalid={invalid}>
+                          <FieldLabel className="sr-only" htmlFor={`new-placeholder-${index}`}>
+                            New placeholder {index + 1}
+                          </FieldLabel>
+                          <InputGroup>
+                            <InputGroupInput
+                              id={`new-placeholder-${index}`}
+                              name={field.name}
+                              value={field.state.value}
+                              placeholder="نام"
+                              onBlur={field.handleBlur}
+                              onChange={(event) => field.handleChange(event.target.value)}
+                              aria-invalid={invalid}
+                            />
+                            <InputGroupAddon align="inline-end">
+                              <InputGroupButton
+                                size="icon-xs"
+                                onClick={() => arrayField.removeValue(index)}
+                                aria-label={`Remove new placeholder ${index + 1}`}
+                              >
+                                <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+                              </InputGroupButton>
+                            </InputGroupAddon>
+                          </InputGroup>
+                          <FieldError errors={field.state.meta.errors} />
+                        </Field>
+                      );
+                    }}
+                  </form.Field>
+                ))
+              }
+            </form.Field>
+          </PlaceholderList>
+          <form.Subscribe
+            selector={(state) => ({ isDirty: state.isDirty, isSubmitting: state.isSubmitting })}
+          >
+            {({ isDirty, isSubmitting }) => (
+              <>
+                <SaveShortcut
+                  enabled={isDirty && !isSubmitting}
+                  onSave={() => void form.handleSubmit()}
+                />
+                <PlaceholderListActions
+                  addLabel="Add custom field"
+                  dirty={isDirty}
+                  saving={isSubmitting}
+                  onReset={() => form.reset(initialValues())}
+                  onAdd={() => {
+                    const index = form.getFieldValue("additions").length;
+                    form.pushFieldValue("additions", { label: "" });
+                    requestAnimationFrame(() =>
+                      document.getElementById(`new-placeholder-${index}`)?.focus(),
                     );
                   }}
-                </form.Field>
-              ))
-            }
-          </form.Field>
-        </PlaceholderList>
-        <form.Subscribe
-          selector={(state) => ({ isDirty: state.isDirty, isSubmitting: state.isSubmitting })}
-        >
-          {({ isDirty, isSubmitting }) => (
-            <>
-              <SaveShortcut
-                enabled={isDirty && !isSubmitting}
-                onSave={() => void form.handleSubmit()}
-              />
-              <PlaceholderListActions
-                addLabel="Add FIR field"
-                dirty={isDirty}
-                saving={isSubmitting}
-                onReset={() => form.reset(initialValues())}
-                onAdd={() => {
-                  const index = form.getFieldValue("additions").length;
-                  form.pushFieldValue("additions", { label: "" });
-                  requestAnimationFrame(() =>
-                    document.getElementById(`new-placeholder-${index}`)?.focus(),
-                  );
-                }}
-              />
-            </>
-          )}
-        </form.Subscribe>
-      </FieldSet>
-    </form>
+                />
+              </>
+            )}
+          </form.Subscribe>
+        </FieldSet>
+      </form>
+    </SettingsSection>
   );
 }
 

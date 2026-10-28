@@ -3,6 +3,8 @@ import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext
 import {
   $getSelection,
   $isRangeSelection,
+  $setSelection,
+  type BaseSelection,
   CAN_UNDO_COMMAND,
   CAN_REDO_COMMAND,
   COMMAND_PRIORITY_LOW,
@@ -34,7 +36,20 @@ import {
   RedoIcon,
   LeftToRightListBulletIcon,
   LeftToRightListNumberIcon,
+  BracesIcon,
+  ArrowDown01Icon,
 } from "@hugeicons/core-free-icons";
+import { useAtomValue } from "@effect/atom-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "#/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
+import { atoms } from "#/state/atoms";
 import { Tooltip, TooltipTrigger, TooltipContent } from "#/components/ui/tooltip";
 import { Kbd, KbdGroup } from "#/components/ui/kbd";
 import { formatForDisplay, type HotkeyChord } from "@tanstack/react-hotkeys";
@@ -96,7 +111,84 @@ function ToolbarButton({
   );
 }
 
-export function EditorToolbar() {
+export type InsertableFieldGroup = {
+  readonly heading: string;
+  readonly labels: readonly string[];
+};
+
+function InsertFieldMenu({ groups }: { groups: readonly InsertableFieldGroup[] }) {
+  const [editor] = useLexicalComposerContext();
+  const { open: openMarker, close: closeMarker } = useAtomValue(atoms.fieldMarkersAtom);
+  const [open, setOpen] = useState(false);
+  const [saved, setSaved] = useState<BaseSelection | null>(null);
+
+  function insert(label: string) {
+    setOpen(false);
+    editor.update(() => {
+      if (saved) $setSelection(saved.clone());
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) selection.insertText(`${openMarker}${label}${closeMarker}`);
+    });
+    editor.focus();
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setSaved(editor.getEditorState().read(() => $getSelection()?.clone() ?? null));
+        setOpen(next);
+      }}
+    >
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onMouseDown={(event) => event.preventDefault()}
+                />
+              }
+            />
+          }
+        >
+          <HugeiconsIcon icon={BracesIcon} strokeWidth={2} data-icon="inline-start" />
+          Insert field
+          <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} data-icon="inline-end" />
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          Or type {openMarker}name{closeMarker}
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent align="start" className="w-72 p-0">
+        <Command>
+          <CommandInput placeholder="Search fields" />
+          <CommandList className="max-h-80">
+            <CommandEmpty>No fields found</CommandEmpty>
+            {groups.map((group) =>
+              group.labels.length ? (
+                <CommandGroup key={group.heading} heading={group.heading}>
+                  {group.labels.map((label) => (
+                    <CommandItem key={label} value={label} onSelect={() => insert(label)}>
+                      <span lang="ur" dir="rtl" className="min-w-0 flex-1 truncate text-ur">
+                        {label}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ) : null,
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function EditorToolbar({ fieldGroups }: { fieldGroups: readonly InsertableFieldGroup[] }) {
   const [editor] = useLexicalComposerContext();
   const [format, setFormat] = useState(0);
   const [alignment, setAlignment] = useState<string>("right");
@@ -232,6 +324,11 @@ export function EditorToolbar() {
         icon={LeftToRightListNumberIcon}
         onClick={() => editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined)}
       />
+      <Separator
+        orientation="vertical"
+        className="mx-1.5 data-vertical:h-4 data-vertical:self-auto"
+      />
+      <InsertFieldMenu groups={fieldGroups} />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { ArrowLeft02Icon, ArrowRight02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { AppBreadcrumbOutlet } from "#/components/app-breadcrumb";
 import { CommandMenu } from "#/components/command-menu";
 import { IconAction } from "#/components/icon-action";
 import { SidebarTrigger } from "#/components/ui/sidebar";
@@ -60,11 +61,14 @@ function HistoryButtons() {
 export function TitleBar() {
   return (
     <header className="grid h-(--titlebar-height) shrink-0 grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-3 bg-sidebar app-drag [&_button]:app-no-drag [&_a]:app-no-drag">
-      <div className="flex items-center gap-0.5 ps-2.5">
+      <div className="flex min-w-0 items-center gap-0.5 ps-2.5">
         <Hint label="Toggle sidebar" shortcut="toggleSidebar">
           <SidebarTrigger variant="subtle" />
         </Hint>
         <HistoryButtons />
+        <div className="ms-2 min-w-0">
+          <AppBreadcrumbOutlet />
+        </div>
       </div>
       <CommandMenu />
       <div className="titlebar-padding" />

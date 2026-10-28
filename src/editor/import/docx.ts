@@ -216,7 +216,8 @@ export function mergeFieldsToTokens(xml: string, markers: FieldMarkers): string 
   if (!xml.includes("MERGEFIELD")) return xml;
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.querySelector("parsererror")) throw new Error("This DOCX contains invalid document XML.");
-  const token = (name: string) => `${markers.open}${name}${markers.close}`;
+  const token = (name: string) =>
+    `${markers.open}${name.replace(/_+/g, " ").replace(/\s+/g, " ").trim()}${markers.close}`;
   const child = (parent: Element, name: string) =>
     [...parent.children].find((node) => node.namespaceURI === WORD_NS && node.localName === name);
   const tokenRun = (template: Element | undefined, text: string) => {

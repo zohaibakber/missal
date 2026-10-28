@@ -129,7 +129,7 @@ it("replaces Word merge fields and their sample values with field tokens", () =>
     "application/xml",
   );
   const texts = [...parsed.getElementsByTagNameNS(NS, "t")].map((text) => text.textContent);
-  expect(texts).toEqual(["«تھانہ_نام_»", " اور ", "«Date FIR»", "3"]);
+  expect(texts).toEqual(["«تھانہ نام»", " اور ", "«Date FIR»", "3"]);
   const token = parsed.getElementsByTagNameNS(NS, "t")[0]?.parentElement;
   expect(token?.getElementsByTagNameNS(NS, "b")).toHaveLength(1);
   expect(parsed.getElementsByTagNameNS(NS, "instrText")).toHaveLength(1);

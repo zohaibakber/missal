@@ -9,19 +9,18 @@ import {
   ArrowUp01Icon,
   ArrowUpRight01Icon,
   Delete02Icon,
-  Edit02Icon,
   LegalDocument01Icon,
   MoreHorizontalIcon,
   PrinterIcon,
   TextFontIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { AppBreadcrumb } from "#/components/app-breadcrumb";
 import { AddTemplatesPopover } from "#/components/add-templates-popover";
 import { DocumentEditor } from "#/components/document-editor";
 import { EditFirSheet } from "#/components/edit-fir-sheet";
-import { FirStatusBadge } from "#/components/fir-status-badge";
+import { FirDetails } from "#/components/fir-details";
 import { Hint } from "#/components/hint";
-import { IconAction } from "#/components/icon-action";
 import { PrintPreview } from "#/components/print-preview";
 import {
   Pane,
@@ -29,17 +28,10 @@ import {
   PaneBody,
   PaneHeader,
   PaneStatusBar,
-  PaneTitle,
   SaveButton,
 } from "#/components/pane";
 import { ShortcutKbd } from "#/components/shortcut-kbd";
-import {
-  SplitView,
-  SplitViewDetail,
-  SplitViewList,
-  SplitViewListHeader,
-  SplitViewListTitle,
-} from "#/components/split-view";
+import { RailHeader, RailLayout, RailTitle } from "#/components/rail-layout";
 import { UnsavedChanges } from "#/components/unsaved-changes";
 import {
   AlertDialog,
@@ -344,177 +336,155 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
         }
       />
       <UnsavedChanges isDirty={() => dirty && pendingId === null} />
-      <SplitView id="fir-workspace">
-        <SplitViewList>
-          <SplitViewListHeader>
-            <SplitViewListTitle className="text-xs text-muted-foreground">
-              Documents
-              {documents.length ? (
-                <span className="font-normal tabular-nums">{documents.length}</span>
-              ) : null}
-            </SplitViewListTitle>
-            <AddTemplatesPopover
-              firId={firId}
-              open={addTemplatesOpen}
-              onOpenChange={setAddTemplatesOpen}
-              onAdded={selectDocument}
-            />
-          </SplitViewListHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {documents.length ? (
-              <SidebarMenu className="gap-px p-2" aria-label="Documents">
-                {documents.map((document, index) => (
-                  <DocumentRow
-                    key={document.id}
-                    title={document.title}
-                    active={document.id === activeId}
-                    printed={!excludedIds.has(document.id)}
-                    canMoveUp={index > 0}
-                    canMoveDown={index < documents.length - 1}
-                    canRemove={!(dirty && document.id === activeId)}
-                    onSelect={() => selectDocument(document.id)}
-                    onPrintedChange={(checked) => setPrinted(document.id, checked)}
-                    onMove={(offset) => void handleReorder(index, index + offset)}
-                    onRemove={() => void handleRemoveDocument(document.id)}
-                  />
-                ))}
-              </SidebarMenu>
-            ) : (
-              <p className="px-4 py-3 text-xs text-muted-foreground">No documents yet</p>
-            )}
-          </div>
-          {documents.length ? (
-            <PaneStatusBar className="px-3">
-              {printCount === documents.length
-                ? "All documents will print"
-                : `${printCount} of ${documents.length} will print`}
-            </PaneStatusBar>
-          ) : null}
-        </SplitViewList>
-        <SplitViewDetail>
-          <Pane>
-            <PaneHeader>
-              <PaneActions className="ms-0 me-auto">
-                {activeDocument ? (
-                  <Hint label="Save document" shortcut="save">
-                    <SaveButton
-                      dirty={dirty}
-                      pending={savePending}
-                      onClick={() => void handleSave()}
-                    />
-                  </Hint>
-                ) : null}
-                <IconAction
-                  label={
-                    printCount
-                      ? `Print ${printCount} ${printCount === 1 ? "document" : "documents"}…`
-                      : "Print…"
-                  }
-                  shortcut="print"
-                  disabled={!printCount}
-                  onClick={() => void openPrintPreview()}
-                >
-                  <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
-                </IconAction>
-                <IconAction
-                  label="Edit FIR details"
-                  shortcut="editFir"
-                  onClick={() => setDetailsOpen(true)}
-                >
-                  <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} />
-                </IconAction>
-                <DropdownMenu>
-                  <Hint label="More actions">
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          size="icon-sm"
-                          type="button"
-                          variant="ghost"
-                          aria-label="More actions"
-                        />
-                      }
-                    >
-                      <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
-                    </DropdownMenuTrigger>
-                  </Hint>
-                  <DropdownMenuContent align="start" className="w-72">
-                    <DropdownMenuGroup>
-                      <DropdownMenuSwitchItem
-                        checked={displayMode === "labels"}
-                        onCheckedChange={(checked) => setDisplayMode(checked ? "labels" : "values")}
-                      >
-                        <HugeiconsIcon icon={TextFontIcon} strokeWidth={2} />
-                        Show field names
-                        <DropdownMenuShortcut>
-                          <ShortcutKbd id="toggleFieldNames" />
-                        </DropdownMenuShortcut>
-                      </DropdownMenuSwitchItem>
-                    </DropdownMenuGroup>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuGroup>
-                      <DropdownMenuItem
-                        onClick={() => setIsDeleteFirOpen(true)}
-                        variant="destructive"
-                      >
-                        <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                        Delete FIR
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </PaneActions>
-              <span
-                lang="ur"
-                dir="rtl"
-                className="hidden min-w-0 truncate text-ur text-muted-foreground lg:block"
+      <PaneHeader className="flex-row-reverse ps-2 pe-4">
+        <AppBreadcrumb crumbs={[{ label: "FIRs", to: "/" }, { label: fir.fir_no }]} />
+        <div dir="rtl" className="flex min-w-0 flex-1 items-center gap-2.5">
+          <h1 lang="ur" className="min-w-0 truncate text-ur-lg">
+            {fir.offence}
+          </h1>
+        </div>
+        <PaneActions className="ms-0">
+          <DropdownMenu>
+            <Hint label="More actions">
+              <DropdownMenuTrigger
+                render={
+                  <Button size="icon-sm" type="button" variant="ghost" aria-label="More actions" />
+                }
               >
-                {fir.offence}
-              </span>
-              <FirStatusBadge status={fir.status} />
-              <PaneTitle className="flex-none">FIR {fir.fir_no}</PaneTitle>
-            </PaneHeader>
-            {activeDocument ? (
-              <DocumentEditor
-                aria-label={activeDocument.title}
-                document={activeDocument.document}
-                onDirtyChange={setDirty}
-                onSavePendingChange={setSavePending}
-                onSessionReady={(session) => {
-                  sessionRef.current = session;
-                }}
-                fieldIndex={presentation.catalog}
-                presentation={presentation}
-                sessionKey={`${activeDocument.id}:${editorEpoch}`}
-              />
-            ) : documents.length ? (
-              <EditorSkeleton />
-            ) : (
-              <div className="flex h-full bg-canvas">
-                <Empty>
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <HugeiconsIcon icon={LegalDocument01Icon} strokeWidth={2} />
-                    </EmptyMedia>
-                    <EmptyTitle>Start with a template</EmptyTitle>
-                    <EmptyDescription>
-                      Each template becomes a document filled with this FIR's details.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                  <EmptyContent>
-                    <Hint label="Add templates" shortcut="addTemplates">
-                      <Button variant="outline" size="sm" onClick={() => setAddTemplatesOpen(true)}>
-                        <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
-                        Add templates
-                      </Button>
-                    </Hint>
-                  </EmptyContent>
-                </Empty>
-              </div>
-            )}
-          </Pane>
-        </SplitViewDetail>
-      </SplitView>
+                <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+              </DropdownMenuTrigger>
+            </Hint>
+            <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuGroup>
+                <DropdownMenuSwitchItem
+                  checked={displayMode === "labels"}
+                  onCheckedChange={(checked) => setDisplayMode(checked ? "labels" : "values")}
+                >
+                  <HugeiconsIcon icon={TextFontIcon} strokeWidth={2} />
+                  Show field names
+                  <DropdownMenuShortcut>
+                    <ShortcutKbd id="toggleFieldNames" />
+                  </DropdownMenuShortcut>
+                </DropdownMenuSwitchItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => setIsDeleteFirOpen(true)} variant="destructive">
+                  <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                  Delete FIR
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {activeDocument ? (
+            <Hint label="Save document" shortcut="save">
+              <SaveButton dirty={dirty} pending={savePending} onClick={() => void handleSave()} />
+            </Hint>
+          ) : null}
+          <Hint label="Print preview" shortcut="print">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Print preview"
+              disabled={!printCount}
+              onClick={() => void openPrintPreview()}
+            >
+              <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
+            </Button>
+          </Hint>
+        </PaneActions>
+      </PaneHeader>
+      <RailLayout
+        label="FIR details and documents"
+        rail={
+          <>
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+              <FirDetails fir={fir} onEdit={() => setDetailsOpen(true)} />
+              <RailHeader className="border-t">
+                <RailTitle>
+                  Documents{" "}
+                  {documents.length ? (
+                    <span className="font-normal tabular-nums">{documents.length}</span>
+                  ) : null}
+                </RailTitle>
+                <AddTemplatesPopover
+                  firId={firId}
+                  open={addTemplatesOpen}
+                  onOpenChange={setAddTemplatesOpen}
+                  onAdded={selectDocument}
+                />
+              </RailHeader>
+              {documents.length ? (
+                <SidebarMenu className="gap-px px-2 pb-2" aria-label="Documents">
+                  {documents.map((document, index) => (
+                    <DocumentRow
+                      key={document.id}
+                      title={document.title}
+                      active={document.id === activeId}
+                      printed={!excludedIds.has(document.id)}
+                      printSelectable={documents.length > 1}
+                      canMoveUp={index > 0}
+                      canMoveDown={index < documents.length - 1}
+                      canRemove={!(dirty && document.id === activeId)}
+                      onSelect={() => selectDocument(document.id)}
+                      onPrintedChange={(checked) => setPrinted(document.id, checked)}
+                      onMove={(offset) => void handleReorder(index, index + offset)}
+                      onRemove={() => void handleRemoveDocument(document.id)}
+                    />
+                  ))}
+                </SidebarMenu>
+              ) : null}
+            </div>
+            {documents.length > 1 ? (
+              <PaneStatusBar className="gap-1.5 px-3">
+                <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} className="size-3.5" />
+                {printCount === documents.length
+                  ? "All will print"
+                  : `${printCount} of ${documents.length} will print`}
+              </PaneStatusBar>
+            ) : null}
+          </>
+        }
+      >
+        {activeDocument ? (
+          <DocumentEditor
+            aria-label={activeDocument.title}
+            document={activeDocument.document}
+            onDirtyChange={setDirty}
+            onSavePendingChange={setSavePending}
+            onSessionReady={(session) => {
+              sessionRef.current = session;
+            }}
+            fieldIndex={presentation.catalog}
+            presentation={presentation}
+            sessionKey={`${activeDocument.id}:${editorEpoch}`}
+          />
+        ) : documents.length ? (
+          <EditorSkeleton />
+        ) : (
+          <div className="flex h-full bg-canvas">
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HugeiconsIcon icon={LegalDocument01Icon} strokeWidth={2} />
+                </EmptyMedia>
+                <EmptyTitle>No documents yet</EmptyTitle>
+                <EmptyDescription>
+                  Add a template to write this FIR's first document.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button onClick={() => setAddTemplatesOpen(true)}>
+                  <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
+                  Add templates
+                  <ShortcutKbd id="addTemplates" />
+                </Button>
+              </EmptyContent>
+            </Empty>
+          </div>
+        )}
+      </RailLayout>
 
       <EditFirSheet fir={fir} open={detailsOpen} onOpenChange={setDetailsOpen} />
 
@@ -604,6 +574,7 @@ type DocumentRowProps = {
   title: string;
   active: boolean;
   printed: boolean;
+  printSelectable: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
   canRemove: boolean;
@@ -617,6 +588,7 @@ function DocumentRow({
   title,
   active,
   printed,
+  printSelectable,
   canMoveUp,
   canMoveDown,
   canRemove,
@@ -631,7 +603,7 @@ function DocumentRow({
   ];
 
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem dir="rtl">
       <ContextMenu>
         <SidebarMenuButton
           isActive={active}
@@ -671,18 +643,22 @@ function DocumentRow({
           </ContextMenuGroup>
         </ContextMenuContent>
       </ContextMenu>
-      <SidebarMenuCheckbox
-        aria-label={`Print ${title}`}
-        checked={printed}
-        onCheckedChange={(checked) => onPrintedChange(checked)}
-      />
+      {printSelectable ? (
+        <Hint label="Include when printing" side="left">
+          <SidebarMenuCheckbox
+            aria-label={`Print ${title}`}
+            checked={printed}
+            onCheckedChange={(checked) => onPrintedChange(checked)}
+          />
+        </Hint>
+      ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger
           render={<SidebarMenuAction showOnHover aria-label={`Actions for ${title}`} />}
         >
           <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuContent align="start" className="w-48">
           <DropdownMenuGroup>
             {actions.map((action) => (
               <DropdownMenuItem key={action.label} disabled={action.disabled} onClick={action.run}>
@@ -742,24 +718,25 @@ export function FirNotFound() {
 function FirWorkspaceSkeleton() {
   return (
     <Pane aria-busy="true">
+      <PaneHeader className="flex-row-reverse ps-2 pe-4">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-20" />
+        <PaneActions className="ms-0 me-auto">
+          <Skeleton className="h-7 w-16" />
+          <Skeleton className="h-7 w-20" />
+        </PaneActions>
+      </PaneHeader>
       <div className="flex min-h-0 flex-1">
-        <div className="flex w-66 flex-col border-e">
-          <div className="h-12 border-b" />
+        <div className="min-w-0 flex-1">
+          <EditorSkeleton />
+        </div>
+        <div className="flex w-72 flex-col border-s">
+          <div className="h-10" />
           <div className="flex flex-col gap-1 p-2">
-            <Skeleton className="h-9" />
-            <Skeleton className="h-9" />
+            <Skeleton className="h-8" />
+            <Skeleton className="h-8" />
           </div>
         </div>
-        <Pane>
-          <PaneHeader>
-            <PaneActions className="ms-0 me-auto">
-              <Skeleton className="h-7 w-16" />
-            </PaneActions>
-            <Skeleton className="h-5 w-20" />
-            <Skeleton className="h-4 w-40" />
-          </PaneHeader>
-          <EditorSkeleton />
-        </Pane>
       </div>
     </Pane>
   );

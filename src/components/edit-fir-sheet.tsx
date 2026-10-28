@@ -7,14 +7,7 @@ import {
   FirFormStatus,
   FirFormSubmit,
 } from "#/components/fir-form";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "#/components/ui/sheet";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "#/components/ui/sheet";
 import { Spinner } from "#/components/ui/spinner";
 import { toast } from "#/components/ui/toast";
 import type { FirId, FirRecord } from "#/lib/fir";
@@ -45,8 +38,7 @@ export function EditFirSheet({
             }}
           >
             <SheetHeader>
-              <SheetTitle>FIR {fir.fir_no}</SheetTitle>
-              <SheetDescription>Every document in this FIR uses these details.</SheetDescription>
+              <SheetTitle>Edit FIR {fir.fir_no}</SheetTitle>
             </SheetHeader>
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
               <FirFormFields />
@@ -60,8 +52,7 @@ export function EditFirSheet({
         ) : (
           <>
             <SheetHeader>
-              <SheetTitle>FIR details</SheetTitle>
-              <SheetDescription>Loading…</SheetDescription>
+              <SheetTitle>Edit FIR</SheetTitle>
             </SheetHeader>
             <div className="flex flex-1 items-center justify-center" aria-busy="true">
               <Spinner />

@@ -4,6 +4,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { useNavigate } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { FirStatusIcon } from "#/components/fir-status-badge";
 import {
   Add01Icon,
   ComputerIcon,
@@ -154,8 +155,8 @@ function CommandMenuContent({ close }: { close: () => void }) {
                     run(() => void navigate({ to: "/$firId", params: { firId: `${fir.id}` } }))
                   }
                 >
-                  <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} />
-                  <span>FIR {fir.fir_no}</span>
+                  <FirStatusIcon status={fir.status} />
+                  <span className="tabular-nums">FIR {fir.fir_no}</span>
                   <span lang="ur" dir="rtl" className="ms-auto truncate text-muted-foreground">
                     {fir.offence}
                   </span>

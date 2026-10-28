@@ -15,6 +15,7 @@ const FIR_PROPERTY_NAMES = [
   "zimni",
   "NIC",
   "mobile",
+  "investigation_officer",
 ] as const;
 
 const FirPropertyName = Schema.Literals(FIR_PROPERTY_NAMES);
@@ -80,14 +81,21 @@ export const FIR_FIELDS = [
   firField("تاریخ گرفتاری", "arrest_date"),
   firField("جرم", "offence"),
   firField("نام ملزم و سکونت", "accused"),
+  firField("نام ملزم و سکونت 1", "accused", 1),
+  firField("نام ملزم و سکونت 2", "accused", 2),
   firField("گواہان", "witness"),
   firField("گواہان 1", "witness", 1),
   firField("گواہان 2", "witness", 2),
   firField("ضمنی", "zimni"),
   firField("ضمنی 1", "zimni", 1),
   firField("ضمنی 2", "zimni", 2),
+  firField("ضمنی 3", "zimni", 3),
+  firField("ضمنی 4", "zimni", 4),
+  firField("ضمنی 5", "zimni", 5),
+  firField("ضمنی 6", "zimni", 6),
   firField("شناختی کارڈ", "NIC"),
   firField("موبائل", "mobile"),
+  firField("تفتیشی", "investigation_officer"),
 ];
 
 export type FieldPresentationContext = {

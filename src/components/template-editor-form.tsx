@@ -23,9 +23,8 @@ import {
   AlertDialogTitle,
 } from "#/components/ui/alert-dialog";
 import { Hint } from "#/components/hint";
-import { IconAction } from "#/components/icon-action";
-import { ShortcutKbd } from "#/components/shortcut-kbd";
 import { PrintPreview } from "#/components/print-preview";
+import { AppBreadcrumb } from "#/components/app-breadcrumb";
 import { Pane, PaneActions, PaneBody, PaneHeader, SaveButton } from "#/components/pane";
 import { UnsavedChanges } from "#/components/unsaved-changes";
 import {
@@ -33,8 +32,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { Spinner } from "#/components/ui/spinner";
@@ -97,9 +94,9 @@ function EditTemplateForm({ templateId }: { templateId: TemplateId }) {
   if (AsyncResult.isInitial(templateResult)) {
     return (
       <Pane aria-busy="true">
-        <PaneHeader>
+        <PaneHeader className="flex-row-reverse ps-2 pe-4">
           <Skeleton className="h-5 w-48" />
-          <PaneActions>
+          <PaneActions className="ms-0 me-auto">
             <Skeleton className="h-7 w-16" />
           </PaneActions>
         </PaneHeader>
@@ -307,17 +304,29 @@ function TemplateEditorWorkspace({
         onPrint={openPrintPreview}
       />
       <UnsavedChanges isDirty={() => dirty && !allowNavigationRef.current} />
-      <PaneHeader>
-        <PaneActions className="ms-0 me-auto">
-          <Hint label={selectedTemplate ? "Save template" : "Create template"} shortcut="save">
-            <SaveButton
-              dirty={selectedTemplate === null || dirty}
-              pending={savePending}
-              disabled={!canSave}
-              label={selectedTemplate ? "Save" : "Create"}
-              onClick={() => void handleSave()}
-            />
-          </Hint>
+      <PaneHeader className="flex-row-reverse ps-2 pe-4">
+        <AppBreadcrumb
+          crumbs={[
+            { label: "Templates", to: "/templates" },
+            selectedTemplate
+              ? { label: selectedTemplate.name, lang: "ur" }
+              : { label: "New template" },
+          ]}
+        />
+        <div dir="rtl" className="flex min-w-0 flex-1 items-center">
+          <Input
+            aria-label="Template name"
+            id="template-name"
+            lang="ur"
+            dir="rtl"
+            autoFocus={!selectedTemplate}
+            placeholder="ٹیمپلیٹ کا نام"
+            variant="title"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </div>
+        <PaneActions className="ms-0">
           <input
             ref={fileInputRef}
             type="file"
@@ -330,65 +339,73 @@ function TemplateEditorWorkspace({
               if (file) chooseImport(file);
             }}
           />
-          <IconAction label="Print preview…" shortcut="print" onClick={openPrintPreview}>
-            <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
-          </IconAction>
-          <DropdownMenu>
-            <Hint label="More actions">
-              <DropdownMenuTrigger
-                render={
-                  <Button size="icon-sm" type="button" variant="ghost" aria-label="More actions" />
-                }
-              >
-                {importPending ? (
-                  <Spinner />
-                ) : (
-                  <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
-                )}
-              </DropdownMenuTrigger>
-            </Hint>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuGroup>
-                <DropdownMenuItem
-                  disabled={savePending || importPending}
-                  onClick={() => fileInputRef.current?.click()}
+          {selectedTemplate ? (
+            <DropdownMenu>
+              <Hint label="More actions">
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      size="icon-sm"
+                      type="button"
+                      variant="ghost"
+                      aria-label="More actions"
+                    />
+                  }
                 >
-                  <HugeiconsIcon icon={FileImportIcon} strokeWidth={2} />
-                  Upload Word
-                  <DropdownMenuShortcut>
-                    <ShortcutKbd id="importDocx" />
-                  </DropdownMenuShortcut>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              {selectedTemplate ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem
-                      disabled={savePending || importPending}
-                      onClick={() => setIsDeleteDialogOpen(true)}
-                      variant="destructive"
-                    >
-                      <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-                      Delete template
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
+                </DropdownMenuTrigger>
+              </Hint>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    disabled={savePending || importPending}
+                    onClick={() => setIsDeleteDialogOpen(true)}
+                    variant="destructive"
+                  >
+                    <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+                    Delete template
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          <Hint label={selectedTemplate ? "Save template" : "Create template"} shortcut="save">
+            <SaveButton
+              dirty={selectedTemplate === null || dirty}
+              pending={savePending}
+              disabled={!canSave}
+              label={selectedTemplate ? "Save" : "Create template"}
+              onClick={() => void handleSave()}
+            />
+          </Hint>
+          <Hint label="Print preview" shortcut="print">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Print preview"
+              onClick={openPrintPreview}
+            >
+              <HugeiconsIcon icon={PrinterIcon} strokeWidth={2} />
+            </Button>
+          </Hint>
+          <Hint label="Upload Word file" shortcut="importDocx">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Upload Word file"
+              disabled={savePending || importPending}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {importPending ? (
+                <Spinner />
+              ) : (
+                <HugeiconsIcon icon={FileImportIcon} strokeWidth={2} />
+              )}
+            </Button>
+          </Hint>
         </PaneActions>
-        <Input
-          aria-label="Template name"
-          id="template-name"
-          lang="ur"
-          dir="rtl"
-          autoFocus={!selectedTemplate}
-          placeholder="ٹیمپلیٹ کا نام"
-          variant="title"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
       </PaneHeader>
       <DocumentEditor
         aria-label="Template content"

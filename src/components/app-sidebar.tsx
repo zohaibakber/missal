@@ -3,13 +3,14 @@ import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
+  Add01Icon,
   Folder01Icon,
   KeyboardIcon,
   LegalDocument01Icon,
   Settings01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { FirStatusDot } from "#/components/fir-status-badge";
+import { FirStatusIcon } from "#/components/fir-status-badge";
 import { useKeyboardShortcuts } from "#/components/keyboard-shortcuts";
 import { ShortcutKbd } from "#/components/shortcut-kbd";
 import {
@@ -18,6 +19,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
@@ -30,18 +32,52 @@ function usePathname() {
   return useRouterState({ select: (state) => state.location.pathname });
 }
 
-const isFirPath = (pathname: string) =>
-  pathname === "/" || pathname === "/new" || /^\/\d+/.test(pathname);
+const isFirPath = (pathname: string) => pathname === "/" || /^\/\d+/.test(pathname);
+
+function useCount(result: AsyncResult.AsyncResult<readonly unknown[], unknown>) {
+  return AsyncResult.isSuccess(result) && result.value.length ? result.value.length : null;
+}
+
+function NewFirButton() {
+  const pathname = usePathname();
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          variant="outline"
+          isActive={pathname === "/new"}
+          render={<Link to="/new" />}
+          tooltip="New FIR"
+        >
+          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+          <span>New FIR</span>
+        </SidebarMenuButton>
+        <SidebarMenuBadge>
+          <ShortcutKbd id="newFir" />
+        </SidebarMenuBadge>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}
 
 function NavMain() {
   const pathname = usePathname();
+  const firCount = useCount(useAtomValue(atoms.firsAtom));
+  const templateCount = useCount(useAtomValue(atoms.templatesAtom));
   const links = [
-    { to: "/", label: "FIRs", icon: Folder01Icon, active: isFirPath(pathname) },
+    {
+      to: "/",
+      label: "FIRs",
+      icon: Folder01Icon,
+      active: isFirPath(pathname),
+      count: firCount,
+    },
     {
       to: "/templates",
       label: "Templates",
       icon: LegalDocument01Icon,
       active: pathname.startsWith("/templates"),
+      count: templateCount,
     },
   ] as const;
 
@@ -58,6 +94,7 @@ function NavMain() {
               <HugeiconsIcon icon={link.icon} strokeWidth={2} />
               <span>{link.label}</span>
             </SidebarMenuButton>
+            {link.count ? <SidebarMenuBadge>{link.count}</SidebarMenuBadge> : null}
           </SidebarMenuItem>
         ))}
       </SidebarMenu>
@@ -83,10 +120,11 @@ function RecentFirs() {
                   render={<Link to="/$firId" params={{ firId: `${fir.id}` }} />}
                   isActive={pathname === `/${fir.id}` || pathname === `/${fir.id}/edit`}
                 >
-                  <span className="flex size-4 items-center justify-center">
-                    <FirStatusDot status={fir.status} />
+                  <FirStatusIcon status={fir.status} />
+                  <span className="shrink-0 tabular-nums">{fir.fir_no}</span>
+                  <span lang="ur" dir="rtl" className="min-w-0 flex-1 text-ur-sm opacity-60">
+                    {fir.offence}
                   </span>
-                  <span>{fir.fir_no}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))
@@ -137,6 +175,9 @@ export function AppSidebar(props: ComponentProps<typeof Sidebar>) {
       variant="inset"
       {...props}
     >
+      <SidebarHeader>
+        <NewFirButton />
+      </SidebarHeader>
       <SidebarContent>
         <NavMain />
         <RecentFirs />
