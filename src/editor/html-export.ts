@@ -1,9 +1,8 @@
+import { buildEditorFromExtensions } from "@lexical/extension";
 import { $generateHtmlFromNodes } from "@lexical/html";
-import { createEditor } from "lexical";
 import { Match } from "effect";
-import { EDITOR_HTML_CONFIG } from "#/editor/html-config";
-import { EDITOR_NODES, EDITOR_THEME } from "#/editor/nodes/registry";
 import { loadEnvelopeIntoEditor } from "#/editor/envelope";
+import { DocumentContentExtension } from "#/editor/extension";
 import { setEditorPresentation } from "#/editor/presentation-context";
 import type { FieldPresentationContext } from "#/lib/field";
 import type { DocumentEnvelope } from "#/lib/document-format";
@@ -21,18 +20,16 @@ export function envelopeToHtml(
   envelope: DocumentEnvelope,
   presentation?: FieldPresentationContext,
 ) {
-  const editor = createEditor({
-    namespace: "missal-html-export",
-    html: EDITOR_HTML_CONFIG,
-    nodes: [...EDITOR_NODES],
-    onError: () => undefined,
-    theme: EDITOR_THEME,
-  });
-  if (presentation) {
-    setEditorPresentation(editor, presentation);
+  const editor = buildEditorFromExtensions(DocumentContentExtension);
+  try {
+    if (presentation) {
+      setEditorPresentation(editor, presentation);
+    }
+    loadEnvelopeIntoEditor(editor, envelope);
+    return editor.getEditorState().read(() => $generateHtmlFromNodes(editor));
+  } finally {
+    editor.dispose();
   }
-  loadEnvelopeIntoEditor(editor, envelope);
-  return editor.getEditorState().read(() => $generateHtmlFromNodes(editor));
 }
 
 export type PrintPacket = { readonly html: string; readonly title: string };

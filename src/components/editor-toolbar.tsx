@@ -1,12 +1,12 @@
 import { useEffect, useState, type ComponentProps } from "react";
+import { HistoryExtension } from "@lexical/history";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { useExtensionSignalValue } from "@lexical/react/useExtensionSignalValue";
 import {
   $getSelection,
   $isRangeSelection,
   $setSelection,
   type BaseSelection,
-  CAN_UNDO_COMMAND,
-  CAN_REDO_COMMAND,
   COMMAND_PRIORITY_LOW,
   FORMAT_TEXT_COMMAND,
   FORMAT_ELEMENT_COMMAND,
@@ -192,8 +192,8 @@ export function EditorToolbar({ fieldGroups }: { fieldGroups: readonly Insertabl
   const [editor] = useLexicalComposerContext();
   const [format, setFormat] = useState(0);
   const [alignment, setAlignment] = useState<string>("right");
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
+  const canUndo = useExtensionSignalValue(HistoryExtension, "canUndo");
+  const canRedo = useExtensionSignalValue(HistoryExtension, "canRedo");
 
   useEffect(() => {
     function updateSelection() {
@@ -210,22 +210,6 @@ export function EditorToolbar({ fieldGroups }: { fieldGroups: readonly Insertabl
         SELECTION_CHANGE_COMMAND,
         () => {
           updateSelection();
-          return false;
-        },
-        COMMAND_PRIORITY_LOW,
-      ),
-      editor.registerCommand(
-        CAN_UNDO_COMMAND,
-        (value) => {
-          setCanUndo(value);
-          return false;
-        },
-        COMMAND_PRIORITY_LOW,
-      ),
-      editor.registerCommand(
-        CAN_REDO_COMMAND,
-        (value) => {
-          setCanRedo(value);
           return false;
         },
         COMMAND_PRIORITY_LOW,

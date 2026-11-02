@@ -2,7 +2,7 @@ import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { ListItemNode, ListNode } from "@lexical/list";
 import { TableCellNode, TableNode, TableRowNode } from "@lexical/table";
 import { LinkNode } from "@lexical/link";
-import { HorizontalRuleNode } from "@lexical/react/LexicalHorizontalRuleNode";
+import { HorizontalRuleNode } from "@lexical/extension";
 import { LineBreakNode, ParagraphNode, TextNode, type Klass, type LexicalNode } from "lexical";
 import { FieldNode } from "#/editor/nodes/field-node";
 import { ImageNode } from "#/editor/nodes/image-node";
