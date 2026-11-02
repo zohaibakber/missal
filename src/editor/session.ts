@@ -1,13 +1,4 @@
-import { createEmptyHistoryState, registerHistory } from "@lexical/history";
-import {
-  $getRoot,
-  $insertNodes,
-  CLEAR_HISTORY_COMMAND,
-  CAN_REDO_COMMAND,
-  CAN_UNDO_COMMAND,
-  COMMAND_PRIORITY_LOW,
-  type LexicalEditor,
-} from "lexical";
+import { $getRoot, $insertNodes, CLEAR_HISTORY_COMMAND, type LexicalEditor } from "lexical";
 import type { DocumentEnvelope, PageLayout } from "#/lib/document-format";
 import type { FieldPresentationContext } from "#/lib/field";
 import type { FieldIndex } from "#/lib/placeholder";
@@ -35,8 +26,6 @@ export type EditorUiState = {
   pageLayout?: PageLayout;
   dirty: boolean;
   empty: boolean;
-  canUndo: boolean;
-  canRedo: boolean;
   savePending: boolean;
 };
 
@@ -59,12 +48,8 @@ export type EditorSessionHandle = {
   dispose(): void;
 };
 
-const HISTORY_MAX_DEPTH = 100;
-
 function editorUiDefaults(): EditorUiState {
   return {
-    canRedo: false,
-    canUndo: false,
     dirty: false,
     empty: true,
     phase: { _tag: "Loading" },
@@ -84,12 +69,10 @@ export function attachEditorSession(
   const ui: EditorUiState = editorUiDefaults();
   let contentRevision = 0;
   let disposed = false;
-  const history = createEmptyHistoryState();
   const presentation = new FieldPresentationController(editor, options.presentation);
   const getFieldMarkers = options.getFieldMarkers ?? (() => DEFAULT_FIELD_MARKERS);
   const unregisters = [
     registerImportedStyleRendering(editor),
-    registerHistory(editor, history, 300, Date.now, undefined, HISTORY_MAX_DEPTH),
     presentation.attach(),
     registerFieldRecognition(editor, options.getFieldIndex, getFieldMarkers),
     registerCompletedTokenConversion(editor, options.getFieldIndex, getFieldMarkers),
@@ -101,24 +84,6 @@ export function attachEditorSession(
         notify();
       },
     }),
-    editor.registerCommand(
-      CAN_UNDO_COMMAND,
-      (payload) => {
-        ui.canUndo = payload;
-        notify();
-        return false;
-      },
-      COMMAND_PRIORITY_LOW,
-    ),
-    editor.registerCommand(
-      CAN_REDO_COMMAND,
-      (payload) => {
-        ui.canRedo = payload;
-        notify();
-        return false;
-      },
-      COMMAND_PRIORITY_LOW,
-    ),
     editor.registerUpdateListener(({ dirtyLeaves, dirtyElements }) => {
       if (ui.phase._tag === "Loading" || ui.phase._tag === "Disposed") {
         return;
@@ -220,6 +185,7 @@ export function attachEditorSession(
       ui.phase = { _tag: "Loading" };
       ui.pageLayout = envelope.pageLayout;
       loadEnvelopeIntoEditor(editor, envelope);
+      editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
       contentRevision = 0;
       ui.dirty = false;
       ui.empty = false;

@@ -83,9 +83,17 @@ import { toast } from "#/components/ui/toast";
 import { envelopePrintPacket, printPacket, type PrintPacket } from "#/editor/html-export";
 import type { EditorSessionHandle } from "#/editor/session";
 import { useShortcut } from "#/hooks/use-shortcut";
-import type { FieldDisplayMode } from "#/lib/field";
-import { ReorderFirDocumentsInput, type FirDocumentSummary } from "#/lib/fir-document";
-import { parseFirDocumentId, type FirDocumentId, type FirId } from "#/lib/ids";
+import {
+  FirDocumentSaveInput,
+  ReorderFirDocumentsInput,
+  type FirDocumentSummary,
+} from "#/lib/fir-document";
+import {
+  parseFirDocumentId,
+  type DocumentRevision,
+  type FirDocumentId,
+  type FirId,
+} from "#/lib/ids";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
 import { atoms } from "#/state/atoms";
 
@@ -99,6 +107,9 @@ type FirWorkspaceProps = {
 export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspaceProps) {
   const navigate = useNavigate();
   const valueContextResult = useAtomValue(atoms.firValueContextAtom(firId));
+  const presentationResult = useAtomValue(atoms.firPresentationAtom(firId));
+  const displayMode = useAtomValue(atoms.firDisplayModeAtom(firId));
+  const setDisplayMode = useAtomSet(atoms.firDisplayModeAtom(firId));
   const documentsResult = useAtomValue(atoms.firDocumentsAtom(firId));
   const removeFir = useAtomSet(atoms.removeFirAtom, { mode: "promiseExit" });
   const loadPrintDocuments = useAtomSet(atoms.loadPrintDocumentsAtom, { mode: "promiseExit" });
@@ -111,10 +122,11 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
     ? documentsResult.value
     : EMPTY_DOCUMENTS;
   const requestedDocumentId = documentIdParam ? parseFirDocumentId(documentIdParam) : undefined;
-  const activeId =
-    (requestedDocumentId && documents.some((document) => document.id === requestedDocumentId)
-      ? requestedDocumentId
-      : documents[0]?.id) ?? null;
+  const activeId = AsyncResult.isSuccess(documentsResult)
+    ? ((requestedDocumentId && documents.some((document) => document.id === requestedDocumentId)
+        ? requestedDocumentId
+        : documents[0]?.id) ?? null)
+    : (requestedDocumentId ?? null);
   const activeDocumentResult = useAtomValue(atoms.firDocumentByIdAtom(activeId));
   const activeDocument =
     activeId && AsyncResult.isSuccess(activeDocumentResult) ? activeDocumentResult.value : null;
@@ -124,7 +136,10 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [savePending, setSavePending] = useState(false);
-  const [displayMode, setDisplayMode] = useState<FieldDisplayMode>("values");
+  const [savedRevision, setSavedRevision] = useState<{
+    readonly id: FirDocumentId;
+    readonly revision: DocumentRevision;
+  } | null>(null);
   const [excludedIds, setExcludedIds] = useState<ReadonlySet<FirDocumentId>>(() => new Set());
   const [isDeleteFirOpen, setIsDeleteFirOpen] = useState(false);
   const [pendingId, setPendingId] = useState<FirDocumentId | null>(null);
@@ -146,11 +161,12 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
     });
   }
 
-  if (AsyncResult.isFailure(documentsResult)) return <FirWorkspaceError />;
+  if (AsyncResult.isFailure(documentsResult) || !AsyncResult.isSuccess(presentationResult)) {
+    return <FirWorkspaceError />;
+  }
 
-  const valueContext = valueContextResult.value;
-  const fir = valueContext.fir;
-  const presentation = valueContext.toPresentation(displayMode);
+  const fir = valueContextResult.value.fir;
+  const presentation = presentationResult.value;
   const printTitle = `FIR ${fir.fir_no}`;
   const printIds = documents
     .filter((document) => !excludedIds.has(document.id))
@@ -181,12 +197,17 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
       return false;
     }
 
+    const expectedRevision =
+      savedRevision?.id === current.id ? savedRevision.revision : current.revision;
     const saved = await session.runSave(async (captured) => {
-      const exit = await saveDocument({ current, document: captured.envelope });
+      const exit = await saveDocument(
+        new FirDocumentSaveInput({ document: captured.envelope, expectedRevision, id: current.id }),
+      );
       if (Exit.isFailure(exit)) {
         toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
         return { saved: false, value: false };
       }
+      setSavedRevision({ id: current.id, revision: exit.value.revision });
       return { saved: true, value: true };
     });
     return saved === true;
@@ -331,9 +352,7 @@ export function FirWorkspace({ documentId: documentIdParam, firId }: FirWorkspac
         onPrint={() => void openPrintPreview()}
         onEditDetails={() => setDetailsOpen(true)}
         onStepDocument={stepDocument}
-        onToggleFieldNames={() =>
-          setDisplayMode((mode) => (mode === "labels" ? "values" : "labels"))
-        }
+        onToggleFieldNames={() => setDisplayMode(displayMode === "labels" ? "values" : "labels")}
       />
       <UnsavedChanges isDirty={() => dirty && pendingId === null} />
       <PaneHeader className="flex-row-reverse ps-2 pe-4">

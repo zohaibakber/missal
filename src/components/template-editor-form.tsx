@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { Exit } from "effect";
@@ -47,13 +47,12 @@ import {
 } from "#/components/ui/empty";
 import { Input } from "#/components/ui/input";
 import { Skeleton } from "#/components/ui/skeleton";
-import { catalogFieldPresentation } from "#/lib/field";
+import type { FieldPresentationContext } from "#/lib/field";
 import { emptyDocumentEnvelope, projectDocument } from "#/lib/document-format";
 import { type TemplateId } from "#/lib/ids";
-import { indexFields, type FieldIndex } from "#/lib/placeholder";
 import { getRepositoryErrorMessage } from "#/lib/storage-errors";
 import { whilePending } from "#/lib/utils";
-import { TemplateCreateInput, type TemplateRecord } from "#/lib/templates";
+import { TemplateCreateInput, TemplateUpdateInput, type TemplateRecord } from "#/lib/templates";
 import { envelopePrintPacket, printPacket, type PrintPacket } from "#/editor/html-export";
 import type { EditorSessionHandle } from "#/editor/session";
 import { useShortcut } from "#/hooks/use-shortcut";
@@ -72,42 +71,50 @@ export function TemplateEditorForm({ templateId }: TemplateEditorFormProps) {
 }
 
 function CreateTemplateForm() {
-  const fieldIndexResult = useAtomValue(atoms.fieldIndexAtom);
-  const fieldIndex = AsyncResult.isSuccess(fieldIndexResult)
-    ? fieldIndexResult.value
-    : indexFields([]);
+  const presentationResult = useAtomValue(atoms.catalogPresentationAtom);
 
-  return <TemplateEditorWorkspace fieldIndex={fieldIndex} selectedTemplate={null} />;
+  if (!AsyncResult.isSuccess(presentationResult)) {
+    return <TemplateEditorSkeleton />;
+  }
+
+  return (
+    <TemplateEditorWorkspace presentation={presentationResult.value} selectedTemplate={null} />
+  );
 }
 
 function EditTemplateForm({ templateId }: { templateId: TemplateId }) {
-  const fieldIndexResult = useAtomValue(atoms.fieldIndexAtom);
+  const presentationResult = useAtomValue(atoms.catalogPresentationAtom);
   const templateResult = useAtomValue(atoms.templateByIdAtom(templateId));
-  const fieldIndex = AsyncResult.isSuccess(fieldIndexResult)
-    ? fieldIndexResult.value
-    : indexFields([]);
 
   if (AsyncResult.isFailure(templateResult)) {
     return <TemplateNotFound />;
   }
 
-  if (AsyncResult.isInitial(templateResult)) {
-    return (
-      <Pane aria-busy="true">
-        <PaneHeader className="flex-row-reverse ps-2 pe-4">
-          <Skeleton className="h-5 w-48" />
-          <PaneActions className="ms-0 me-auto">
-            <Skeleton className="h-7 w-16" />
-          </PaneActions>
-        </PaneHeader>
-        <div className="h-10 border-b" />
-        <div className="flex-1 bg-canvas" />
-      </Pane>
-    );
+  if (!AsyncResult.isSuccess(templateResult) || !AsyncResult.isSuccess(presentationResult)) {
+    return <TemplateEditorSkeleton />;
   }
 
   return (
-    <TemplateEditorWorkspace fieldIndex={fieldIndex} selectedTemplate={templateResult.value} />
+    <TemplateEditorWorkspace
+      key={templateId}
+      presentation={presentationResult.value}
+      selectedTemplate={templateResult.value}
+    />
+  );
+}
+
+function TemplateEditorSkeleton() {
+  return (
+    <Pane aria-busy="true">
+      <PaneHeader className="flex-row-reverse ps-2 pe-4">
+        <Skeleton className="h-5 w-48" />
+        <PaneActions className="ms-0 me-auto">
+          <Skeleton className="h-7 w-16" />
+        </PaneActions>
+      </PaneHeader>
+      <div className="h-10 border-b" />
+      <div className="flex-1 bg-canvas" />
+    </Pane>
   );
 }
 
@@ -141,19 +148,23 @@ export function TemplateNotFound() {
 }
 
 function TemplateEditorWorkspace({
-  fieldIndex,
+  presentation,
   selectedTemplate,
 }: {
-  fieldIndex: FieldIndex;
+  presentation: FieldPresentationContext;
   selectedTemplate: TemplateRecord | null;
 }) {
   const navigate = useNavigate();
   const createTemplate = useAtomSet(atoms.createTemplateAtom, { mode: "promiseExit" });
   const saveTemplate = useAtomSet(atoms.saveTemplateAtom, { mode: "promiseExit" });
   const removeTemplate = useAtomSet(atoms.removeTemplateAtom, { mode: "promiseExit" });
-  const [name, setName] = useState("");
+  const [saved, setSaved] = useState(() => ({
+    name: selectedTemplate?.name ?? "",
+    revision: selectedTemplate?.revision,
+  }));
+  const [name, setName] = useState(saved.name);
   const [contentDirty, setContentDirty] = useState(false);
-  const dirty = contentDirty || name !== (selectedTemplate?.name ?? "");
+  const dirty = contentDirty || name !== saved.name;
   const [savePending, setSavePending] = useState(false);
   const [importPending, setImportPending] = useState(false);
   const [pendingImport, setPendingImport] = useState<File | null>(null);
@@ -163,20 +174,7 @@ function TemplateEditorWorkspace({
   const [previewPacket, setPreviewPacket] = useState<PrintPacket | null>(null);
   const allowNavigationRef = useRef(false);
   const sessionRef = useRef<EditorSessionHandle | null>(null);
-  const loadedKeyRef = useRef<string | number | null>(null);
-  const presentation = useMemo(() => catalogFieldPresentation(fieldIndex), [fieldIndex]);
   const sessionKey = selectedTemplate?.id ?? "new";
-
-  useEffect(() => {
-    if (loadedKeyRef.current === sessionKey) {
-      return;
-    }
-
-    loadedKeyRef.current = sessionKey;
-    allowNavigationRef.current = false;
-    setName(selectedTemplate?.name ?? "");
-    setContentDirty(false);
-  }, [selectedTemplate, sessionKey]);
 
   async function handleImport(file: File) {
     const session = sessionRef.current;
@@ -223,17 +221,26 @@ function TemplateEditorWorkspace({
       return;
     }
 
-    if (selectedTemplate) {
-      const current = selectedTemplate;
-      const saved = await session.runSave(async (captured) => {
-        const exit = await saveTemplate({ current, document: captured.envelope, name: trimmed });
+    if (selectedTemplate && saved.revision !== undefined) {
+      const id = selectedTemplate.id;
+      const expectedRevision = saved.revision;
+      const updated = await session.runSave(async (captured) => {
+        const exit = await saveTemplate(
+          new TemplateUpdateInput({
+            document: captured.envelope,
+            expectedRevision,
+            id,
+            name: trimmed,
+          }),
+        );
         if (Exit.isFailure(exit)) {
           toast.add({ title: getRepositoryErrorMessage(exit), type: "error" });
           return { saved: false, value: false };
         }
+        setSaved({ name: trimmed, revision: exit.value.revision });
         return { saved: true, value: true };
       });
-      if (saved) toast.add({ title: "Template updated", type: "success" });
+      if (updated) toast.add({ title: "Template updated", type: "success" });
       return;
     }
 
@@ -308,9 +315,7 @@ function TemplateEditorWorkspace({
         <AppBreadcrumb
           crumbs={[
             { label: "Templates", to: "/templates" },
-            selectedTemplate
-              ? { label: selectedTemplate.name, lang: "ur" }
-              : { label: "New template" },
+            selectedTemplate ? { label: saved.name, lang: "ur" } : { label: "New template" },
           ]}
         />
         <div dir="rtl" className="flex min-w-0 flex-1 items-center">
@@ -415,7 +420,7 @@ function TemplateEditorWorkspace({
         onSessionReady={(session) => {
           sessionRef.current = session;
         }}
-        fieldIndex={fieldIndex}
+        fieldIndex={presentation.catalog}
         presentation={presentation}
         sessionKey={sessionKey}
       />
