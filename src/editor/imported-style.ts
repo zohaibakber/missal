@@ -1,3 +1,4 @@
+import { $isTableCellNode, $isTableNode, $isTableRowNode } from "@lexical/table";
 import { $getState, $setState, createState, type LexicalNode, type TextNode } from "lexical";
 
 const TEXT_PROPERTIES = new Set([
@@ -108,8 +109,50 @@ export function $setImportedStyle(node: LexicalNode, style: string) {
   $setState(node, importedStyleState, retainedStyle(style));
 }
 
+// Word tables often carry negative side margins and a width wider than the page.
+const TABLE_CONTAINMENT = "margin-left: 0; margin-right: 0; max-width: 100%;";
+const PX_PER_UNIT: Record<string, number> = {
+  px: 1,
+  pt: 96 / 72,
+  pc: 16,
+  in: 96,
+  cm: 96 / 2.54,
+  mm: 96 / 25.4,
+};
+
+function absoluteWidth(style: string): number | undefined {
+  const declaration = document.createElement("span").style;
+  declaration.cssText = style;
+  const match = /^([\d.]+)(px|pt|pc|in|cm|mm)$/.exec(declaration.width);
+  return match ? Number(match[1]) * PX_PER_UNIT[match[2]] : undefined;
+}
+
+// Fixed-layout tables never shrink below their summed column widths, so absolute
+// cell widths become shares of the row and the table can fit the page.
+function $relativeCellWidth(cell: LexicalNode, style: string): string | undefined {
+  const width = absoluteWidth(style);
+  const row = cell.getParent();
+  if (width === undefined || !$isTableRowNode(row)) return undefined;
+  let total = 0;
+  for (const sibling of row.getChildren()) {
+    total += absoluteWidth($getImportedStyle(sibling)) ?? 0;
+  }
+  return `width: ${((width / total) * 100).toFixed(3)}%;`;
+}
+
+export function $getRenderedImportedStyle(node: LexicalNode): string {
+  const style = $getImportedStyle(node);
+  if (!style) return style;
+  if ($isTableNode(node)) return `${style} ${TABLE_CONTAINMENT}`;
+  if ($isTableCellNode(node)) {
+    const width = $relativeCellWidth(node, style);
+    if (width) return `${style} ${width}`;
+  }
+  return style;
+}
+
 export function $applyImportedStyle(node: LexicalNode, element: HTMLElement) {
-  const style = $getState(node, importedStyleState);
+  const style = $getRenderedImportedStyle(node);
   if (style) element.style.cssText = `${element.style.cssText};${style}`;
 }
 

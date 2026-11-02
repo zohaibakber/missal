@@ -12,7 +12,7 @@ import { $isTableCellNode } from "@lexical/table";
 import { EDITOR_NODES } from "#/editor/nodes/registry";
 import {
   $applyImportedStyle,
-  $getImportedStyle,
+  $getRenderedImportedStyle,
   $setImportedStyle,
   retainedStyle,
 } from "#/editor/imported-style";
@@ -142,7 +142,7 @@ export function registerImportedStyleRendering(editor: LexicalEditor) {
             const node = $getNodeByKey(key);
             const element = editor.getElementByKey(key);
             if (!node || !element) continue;
-            const style = $getImportedStyle(node);
+            const style = $getRenderedImportedStyle(node);
             if (style) element.dataset.importedStyle = table.indexOf(style);
             else delete element.dataset.importedStyle;
           }
