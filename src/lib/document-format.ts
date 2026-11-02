@@ -1,8 +1,8 @@
-import { Match, Schema } from "effect";
+import { Match, Schema, SchemaGetter } from "effect";
 import { FieldReference } from "#/lib/field";
 
 export const DOCUMENT_FORMAT = "missal-lexical" as const;
-export const DOCUMENT_FORMAT_VERSION = 1 as const;
+export const DOCUMENT_FORMAT_VERSION = 2 as const;
 const PREVIEW_TEXT_LIMIT = 280;
 
 const DocumentFormat = Schema.Literal(DOCUMENT_FORMAT);
@@ -25,9 +25,84 @@ export class PageLayout extends Schema.Class<PageLayout>("PageLayout")({
 export class DocumentEnvelope extends Schema.Class<DocumentEnvelope>("DocumentEnvelope")({
   format: DocumentFormat,
   version: DocumentFormatVersion,
+  styles: Schema.Array(Schema.String),
   state: SerializedLexicalState,
   pageLayout: Schema.optionalKey(PageLayout),
 }) {}
+
+const STYLE_KEYS: ReadonlySet<string> = new Set(["style", "textStyle", "importedStyle"]);
+
+function mapStyles(value: unknown, map: (style: string | number) => string | number): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => mapStyles(item, map));
+  }
+
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (child === undefined) continue;
+    result[key] =
+      STYLE_KEYS.has(key) && (typeof child === "string" || typeof child === "number")
+        ? map(child)
+        : mapStyles(child, map);
+  }
+  return result;
+}
+
+export function normalizeDocumentStyles(lexicalState: unknown) {
+  const styles: string[] = [];
+  const indexes = new Map<string, number>();
+  const state = mapStyles(lexicalState, (style) => {
+    if (typeof style === "number" || style === "") return style;
+    let index = indexes.get(style);
+    if (index === undefined) {
+      index = styles.push(style) - 1;
+      indexes.set(style, index);
+    }
+    return index;
+  });
+  return { styles, state };
+}
+
+export function expandDocumentStyles({
+  styles,
+  state,
+}: {
+  readonly styles: readonly string[];
+  readonly state: unknown;
+}): unknown {
+  return mapStyles(state, (style) => (typeof style === "number" ? (styles[style] ?? "") : style));
+}
+
+const DocumentEnvelopeV1 = Schema.Struct({
+  format: DocumentFormat,
+  version: Schema.Literal(1),
+  state: SerializedLexicalState,
+  pageLayout: Schema.optionalKey(PageLayout),
+});
+
+export const StoredDocumentEnvelope = Schema.Union([
+  DocumentEnvelope,
+  DocumentEnvelopeV1.pipe(
+    Schema.decodeTo(DocumentEnvelope, {
+      decode: SchemaGetter.transform(({ format, pageLayout, state }) => ({
+        format,
+        version: DOCUMENT_FORMAT_VERSION,
+        ...normalizeDocumentStyles(state),
+        ...(pageLayout ? { pageLayout } : {}),
+      })),
+      encode: SchemaGetter.transform((envelope) => ({
+        format: envelope.format,
+        version: 1 as const,
+        state: expandDocumentStyles(envelope),
+        ...(envelope.pageLayout ? { pageLayout: envelope.pageLayout } : {}),
+      })),
+    }),
+  ),
+]);
 
 type SerializedLexicalNode = {
   readonly type?: string;
@@ -62,6 +137,7 @@ export function emptyDocumentEnvelope() {
   return new DocumentEnvelope({
     format: DOCUMENT_FORMAT,
     version: DOCUMENT_FORMAT_VERSION,
+    styles: [],
     state: EMPTY_LEXICAL_STATE,
   });
 }

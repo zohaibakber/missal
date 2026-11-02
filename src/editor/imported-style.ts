@@ -79,7 +79,7 @@ function isRetained(property: string, textOnly: boolean) {
 }
 
 const importedStyleState = createState("importedStyle", {
-  parse: (value: unknown) => (typeof value === "string" ? retainedStyle(value) : ""),
+  parse: (value: unknown) => (typeof value === "string" ? value : ""),
 });
 
 export function retainedStyle(cssText: string, textOnly = false): string {
@@ -110,11 +110,7 @@ export function $setImportedStyle(node: LexicalNode, style: string) {
 
 export function $applyImportedStyle(node: LexicalNode, element: HTMLElement) {
   const style = $getState(node, importedStyleState);
-  if (!style) return;
-  const source = document.createElement("span").style;
-  source.cssText = style;
-  for (const property of source)
-    element.style.setProperty(property, source.getPropertyValue(property));
+  if (style) element.style.cssText = `${element.style.cssText};${style}`;
 }
 
 export function $copyTextStyleToField(source: TextNode, field: LexicalNode) {

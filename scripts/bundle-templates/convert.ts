@@ -60,9 +60,18 @@ async function convertTemplate(bytes: Uint8Array<ArrayBuffer>, fields: TemplateB
     { discrete: true },
   );
   unregister();
-  const { format, version, pageLayout, state } = captureEditorEnvelope(editor, imported.pageLayout);
+  const { format, version, pageLayout, styles, state } = captureEditorEnvelope(
+    editor,
+    imported.pageLayout,
+  );
   const labels = new Map(placeholders.map(({ id, label }) => [id as number, label]));
-  return { format, version, pageLayout, state: unbindCatalogFields(state, (id) => labels.get(id)) };
+  return {
+    format,
+    version,
+    pageLayout,
+    styles,
+    state: unbindCatalogFields(state, (id) => labels.get(id)),
+  };
 }
 
 Object.assign(window, { convertTemplate });

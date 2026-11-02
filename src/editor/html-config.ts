@@ -10,7 +10,12 @@ import {
 } from "lexical";
 import { $isTableCellNode } from "@lexical/table";
 import { EDITOR_NODES } from "#/editor/nodes/registry";
-import { $applyImportedStyle, $setImportedStyle, retainedStyle } from "#/editor/imported-style";
+import {
+  $applyImportedStyle,
+  $getImportedStyle,
+  $setImportedStyle,
+  retainedStyle,
+} from "#/editor/imported-style";
 
 function createImportMap(): DOMConversionMap {
   const converters = new Map<string, NonNullable<DOMConversionMap[string]>[]>();
@@ -97,20 +102,58 @@ const exports: DOMExportOutputMap = new Map(
 
 export const EDITOR_HTML_CONFIG: HTMLConfig = { import: createImportMap(), export: exports };
 
+function createStyleTable(scope: string) {
+  const sheet = new CSSStyleSheet();
+  const indexes = new Map<string, string>();
+  return {
+    sheet,
+    indexOf(style: string) {
+      let index = indexes.get(style);
+      if (index === undefined) {
+        index = `${indexes.size}`;
+        const rule = sheet.cssRules[
+          sheet.insertRule(
+            `[data-imported-styles="${scope}"] [data-imported-style="${index}"] {}`,
+            sheet.cssRules.length,
+          )
+        ] as CSSStyleRule;
+        rule.style.cssText = style;
+        indexes.set(style, index);
+      }
+      return index;
+    },
+  };
+}
+
 export function registerImportedStyleRendering(editor: LexicalEditor) {
-  const unregister = EDITOR_NODES.map((klass) =>
-    editor.registerMutationListener(klass, (mutations) => {
-      editor.getEditorState().read(() => {
-        for (const [key, mutation] of mutations) {
-          if (mutation === "destroyed") continue;
-          const node = $getNodeByKey(key);
-          const element = editor.getElementByKey(key);
-          if (node && element) $applyImportedStyle(node, element);
-        }
-      });
+  const scope = CSS.escape(editor.getKey());
+  const table = createStyleTable(scope);
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, table.sheet];
+  const unregister = [
+    editor.registerRootListener((next, previous) => {
+      if (previous) delete previous.dataset.importedStyles;
+      if (next) next.dataset.importedStyles = scope;
     }),
-  );
+    ...EDITOR_NODES.map((klass) =>
+      editor.registerMutationListener(klass, (mutations) => {
+        editor.getEditorState().read(() => {
+          for (const [key, mutation] of mutations) {
+            if (mutation === "destroyed") continue;
+            const node = $getNodeByKey(key);
+            const element = editor.getElementByKey(key);
+            if (!node || !element) continue;
+            const style = $getImportedStyle(node);
+            if (style) element.dataset.importedStyle = table.indexOf(style);
+            else delete element.dataset.importedStyle;
+          }
+        });
+      }),
+    ),
+  ];
   return () => {
     for (const dispose of unregister) dispose();
+    document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+      (sheet) => sheet !== table.sheet,
+    );
   };
 }

@@ -28,30 +28,27 @@ export class FieldPresentationController {
         }
 
         const host = this.editor.getElementByKey(key);
-        if (host) {
-          this.hosts.set(key, host);
-          this.renderHost(key, host);
-        }
+        if (host) this.hosts.set(key, host);
       }
+      this.paint(mutations.keys());
     });
   }
 
   setContext(context: FieldPresentationContext) {
     this.context = context;
     setEditorPresentation(this.editor, context);
-    for (const [key, host] of this.hosts) {
-      this.renderHost(key, host);
-    }
+    this.paint(this.hosts.keys());
   }
 
-  private renderHost(key: NodeKey, host: HTMLElement) {
+  private paint(keys: Iterable<NodeKey>) {
     this.editor.getEditorState().read(() => {
-      const node = $getNodeByKey(key);
-      if (!(node instanceof FieldNode)) {
-        return;
+      for (const key of keys) {
+        const host = this.hosts.get(key);
+        const node = $getNodeByKey(key);
+        if (host && node instanceof FieldNode) {
+          paintFieldHost(host, $getFieldReference(node), this.context);
+        }
       }
-
-      paintFieldHost(host, $getFieldReference(node), this.context);
     });
   }
 }

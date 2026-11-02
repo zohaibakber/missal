@@ -96,6 +96,7 @@ export const BundledTemplatesLive = Layer.effectDiscard(
               new DocumentEnvelope({
                 format: template.document.format,
                 version: template.document.version,
+                styles: template.document.styles,
                 state: bindCatalogFields(template.document.state, ids),
                 ...(template.document.pageLayout
                   ? { pageLayout: template.document.pageLayout }
