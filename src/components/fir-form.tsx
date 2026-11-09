@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "#/components/ui/select";
 import { Spinner } from "#/components/ui/spinner";
+import { Textarea } from "#/components/ui/textarea";
 import { toast } from "#/components/ui/toast";
 import { useShortcut } from "#/hooks/use-shortcut";
 import { formatDate } from "#/lib/date";
@@ -267,14 +268,14 @@ const dateFields = [
 ] as const;
 
 const textFields = [
-  { name: "NIC", label: FIR_LABELS.NIC, placeholder: "35202-1234567-1", urdu: false },
-  { name: "mobile", label: FIR_LABELS.mobile, placeholder: "0300-1234567", urdu: false },
-  {
-    name: "investigation_officer",
-    label: FIR_LABELS.investigation_officer,
-    placeholder: "",
-    urdu: true,
-  },
+  { name: "investigation_officer", label: FIR_LABELS.investigation_officer, kind: "urdu" },
+  { name: "writer", label: FIR_LABELS.writer, kind: "urdu" },
+  { name: "recovery", label: FIR_LABELS.recovery, kind: "long" },
+  { name: "body", label: FIR_LABELS.body, kind: "long" },
+  { name: "imei_1", label: FIR_LABELS.imei_1, kind: "number" },
+  { name: "imei_2", label: FIR_LABELS.imei_2, kind: "number" },
+  { name: "sim_1", label: FIR_LABELS.sim_1, kind: "number" },
+  { name: "sim_2", label: FIR_LABELS.sim_2, kind: "number" },
 ] as const;
 
 function FormSection({
@@ -308,7 +309,7 @@ function FirFormFields({ className }: { className?: string }) {
 
   return (
     <div dir="rtl" lang="ur" className={cn("missal-fir-form @container", className)}>
-      <FormSection title="مقدمہ" className="@lg:grid-cols-2">
+      <FormSection title="مقدمہ" className="@lg:grid-cols-3">
         <form.Field
           name="fir_no"
           children={(field) => {
@@ -332,6 +333,21 @@ function FirFormFields({ className }: { className?: string }) {
               </Field>
             );
           }}
+        />
+        <form.Field
+          name="complainant"
+          children={(field) => (
+            <Field>
+              <FieldLabel htmlFor={id("complainant")}>{FIR_LABELS.complainant}</FieldLabel>
+              <Input
+                id={id("complainant")}
+                name={field.name}
+                value={field.state.value}
+                onBlur={field.handleBlur}
+                onChange={(event) => field.handleChange(event.target.value)}
+              />
+            </Field>
+          )}
         />
         <form.Field
           name="status"
@@ -374,7 +390,7 @@ function FirFormFields({ className }: { className?: string }) {
           children={(field) => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
             return (
-              <Field data-invalid={isInvalid} className="@lg:col-span-2">
+              <Field data-invalid={isInvalid} className="@lg:col-span-3">
                 <FieldLabel htmlFor={id("offence")}>
                   {FIR_LABELS.offence} <RequiredMark />
                 </FieldLabel>
@@ -430,17 +446,27 @@ function FirFormFields({ className }: { className?: string }) {
             key={text.name}
             name={text.name}
             children={(field) => (
-              <Field className={text.urdu ? "@lg:col-span-2" : undefined}>
+              <Field className={text.kind === "number" ? undefined : "@lg:col-span-2"}>
                 <FieldLabel htmlFor={id(text.name)}>{text.label}</FieldLabel>
-                <Input
-                  id={id(text.name)}
-                  inputMode={text.urdu ? undefined : "numeric"}
-                  name={field.name}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
-                  placeholder={text.placeholder}
-                />
+                {text.kind === "long" ? (
+                  <Textarea
+                    id={id(text.name)}
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                  />
+                ) : (
+                  <Input
+                    id={id(text.name)}
+                    dir={text.kind === "number" ? "ltr" : undefined}
+                    inputMode={text.kind === "number" ? "numeric" : undefined}
+                    name={field.name}
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={(event) => field.handleChange(event.target.value)}
+                  />
+                )}
               </Field>
             )}
           />

@@ -8,6 +8,10 @@ import { Button } from "#/components/ui/button";
 import { formatDate } from "#/lib/date";
 import { FIR_LABELS, type FirRecord } from "#/lib/fir";
 
+const urduProperties = ["investigation_officer", "writer", "recovery", "body"] as const;
+
+const numberProperties = ["imei_1", "imei_2", "sim_1", "sim_2"] as const;
+
 function Property({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="grid grid-cols-[6.5rem_minmax(0,1fr)] items-baseline gap-2 px-4 py-0.5">
@@ -60,6 +64,11 @@ export function FirDetails({ fir, onEdit }: { fir: FirRecord; onEdit: () => void
         <Property label={FIR_LABELS.status}>
           <FirStatusLabel status={fir.status} className="max-w-full" />
         </Property>
+        {fir.complainant ? (
+          <Property label={FIR_LABELS.complainant}>
+            <UrduValues values={[fir.complainant]} />
+          </Property>
+        ) : null}
         <Property label={FIR_LABELS.date}>
           <DateValue value={fir.date} />
         </Property>
@@ -77,21 +86,20 @@ export function FirDetails({ fir, onEdit }: { fir: FirRecord; onEdit: () => void
             <UrduValues values={fir.witness} />
           </Property>
         ) : null}
-        {fir.investigation_officer ? (
-          <Property label={FIR_LABELS.investigation_officer}>
-            <UrduValues values={[fir.investigation_officer]} />
-          </Property>
-        ) : null}
-        {fir.NIC ? (
-          <Property label={FIR_LABELS.NIC}>
-            <span className="tabular-nums">{fir.NIC}</span>
-          </Property>
-        ) : null}
-        {fir.mobile ? (
-          <Property label={FIR_LABELS.mobile}>
-            <span className="tabular-nums">{fir.mobile}</span>
-          </Property>
-        ) : null}
+        {urduProperties.map((name) =>
+          fir[name] ? (
+            <Property key={name} label={FIR_LABELS[name]}>
+              <UrduValues values={[fir[name]]} />
+            </Property>
+          ) : null,
+        )}
+        {numberProperties.map((name) =>
+          fir[name] ? (
+            <Property key={name} label={FIR_LABELS[name]}>
+              <span className="tabular-nums">{fir[name]}</span>
+            </Property>
+          ) : null,
+        )}
       </dl>
     </section>
   );

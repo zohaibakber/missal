@@ -327,17 +327,23 @@ const DrizzleFirRepositoryLive = Layer.effect(
     const db = yield* MissalDrizzle;
 
     const firColumns = (input: FirRecord | Omit<FirRecord, "id">) => ({
-      NIC: input.NIC,
       accused: input.accused,
       arrest_date: input.arrest_date,
+      body: input.body,
+      complainant: input.complainant,
       date: input.date,
       fir_no: input.fir_no,
+      imei_1: input.imei_1,
+      imei_2: input.imei_2,
       incident_date: input.incident_date,
       investigation_officer: input.investigation_officer,
-      mobile: input.mobile,
       offence: input.offence,
+      recovery: input.recovery,
+      sim_1: input.sim_1,
+      sim_2: input.sim_2,
       status: input.status,
       witness: input.witness,
+      writer: input.writer,
       zimni: input.zimni,
     });
 

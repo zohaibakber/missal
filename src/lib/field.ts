@@ -6,6 +6,7 @@ import type { FieldIndex, Placeholder } from "#/lib/placeholder";
 
 const FIR_PROPERTY_NAMES = [
   "fir_no",
+  "complainant",
   "date",
   "incident_date",
   "arrest_date",
@@ -13,9 +14,14 @@ const FIR_PROPERTY_NAMES = [
   "accused",
   "witness",
   "zimni",
-  "NIC",
-  "mobile",
   "investigation_officer",
+  "writer",
+  "recovery",
+  "body",
+  "imei_1",
+  "imei_2",
+  "sim_1",
+  "sim_2",
 ] as const;
 
 const FirPropertyName = Schema.Literals(FIR_PROPERTY_NAMES);
@@ -76,6 +82,7 @@ const firField = (label: string, property: FirPropertyName, index?: number) => (
 
 export const FIR_FIELDS = [
   firField("مقدمہ نمبر", "fir_no"),
+  firField("مدعی مقدمہ", "complainant"),
   firField("Date FIR", "date"),
   firField("تاریخ ووقت وقوعہ", "incident_date"),
   firField("تاریخ گرفتاری", "arrest_date"),
@@ -93,9 +100,14 @@ export const FIR_FIELDS = [
   firField("ضمنی 4", "zimni", 4),
   firField("ضمنی 5", "zimni", 5),
   firField("ضمنی 6", "zimni", 6),
-  firField("شناختی کارڈ", "NIC"),
-  firField("موبائل", "mobile"),
   firField("تفتیشی", "investigation_officer"),
+  firField("تحریر کنندہ", "writer"),
+  firField("برآمدگی", "recovery"),
+  firField("متن", "body"),
+  firField("ایمی نمبر 1", "imei_1"),
+  firField("ایمی نمبر 2", "imei_2"),
+  firField("سم نمبر 1", "sim_1"),
+  firField("سم نمبر 2", "sim_2"),
 ];
 
 export type FieldPresentationContext = {
