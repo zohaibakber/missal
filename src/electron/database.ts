@@ -3,6 +3,7 @@ import { layer as sqliteClientLayer } from "@effect/sql-sqlite-node/SqliteClient
 import { sql } from "drizzle-orm";
 import * as SQLiteNodeDrizzle from "drizzle-orm/effect-sqlite-node";
 import { migrate } from "drizzle-orm/effect-sqlite-node/migrator";
+import { runDataMigrations } from "#/electron/data-migrations";
 import { StorageError } from "#/lib/storage-errors";
 
 export class DatabasePath extends Context.Service<DatabasePath, string>()("missal/DatabasePath") {}
@@ -68,6 +69,15 @@ export const MissalDrizzleLive = Layer.effect(
             }),
           ),
       }),
+    );
+    yield* runDataMigrations.pipe(
+      Effect.mapError(
+        () =>
+          new StorageError({
+            message: "Storage operation failed",
+            operation: "database.migrateData",
+          }),
+      ),
     );
     return db;
   }),

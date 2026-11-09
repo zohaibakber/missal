@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { DocumentEnvelope } from "#/lib/document-format";
+import { FIR_FIELDS } from "#/lib/field";
 import type { PlaceholderId } from "#/lib/ids";
 import { fieldLookupKey } from "#/lib/placeholder";
 import { NonEmptyTrimmedString } from "#/lib/schema";
@@ -19,10 +20,19 @@ export const BundledTemplates = Schema.Array(
   }),
 );
 
-type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
-type JsonObject = { [key: string]: JsonValue };
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
 
-function mapReferences(value: JsonValue, map: (reference: JsonObject) => JsonValue): JsonValue {
+export function mapReferences(
+  value: JsonValue,
+  map: (reference: JsonObject) => JsonValue,
+): JsonValue {
   if (Array.isArray(value)) return value.map((item) => mapReferences(item, map));
   if (value === null || typeof value !== "object") return value;
   const result: JsonObject = {};
@@ -48,15 +58,22 @@ export function unbindCatalogFields(
   });
 }
 
+const firFieldsByName = new Map(
+  FIR_FIELDS.map(({ label, reference }) => [fieldLookupKey(label), reference]),
+);
+
 export function bindCatalogFields(
   state: unknown,
   idOf: ReadonlyMap<string, PlaceholderId>,
 ): unknown {
   return mapReferences(state as JsonValue, (reference) => {
-    const id =
-      reference._tag === "UnresolvedToken" && typeof reference.text === "string"
-        ? idOf.get(fieldLookupKey(reference.text))
-        : undefined;
+    if (reference._tag !== "UnresolvedToken" || typeof reference.text !== "string") {
+      return reference;
+    }
+    const key = fieldLookupKey(reference.text);
+    const firField = firFieldsByName.get(key);
+    if (firField) return { ...firField };
+    const id = idOf.get(key);
     return id === undefined ? reference : { _tag: "CatalogField", id };
   });
 }
