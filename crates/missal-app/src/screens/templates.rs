@@ -328,7 +328,7 @@ pub struct TemplatesScreen {
 
 impl TemplatesScreen {
     pub fn new(models: Models, route: Route, window: &mut Window, cx: &mut Context<Self>) -> TemplatesScreen {
-        let search = text_input(window, cx, Kind::Urdu, "Search templates", "");
+        let search = text_input(window, cx, Kind::Auto, "Search templates", "");
         let subscriptions = vec![
             cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
                 if *event == TextInputEvent::Change {

@@ -10,7 +10,6 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable, StyledExt, h_flex, v_flex};
-use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyElement, Div, Hsla, IntoElement, ParentElement, SharedString, Styled, div, px,
 };

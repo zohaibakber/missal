@@ -63,7 +63,7 @@ fn date(random: &mut Random, year: i64) -> CalendarDate {
     CalendarDate::new(year, month, day).expect("a valid calendar date")
 }
 
-pub fn sample_fir(index: usize, random: &mut Random) -> Fir {
+fn sample_fir(index: usize, random: &mut Random) -> Fir {
     let year = 2019 + (index % 8) as i64;
     let number = 1 + (index / 8) % 3000;
     let incident = date(random, year);

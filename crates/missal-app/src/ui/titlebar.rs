@@ -145,6 +145,7 @@ impl Render for TitleBarView {
                                 let text = div()
                                     .id(("crumb", index))
                                     .max_w(px(260.))
+                                    .py_1()
                                     .overflow_hidden()
                                     .text_color(if last { palette.foreground } else { palette.muted_foreground })
                                     .when(last, |this| this.font_medium())

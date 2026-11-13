@@ -167,7 +167,7 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     let transparent = theme.transparent;
     let hover = |base: Hsla, toward: Hsla| base.mix_oklab(toward, 0.12);
     let active = |base: Hsla, toward: Hsla| base.mix_oklab(toward, 0.22);
-    let toward_ink = if palette.dark { palette.foreground } else { palette.foreground };
+    let toward_ink = palette.foreground;
     let colors = &mut theme.colors;
     colors.background = palette.background;
     colors.foreground = palette.foreground;

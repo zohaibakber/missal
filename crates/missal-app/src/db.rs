@@ -165,15 +165,9 @@ impl Db {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::task::Wake;
-
-    struct Noop;
-    impl Wake for Noop {
-        fn wake(self: Arc<Self>) {}
-    }
 
     fn block_on<T>(future: impl Future<Output = T>) -> T {
-        let waker = Waker::from(Arc::new(Noop));
+        let waker = Waker::noop().clone();
         let mut context = Context::from_waker(&waker);
         let mut future = Box::pin(future);
         loop {

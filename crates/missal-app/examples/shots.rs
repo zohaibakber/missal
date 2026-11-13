@@ -21,7 +21,6 @@ const DEFAULT_OUT: &str = "/tmp/claude-0/-home-user-missal/da28de75-7983-5932-bd
 struct Harness {
     cx: HeadlessAppContext,
     handle: AnyWindowHandle,
-    models: Models,
     out: PathBuf,
     suffix: &'static str,
 }
@@ -106,7 +105,8 @@ fn build(dark: bool, out: &Path, width: f32, height: f32) -> (Harness, tempfile:
         (handle, models)
     });
     let suffix = if dark { "dark" } else { "light" };
-    let mut harness = Harness { cx, handle, models, out: out.to_owned(), suffix };
+    let _ = models;
+    let mut harness = Harness { cx, handle, out: out.to_owned(), suffix };
     harness.settle();
     (harness, directory)
 }
@@ -190,7 +190,7 @@ fn run(dark: bool, out: &Path) {
     h.go(Route::Settings);
     h.shot("15-settings");
 
-    h.with_window(|window, cx| show_shortcuts(window, cx));
+    h.with_window(show_shortcuts);
     h.shot("16-shortcuts");
     h.reset();
 

@@ -1,7 +1,6 @@
 use std::rc::Rc;
 
-use gpui_kit::component::{StyledExt, WindowExt, h_flex, v_flex};
-use gpui_kit::prelude::*;
+use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::{
     AnyView, App, AppContext, Context, Entity, FocusHandle, Focusable, Global, InteractiveElement,
     IntoElement, ParentElement, Render, Styled, Subscription, WeakEntity, Window, div, px,
@@ -135,6 +134,45 @@ impl AppShell {
         self.models.prefs.update(cx, |prefs, cx| prefs.update(cx, |p| p.window = Some(remembered)));
     }
 
+    pub fn fir_list(&self) -> Option<Entity<FirListScreen>> {
+        match &self.screen {
+            Screen::Firs(view) => Some(view.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn new_fir(&self) -> Option<Entity<NewFirScreen>> {
+        match &self.screen {
+            Screen::NewFir(view) => Some(view.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn workspace(&self) -> Option<Entity<WorkspaceScreen>> {
+        match &self.screen {
+            Screen::Workspace(view) => Some(view.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn settings(&self) -> Option<Entity<SettingsScreen>> {
+        match &self.screen {
+            Screen::Settings(view) => Some(view.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn templates(&self) -> Option<Entity<TemplatesScreen>> {
+        match &self.screen {
+            Screen::Templates(view) => Some(view.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn palette_entity(&self) -> Option<Entity<CommandPalette>> {
+        self.palette.clone()
+    }
+
     pub fn current_route(&self) -> Route {
         self.route
     }
@@ -216,7 +254,7 @@ impl Focusable for AppShell {
 
 pub fn navigate(route: Route, window: &mut Window, cx: &mut App) {
     let nav = Models::get(cx).nav;
-    nav.update(cx, |nav, cx| nav.go(route, window, cx));
+    window.defer(cx, move |window, cx| nav.update(cx, |nav, cx| nav.go(route, window, cx)));
 }
 
 pub fn navigate_replace(route: Route, cx: &mut App) {
@@ -252,7 +290,7 @@ pub fn set_theme(choice: crate::prefs::ThemeChoice, window: &mut Window, cx: &mu
 }
 
 impl Render for AppShell {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
         let nav = self.models.nav.clone();
         let sidebar_open = self.models.prefs.read(cx).read().sidebar_open;

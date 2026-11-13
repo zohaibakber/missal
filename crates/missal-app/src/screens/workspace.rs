@@ -13,7 +13,7 @@ use gpui_kit::component::Disableable as _;
 use gpui_kit::component::menu::DropdownMenu as _;
 
 use gpui_kit::{
-    AnyElement, App, AppContext, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
+    AnyElement, App, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
     MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Subscription,
     WeakEntity, Window, div, px,
 };
@@ -94,7 +94,7 @@ impl WorkspaceScreen {
                 .ok();
             })
         });
-        let add_search = text_input(window, cx, Kind::Urdu, "Search templates", "");
+        let add_search = text_input(window, cx, Kind::Auto, "Search templates", "");
         let subscriptions = vec![
             editor_subscription,
             cx.subscribe(&add_search, |this, input, event: &TextInputEvent, cx| {

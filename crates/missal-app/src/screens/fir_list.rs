@@ -63,7 +63,7 @@ pub struct FirListScreen {
 impl FirListScreen {
     pub fn new(models: Models, window: &mut Window, cx: &mut Context<Self>) -> FirListScreen {
         let prefs = models.prefs.read(cx).read().table.clone();
-        let search = text_input(window, cx, Kind::Urdu, "Search FIRs", "");
+        let search = text_input(window, cx, Kind::Auto, "Search FIRs", "");
         let subscriptions = vec![
             cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
                 if *event == TextInputEvent::Change {
@@ -102,6 +102,15 @@ impl FirListScreen {
 
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
         window.focus(&self.focus, cx);
+    }
+
+    pub fn search_input(&self, _: &App) -> Entity<TextInput> {
+        self.search.clone()
+    }
+
+    pub fn scroll_to_row(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.scroll.scroll_to_item_strict(index, ScrollStrategy::Top);
+        cx.notify();
     }
 
     pub fn visible_count(&self) -> usize {

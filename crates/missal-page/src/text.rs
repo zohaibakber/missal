@@ -279,7 +279,36 @@ struct Builder<'a> {
     decorations: Vec<DecoSpan>,
     backgrounds: Vec<BackgroundSpan>,
     field_spans: Vec<FieldSpan>,
-    jameel_space: f32,
+    spaces: Vec<SpaceRun>,
+}
+
+struct SpaceRun {
+    range: Range<usize>,
+    face: FaceId,
+    size: f32,
+    word_spacing: f32,
+}
+
+const ARABIC_SPACE_UNITS: f32 = 5.0;
+
+fn script_of(c: char) -> Option<bool> {
+    let cp = c as u32;
+    if matches!(cp, 0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF) {
+        let digit = matches!(cp, 0x0660..=0x0669 | 0x06F0..=0x06F9);
+        let common = matches!(cp, 0x060C | 0x061B | 0x061F | 0x0640 | 0x06DD);
+        return if digit || common { None } else { Some(true) };
+    }
+    if c.is_alphabetic() {
+        return Some(false);
+    }
+    None
+}
+
+fn arabic_context(text: &str, range: Range<usize>) -> bool {
+    if let Some(found) = text[..range.start].chars().rev().find_map(script_of) {
+        return found;
+    }
+    text[range.end..].chars().find_map(script_of).unwrap_or(true)
 }
 
 fn bidi_open(text: &TextProps, bidi: UnicodeBidi, auto: bool) -> (Vec<char>, Vec<char>) {
@@ -327,27 +356,38 @@ impl Builder<'_> {
         }
     }
 
-    fn word_spacing(&mut self, start: usize, props: &TextProps) {
+    fn word_spacing(&mut self, start: usize, end: usize, props: &TextProps) {
         if props.word_spacing == 0.0 {
             return;
         }
         let face = props.primary_face();
-        let metrics = fonts::metrics(face);
-        let natural = metrics.space_advance / metrics.units_per_em * props.size;
-        let target = (natural + props.word_spacing).max(0.0);
-        let size = target / self.jameel_space;
-        let text = &self.text[start..];
-        let mut spaces = Vec::new();
-        for (i, c) in text.char_indices() {
+        for (i, c) in self.text[start..end].char_indices() {
             if c == ' ' || c == '\u{A0}' {
-                spaces.push(start + i..start + i + c.len_utf8());
+                self.spaces.push(SpaceRun {
+                    range: start + i..start + i + c.len_utf8(),
+                    face,
+                    size: props.size,
+                    word_spacing: props.word_spacing,
+                });
             }
         }
-        for range in spaces {
-            if props.family != FontFamily::Document {
-                self.spans.push((range.clone(), Attr::Family(FontFamily::Document)));
-            }
-            self.spans.push((range, Attr::Size(size)));
+    }
+
+    fn apply_spaces(&mut self) {
+        let inter = fonts::metrics(FaceId(1));
+        let inter_space = inter.space_advance / inter.units_per_em;
+        let spaces = std::mem::take(&mut self.spaces);
+        for space in spaces {
+            let arabic = arabic_context(&self.text, space.range.clone());
+            let metrics = fonts::metrics(space.face);
+            let natural = if arabic && space.face == FaceId(0) {
+                ARABIC_SPACE_UNITS / metrics.units_per_em * space.size
+            } else {
+                metrics.space_advance / metrics.units_per_em * space.size
+            };
+            let target = (natural + space.word_spacing).max(0.0);
+            self.spans.push((space.range.clone(), Attr::Family(FontFamily::Interface)));
+            self.spans.push((space.range, Attr::Size(target / inter_space)));
         }
     }
 
@@ -369,8 +409,7 @@ impl Builder<'_> {
         self.push_controls(&close);
         let outer_end = self.text.len();
         self.style_attrs(start..end, props);
-        self.word_spacing(start, props);
-        self.text.truncate(outer_end);
+        self.word_spacing(start, end, props);
         if atomic {
             self.segs.push(Seg {
                 logical: self.logical..self.logical + logical_len,
@@ -535,7 +574,6 @@ pub(crate) fn build_inline(
     fields: &dyn FieldSource,
     indent: f32,
 ) -> InlineContent {
-    let jameel = fonts::metrics(FaceId(0));
     let mut builder = Builder {
         base: &block.text,
         block_decoration: block.boxp.decoration,
@@ -550,13 +588,14 @@ pub(crate) fn build_inline(
         decorations: Vec::new(),
         backgrounds: Vec::new(),
         field_spans: Vec::new(),
-        jameel_space: jameel.space_advance / jameel.units_per_em,
+        spaces: Vec::new(),
     };
     let inherited = BoxProps {
         decoration: Decoration::default(),
         ..BoxProps::default()
     };
     builder.inlines(inlines, &block.text, &inherited);
+    builder.apply_spaces();
     if indent > 0.0 {
         builder.objects.push(InlineObject {
             id: INDENT_OBJECT,
@@ -733,7 +772,11 @@ impl TextBox {
             ));
         }
         for (index, info) in self.layout.lines().iter().enumerate() {
-            let breaks = self.layout.text()[info.text_range.clone()].ends_with('\n');
+            let breaks = self
+                .layout
+                .text()
+                .get(info.text_range.clone())
+                .is_some_and(|t| t.ends_with('\n'));
             let line_end = info.text_range.end;
             let covered = if breaks {
                 layout_range.start < line_end && layout_range.end >= line_end
@@ -906,7 +949,11 @@ pub(crate) fn measure_text_block(
             let range = info.text_range.clone();
             for (box_range, ibox) in &content.boxes {
                 if box_range.start < range.end && range.start < box_range.end {
-                    let visible = &content.text.text[box_range.start.max(range.start)..box_range.end.min(range.end)];
+                    let visible = content
+                        .text
+                        .text
+                        .get(box_range.start.max(range.start)..box_range.end.min(range.end))
+                        .unwrap_or("");
                     if visible.chars().all(|c| c == '\n') {
                         continue;
                     }

@@ -229,7 +229,6 @@ pub(crate) fn measure_table(
     table: &Table,
     parent: &TextProps,
     available: f32,
-    path: &BlockPath,
     ctx: &mut Ctx<'_>,
     previous: Option<(&TableBox, &[u32])>,
 ) -> TableBox {
@@ -491,7 +490,7 @@ pub(crate) fn measure_table(
         let flow = match reused {
             Some(flow) => flow,
             None => {
-                let cell_path = path.child(sr).child(sc);
+                let cell_path = BlockPath::new(&[sr, sc]);
                 let items = measure_blocks(&cell.blocks, &style.text, content_width, &cell_path, ctx);
                 Arc::new(Flow::stack(items))
             }

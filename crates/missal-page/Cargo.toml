@@ -26,3 +26,6 @@ headless = ["missal-text/headless", "dep:gpui-pre-wgpu"]
 
 [lints]
 workspace = true
+
+[[example]]
+name = "templates"

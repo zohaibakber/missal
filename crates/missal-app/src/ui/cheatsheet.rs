@@ -1,6 +1,5 @@
 use gpui_kit::component::dialog::Dialog;
 use gpui_kit::component::{StyledExt, WindowExt, h_flex, v_flex};
-use gpui_kit::prelude::*;
 use gpui_kit::{App, IntoElement, ParentElement, Styled, Window, div, px};
 
 use crate::shortcuts::{Group, SHORTCUTS};

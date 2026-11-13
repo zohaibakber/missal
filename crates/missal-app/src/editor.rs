@@ -81,11 +81,14 @@ pub trait DocumentEditor {
     fn mark_saved(&self, revision: u64, cx: &mut App);
     fn discard(&self, window: &mut Window, cx: &mut App);
     fn focus(&self, window: &mut Window, cx: &mut App);
-    fn on_event(&self, cx: &mut App, listener: Box<dyn Fn(&EditorEvent, &mut App)>) -> Subscription;
+    fn on_event(&self, cx: &mut App, listener: EditorListener) -> Subscription;
 }
 
+pub type EditorBuilder = Rc<dyn Fn(&mut Window, &mut App) -> Rc<dyn DocumentEditor>>;
+pub type EditorListener = Box<dyn Fn(&EditorEvent, &mut App)>;
+
 #[derive(Clone)]
-pub struct EditorFactory(pub Rc<dyn Fn(&mut Window, &mut App) -> Rc<dyn DocumentEditor>>);
+pub struct EditorFactory(pub EditorBuilder);
 
 impl Global for EditorFactory {}
 
@@ -113,6 +116,7 @@ pub struct StandInEditor {
     original: Option<Document>,
     fields: Option<FieldContext>,
     note: Entity<TextInput>,
+    last_text: String,
     revision: u64,
     saved_revision: u64,
     dirty: bool,
@@ -132,7 +136,9 @@ impl StandInEditor {
                 .placeholder("اس خانے میں لکھنے سے دستاویز میں تبدیلی کا عمل آزمایا جا سکتا ہے")
         });
         let subscription = cx.subscribe(&note, |this, _, event: &TextInputEvent, cx| {
-            if *event == TextInputEvent::Change && !this.loading {
+            let text = this.note.read(cx).text().to_owned();
+            if *event == TextInputEvent::Change && text != this.last_text {
+                this.last_text = text;
                 this.revision += 1;
                 this.refresh_dirty(cx);
                 cx.notify();
@@ -143,6 +149,7 @@ impl StandInEditor {
             original: None,
             fields: None,
             note,
+            last_text: String::new(),
             revision: 0,
             saved_revision: 0,
             dirty: false,
@@ -167,6 +174,7 @@ impl StandInEditor {
         self.revision = 0;
         self.saved_revision = 0;
         self.note.update(cx, |note, cx| note.set_text("", cx));
+        self.last_text.clear();
         self.loading = false;
         self.refresh_dirty(cx);
         cx.notify();
@@ -193,6 +201,7 @@ impl StandInEditor {
     pub fn discard(&mut self, cx: &mut Context<Self>) {
         self.loading = true;
         self.note.update(cx, |note, cx| note.set_text("", cx));
+        self.last_text.clear();
         self.loading = false;
         self.revision = 0;
         self.saved_revision = 0;
@@ -336,7 +345,7 @@ impl DocumentEditor for StandInHandle {
         note.update(cx, |note, cx| note.focus(window, cx));
     }
 
-    fn on_event(&self, cx: &mut App, listener: Box<dyn Fn(&EditorEvent, &mut App)>) -> Subscription {
+    fn on_event(&self, cx: &mut App, listener: EditorListener) -> Subscription {
         cx.subscribe(&self.editor, move |_, event: &EditorEvent, cx| listener(event, cx))
     }
 }

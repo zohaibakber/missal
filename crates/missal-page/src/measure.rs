@@ -308,7 +308,6 @@ pub(crate) fn measure_block(
                 t,
                 parent,
                 available,
-                &path,
                 ctx,
                 prev_table.as_ref().map(|(t, d)| (t.as_ref(), *d)),
             );

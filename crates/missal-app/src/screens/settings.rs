@@ -416,6 +416,7 @@ impl SettingsScreen {
             )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn section_actions(&self, palette: &Palette, dirty: bool, saving: bool, id: &'static str, save: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static, reset: Option<fn(&mut Self, &mut Window, &mut Context<Self>)>, cx: &mut Context<Self>) -> Option<AnyElement> {
         (dirty || saving).then(|| {
             h_flex()

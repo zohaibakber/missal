@@ -158,26 +158,23 @@ impl Preferences {
         if let Some(open) = value.get("sidebarOpen").and_then(Value::as_bool) {
             preferences.sidebar_open = open;
         }
-        if let Some(window) = value.get("window") {
-            if let (Some(x), Some(y), Some(width), Some(height)) = (
+        if let Some(window) = value.get("window")
+            && let (Some(x), Some(y), Some(width), Some(height)) = (
                 number(window, "x"),
                 number(window, "y"),
                 number(window, "width"),
                 number(window, "height"),
-            ) && width >= MIN_WINDOW.0
-                && height >= MIN_WINDOW.1
-            {
-                preferences.window = Some(WindowPrefs {
-                    x,
-                    y,
-                    width,
-                    height,
-                    maximized: window
-                        .get("maximized")
-                        .and_then(Value::as_bool)
-                        .unwrap_or(false),
-                });
-            }
+            )
+            && width >= MIN_WINDOW.0
+            && height >= MIN_WINDOW.1
+        {
+            preferences.window = Some(WindowPrefs {
+                x,
+                y,
+                width,
+                height,
+                maximized: window.get("maximized").and_then(Value::as_bool).unwrap_or(false),
+            });
         }
         if let Some(table) = value.get("firTable") {
             if let Some(column) = table

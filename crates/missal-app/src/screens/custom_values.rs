@@ -46,7 +46,7 @@ impl CustomValues {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> CustomValues {
-        let search = text_input(window, cx, Kind::Urdu, "Search custom fields", "");
+        let search = text_input(window, cx, Kind::Auto, "Search custom fields", "");
         let mut subscriptions = vec![cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
             if *event == TextInputEvent::Change {
                 this.query = input.read(cx).text().to_owned();

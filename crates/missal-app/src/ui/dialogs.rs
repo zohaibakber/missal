@@ -3,8 +3,7 @@ use std::rc::Rc;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::dialog::{Dialog, DialogFooter};
 use gpui_kit::component::{StyledExt, WindowExt, v_flex};
-use gpui_kit::{App, IntoElement, ParentElement, SharedString, Styled, Window, div, px};
-use gpui_kit::prelude::*;
+use gpui_kit::{App, ParentElement, SharedString, Styled, Window, div, px};
 use missal_text::label;
 
 use crate::theme::Palette;
@@ -16,12 +15,14 @@ pub enum Tone {
     Danger,
 }
 
+pub type ChoiceAction = Rc<dyn Fn(&mut Window, &mut App)>;
+
 #[derive(Clone)]
 pub struct Choice {
     pub id: &'static str,
     pub label: &'static str,
     pub tone: Tone,
-    pub action: Rc<dyn Fn(&mut Window, &mut App)>,
+    pub action: ChoiceAction,
 }
 
 impl Choice {

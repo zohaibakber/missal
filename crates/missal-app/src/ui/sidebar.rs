@@ -1,13 +1,13 @@
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::button::Button;
 use gpui_kit::component::{StyledExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::component::Sizable as _;
 
 use gpui_kit::{
-    AnyElement, App, Context, ElementId, InteractiveElement, IntoElement, ParentElement, Render,
-    SharedString, Stateful, StatefulInteractiveElement, Styled, Subscription, Window, div, px,
+    AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, Render,
+    Stateful, StatefulInteractiveElement, Styled, Subscription, Window, div, px,
 };
 use missal_text::label;
 
@@ -37,6 +37,7 @@ impl SidebarView {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn nav_item(
     palette: &Palette,
     id: impl Into<ElementId>,

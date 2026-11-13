@@ -1,10 +1,9 @@
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Sizable, StyledExt, WindowExt, h_flex};
-use gpui_kit::prelude::*;
 use gpui_kit::component::Disableable as _;
 
 use gpui_kit::{
-    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
+    App, AppContext, Context, Entity, IntoElement, ParentElement, Render,
     Styled, Subscription, Window, div, px,
 };
 use missal_core::FirRecord;

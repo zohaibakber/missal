@@ -61,11 +61,11 @@ const LIMIT: usize = 20;
 
 impl CommandPalette {
     pub fn new(models: Models, window: &mut Window, cx: &mut Context<Self>) -> CommandPalette {
-        let input = text_input(window, cx, Kind::Urdu, "Search FIRs, templates and commands…", "");
-        let subscription = cx.subscribe(&input, |this, _, event: &TextInputEvent, cx| {
-            if *event == TextInputEvent::Change {
-                this.refresh(cx);
-            }
+        let input = text_input(window, cx, Kind::Auto, "Search FIRs, templates and commands…", "");
+        let subscription = cx.subscribe_in(&input, window, |this, _, event: &TextInputEvent, window, cx| match event {
+            TextInputEvent::Change => this.refresh(cx),
+            TextInputEvent::Submit => this.run(this.selected, window, cx),
+            _ => {}
         });
         let mut palette = CommandPalette {
             models,
@@ -257,7 +257,7 @@ impl Render for CommandPalette {
                 );
             }
             let lead = match &entry.lead {
-                Lead::Icon(name) => small_icon(name.clone(), palette.muted_foreground).into_any_element(),
+                Lead::Icon(name) => small_icon(*name, palette.muted_foreground).into_any_element(),
                 Lead::Status(status) => status_icon(*status, palette.status(*status), px(14.)).into_any_element(),
             };
             rows.push(

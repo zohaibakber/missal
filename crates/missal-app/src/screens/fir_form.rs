@@ -6,7 +6,6 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::calendar::{Calendar, CalendarEvent, CalendarState, Date};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::{Sizable, StyledExt, h_flex, v_flex};
-use gpui_kit::prelude::*;
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::{
     AnyElement, App, AppContext, Context, Entity, EventEmitter, FocusHandle, InteractiveElement,
@@ -65,7 +64,7 @@ impl ListKind {
 }
 
 pub enum FirFormEvent {
-    Saved { record: FirRecord, created: bool },
+    Saved { record: Box<FirRecord>, created: bool },
     DirtyChanged(bool),
 }
 
@@ -436,7 +435,7 @@ impl FirForm {
                         this.errors.clear();
                         this.models.firs.update(cx, |firs, cx| firs.upsert(FirRow::from_record(&record), cx));
                         cx.emit(FirFormEvent::DirtyChanged(false));
-                        cx.emit(FirFormEvent::Saved { record, created });
+                        cx.emit(FirFormEvent::Saved { record: Box::new(record), created });
                     }
                     Err(error) => toast_error(window, cx, error.message()),
                 }

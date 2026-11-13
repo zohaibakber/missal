@@ -49,7 +49,7 @@ fn read_u32(data: &[u8], at: usize) -> Option<u32> {
     ]))
 }
 
-pub(crate) fn table(data: &[u8], tag: &[u8; 4]) -> Option<&[u8]> {
+pub(crate) fn table<'a>(data: &'a [u8], tag: &[u8; 4]) -> Option<&'a [u8]> {
     let count = read_u16(data, 4)? as usize;
     for i in 0..count {
         let record = 12 + i * 16;

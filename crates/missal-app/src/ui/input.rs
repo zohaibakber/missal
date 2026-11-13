@@ -9,6 +9,7 @@ pub enum Kind {
     Urdu,
     Numeric,
     Latin,
+    Auto,
 }
 
 pub fn text_input(
@@ -38,6 +39,7 @@ fn configure(input: TextInput, kind: Kind, placeholder: &str, text: &str) -> Tex
         Kind::Urdu => input.direction(Direction::Rtl).align(Align::Start).text_size(URDU_SIZE),
         Kind::Numeric => input.direction(Direction::Ltr).align(Align::Right).text_size(LATIN_SIZE),
         Kind::Latin => input.direction(Direction::Ltr).align(Align::Start).text_size(LATIN_SIZE),
+        Kind::Auto => input.direction(Direction::Auto).align(Align::Start).text_size(URDU_SIZE),
     };
     input.placeholder(placeholder.to_owned()).default_text(text.to_owned())
 }
