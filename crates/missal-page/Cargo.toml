@@ -1,0 +1,28 @@
+[package]
+name = "missal-page"
+description = "Missal page engine: style resolution, block layout, pagination, position mapping, GPUI painting and PDF output"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+missal-core.workspace = true
+missal-text.workspace = true
+gpui-kit.workspace = true
+swash.workspace = true
+image = { workspace = true, features = ["jpeg"] }
+flate2.workspace = true
+pdf-writer.workspace = true
+subsetter.workspace = true
+gpui-pre-wgpu = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[features]
+headless = ["missal-text/headless", "dep:gpui-pre-wgpu"]
+
+[lints]
+workspace = true

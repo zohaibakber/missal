@@ -56,7 +56,9 @@ impl Styles {
         }
         let mut definitions: HashMap<String, StyleDef> = HashMap::new();
         for style in children(root, "style") {
-            let Some(id) = attr(style, "styleId") else { continue };
+            let Some(id) = attr(style, "styleId") else {
+                continue;
+            };
             let kind = match attr(style, "type") {
                 Some("character") => Kind::Character,
                 Some("table") => Kind::Table,
@@ -95,7 +97,9 @@ impl Styles {
                 if chain.contains(&name) || chain.len() > 64 {
                     break;
                 }
-                let Some(definition) = definitions.get(&name) else { break };
+                let Some(definition) = definitions.get(&name) else {
+                    break;
+                };
                 current = definition.based_on.clone();
                 chain.push(name);
             }
@@ -130,6 +134,19 @@ impl Styles {
         found.map_or_else(|| self.empty.clone(), |(_, resolved)| resolved.clone())
     }
 
+    pub fn none(&self) -> Rc<Resolved> {
+        self.empty.clone()
+    }
+
+    pub fn is_default_paragraph(&self, id: Option<&str>) -> bool {
+        match id {
+            None => true,
+            Some(id) => {
+                self.default_paragraph.as_deref() == Some(id) || !self.resolved.contains_key(id)
+            }
+        }
+    }
+
     pub fn paragraph(&self, id: Option<&str>) -> Rc<Resolved> {
         self.lookup(id, Kind::Paragraph, &self.default_paragraph)
     }
@@ -147,9 +164,7 @@ impl Styles {
 pub struct Level {
     pub start: i64,
     pub format: String,
-    pub text: String,
     pub ppr: ParaProps,
-    pub restart_after: Option<u8>,
 }
 
 #[derive(Debug, Default)]
@@ -177,14 +192,7 @@ fn parse_level(node: Node) -> Option<(u8, Level)> {
                 .and_then(val)
                 .unwrap_or("decimal")
                 .to_owned(),
-            text: child(node, "lvlText")
-                .and_then(val)
-                .unwrap_or_default()
-                .to_owned(),
             ppr: child(node, "pPr").map(ParaProps::parse).unwrap_or_default(),
-            restart_after: child(node, "lvlRestart")
-                .and_then(|restart| number(val(restart)))
-                .map(|restart| restart.clamp(0.0, 9.0) as u8),
         },
     ))
 }
@@ -193,15 +201,21 @@ impl Numbering {
     pub fn parse(root: Node, styles_root: Option<Node>) -> Numbering {
         let mut numbering = Numbering::default();
         for definition in children(root, "abstractNum") {
-            let Some(id) = attr(definition, "abstractNumId") else { continue };
-            let levels = children(definition, "lvl").filter_map(parse_level).collect();
+            let Some(id) = attr(definition, "abstractNumId") else {
+                continue;
+            };
+            let levels = children(definition, "lvl")
+                .filter_map(parse_level)
+                .collect();
             let link = child(definition, "numStyleLink")
                 .and_then(val)
                 .map(str::to_owned);
             numbering.abstracts.insert(id.to_owned(), (levels, link));
         }
         for num in children(root, "num") {
-            let Some(id) = attr(num, "numId") else { continue };
+            let Some(id) = attr(num, "numId") else {
+                continue;
+            };
             let Some(abstract_id) = child(num, "abstractNumId").and_then(val) else {
                 continue;
             };
@@ -211,7 +225,9 @@ impl Numbering {
                     let start = child(item, "startOverride")
                         .and_then(|start| number(val(start)))
                         .map(|start| start as i64);
-                    let replacement = child(item, "lvl").and_then(parse_level).map(|(_, level)| level);
+                    let replacement = child(item, "lvl")
+                        .and_then(parse_level)
+                        .map(|(_, level)| level);
                     Some((level, (start, replacement)))
                 })
                 .collect();
@@ -237,7 +253,9 @@ impl Numbering {
                 ) else {
                     continue;
                 };
-                numbering.style_nums.insert(id.to_owned(), num_id.to_owned());
+                numbering
+                    .style_nums
+                    .insert(id.to_owned(), num_id.to_owned());
             }
         }
         numbering
@@ -327,7 +345,9 @@ impl Theme {
         let fonts = root
             .descendants()
             .find(|node| is_ns(*node, A, "fontScheme"));
-        let find = |name: &str| fonts.and_then(|fonts| fonts.children().find(|child| is_ns(*child, A, name)));
+        let find = |name: &str| {
+            fonts.and_then(|fonts| fonts.children().find(|child| is_ns(*child, A, name)))
+        };
         Theme {
             major: scheme(find("majorFont")),
             minor: scheme(find("minorFont")),

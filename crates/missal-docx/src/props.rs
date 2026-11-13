@@ -1,6 +1,6 @@
 use roxmltree::Node;
 
-use crate::xml::{attr, child, child_val, measure, number, on_off, twips, val, w_name};
+use crate::xml::{attr, child_val, measure, number, on_off, twips, val, w_name};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Rgb(pub u8, pub u8, pub u8);
@@ -115,7 +115,9 @@ impl RunProps {
     pub fn parse(node: Node) -> RunProps {
         let mut props = RunProps::default();
         for element in node.children() {
-            let Some(name) = w_name(element) else { continue };
+            let Some(name) = w_name(element) else {
+                continue;
+            };
             match name {
                 "rStyle" => props.style = val(element).map(str::to_owned),
                 "rFonts" => {
@@ -341,7 +343,9 @@ impl ParaProps {
     pub fn parse(node: Node) -> ParaProps {
         let mut props = ParaProps::default();
         for element in node.children() {
-            let Some(name) = w_name(element) else { continue };
+            let Some(name) = w_name(element) else {
+                continue;
+            };
             match name {
                 "pStyle" => props.style = val(element).map(str::to_owned),
                 "jc" => {
@@ -350,8 +354,8 @@ impl ParaProps {
                         Some("right" | "end") => Some(Jc::End),
                         Some("center") => Some(Jc::Center),
                         Some(
-                            "both" | "distribute" | "lowKashida" | "mediumKashida"
-                            | "highKashida" | "thaiDistribute",
+                            "both" | "distribute" | "lowKashida" | "mediumKashida" | "highKashida"
+                            | "thaiDistribute",
                         ) => Some(Jc::Justify),
                         _ => props.jc,
                     }
@@ -475,7 +479,9 @@ impl TableProps {
     pub fn parse(node: Node) -> TableProps {
         let mut props = TableProps::default();
         for element in node.children() {
-            let Some(name) = w_name(element) else { continue };
+            let Some(name) = w_name(element) else {
+                continue;
+            };
             match name {
                 "tblStyle" => props.style = val(element).map(str::to_owned),
                 "bidiVisual" => props.bidi = Some(on_off(element)),
@@ -537,12 +543,14 @@ impl CellProps {
         };
         let Some(node) = node else { return props };
         for element in node.children() {
-            let Some(name) = w_name(element) else { continue };
+            let Some(name) = w_name(element) else {
+                continue;
+            };
             match name {
                 "tcW" => props.width = width(element),
                 "gridSpan" => {
-                    props.span = number(val(element))
-                        .map_or(1, |span| span.clamp(1.0, 1000.0) as u32)
+                    props.span =
+                        number(val(element)).map_or(1, |span| span.clamp(1.0, 1000.0) as u32)
                 }
                 "vMerge" => {
                     props.v_merge = Some(match val(element) {
@@ -587,7 +595,8 @@ impl RowProps {
     pub fn parse(node: Option<Node>) -> RowProps {
         let mut props = RowProps::default();
         let Some(node) = node else { return props };
-        let count = |element: Node| number(val(element)).map_or(0, |count| count.clamp(0.0, 1000.0) as u32);
+        let count =
+            |element: Node| number(val(element)).map_or(0, |count| count.clamp(0.0, 1000.0) as u32);
         for element in node.children() {
             match w_name(element) {
                 Some("trHeight") => {
@@ -604,8 +613,4 @@ impl RowProps {
         }
         props
     }
-}
-
-pub fn child_props<T>(node: Node, name: &str, parse: fn(Node) -> T) -> Option<T> {
-    child(node, name).map(parse)
 }

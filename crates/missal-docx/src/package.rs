@@ -132,7 +132,9 @@ fn decode_text(bytes: Vec<u8>) -> String {
     if bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]) {
         let little = bytes[0] == 0xFF;
         let units: Vec<u16> = bytes[2..]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| {
                 if little {
                     u16::from_le_bytes([pair[0], pair[1]])
@@ -154,7 +156,10 @@ fn resolve(directory: &str, target: &str) -> String {
     let mut parts: Vec<&str> = if target.starts_with('/') {
         Vec::new()
     } else {
-        directory.split('/').filter(|part| !part.is_empty()).collect()
+        directory
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .collect()
     };
     for segment in target.split('/') {
         match segment {

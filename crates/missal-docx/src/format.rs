@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use missal_core::document::{Align, Style, TextFormat};
+use missal_core::document::{Align, TextFormat};
 
 use crate::props::{Border, LineRule, Rgb, RunProps, Sides, VertAlign};
 use crate::styles::Theme;
@@ -10,7 +10,10 @@ const DEFAULT_LINE_RATIO: f64 = 1.15;
 
 const FONT_LINE_RATIOS: [(&str, f64); 12] = [
     ("jameel noori nastaleeq", URDU_FONT_WINDOWS_LINE_RATIO),
-    ("jameel noori nastaleeq kasheeda", URDU_FONT_WINDOWS_LINE_RATIO),
+    (
+        "jameel noori nastaleeq kasheeda",
+        URDU_FONT_WINDOWS_LINE_RATIO,
+    ),
     ("times new roman", (1825.0 + 443.0) / 2048.0),
     ("arial", (1854.0 + 434.0) / 2048.0),
     ("calibri", (1950.0 + 550.0) / 2048.0),
@@ -149,7 +152,10 @@ impl RunFormat {
         if self.italic {
             css.push("font-style", "italic");
         }
-        css.push("line-height", &px(round2(line.height(self.family.as_deref(), self.size_px))));
+        css.push(
+            "line-height",
+            &px(round2(line.height(self.family.as_deref(), self.size_px))),
+        );
         if let Some(color) = self.color {
             css.push("color", &color.css());
         }
@@ -212,16 +218,22 @@ pub fn round2(value: f64) -> f64 {
 }
 
 pub fn number(value: f64) -> String {
-    let rounded = (value * 10000.0).round() / 10000.0;
-    let rounded = if rounded == 0.0 { 0.0 } else { rounded };
-    let mut text = format!("{rounded:.4}");
-    while text.ends_with('0') {
-        text.pop();
+    let scaled = (value * 10000.0).round();
+    if !scaled.is_finite() || scaled.abs() >= 9.0e15 {
+        return "0".to_owned();
     }
-    if text.ends_with('.') {
-        text.pop();
+    let scaled = scaled as i64;
+    let sign = if scaled < 0 { "-" } else { "" };
+    let magnitude = scaled.unsigned_abs();
+    let (whole, fraction) = (magnitude / 10000, magnitude % 10000);
+    if fraction == 0 {
+        return format!("{sign}{whole}");
     }
-    text
+    let mut digits = format!("{fraction:04}");
+    while digits.ends_with('0') {
+        digits.pop();
+    }
+    format!("{sign}{whole}.{digits}")
 }
 
 pub fn px(value: f64) -> String {
@@ -283,7 +295,11 @@ impl Css {
             .collect();
         let colors: Vec<String> = sides
             .iter()
-            .map(|side| side.and_then(|border| border.color).unwrap_or(Rgb(0, 0, 0)).css())
+            .map(|side| {
+                side.and_then(|border| border.color)
+                    .unwrap_or(Rgb(0, 0, 0))
+                    .css()
+            })
             .collect();
         self.push("border-width", &four(&widths));
         self.push("border-style", &four(&styles));
@@ -292,10 +308,6 @@ impl Css {
 
     pub fn finish(self) -> String {
         self.text
-    }
-
-    pub fn style(self) -> Option<Style> {
-        (!self.text.is_empty()).then(|| Style::new(&self.text))
     }
 }
 

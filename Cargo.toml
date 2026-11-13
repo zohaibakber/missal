@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/missal-app", "crates/missal-core", "crates/missal-docx", "crates/missal-store", "crates/missal-text"]
+members = ["crates/missal-app", "crates/missal-core", "crates/missal-docx", "crates/missal-page", "crates/missal-store", "crates/missal-text"]
 
 [workspace.package]
 version = "0.1.0"
@@ -27,6 +27,9 @@ gpui-pre-wgpu = "=0.3.12"
 image = { version = "0.25", default-features = false, features = ["png"] }
 zip = { version = "9.5.1", default-features = false, features = ["deflate-flate2"] }
 roxmltree = "0.21.2"
+pdf-writer = "0.15.0"
+subsetter = { version = "0.2.6", default-features = false }
+chrono = { version = "0.4.45", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
