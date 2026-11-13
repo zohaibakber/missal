@@ -31,33 +31,41 @@ actions!(
 
 pub const KEY_CONTEXT: &str = "MissalEditor";
 
+fn key(keys: &str, action: impl gpui_kit::Action, cx: &App) -> KeyBinding {
+    let predicate = gpui_kit::KeyBindingContextPredicate::parse(KEY_CONTEXT)
+        .ok()
+        .map(std::rc::Rc::new);
+    KeyBinding::load(keys, Box::new(action), predicate, false, None, cx).expect("a valid keystroke")
+}
+
 pub fn bind_keys(cx: &mut App) {
     let c = Some(KEY_CONTEXT);
-    cx.bind_keys([
+    let bindings = [
         KeyBinding::new("tab", NextCell, c),
         KeyBinding::new("shift-tab", PreviousCell, c),
         KeyBinding::new("pageup", PageUp, c),
         KeyBinding::new("pagedown", PageDown, c),
         KeyBinding::new("shift-pageup", SelectPageUp, c),
         KeyBinding::new("shift-pagedown", SelectPageDown, c),
-        KeyBinding::new("secondary-b", ToggleBold, c),
-        KeyBinding::new("secondary-i", ToggleItalic, c),
-        KeyBinding::new("secondary-u", ToggleUnderline, c),
-        KeyBinding::new("secondary-l", AlignLeft, c),
-        KeyBinding::new("secondary-e", AlignCenter, c),
-        KeyBinding::new("secondary-r", AlignRight, c),
-        KeyBinding::new("secondary-j", AlignJustify, c),
-        KeyBinding::new("secondary-shift-8", BulletList, c),
-        KeyBinding::new("secondary-shift-7", NumberedList, c),
-        KeyBinding::new("secondary-]", IndentList, c),
-        KeyBinding::new("secondary-[", OutdentList, c),
-        KeyBinding::new("secondary-=", ZoomIn, c),
-        KeyBinding::new("secondary-+", ZoomIn, c),
-        KeyBinding::new("secondary-shift-=", ZoomIn, c),
-        KeyBinding::new("secondary--", ZoomOut, c),
-        KeyBinding::new("secondary-0", ZoomReset, c),
-        KeyBinding::new("secondary-shift-f", InsertField, c),
-    ]);
+        key("secondary-b", ToggleBold, cx),
+        key("secondary-i", ToggleItalic, cx),
+        key("secondary-u", ToggleUnderline, cx),
+        key("secondary-l", AlignLeft, cx),
+        key("secondary-e", AlignCenter, cx),
+        key("secondary-r", AlignRight, cx),
+        key("secondary-j", AlignJustify, cx),
+        key("secondary-shift-8", BulletList, cx),
+        key("secondary-shift-7", NumberedList, cx),
+        key("secondary-]", IndentList, cx),
+        key("secondary-[", OutdentList, cx),
+        key("secondary-=", ZoomIn, cx),
+        key("secondary-+", ZoomIn, cx),
+        key("secondary-shift-=", ZoomIn, cx),
+        key("secondary--", ZoomOut, cx),
+        key("secondary-0", ZoomReset, cx),
+        key("secondary-shift-f", InsertField, cx),
+    ];
+    cx.bind_keys(bindings);
     if !cfg!(target_os = "macos") {
         cx.bind_keys([
             KeyBinding::new("ctrl-up", ParagraphUp, c),

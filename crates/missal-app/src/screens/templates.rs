@@ -51,7 +51,6 @@ pub struct TemplatePage {
     saving: bool,
     picking: bool,
     importing: bool,
-    imported: bool,
     imports: u64,
     _subscriptions: Vec<Subscription>,
 }
@@ -91,7 +90,6 @@ impl TemplatePage {
             saving: false,
             picking: false,
             importing: false,
-            imported: false,
             imports: 0,
             _subscriptions: vec![editor_subscription, title_subscription],
         };
@@ -112,6 +110,7 @@ impl TemplatePage {
                     key: "template:new".into(),
                     document: Document::empty(),
                     fields: self.field_context(cx),
+                    dirty: false,
                 };
                 self.editor.load(request, window, cx);
                 self.title.update(cx, |input, cx| input.focus(window, cx));
@@ -127,6 +126,7 @@ impl TemplatePage {
                                 key: format!("template:{}:{}", record.id, record.revision),
                                 document: record.document,
                                 fields: this.field_context(cx),
+                                dirty: false,
                             };
                             this.editor.load(request, window, cx);
                             this.state = PageState::Ready;
@@ -144,7 +144,6 @@ impl TemplatePage {
         self.state == PageState::Ready
             && (self.title.read(cx).text() != self.initial_name
                 || self.editor_dirty
-                || self.imported
                 || self.editor.is_dirty(cx))
     }
 
@@ -235,7 +234,6 @@ impl TemplatePage {
         let projections = self.editor.snapshot(cx).document.projections();
         let has_content = self.id.is_some()
             || self.editor_dirty
-            || self.imported
             || self.editor.is_dirty(cx)
             || !projections.plain_text.trim().is_empty()
             || projections.field_count > 0;
@@ -288,10 +286,10 @@ impl TemplatePage {
                     key,
                     document: imported.document,
                     fields: self.field_context(cx),
+                    dirty: true,
                 };
                 self.editor.load(request, window, cx);
                 self.editor_dirty = false;
-                self.imported = true;
                 if self.title.read(cx).text().trim().is_empty()
                     && let Some(name) = imported.name
                 {
@@ -354,7 +352,6 @@ impl TemplatePage {
                         let new_id = summary.id;
                         this.models.templates.update(cx, |templates, cx| templates.upsert(summary, cx));
                         this.editor.mark_saved(revision_token, cx);
-                        this.imported = false;
                         this.initial_name = name.clone();
                         toast_success(window, cx, "Template created");
                         navigate_replace(Route::Template(new_id), cx);
@@ -363,7 +360,6 @@ impl TemplatePage {
                         this.revision = Some(ack.revision);
                         this.initial_name = name.clone();
                         this.editor.mark_saved(revision_token, cx);
-                        this.imported = false;
                         let created_at = this
                             .id
                             .and_then(|id| this.models.templates.read(cx).get(id).map(|item| item.created_at.clone()));

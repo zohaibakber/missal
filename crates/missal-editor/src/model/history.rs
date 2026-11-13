@@ -93,6 +93,10 @@ impl History {
             && last.at.elapsed() < COALESCE
     }
 
+    pub fn undo_entries(&self) -> impl DoubleEndedIterator<Item = &Entry> {
+        self.undo.iter()
+    }
+
     pub fn last_mut(&mut self) -> Option<&mut Entry> {
         self.undo.back_mut()
     }

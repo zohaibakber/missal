@@ -92,7 +92,13 @@ fn between(path: &BlockPath, s: &Position, e: &Position) -> bool {
     path > &s.path && path < &e.path
 }
 
-fn collect_marks(block: &Block, path: BlockPath, s: &Position, e: &Position, marks: &mut Vec<Mark>) {
+fn collect_marks(
+    block: &Block,
+    path: BlockPath,
+    s: &Position,
+    e: &Position,
+    marks: &mut Vec<Mark>,
+) {
     let contains_s = s.path.starts_with(path.steps());
     let contains_e = e.path.starts_with(path.steps());
     match block {
@@ -191,8 +197,15 @@ pub fn delete_range(doc: &mut Document, s: &Position, e: &Position) -> Position 
         return pos(s.path.clone(), s.offset.min(e.offset));
     }
     let mut marks = Vec::new();
-    for k in s.path.top_index()..=e.path.top_index().min(doc.blocks.len().saturating_sub(1)) {
-        collect_marks(&doc.blocks[k], BlockPath::top(k), s, e, &mut marks);
+    let last = e.path.top_index().min(doc.blocks.len().saturating_sub(1));
+    for (k, block) in doc
+        .blocks
+        .iter()
+        .enumerate()
+        .take(last + 1)
+        .skip(s.path.top_index())
+    {
+        collect_marks(block, BlockPath::top(k), s, e, &mut marks);
     }
     let merge = tree::same_container(doc, &s.path, &e.path);
     if let Some(length) = block_len(doc, &s.path) {
@@ -393,7 +406,10 @@ pub fn forward(doc: &Document, at: &Position, word: bool) -> Backward {
         } else {
             boundary::next_delete(&text, at.offset)
         };
-        return Backward::Range(at.clone(), pos(at.path.clone(), end.max(at.offset + 1).min(length)));
+        return Backward::Range(
+            at.clone(),
+            pos(at.path.clone(), end.max(at.offset + 1).min(length)),
+        );
     }
     let Some(info) = anatomy(doc, &at.path) else {
         return Backward::Nothing;
@@ -422,7 +438,10 @@ pub fn forward(doc: &Document, at: &Position, word: bool) -> Backward {
             into: at.path.clone(),
             from: next_path,
         },
-        Block::List(_) => match tree::text_paths_of_block(next, next_path).into_iter().next() {
+        Block::List(_) => match tree::text_paths_of_block(next, next_path)
+            .into_iter()
+            .next()
+        {
             Some(from) => Backward::Merge {
                 into: at.path.clone(),
                 from,
@@ -483,7 +502,10 @@ pub fn to_paragraph(doc: &mut Document, path: &BlockPath) -> Position {
 pub fn hosts_between(doc: &Document, s: &Position, e: &Position) -> Vec<(BlockPath, Range<usize>)> {
     let mut out = Vec::new();
     if s.path == e.path {
-        out.push((s.path.clone(), s.offset.min(e.offset)..s.offset.max(e.offset)));
+        out.push((
+            s.path.clone(),
+            s.offset.min(e.offset)..s.offset.max(e.offset),
+        ));
         return out;
     }
     let last = e.path.top_index().min(doc.blocks.len().saturating_sub(1));
@@ -627,10 +649,7 @@ fn convert_list(
             Inline::Text(mut text) if convertible(&text) && text.text.contains(markers.open()) => {
                 let mut origin = acc;
                 let mut from = 0;
-                loop {
-                    let Some(found) = catalog.find_token(&text.text, markers, from) else {
-                        break;
-                    };
+                while let Some(found) = catalog.find_token(&text.text, markers, from) {
                     let start = origin + found.range.start;
                     let end = origin + found.range.end;
                     if caret.is_some_and(|c| c > start && c < end) {
@@ -654,8 +673,7 @@ fn convert_list(
                 }
             }
             Inline::Link(mut link) => {
-                link.children =
-                    convert_list(link.children, acc, catalog, markers, caret, changes);
+                link.children = convert_list(link.children, acc, catalog, markers, caret, changes);
                 out.push(Inline::Link(link));
             }
             other => out.push(other),

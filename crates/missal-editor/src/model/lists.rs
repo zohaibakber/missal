@@ -67,7 +67,11 @@ fn remove_in(list: &mut List, tail: &[u32]) {
     }
 }
 
-fn list_block_mut<'a>(doc: &'a mut Document, container: &[u32], block: usize) -> Option<&'a mut List> {
+fn list_block_mut<'a>(
+    doc: &'a mut Document,
+    container: &[u32],
+    block: usize,
+) -> Option<&'a mut List> {
     match container_mut(doc, container)?.get_mut(block)? {
         Block::List(list) => Some(list),
         _ => None,
@@ -274,7 +278,11 @@ pub fn indent(doc: &mut Document, path: &BlockPath) -> Option<Position> {
                 return None;
             };
             nested.items.push(moved);
-            vec![(i - 1) as u32, child_index as u32, (nested.items.len() - 1) as u32]
+            vec![
+                (i - 1) as u32,
+                child_index as u32,
+                (nested.items.len() - 1) as u32,
+            ]
         }
         None => {
             let direction = match &moved {
@@ -403,7 +411,9 @@ pub fn toggle(
         }
         let mut local = steps[k.len()..].to_vec();
         local[0] -= first as u32;
-        before_paths.iter().position(|q| q.steps() == local.as_slice())
+        before_paths
+            .iter()
+            .position(|q| q.steps() == local.as_slice())
     };
     let s_index = rel(&s.path).unwrap_or(0);
     let e_index = rel(&e.path).unwrap_or(s_index);

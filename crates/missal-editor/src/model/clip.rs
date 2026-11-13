@@ -1,6 +1,4 @@
-use missal_core::document::{
-    Block, Child, Document, Inline, List, ListItemChild, Paragraph, Text,
-};
+use missal_core::document::{Block, Child, Document, Inline, List, ListItemChild, Paragraph, Text};
 use missal_core::{FieldDisplayText, FieldReference};
 use missal_page::{BlockPath, Position};
 use serde_json::{Value, json};
@@ -41,7 +39,10 @@ impl Fragment {
         if value.get("kind")?.as_str()? != FRAGMENT_TAG {
             return None;
         }
-        let inline = value.get("inline").and_then(Value::as_bool).unwrap_or(false);
+        let inline = value
+            .get("inline")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let document = Document::decode(&value.get("document")?.to_string()).ok()?;
         Some(Fragment {
             blocks: document.blocks,
@@ -76,7 +77,9 @@ fn host_block(doc: &Document, path: &BlockPath, range: std::ops::Range<usize>) -
     if found.tail.is_empty() {
         return Some(sliced_block(block, children));
     }
-    let Block::List(list) = block else { return None };
+    let Block::List(list) = block else {
+        return None;
+    };
     let item = tree::item(list, &found.tail)?;
     Some(Block::Paragraph(Paragraph {
         props: item.props.clone(),
@@ -123,7 +126,10 @@ pub fn copy(doc: &Document, s: &Position, e: &Position) -> Fragment {
     }
 }
 
-pub fn plain_text(fragment: &Fragment, display: &dyn Fn(&FieldReference) -> FieldDisplayText) -> String {
+pub fn plain_text(
+    fragment: &Fragment,
+    display: &dyn Fn(&FieldReference) -> FieldDisplayText,
+) -> String {
     let mut lines: Vec<String> = Vec::new();
     for block in &fragment.blocks {
         block_text(block, display, &mut lines);
@@ -131,7 +137,11 @@ pub fn plain_text(fragment: &Fragment, display: &dyn Fn(&FieldReference) -> Fiel
     lines.join("\n")
 }
 
-fn inline_text(inlines: &[Inline], display: &dyn Fn(&FieldReference) -> FieldDisplayText, out: &mut String) {
+fn inline_text(
+    inlines: &[Inline],
+    display: &dyn Fn(&FieldReference) -> FieldDisplayText,
+    out: &mut String,
+) {
     for inline in inlines {
         match inline {
             Inline::Text(text) => out.push_str(&text.text),
@@ -143,7 +153,11 @@ fn inline_text(inlines: &[Inline], display: &dyn Fn(&FieldReference) -> FieldDis
     }
 }
 
-fn block_text(block: &Block, display: &dyn Fn(&FieldReference) -> FieldDisplayText, lines: &mut Vec<String>) {
+fn block_text(
+    block: &Block,
+    display: &dyn Fn(&FieldReference) -> FieldDisplayText,
+    lines: &mut Vec<String>,
+) {
     match block {
         Block::Paragraph(p) => {
             let mut line = String::new();
@@ -178,7 +192,11 @@ fn block_text(block: &Block, display: &dyn Fn(&FieldReference) -> FieldDisplayTe
     }
 }
 
-fn list_text(list: &List, display: &dyn Fn(&FieldReference) -> FieldDisplayText, lines: &mut Vec<String>) {
+fn list_text(
+    list: &List,
+    display: &dyn Fn(&FieldReference) -> FieldDisplayText,
+    lines: &mut Vec<String>,
+) {
     for item in list.items.iter().filter_map(Child::node) {
         let mut line = String::new();
         let mut has_inline = false;
@@ -222,11 +240,21 @@ pub fn from_text(text: &str, template: &Text) -> Fragment {
 }
 
 pub fn looks_like_html(text: &str) -> bool {
-    let head: String = text.trim_start().chars().take(64).collect::<String>().to_ascii_lowercase();
+    let head: String = text
+        .trim_start()
+        .chars()
+        .take(64)
+        .collect::<String>()
+        .to_ascii_lowercase();
     head.starts_with("<!doctype html")
         || head.starts_with("<html")
         || head.starts_with("<meta")
-        || (head.starts_with('<') && text.contains("</") && (text.contains("<p") || text.contains("<div") || text.contains("<span") || text.contains("<br")))
+        || (head.starts_with('<')
+            && text.contains("</")
+            && (text.contains("<p")
+                || text.contains("<div")
+                || text.contains("<span")
+                || text.contains("<br")))
 }
 
 pub fn html_to_text(html: &str) -> String {
@@ -261,7 +289,8 @@ pub fn html_to_text(html: &str) -> String {
             }
             match name.as_str() {
                 "br" => out.push('\n'),
-                "p" | "div" | "li" | "tr" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "blockquote" | "table" => {
+                "p" | "div" | "li" | "tr" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+                | "blockquote" | "table" => {
                     if !out.is_empty() && !out.ends_with('\n') {
                         out.push('\n');
                     }
@@ -380,7 +409,9 @@ pub fn paste(doc: &mut Document, at: &Position, fragment: Fragment) -> Position 
         return at.clone();
     }
     let in_item = host_kind(doc, &at.path) == Some(HostKind::Item);
-    if fragment.inline || fragment.blocks.len() == 1 && inline_children(fragment.blocks[0].clone()).is_some() {
+    if fragment.inline
+        || fragment.blocks.len() == 1 && inline_children(fragment.blocks[0].clone()).is_some()
+    {
         let children = fragment
             .blocks
             .into_iter()
@@ -403,7 +434,11 @@ pub fn paste(doc: &mut Document, at: &Position, fragment: Fragment) -> Position 
     }
     let mut blocks = fragment.blocks;
     let first = blocks.remove(0);
-    let last = if blocks.is_empty() { None } else { blocks.pop() };
+    let last = if blocks.is_empty() {
+        None
+    } else {
+        blocks.pop()
+    };
     let after = split(doc, at);
     let Some(found) = anatomy(doc, &at.path) else {
         return after;

@@ -9,7 +9,21 @@ use missal_editor::{EditorCore, Selection};
 use missal_page::{DocSource, PageEngine, TokenFields};
 
 const SNIPPETS: &[&str] = &[
-    "ک", "ی", "ا", " ", "سلام", "PPC 380", "۱۲", "«", "»", "«جرم»", "«بینک»", "«نامعلوم»", "e\u{301}", "بَ", "👍",
+    "ک",
+    "ی",
+    "ا",
+    " ",
+    "سلام",
+    "PPC 380",
+    "۱۲",
+    "«",
+    "»",
+    "«جرم»",
+    "«بینک»",
+    "«نامعلوم»",
+    "e\u{301}",
+    "بَ",
+    "👍",
 ];
 
 fn random_position(core: &EditorCore, rng: &mut Rng) -> missal_page::Position {
@@ -29,18 +43,35 @@ fn random_position(core: &EditorCore, rng: &mut Rng) -> missal_page::Position {
 
 fn check(core: &EditorCore, step: usize, op: &str) {
     let encoded = core.document().encode();
-    let decoded = Document::decode(&encoded).unwrap_or_else(|e| panic!("step {step} {op}: decode failed {e:?}"));
-    assert_eq!(decoded.encode(), encoded, "step {step} {op}: codec round trip");
+    let decoded = Document::decode(&encoded)
+        .unwrap_or_else(|e| panic!("step {step} {op}: decode failed {e:?}"));
+    assert_eq!(
+        decoded.encode(),
+        encoded,
+        "step {step} {op}: codec round trip"
+    );
     let selection = core.selection();
-    assert!(core.is_valid(&selection.anchor), "step {step} {op}: anchor {:?}", selection.anchor);
-    assert!(core.is_valid(&selection.head), "step {step} {op}: head {:?}", selection.head);
+    assert!(
+        core.is_valid(&selection.anchor),
+        "step {step} {op}: anchor {:?}",
+        selection.anchor
+    );
+    assert!(
+        core.is_valid(&selection.head),
+        "step {step} {op}: head {:?}",
+        selection.head
+    );
     if let Some(marked) = core.marked() {
         let length = core.block_len(&marked.path).expect("marked block exists");
         assert!(marked.range.end <= length, "step {step} {op}: marked range");
     }
 }
 
-fn random_op(core: &mut EditorCore, rng: &mut Rng, fragments: &mut Vec<missal_editor::Fragment>) -> (&'static str, Option<missal_editor::Change>) {
+fn random_op(
+    core: &mut EditorCore,
+    rng: &mut Rng,
+    fragments: &mut Vec<missal_editor::Fragment>,
+) -> (&'static str, Option<missal_editor::Change>) {
     match rng.below(26) {
         0..=5 => {
             let snippet = SNIPPETS[rng.below(SNIPPETS.len())];
@@ -68,11 +99,18 @@ fn random_op(core: &mut EditorCore, rng: &mut Rng, fragments: &mut Vec<missal_ed
             ("align", core.set_align(align))
         }
         14 => {
-            let kind = if rng.chance(50) { ListType::Bullet } else { ListType::Number };
+            let kind = if rng.chance(50) {
+                ListType::Bullet
+            } else {
+                ListType::Number
+            };
             ("list", core.toggle_list(kind))
         }
         15 => ("indent", core.indent(rng.chance(50))),
-        16 => ("field", core.insert_field(if rng.chance(50) { fir_no() } else { offence() })),
+        16 => (
+            "field",
+            core.insert_field(if rng.chance(50) { fir_no() } else { offence() }),
+        ),
         17 => {
             let head = core.selection().head.clone();
             if core.field_at(&head.path, head.offset).is_some() {
@@ -129,19 +167,44 @@ fn episode(document: Document, seed: u64, steps: usize, relayout: bool) {
             kinds.insert(op);
         }
         if let (Some(packet), Some(change)) = (packet.as_mut(), change) {
-            engine.update(packet, 0, &DocSource::new(core.document(), &fields), &change.edit);
-            assert!(packet.caret(&core.selection().head).is_some(), "seed {seed} step {step} {op}: caret has geometry");
+            engine.update(
+                packet,
+                0,
+                &DocSource::new(core.document(), &fields),
+                &change.edit,
+            );
+            assert!(
+                packet.caret(&core.selection().head).is_some(),
+                "seed {seed} step {step} {op}: caret has geometry"
+            );
         }
     }
-    assert!(changed * 3 > steps, "seed {seed}: only {changed} of {steps} operations changed anything");
-    assert!(kinds.len() >= 8, "seed {seed}: too few kinds of change {kinds:?}");
+    assert!(
+        changed * 3 > steps,
+        "seed {seed}: only {changed} of {steps} operations changed anything"
+    );
+    assert!(
+        kinds.len() >= 8,
+        "seed {seed}: too few kinds of change {kinds:?}"
+    );
     if let Some(packet) = &packet {
         let fresh = PageEngine::new().layout(&[DocSource::new(core.document(), &fields)]);
-        assert_eq!(packet.page_count(), fresh.page_count(), "seed {seed}: page count");
+        assert_eq!(
+            packet.page_count(),
+            fresh.page_count(),
+            "seed {seed}: page count"
+        );
         let lines = |p: &missal_page::Packet| -> Vec<_> {
-            p.lines(0).into_iter().map(|l| (l.path, l.page, l.text)).collect()
+            p.lines(0)
+                .into_iter()
+                .map(|l| (l.path, l.page, l.text))
+                .collect()
         };
-        assert_eq!(lines(packet), lines(&fresh), "seed {seed}: incremental layout equals fresh layout");
+        assert_eq!(
+            lines(packet),
+            lines(&fresh),
+            "seed {seed}: incremental layout equals fresh layout"
+        );
     }
     let finished = core.document().encode();
     let mut undone = 0;
@@ -150,12 +213,20 @@ fn episode(document: Document, seed: u64, steps: usize, relayout: bool) {
         check(&core, steps + undone, "undo-all");
     }
     if core.undo_depth() == 0 && undone < 100 {
-        assert_eq!(core.document().encode(), original, "seed {seed}: undo of everything restores the original bytes");
+        assert_eq!(
+            core.document().encode(),
+            original,
+            "seed {seed}: undo of everything restores the original bytes"
+        );
     }
     while core.redo().is_some() {
         check(&core, steps, "redo-all");
     }
-    assert_eq!(core.document().encode(), finished, "seed {seed}: redo of everything restores the final bytes");
+    assert_eq!(
+        core.document().encode(),
+        finished,
+        "seed {seed}: redo of everything restores the final bytes"
+    );
 }
 
 fn mixed() -> Document {

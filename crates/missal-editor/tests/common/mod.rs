@@ -103,7 +103,11 @@ pub fn table(rows: Vec<Vec<Child<TableCell>>>) -> Block {
 pub fn grid(rows: usize, cols: usize) -> Block {
     table(
         (0..rows)
-            .map(|r| (0..cols).map(|c| cell(vec![p(&format!("خانہ {r}{c}"))])).collect())
+            .map(|r| {
+                (0..cols)
+                    .map(|c| cell(vec![p(&format!("خانہ {r}{c}"))]))
+                    .collect()
+            })
             .collect(),
     )
 }
@@ -134,7 +138,8 @@ pub fn select(core: &mut EditorCore, a: (&[u32], usize), b: (&[u32], usize)) {
 }
 
 pub fn block_text(core: &EditorCore, steps: &[u32]) -> String {
-    core.block_text(&BlockPath::new(steps)).unwrap_or_else(|| panic!("no text block at {steps:?}"))
+    core.block_text(&BlockPath::new(steps))
+        .unwrap_or_else(|| panic!("no text block at {steps:?}"))
 }
 
 pub fn texts(core: &EditorCore) -> Vec<String> {
@@ -150,9 +155,15 @@ pub fn head(core: &EditorCore) -> (Vec<u32>, usize) {
 }
 
 pub fn bundle() -> Vec<(String, Document)> {
-    let bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../templates/bundle.json.gz")).unwrap();
+    let bytes = std::fs::read(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../templates/bundle.json.gz"
+    ))
+    .unwrap();
     let mut raw = String::new();
-    flate2::read::GzDecoder::new(bytes.as_slice()).read_to_string(&mut raw).unwrap();
+    flate2::read::GzDecoder::new(bytes.as_slice())
+        .read_to_string(&mut raw)
+        .unwrap();
     let serde_json::Value::Array(items) = serde_json::from_str(&raw).unwrap() else {
         panic!("bundle is an array")
     };
@@ -169,7 +180,10 @@ pub fn bundle() -> Vec<(String, Document)> {
 }
 
 pub fn largest_template() -> (String, Document) {
-    bundle().into_iter().max_by_key(|(_, d)| d.encode().len()).unwrap()
+    bundle()
+        .into_iter()
+        .max_by_key(|(_, d)| d.encode().len())
+        .unwrap()
 }
 
 pub struct Rng(pub u64);
@@ -185,7 +199,11 @@ impl Rng {
     }
 
     pub fn below(&mut self, n: usize) -> usize {
-        if n == 0 { 0 } else { (self.next() % n as u64) as usize }
+        if n == 0 {
+            0
+        } else {
+            (self.next() % n as u64) as usize
+        }
     }
 
     pub fn chance(&mut self, percent: u64) -> bool {

@@ -39,7 +39,11 @@ pub fn typed_rows(table: &Table) -> impl Iterator<Item = &missal_core::document:
 }
 
 pub fn cell(table: &Table, r: u32, c: u32) -> Option<&TableCell> {
-    typed_rows(table).nth(r as usize)?.cells.get(c as usize)?.node()
+    typed_rows(table)
+        .nth(r as usize)?
+        .cells
+        .get(c as usize)?
+        .node()
 }
 
 pub fn cell_mut(table: &mut Table, r: u32, c: u32) -> Option<&mut TableCell> {

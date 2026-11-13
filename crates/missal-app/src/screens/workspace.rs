@@ -247,6 +247,7 @@ impl WorkspaceScreen {
                             key: format!("fir-document:{}:{}", record.id, record.revision),
                             document: record.document,
                             fields,
+                            dirty: false,
                         },
                         window,
                         cx,

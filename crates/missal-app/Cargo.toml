@@ -24,9 +24,14 @@ required-features = ["headless"]
 name = "perf"
 required-features = ["headless"]
 
+[[example]]
+name = "editor_shots"
+required-features = ["headless"]
+
 [dependencies]
 missal-core.workspace = true
 missal-docx.workspace = true
+missal-editor.workspace = true
 missal-page.workspace = true
 missal-store.workspace = true
 missal-text.workspace = true

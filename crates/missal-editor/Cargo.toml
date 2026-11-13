@@ -27,3 +27,7 @@ headless = ["gpui-kit/test-support", "missal-page/headless", "dep:gpui-pre-wgpu"
 
 [lints]
 workspace = true
+
+[[example]]
+name = "editor_perf"
+required-features = ["headless"]

@@ -1,18 +1,8 @@
 use std::rc::Rc;
 
-use gpui_kit::component::{StyledExt, h_flex, v_flex};
-use gpui_kit::prelude::*;
-use gpui_kit::{
-    AnyView, App, AppContext, Context, Entity, EventEmitter, Global, IntoElement, ParentElement,
-    Render, Styled, Subscription, Window, div, px,
-};
-use missal_core::document::{Block, Inline, Paragraph, Text};
-use missal_core::{
-    DisplayMode, Document, FieldCatalog, FieldMarkers, FieldPresentation, FirValues,
-};
-use missal_text::{Direction, TextInput, TextInputEvent, label};
-
-use crate::theme::Palette;
+use gpui_kit::{AnyView, App, AppContext, Entity, Global, Subscription, Window};
+use missal_core::{DisplayMode, Document, FieldCatalog, FieldMarkers, FieldPresentation, FirValues};
+use missal_editor::{Editor, EditorFields};
 
 #[derive(Clone)]
 pub struct FieldContext {
@@ -58,6 +48,7 @@ pub struct LoadRequest {
     pub key: String,
     pub document: Document,
     pub fields: FieldContext,
+    pub dirty: bool,
 }
 
 #[derive(Clone)]
@@ -82,6 +73,9 @@ pub trait DocumentEditor {
     fn discard(&self, window: &mut Window, cx: &mut App);
     fn focus(&self, window: &mut Window, cx: &mut App);
     fn on_event(&self, cx: &mut App, listener: EditorListener) -> Subscription;
+    fn editor_entity(&self) -> Option<Entity<Editor>> {
+        None
+    }
 }
 
 pub type EditorBuilder = Rc<dyn Fn(&mut Window, &mut App) -> Rc<dyn DocumentEditor>>;
@@ -93,17 +87,17 @@ pub struct EditorFactory(pub EditorBuilder);
 impl Global for EditorFactory {}
 
 impl EditorFactory {
-    pub fn stand_in() -> EditorFactory {
+    pub fn rich() -> EditorFactory {
         EditorFactory(Rc::new(|window, cx| {
-            let editor = cx.new(|cx| StandInEditor::new(window, cx));
-            Rc::new(StandInHandle { editor })
+            let editor = cx.new(|cx| Editor::new(window, cx));
+            Rc::new(RichEditor { editor })
         }))
     }
 
     pub fn create(cx: &App) -> EditorFactory {
         cx.try_global::<EditorFactory>()
             .cloned()
-            .unwrap_or_else(EditorFactory::stand_in)
+            .unwrap_or_else(EditorFactory::rich)
     }
 
     pub fn build(&self, window: &mut Window, cx: &mut App) -> Rc<dyn DocumentEditor> {
@@ -111,216 +105,43 @@ impl EditorFactory {
     }
 }
 
-pub struct StandInEditor {
-    key: String,
-    original: Option<Document>,
-    fields: Option<FieldContext>,
-    note: Entity<TextInput>,
-    last_text: String,
-    revision: u64,
-    saved_revision: u64,
-    dirty: bool,
-    loading: bool,
-    _subscription: Subscription,
+pub fn install(cx: &mut App) {
+    missal_editor::init(cx);
+    cx.set_global(EditorFactory::rich());
 }
 
-impl EventEmitter<EditorEvent> for StandInEditor {}
-
-impl StandInEditor {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> StandInEditor {
-        let note = cx.new(|cx| {
-            TextInput::new(window, cx)
-                .multiline(2, 4)
-                .direction(Direction::Rtl)
-                .text_size(16.0)
-                .placeholder("اس خانے میں لکھنے سے دستاویز میں تبدیلی کا عمل آزمایا جا سکتا ہے")
-        });
-        let subscription = cx.subscribe(&note, |this, _, event: &TextInputEvent, cx| {
-            let text = this.note.read(cx).text().to_owned();
-            if *event == TextInputEvent::Change && text != this.last_text {
-                this.last_text = text;
-                this.revision += 1;
-                this.refresh_dirty(cx);
-                cx.notify();
-            }
-        });
-        StandInEditor {
-            key: String::new(),
-            original: None,
-            fields: None,
-            note,
-            last_text: String::new(),
-            revision: 0,
-            saved_revision: 0,
-            dirty: false,
-            loading: false,
-            _subscription: subscription,
-        }
-    }
-
-    fn refresh_dirty(&mut self, cx: &mut Context<Self>) {
-        let dirty = self.revision != self.saved_revision;
-        if dirty != self.dirty {
-            self.dirty = dirty;
-            cx.emit(EditorEvent::DirtyChanged(dirty));
-        }
-    }
-
-    pub fn load(&mut self, request: LoadRequest, cx: &mut Context<Self>) {
-        self.loading = true;
-        self.key = request.key;
-        self.original = Some(request.document);
-        self.fields = Some(request.fields);
-        self.revision = 0;
-        self.saved_revision = 0;
-        self.note.update(cx, |note, cx| note.set_text("", cx));
-        self.last_text.clear();
-        self.loading = false;
-        self.refresh_dirty(cx);
-        cx.notify();
-    }
-
-    pub fn snapshot(&self, cx: &App) -> Snapshot {
-        let mut document = self.original.clone().unwrap_or_default();
-        let note = self.note.read(cx).text().trim().to_owned();
-        if !note.is_empty() {
-            document.blocks.push(paragraph_block(&note));
-        }
-        Snapshot {
-            document,
-            revision: self.revision,
-        }
-    }
-
-    pub fn mark_saved(&mut self, revision: u64, cx: &mut Context<Self>) {
-        self.saved_revision = revision;
-        self.refresh_dirty(cx);
-        cx.notify();
-    }
-
-    pub fn discard(&mut self, cx: &mut Context<Self>) {
-        self.loading = true;
-        self.note.update(cx, |note, cx| note.set_text("", cx));
-        self.last_text.clear();
-        self.loading = false;
-        self.revision = 0;
-        self.saved_revision = 0;
-        self.refresh_dirty(cx);
-        cx.notify();
-    }
-
-    pub fn set_fields(&mut self, fields: FieldContext, cx: &mut Context<Self>) {
-        self.fields = Some(fields);
-        cx.notify();
-    }
-
-    pub fn is_dirty(&self) -> bool {
-        self.dirty
-    }
-
-    pub fn key(&self) -> &str {
-        &self.key
+fn editor_fields(fields: FieldContext) -> EditorFields {
+    EditorFields {
+        catalog: fields.catalog,
+        values: fields.values,
+        mode: fields.mode,
+        markers: fields.markers,
     }
 }
 
-impl Render for StandInEditor {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = *Palette::get(cx);
-        let document = self.original.as_ref();
-        let projections = document.map(Document::projections).unwrap_or_default();
-        let paragraphs = document.map_or(0, |document| document.blocks.len());
-        let fields: Vec<(String, bool)> = match (&self.fields, document) {
-            (Some(fields), Some(document)) => {
-                let presentation = fields.presentation();
-                document
-                    .field_references()
-                    .iter()
-                    .take(8)
-                    .map(|reference| {
-                        let shown = presentation.display_text(reference);
-                        (shown.text, shown.unresolved)
-                    })
-                    .collect()
-            }
-            _ => Vec::new(),
-        };
-        let mode = match self.fields.as_ref().map(|fields| (fields.values.is_some(), fields.mode)) {
-            Some((true, DisplayMode::Values)) => "values",
-            _ => "field names",
-        };
-        let preview: String = projections.preview_text.chars().take(160).collect();
-        v_flex()
-            .id("editor-placeholder")
-            .size_full()
-            .p_6()
-            .bg(palette.canvas)
-            .child(
-                v_flex()
-                    .size_full()
-                    .gap_3()
-                    .p_6()
-                    .rounded(px(10.))
-                    .border_1()
-                    .border_color(palette.input)
-                    .bg(palette.paper)
-                    .child(
-                        div()
-                            .text_size(px(15.))
-                            .font_semibold()
-                            .child("Document editor mounts here"),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(palette.muted_foreground)
-                            .child(format!(
-                                "Stand-in for the rich editor. {paragraphs} blocks, {} fields shown as {mode}.",
-                                projections.field_count
-                            )),
-                    )
-                    .child(
-                        div()
-                            .w_full()
-                            .text_size(px(16.))
-                            .text_color(palette.paper_foreground)
-                            .child(label(if preview.is_empty() { "خالی".to_owned() } else { preview }).rtl()),
-                    )
-                    .child(
-                        h_flex().flex_wrap().gap_2().children(fields.into_iter().map(
-                            |(text, unresolved)| {
-                                div()
-                                    .px_2()
-                                    .rounded(px(5.))
-                                    .bg(palette.muted)
-                                    .text_size(px(14.))
-                                    .text_color(if unresolved { palette.muted_foreground } else { palette.field })
-                                    .child(label(text).rtl())
-                            },
-                        )),
-                    )
-                    .child(div().w_full().child(self.note.clone())),
-            )
+pub struct RichEditor {
+    editor: Entity<Editor>,
+}
+
+impl RichEditor {
+    pub fn entity(&self) -> &Entity<Editor> {
+        &self.editor
     }
 }
 
-fn paragraph_block(text: &str) -> Block {
-    Block::Paragraph(Paragraph::new(vec![Inline::Text(Text::new(text))]))
-}
-
-pub struct StandInHandle {
-    editor: Entity<StandInEditor>,
-}
-
-impl DocumentEditor for StandInHandle {
+impl DocumentEditor for RichEditor {
     fn view(&self) -> AnyView {
         self.editor.clone().into()
     }
 
     fn load(&self, request: LoadRequest, _: &mut Window, cx: &mut App) {
-        self.editor.update(cx, |editor, cx| editor.load(request, cx));
+        let fields = editor_fields(request.fields);
+        self.editor
+            .update(cx, |editor, cx| editor.load(request.key, request.document, fields, request.dirty, cx));
     }
 
     fn set_fields(&self, fields: FieldContext, cx: &mut App) {
+        let fields = editor_fields(fields);
         self.editor.update(cx, |editor, cx| editor.set_fields(fields, cx));
     }
 
@@ -329,7 +150,8 @@ impl DocumentEditor for StandInHandle {
     }
 
     fn snapshot(&self, cx: &App) -> Snapshot {
-        self.editor.read(cx).snapshot(cx)
+        let (document, revision) = self.editor.read(cx).snapshot();
+        Snapshot { document, revision }
     }
 
     fn mark_saved(&self, revision: u64, cx: &mut App) {
@@ -341,11 +163,21 @@ impl DocumentEditor for StandInHandle {
     }
 
     fn focus(&self, window: &mut Window, cx: &mut App) {
-        let note = self.editor.read(cx).note.clone();
-        note.update(cx, |note, cx| note.focus(window, cx));
+        let handle = self.editor.read(cx).focus_handle_ref().clone();
+        window.focus(&handle, cx);
+    }
+
+    fn editor_entity(&self) -> Option<Entity<Editor>> {
+        Some(self.editor.clone())
     }
 
     fn on_event(&self, cx: &mut App, listener: EditorListener) -> Subscription {
-        cx.subscribe(&self.editor, move |_, event: &EditorEvent, cx| listener(event, cx))
+        cx.subscribe(&self.editor, move |_, event: &missal_editor::EditorEvent, cx| {
+            let event = match event {
+                missal_editor::EditorEvent::DirtyChanged(dirty) => EditorEvent::DirtyChanged(*dirty),
+                missal_editor::EditorEvent::SaveRequested => EditorEvent::SaveRequested,
+            };
+            listener(&event, cx)
+        })
     }
 }

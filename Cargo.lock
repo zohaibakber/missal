@@ -4324,6 +4324,7 @@ dependencies = [
  "image",
  "missal-core",
  "missal-docx",
+ "missal-editor",
  "missal-page",
  "missal-store",
  "missal-text",
