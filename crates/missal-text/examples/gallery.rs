@@ -1,11 +1,12 @@
 use std::{ops::Range, sync::Arc};
 
 use gpui_kit::{
+    prelude::FluentBuilder,
     AppContext, Bounds, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
     Styled, Window, canvas, div, hsla, point, px, rgb, size,
 };
 use missal_text::{
-    Align, Attr, AttributedText, FontFamily, InlineObject, LineHeight, ParagraphStyle, Rgba,
+    Align, Attr, AttributedText, InlineObject, LineHeight, ParagraphStyle, Rgba,
     TextLayout, TextPaint, TextStyle, TextSystem, label, paint_text,
 };
 
@@ -293,6 +294,140 @@ impl Render for LabelPage {
     }
 }
 
+
+const NAMES: [&str; 8] = ["محمد اسلم", "Muhammad Aslam", "غلام رسول ولد اللہ دتہ", "شازیہ بی بی", "Rana Tariq", "عبدالستار خان", "نامعلوم ملزمان", "Zahid Hussain عرف زاہدی"];
+const OFFENCES: [&str; 5] = ["379 PPC چوری", "380 PPC گھر میں چوری", "302 PPC قتل", "Section 489-F چیک", "تفتیش جاری ہے"];
+
+pub(crate) fn row_cells(i: usize) -> [String; 4] {
+    [
+        format!("{}/2026", 400 + i),
+        NAMES[i % NAMES.len()].to_string(),
+        OFFENCES[i % OFFENCES.len()].to_string(),
+        format!("{:02}-03-2026", 1 + i % 28),
+    ]
+}
+
+struct WidgetsPage {
+    inputs: Vec<(&'static str, Entity<missal_text::TextInput>)>,
+    focused: Entity<missal_text::TextInput>,
+}
+
+impl WidgetsPage {
+    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        use missal_text::TextInput;
+        let mk = |cx: &mut Context<Self>, window: &mut Window, f: &dyn Fn(TextInput) -> TextInput| {
+            cx.new(|cx| f(TextInput::new(window, cx)))
+        };
+        let focused = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text("ملزم محمد اسلم ولد اکرم"));
+        let selected = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text("مقدمہ نمبر 412/2026 بجرم 379 PPC"));
+        let composing = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text("تھانہ "));
+        let placeholder = mk(cx, window, &|i| i.document_font().text_size(20.0).placeholder("مدعی کا نام لکھیں"));
+        let ui_placeholder = mk(cx, window, &|i| i.placeholder("Search FIRs / ایف آئی آر تلاش کریں"));
+        let disabled = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text("تھانہ صدر، ضلع لاہور").disabled(true));
+        let read_only = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text("یہ خانہ صرف پڑھنے کے لیے ہے").read_only(true));
+        let long = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text(P3));
+        let area = mk(cx, window, &|i| i.document_font().text_size(20.0).multiline(3, 6).default_text(P1));
+        selected.update(cx, |i, cx| {
+            let t = i.text().to_string();
+            let s = t.find("412").unwrap_or(0);
+            i.select(s - "نمبر ".len()..s + "412/2026".len(), cx)
+        });
+        long.update(cx, |i, cx| i.select(0..0, cx));
+        composing.update(cx, |i, cx| {
+            use gpui_kit::EntityInputHandler;
+            i.replace_and_mark_text_in_range(None, "صدر", None, window, cx)
+        });
+        Self {
+            inputs: vec![
+                ("Focused, caret at end", focused.clone()),
+                ("Selection across RTL/LTR", selected),
+                ("IME composition (marked)", composing),
+                ("Placeholder (document font)", placeholder),
+                ("Placeholder (UI font)", ui_placeholder),
+                ("Disabled", disabled),
+                ("Read-only", read_only),
+                ("Long single line, scrolled to start", long),
+                ("Textarea (3-6 rows)", area),
+            ],
+            focused,
+        }
+    }
+}
+
+impl Render for WidgetsPage {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        use gpui_kit::component::ActiveTheme;
+        let theme = cx.theme().clone();
+        let table = gpui_kit::uniform_list("table", 5000, |range, _, _| {
+            range
+                .map(|i| {
+                    let cells = row_cells(i);
+                    div()
+                        .flex()
+                        .flex_row_reverse()
+                        .h(px(30.))
+                        .items_center()
+                        .border_b_1()
+                        .border_color(rgb(0xe5e5e5))
+                        .when(i % 2 == 1, |d| d.bg(rgb(0xfafafa)))
+                        .child(div().w(px(80.)).px(px(6.)).child(label(cells[0].clone()).text_size(px(13.)).truncate()))
+                        .child(div().w(px(150.)).px(px(6.)).child(label(cells[1].clone()).text_size(px(13.)).truncate()))
+                        .child(div().w(px(130.)).px(px(6.)).child(label(cells[2].clone()).text_size(px(13.)).truncate()))
+                        .child(div().flex_1().px(px(6.)).child(label(cells[3].clone()).text_size(px(13.)).truncate()))
+                })
+                .collect()
+        })
+        .h(px(270.));
+        let sidebar = ["تمام ایف آئی آر", "نئی ایف آئی آر", "Templates / سانچے", "مقامی ترتیبات", "ضمنی رپورٹس", "Archive"];
+        let _ = &self.focused;
+        div()
+            .size_full()
+            .bg(theme.background)
+            .text_color(theme.foreground)
+            .flex()
+            .flex_row_reverse()
+            .child(
+                div()
+                    .w(px(190.))
+                    .h_full()
+                    .bg(theme.sidebar)
+                    .border_l_1()
+                    .border_color(theme.border)
+                    .p(px(8.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .children(sidebar.iter().enumerate().map(|(i, s)| {
+                        div()
+                            .px(px(10.))
+                            .py(px(6.))
+                            .rounded(px(6.))
+                            .when(i == 1, |d| d.bg(theme.sidebar_accent))
+                            .child(label(*s).text_size(px(14.)).when(i == 1, |l| l.font_weight(gpui_kit::FontWeight::SEMIBOLD)))
+                    })),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .p(px(16.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.))
+                    .child(label("ایف آئی آر فارم — Inputs").text_size(px(18.)).font_weight(gpui_kit::FontWeight::SEMIBOLD))
+                    .children(self.inputs.iter().map(|(caption, input)| {
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(label(*caption).ltr().text_size(px(11.)).text_color(theme.muted_foreground))
+                            .child(input.clone())
+                    }))
+                    .child(label("جدول — 5000 rows (uniform_list, virtualised)").text_size(px(14.)).font_weight(gpui_kit::FontWeight::SEMIBOLD).mt(px(6.)))
+                    .child(div().border_1().border_color(theme.border).rounded(px(6.)).overflow_hidden().child(table)),
+            )
+    }
+}
+
 #[cfg(feature = "headless")]
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -335,6 +470,25 @@ fn main() {
             e.into()
         })),
     ];
+    let mut shots = shots;
+    shots.truncate(if args.iter().any(|a| a == "--widgets-only") { 0 } else { shots.len() });
+    {
+        let window = cx
+            .open_window(size(px(900.), px(1040.)), |window, cx| {
+                let page = cx.new(|cx| WidgetsPage::new(window, cx));
+                let focused = page.read(cx).focused.clone();
+                focused.update(cx, |i, cx| i.focus(window, cx));
+                page
+            })
+            .expect("window");
+        cx.run_until_parked();
+        cx.update_window(window.into(), |_, window, _| window.refresh()).ok();
+        cx.run_until_parked();
+        let image = cx.capture_screenshot(window.into()).expect("screenshot");
+        let path = format!("{out_dir}/widgets.png");
+        image.save(&path).expect("save");
+        println!("widgets: {}x{} -> {path}", image.width(), image.height());
+    }
     for (name, w, h, build) in shots {
         let window = cx
             .open_window(size(px(w), px(h)), |_, cx| {
@@ -362,5 +516,5 @@ impl Render for Host {
 
 #[cfg(not(feature = "headless"))]
 fn main() {
-    let _ = (reference_html, ComparePage::new, FontFamily::Document, LabelPage);
+    let _ = (reference_html, ComparePage::new, LabelPage, WidgetsPage::new, row_cells);
 }
