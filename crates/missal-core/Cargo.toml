@@ -1,0 +1,15 @@
+[package]
+name = "missal-core"
+description = "Missal domain model: FIRs, fields, documents and projections"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+unicode-general-category.workspace = true
+
+[lints]
+workspace = true

@@ -9,3 +9,4 @@ release
 .tanstack
 __unconfig*
 todos.json
+target/
