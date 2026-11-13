@@ -38,7 +38,9 @@ impl FirStatus {
     }
 
     pub fn parse(value: &str) -> Option<FirStatus> {
-        FirStatus::ALL.into_iter().find(|status| status.as_str() == value)
+        FirStatus::ALL
+            .into_iter()
+            .find(|status| status.as_str() == value)
     }
 }
 

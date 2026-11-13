@@ -54,7 +54,10 @@ mod tests {
             Timestamp::from_unix_millis(1_793_144_341_007).as_str(),
             "2026-10-27T23:39:01.007Z"
         );
-        assert_eq!(Timestamp::from_unix_millis(0).as_str(), "1970-01-01T00:00:00.000Z");
+        assert_eq!(
+            Timestamp::from_unix_millis(0).as_str(),
+            "1970-01-01T00:00:00.000Z"
+        );
         assert!(Timestamp::parse("2026-10-27T23:39:01.007Z").is_some());
         assert!(Timestamp::parse("2026-10-27T23:39:01Z").is_none());
     }

@@ -28,7 +28,9 @@ impl FieldReference {
     pub fn from_json(value: &Value) -> Option<FieldReference> {
         let object = value.as_object()?;
         match object.get("_tag")?.as_str()? {
-            "CatalogField" => PlaceholderId::new(json_int(object.get("id")?)?).map(FieldReference::Catalog),
+            "CatalogField" => {
+                PlaceholderId::new(json_int(object.get("id")?)?).map(FieldReference::Catalog)
+            }
             "FirField" => {
                 let property = FirProperty::parse(object.get("property")?.as_str()?)?;
                 let index = match object.get("index") {
@@ -78,7 +80,7 @@ impl FieldReference {
     }
 }
 
-pub(crate) fn json_int(value: &Value) -> Option<i64> {
+pub fn json_int(value: &Value) -> Option<i64> {
     if let Some(int) = value.as_i64() {
         return Some(int);
     }
@@ -92,7 +94,11 @@ pub struct FirFieldLabel {
     pub field: FirField,
 }
 
-const fn fir_field(label: &'static str, property: FirProperty, index: Option<u32>) -> FirFieldLabel {
+const fn fir_field(
+    label: &'static str,
+    property: FirProperty,
+    index: Option<u32>,
+) -> FirFieldLabel {
     FirFieldLabel {
         label,
         field: FirField { property, index },
@@ -273,7 +279,9 @@ impl FieldCatalog {
     }
 
     pub fn placeholder(&self, id: PlaceholderId) -> Option<&Placeholder> {
-        self.by_id.get(&id).map(|&position| &self.placeholders[position])
+        self.by_id
+            .get(&id)
+            .map(|&position| &self.placeholders[position])
     }
 
     pub fn resolve(&self, name: &str) -> Option<FieldReference> {
@@ -297,7 +305,12 @@ impl FieldCatalog {
         }
     }
 
-    pub fn find_token(&self, text: &str, markers: &FieldMarkers, from: usize) -> Option<TokenMatch> {
+    pub fn find_token(
+        &self,
+        text: &str,
+        markers: &FieldMarkers,
+        from: usize,
+    ) -> Option<TokenMatch> {
         let mut search = from;
         while let Some(found) = text.get(search..)?.find(markers.open.as_str()) {
             let open = search + found;
@@ -386,19 +399,10 @@ pub fn is_valid_marker(marker: &str) -> bool {
         })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct AppSettings {
     pub shared_placeholders: BTreeMap<String, String>,
     pub field_markers: FieldMarkers,
-}
-
-impl Default for AppSettings {
-    fn default() -> AppSettings {
-        AppSettings {
-            shared_placeholders: BTreeMap::new(),
-            field_markers: FieldMarkers::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -475,8 +479,8 @@ impl<'a> FieldPresentation<'a> {
                 fir_value(&values.fir.fir, *field)
             }),
             FieldReference::Catalog(id) => match self.catalog.placeholder(*id) {
-                Some(placeholder) => self.present(&placeholder.label, |values| {
-                    match &placeholder.source {
+                Some(placeholder) => {
+                    self.present(&placeholder.label, |values| match &placeholder.source {
                         PlaceholderSource::SharedSetting { setting } => values
                             .shared_settings
                             .get(setting)
@@ -486,8 +490,8 @@ impl<'a> FieldPresentation<'a> {
                             .override_value(placeholder.id)
                             .unwrap_or_default()
                             .to_owned(),
-                    }
-                }),
+                    })
+                }
                 None => FieldDisplayText {
                     text: id.to_string(),
                     unresolved: true,
@@ -523,10 +527,7 @@ pub fn fir_value(fir: &Fir, field: FirField) -> String {
         FirValue::Text(text) => text.to_owned(),
         FirValue::List(items) => match field.index {
             None => items.join("\n"),
-            Some(index) => items
-                .get(index as usize - 1)
-                .cloned()
-                .unwrap_or_default(),
+            Some(index) => items.get(index as usize - 1).cloned().unwrap_or_default(),
         },
     }
 }
@@ -570,7 +571,8 @@ pub fn bind_reference_json(
     if let Some(field) = fir_field_by_key(&key) {
         return Some(FieldReference::Fir(field).to_json());
     }
-    ids.get(&key).map(|id| FieldReference::Catalog(*id).to_json())
+    ids.get(&key)
+        .map(|id| FieldReference::Catalog(*id).to_json())
 }
 
 pub fn unbind_reference_json(
@@ -652,20 +654,32 @@ mod tests {
             FieldReference::Unresolved("x".into()),
         ];
         for reference in references {
-            assert_eq!(FieldReference::from_json(&reference.to_json()), Some(reference));
+            assert_eq!(
+                FieldReference::from_json(&reference.to_json()),
+                Some(reference)
+            );
         }
         assert_eq!(
-            serde_json::to_string(&FieldReference::Fir(FirField {
-                property: FirProperty::Zimni,
-                index: Some(3)
-            })
-            .to_json())
+            serde_json::to_string(
+                &FieldReference::Fir(FirField {
+                    property: FirProperty::Zimni,
+                    index: Some(3)
+                })
+                .to_json()
+            )
             .unwrap(),
             r#"{"_tag":"FirField","property":"zimni","index":3}"#
         );
-        assert!(FieldReference::from_json(&json!({"_tag": "FirField", "property": "fir_no", "index": 0})).is_none());
+        assert!(
+            FieldReference::from_json(
+                &json!({"_tag": "FirField", "property": "fir_no", "index": 0})
+            )
+            .is_none()
+        );
         assert!(FieldReference::from_json(&json!({"_tag": "CatalogField", "id": 0})).is_none());
-        assert!(FieldReference::from_json(&json!({"_tag": "FirField", "property": "nic"})).is_none());
+        assert!(
+            FieldReference::from_json(&json!({"_tag": "FirField", "property": "nic"})).is_none()
+        );
     }
 
     #[test]
@@ -715,8 +729,17 @@ mod tests {
                 unresolved: false
             }
         );
-        assert_eq!(FieldPresentation::labels(&catalog).display_text(&shared).text, "تھانہ نام");
-        assert!(labels.display_text(&FieldReference::Unresolved("x".into())).unresolved);
+        assert_eq!(
+            FieldPresentation::labels(&catalog)
+                .display_text(&shared)
+                .text,
+            "تھانہ نام"
+        );
+        assert!(
+            labels
+                .display_text(&FieldReference::Unresolved("x".into()))
+                .unresolved
+        );
     }
 
     #[test]
@@ -734,7 +757,10 @@ mod tests {
             })
         );
         let second = catalog.find_token(text, &markers, first.range.end).unwrap();
-        assert_eq!(second.reference, FieldReference::Catalog(PlaceholderId::new(2).unwrap()));
+        assert_eq!(
+            second.reference,
+            FieldReference::Catalog(PlaceholderId::new(2).unwrap())
+        );
         let braces = FieldMarkers::new("{{", "}}").unwrap();
         assert!(catalog.find_token("{{جرم}}", &braces, 0).is_some());
         assert!(catalog.find_token("«جرم", &markers, 0).is_none());

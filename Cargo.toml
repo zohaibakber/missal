@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/missal-core", "crates/missal-store"]
+members = ["crates/missal-core", "crates/missal-store", "crates/missal-text"]
 
 [workspace.package]
 version = "0.1.0"
@@ -18,9 +18,56 @@ flate2 = "1.1.11"
 uuid = { version = "1.29.2", features = ["v4"] }
 sha2 = "0.11.1"
 tempfile = "3.27.0"
+gpui-kit = "=0.9.1"
+parley = "=0.12.0"
+swash = "0.2.10"
+gpui-pre-wgpu = "=0.3.12"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.dev.package.gpui-pre]
+opt-level = 3
+
+[profile.dev.package.gpui-pre-platform]
+opt-level = 3
+
+[profile.dev.package.gpui-component]
+opt-level = 3
+
+[profile.dev.package.gpui-base]
+opt-level = 3
+
+[profile.dev.package.taffy]
+opt-level = 3
+
+[profile.dev.package.parley]
+opt-level = 3
+
+[profile.dev.package.parley_engine]
+opt-level = 3
+
+[profile.dev.package.fontique]
+opt-level = 3
+
+[profile.dev.package.harfrust]
+opt-level = 3
+
+[profile.dev.package.skrifa]
+opt-level = 3
+
+[profile.dev.package.read-fonts]
+opt-level = 3
+
+[profile.dev.package.swash]
+opt-level = 3
+
+[profile.dev.package.zeno]
+opt-level = 3

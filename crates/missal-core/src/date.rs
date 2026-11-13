@@ -43,7 +43,11 @@ impl CalendarDate {
 
 impl fmt::Display for CalendarDate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let year = if self.year > 0 { self.year } else { 1 - self.year };
+        let year = if self.year > 0 {
+            self.year
+        } else {
+            1 - self.year
+        };
         write!(f, "{:02}-{:02}-{year:04}", self.day, self.month)
     }
 }
@@ -195,9 +199,8 @@ fn iso_year(date: &str) -> Option<(i64, &str)> {
     let all_digits = |range: std::ops::Range<usize>| {
         bytes.len() >= range.end && bytes[range].iter().all(u8::is_ascii_digit)
     };
-    let signed = |length: usize| {
-        matches!(bytes.first(), Some(b'+' | b'-')) && all_digits(1..length + 1)
-    };
+    let signed =
+        |length: usize| matches!(bytes.first(), Some(b'+' | b'-')) && all_digits(1..length + 1);
     if all_digits(0..4) {
         return Some((date[..4].parse().ok()?, &date[4..]));
     }
@@ -279,7 +282,10 @@ fn iso_time(time: &str) -> Option<f64> {
         }
         let mut end = 2;
         if matches!(bytes.get(2), Some(b'.' | b',')) {
-            end = 3 + bytes[3..].iter().take_while(|byte| byte.is_ascii_digit()).count();
+            end = 3 + bytes[3..]
+                .iter()
+                .take_while(|byte| byte.is_ascii_digit())
+                .count();
         }
         let value = input[..end].replace(',', ".");
         let value = value.strip_suffix('.').unwrap_or(&value);
@@ -302,7 +308,9 @@ fn iso_time(time: &str) -> Option<f64> {
     let valid = if hours == 24.0 {
         minutes == 0.0 && seconds == 0.0
     } else {
-        (0.0..60.0).contains(&seconds) && (0.0..60.0).contains(&minutes) && (0.0..25.0).contains(&hours)
+        (0.0..60.0).contains(&seconds)
+            && (0.0..60.0).contains(&minutes)
+            && (0.0..25.0).contains(&hours)
     };
     valid.then_some(hours * 3_600_000.0 + minutes * 60_000.0 + seconds * 1000.0)
 }
@@ -346,7 +354,8 @@ pub(crate) fn days_from_civil(year: i64, month: u8, day: u8) -> i64 {
     let era = year.div_euclid(400);
     let year_of_era = year - era * 400;
     let month = i64::from(month);
-    let day_of_year = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + i64::from(day) - 1;
+    let day_of_year =
+        (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + i64::from(day) - 1;
     let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
     era * 146_097 + day_of_era - 719_468
 }

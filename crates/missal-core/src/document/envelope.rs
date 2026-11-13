@@ -146,11 +146,14 @@ impl Envelope {
         if object.remove("format").as_ref().and_then(Value::as_str) != Some(DOCUMENT_FORMAT) {
             return Err(DocumentError::Invalid("unknown format"));
         }
-        let version = object.remove("version").and_then(|version| version.as_f64());
+        let version = object
+            .remove("version")
+            .and_then(|version| version.as_f64());
         let page_layout = match object.remove("pageLayout") {
             None => None,
             Some(layout) => Some(
-                PageLayout::from_json(&layout).ok_or(DocumentError::Invalid("invalid page layout"))?,
+                PageLayout::from_json(&layout)
+                    .ok_or(DocumentError::Invalid("invalid page layout"))?,
             ),
         };
         let state = object
