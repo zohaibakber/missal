@@ -48,7 +48,7 @@ impl<'b> Package<'b> {
         let archive = ZipArchive::new(Cursor::new(bytes)).map_err(|_| ImportError::NotDocx)?;
         let names = (0..archive.len())
             .filter_map(|index| {
-                let name = archive.name_for_index(index).ok()?;
+                let name = archive.name_for_index(index)?.ok()?;
                 Some((name.trim_start_matches('/').to_ascii_lowercase(), index))
             })
             .collect();
