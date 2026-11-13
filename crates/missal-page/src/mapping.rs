@@ -382,7 +382,7 @@ impl Packet {
                     .get(line)
                     .map(|info| info.text_range.clone())
                     .unwrap_or(0..0);
-                let start = node.map.to_logical(TextPosition::downstream(range.start)).0;
+                let start = node.map.floor_logical(range.start);
                 let end = node.map.to_logical(TextPosition::upstream(range.end)).0;
                 out.push(PlacedLine {
                     path: piece.path.clone(),

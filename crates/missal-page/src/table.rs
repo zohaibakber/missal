@@ -323,13 +323,19 @@ pub(crate) fn measure_table(
         }
     }
     if col_widths.iter().all(Option::is_none) {
-        for (index, &(r, col, _, span, _, _)) in grid.placements.iter().enumerate() {
-            if r != 0 {
-                continue;
-            }
+        let first_row: Vec<usize> = (0..grid.placements.len())
+            .filter(|i| grid.placements[*i].0 == 0)
+            .collect();
+        for index in first_row {
+            let (_, col, _, span, _, _) = grid.placements[index];
             let style = &cell_styles[index];
             if let Some(w) = style.boxp.width.filter(|w| *w != Length::Auto) {
-                let resolved = w.resolve(style.text.size, width);
+                let padding = if span == 1 {
+                    style.boxp.paddings(&style.text, width).horizontal()
+                } else {
+                    0.0
+                };
+                let resolved = w.resolve(style.text.size, width) + padding;
                 for slot in col_widths.iter_mut().skip(col).take(span) {
                     *slot = Some(resolved / span as f32);
                 }
@@ -338,7 +344,10 @@ pub(crate) fn measure_table(
     }
     let fixed: f32 = col_widths.iter().flatten().sum();
     let autos = col_widths.iter().filter(|w| w.is_none()).count();
-    let mut widths: Vec<f32> = if autos > 0 {
+    let mut widths: Vec<f32> = if fixed > width && fixed > 0.0 {
+        let scale = width / fixed;
+        col_widths.iter().map(|w| w.unwrap_or(0.0) * scale).collect()
+    } else if autos > 0 {
         let share = ((width - fixed) / autos as f32).max(0.0);
         col_widths.iter().map(|w| w.unwrap_or(share)).collect()
     } else if fixed > 0.0 {

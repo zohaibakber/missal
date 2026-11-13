@@ -190,6 +190,21 @@ impl OffsetMap {
         (self.logical_len, Affinity::Upstream)
     }
 
+    pub fn floor_logical(&self, index: usize) -> usize {
+        for seg in &self.segs {
+            if index < seg.layout.end && index >= seg.layout.start {
+                return match seg.kind {
+                    SegKind::Text => seg.logical.start + (index - seg.layout.start),
+                    SegKind::Atomic => seg.logical.start,
+                };
+            }
+            if index < seg.layout.start {
+                return seg.logical.start;
+            }
+        }
+        self.logical_len
+    }
+
     pub(crate) fn layout_range(&self, range: Range<usize>) -> Range<usize> {
         let start = self.to_layout(range.start, Affinity::Downstream).index;
         let end = self.to_layout(range.end, Affinity::Upstream).index;
