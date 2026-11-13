@@ -110,7 +110,14 @@ fn is_control(c: char) -> bool {
     matches!(c, '\u{2066}'..='\u{2069}' | '\u{202A}'..='\u{202E}' | '\u{200E}' | '\u{200F}')
 }
 
-fn border_rects(rect: Rect, sides: &[BorderSide; 4], color: Rgba, top: bool, bottom: bool, out: &mut Vec<DisplayItem>) {
+fn border_rects(
+    rect: Rect,
+    sides: &[BorderSide; 4],
+    color: Rgba,
+    top: bool,
+    bottom: bool,
+    out: &mut Vec<DisplayItem>,
+) {
     let w = |s: &BorderSide| s.used_width();
     let push = |out: &mut Vec<DisplayItem>, r: Rect, side: &BorderSide| {
         if r.width > 0.0 && r.height > 0.0 {
@@ -122,24 +129,42 @@ fn border_rects(rect: Rect, sides: &[BorderSide; 4], color: Rgba, top: bool, bot
         }
     };
     if top && w(&sides[0]) > 0.0 {
-        push(out, Rect::new(rect.x, rect.y, rect.width, w(&sides[0])), &sides[0]);
+        push(
+            out,
+            Rect::new(rect.x, rect.y, rect.width, w(&sides[0])),
+            &sides[0],
+        );
     }
     if bottom && w(&sides[2]) > 0.0 {
         push(
             out,
-            Rect::new(rect.x, rect.bottom() - w(&sides[2]), rect.width, w(&sides[2])),
+            Rect::new(
+                rect.x,
+                rect.bottom() - w(&sides[2]),
+                rect.width,
+                w(&sides[2]),
+            ),
             &sides[2],
         );
     }
     if w(&sides[1]) > 0.0 {
         push(
             out,
-            Rect::new(rect.right() - w(&sides[1]), rect.y, w(&sides[1]), rect.height),
+            Rect::new(
+                rect.right() - w(&sides[1]),
+                rect.y,
+                w(&sides[1]),
+                rect.height,
+            ),
             &sides[1],
         );
     }
     if w(&sides[3]) > 0.0 {
-        push(out, Rect::new(rect.x, rect.y, w(&sides[3]), rect.height), &sides[3]);
+        push(
+            out,
+            Rect::new(rect.x, rect.y, w(&sides[3]), rect.height),
+            &sides[3],
+        );
     }
 }
 
@@ -155,7 +180,7 @@ fn line_rects_by_line(piece: &TextPiece, range: Range<usize>) -> Vec<(usize, f32
         if line < piece.lines.start || line >= piece.lines.end || line >= node.lines.len() {
             continue;
         }
-        let shift = node.line_x_shift(line);
+        let shift = node.layout_dx();
         let x0 = piece.dx + node.content.x + rect.x + shift;
         out.push((line, x0, x0 + rect.width));
     }
@@ -179,12 +204,24 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
             kind: RectKind::Background,
         });
     }
-    border_rects(box_rect, &node.borders, node.color, piece.first, piece.last, &mut layers.borders);
+    border_rects(
+        box_rect,
+        &node.borders,
+        node.color,
+        piece.first,
+        piece.last,
+        &mut layers.borders,
+    );
     for span in &node.backgrounds {
         for (line, x0, x1) in line_rects_by_line(piece, span.range.clone()) {
             let lb = node.lines[line];
             layers.backgrounds.push(DisplayItem::Rect {
-                rect: Rect::from_edges(x0, dy + lb.baseline - span.ascent, x1, dy + lb.baseline + span.descent),
+                rect: Rect::from_edges(
+                    x0,
+                    dy + lb.baseline - span.ascent,
+                    x1,
+                    dy + lb.baseline + span.descent,
+                ),
                 color: span.color,
                 kind: RectKind::Background,
             });
@@ -196,7 +233,12 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
             let lb = node.lines[line];
             field_rects.push((line, x0, x1, field.unresolved));
             layers.highlights.push(DisplayItem::FieldHighlight {
-                rect: Rect::from_edges(x0, dy + lb.baseline - field.ascent, x1, dy + lb.baseline + field.descent),
+                rect: Rect::from_edges(
+                    x0,
+                    dy + lb.baseline - field.ascent,
+                    x1,
+                    dy + lb.baseline + field.descent,
+                ),
                 unresolved: field.unresolved,
             });
         }
@@ -235,7 +277,7 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
         let Some(lb) = node.lines.get(run.line) else {
             continue;
         };
-        let shift = node.line_x_shift(run.line);
+        let shift = node.layout_dx();
         let gy = dy + lb.glyph_dy;
         let line_id = line_base + (run.line - piece.lines.start) as u32;
         let size = run.font_size;
@@ -243,7 +285,8 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
         let ascent = metrics.ascent * size / metrics.units_per_em;
         let descent = metrics.descent * size / metrics.units_per_em;
         let mut current: Option<(Option<FieldMark>, u32, f32, f32)> = None;
-        let flush = |layers: &mut Layers, current: &mut Option<(Option<FieldMark>, u32, f32, f32)>| {
+        let flush = |layers: &mut Layers,
+                     current: &mut Option<(Option<FieldMark>, u32, f32, f32)>| {
             if let Some((field, start, x0, x1)) = current.take() {
                 let end = layers.glyphs.len() as u32;
                 if end > start {
@@ -255,7 +298,12 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
                         glyphs: start..end,
                         line: line_id,
                         field,
-                        bounds: Rect::from_edges(x0, gy + lb.baseline - ascent - size * 0.3, x1, gy + lb.baseline + descent + size * 0.3),
+                        bounds: Rect::from_edges(
+                            x0,
+                            gy + lb.baseline - ascent - size * 0.3,
+                            x1,
+                            gy + lb.baseline + descent + size * 0.3,
+                        ),
                     }));
                 }
             }
@@ -298,11 +346,16 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
                 });
             };
             if deco.decoration.underline {
-                push(baseline - metrics.scaled(metrics.underline_offset, deco.size), RectKind::Underline);
+                push(
+                    baseline - metrics.scaled(metrics.underline_offset, deco.size),
+                    RectKind::Underline,
+                );
             }
             if deco.decoration.strike {
                 push(
-                    baseline - metrics.scaled(metrics.strikeout_offset, deco.size) - thickness / 2.0,
+                    baseline
+                        - metrics.scaled(metrics.strikeout_offset, deco.size)
+                        - thickness / 2.0,
                     RectKind::Strikethrough,
                 );
             }
@@ -340,7 +393,12 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
         layers.lines.push(TextLine {
             text: marker_text,
             rtl: marker.layout.is_rtl(),
-            bounds: Rect::new(dx + marker.x, dy + first.top, marker.layout.width(), first.bottom - first.top),
+            bounds: Rect::new(
+                dx + marker.x,
+                dy + first.top,
+                marker.layout.width(),
+                first.bottom - first.top,
+            ),
         });
         for run in marker.layout.glyph_runs() {
             let start = layers.glyphs.len() as u32;
@@ -360,7 +418,12 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
                 glyphs: start..end,
                 line: line_id,
                 field: None,
-                bounds: Rect::new(dx + marker.x, dy + first.top, marker.layout.width().max(1.0), first.bottom - first.top),
+                bounds: Rect::new(
+                    dx + marker.x,
+                    dy + first.top,
+                    marker.layout.width().max(1.0),
+                    first.bottom - first.top,
+                ),
             }));
         }
     }
@@ -382,7 +445,11 @@ fn table_piece(piece: &TablePiece, layers: &mut Layers) {
     let color = |side: &BorderSide| side.color.unwrap_or(Rgba::BLACK);
     let mut lines: Vec<(usize, f32)> = Vec::new();
     for row in &piece.rows {
-        if row.starts && !lines.iter().any(|(l, y)| *l == row.row && (y - row.y).abs() < 0.5) {
+        if row.starts
+            && !lines
+                .iter()
+                .any(|(l, y)| *l == row.row && (y - row.y).abs() < 0.5)
+        {
             lines.push((row.row, row.y));
         }
         if row.ends {

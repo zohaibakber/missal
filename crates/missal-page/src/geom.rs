@@ -1,5 +1,4 @@
 pub const PX_PER_MM: f32 = 96.0 / 25.4;
-pub const PT_PER_PX: f32 = 0.75;
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct Point {
@@ -60,7 +59,10 @@ impl Rect {
     }
 
     pub fn contains(&self, point: Point) -> bool {
-        point.x >= self.x && point.x <= self.right() && point.y >= self.y && point.y <= self.bottom()
+        point.x >= self.x
+            && point.x <= self.right()
+            && point.y >= self.y
+            && point.y <= self.bottom()
     }
 
     pub fn intersects(&self, other: &Rect) -> bool {

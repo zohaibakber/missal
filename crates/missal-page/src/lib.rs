@@ -24,11 +24,14 @@ pub use image::{ImageData, ImageFormat};
 pub use mapping::{Caret, LineHit, PlacedCell, PlacedLine};
 pub use position::{BlockPath, Position, VerticalDirection};
 pub use style::SUPPORTED_PROPERTIES;
-pub use text::{FieldSpan, InlineLocation, LineBox, OBJECT, OBJECT_LEN, OffsetMap, TextBox, locate, logical_len, logical_text};
+pub use text::{
+    FieldSpan, InlineLocation, LineBox, OBJECT, OBJECT_LEN, OffsetMap, TextBox, locate,
+    logical_len, logical_text,
+};
 
 pub use missal_text::{Affinity, HorizontalDirection};
 
-pub trait FieldSource {
+pub trait FieldSource: Sync {
     fn display(&self, reference: &FieldReference) -> FieldDisplayText;
 }
 
@@ -40,7 +43,7 @@ impl FieldSource for FieldPresentation<'_> {
 
 impl<F> FieldSource for F
 where
-    F: Fn(&FieldReference) -> FieldDisplayText,
+    F: Fn(&FieldReference) -> FieldDisplayText + Sync,
 {
     fn display(&self, reference: &FieldReference) -> FieldDisplayText {
         self(reference)

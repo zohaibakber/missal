@@ -6,14 +6,14 @@ use missal_text::Rgba;
 use crate::css::{self, Length};
 use crate::measure::{Ctx, Flow, compute_element, measure_blocks};
 use crate::position::BlockPath;
-use crate::style::{BorderSide, BorderStyle, BoxProps, BreakValue, Computed, Edges, TextProps, VerticalAlign};
+use crate::style::{
+    BorderSide, BorderStyle, BoxProps, BreakValue, Computed, Edges, TextProps, VerticalAlign,
+};
 
 #[derive(Clone, Debug)]
 pub struct CellBox {
     pub row: usize,
-    pub col: usize,
     pub row_span: usize,
-    pub col_span: usize,
     pub source: (u32, u32),
     pub x0: f32,
     pub x1: f32,
@@ -43,15 +43,12 @@ impl CellBox {
 pub struct RowBox {
     pub y: f32,
     pub height: f32,
-    pub min_height: f32,
-    pub header: bool,
     pub break_inside: BreakValue,
 }
 
 #[derive(Clone, Debug)]
 pub struct TableBox {
     pub x: f32,
-    pub width: f32,
     pub height: f32,
     pub margin_top: f32,
     pub margin_bottom: f32,
@@ -65,7 +62,6 @@ pub struct TableBox {
     pub h_edges: Vec<BorderSide>,
     pub v_edges: Vec<BorderSide>,
     pub header_rows: usize,
-    pub rtl: bool,
     pub(crate) cell_styles: Vec<Computed>,
     available: f32,
 }
@@ -79,23 +75,11 @@ impl TableBox {
         self.v_edges[row * (self.ncols + 1) + line]
     }
 
-    pub(crate) fn physical(&self, col: usize, span: usize) -> (usize, usize) {
-        if self.rtl {
-            (self.ncols - col - span, self.ncols - col)
-        } else {
-            (col, col + span)
-        }
-    }
-
     pub(crate) fn cells_in_row(&self, row: usize) -> impl Iterator<Item = (usize, &CellBox)> {
         self.cells
             .iter()
             .enumerate()
             .filter(move |(_, c)| c.row <= row && row < c.row + c.row_span)
-    }
-
-    pub(crate) fn row_bottom(&self, row: usize) -> f32 {
-        self.rows[row].y + self.rows[row].height
     }
 }
 
@@ -139,8 +123,8 @@ fn build_grid(rows: &[&TableRow]) -> Grid {
                 if occupied[rr].len() < col + col_span {
                     occupied[rr].resize(col + col_span, false);
                 }
-                for cc in col..col + col_span {
-                    occupied[rr][cc] = true;
+                for slot in occupied[rr].iter_mut().skip(col).take(col_span) {
+                    *slot = true;
                 }
             }
             placements.push((r, col, row_span, col_span, r as u32, c as u32));
@@ -151,7 +135,7 @@ fn build_grid(rows: &[&TableRow]) -> Grid {
     Grid { ncols, placements }
 }
 
-fn cell_style(table_text: &TextProps, row: &Computed, cell: &TableCell, row_total: f32) -> Computed {
+fn cell_style(row: &Computed, cell: &TableCell, row_total: f32) -> Computed {
     let base = BoxProps {
         padding: [
             Length::Px(4.0),
@@ -163,7 +147,6 @@ fn cell_style(table_text: &TextProps, row: &Computed, cell: &TableCell, row_tota
         vertical_align: VerticalAlign::Top,
         ..BoxProps::default()
     };
-    let _ = table_text;
     let mut extra: Vec<(&str, String)> = Vec::new();
     if let Some(bg) = &cell.background_color {
         extra.push(("background-color", bg.clone()));
@@ -310,7 +293,7 @@ pub(crate) fn measure_table(
                 let cell = rows[sr as usize].cells[sc as usize]
                     .node()
                     .expect("placed cells are typed");
-                cell_style(&table_text, &row_styles[r], cell, row_totals[r])
+                cell_style(&row_styles[r], cell, row_totals[r])
             })
             .collect(),
     };
@@ -346,13 +329,19 @@ pub(crate) fn measure_table(
     let autos = col_widths.iter().filter(|w| w.is_none()).count();
     let mut widths: Vec<f32> = if fixed > width && fixed > 0.0 {
         let scale = width / fixed;
-        col_widths.iter().map(|w| w.unwrap_or(0.0) * scale).collect()
+        col_widths
+            .iter()
+            .map(|w| w.unwrap_or(0.0) * scale)
+            .collect()
     } else if autos > 0 {
         let share = ((width - fixed) / autos as f32).max(0.0);
         col_widths.iter().map(|w| w.unwrap_or(share)).collect()
     } else if fixed > 0.0 {
         let scale = width / fixed;
-        col_widths.iter().map(|w| w.unwrap_or(0.0) * scale).collect()
+        col_widths
+            .iter()
+            .map(|w| w.unwrap_or(0.0) * scale)
+            .collect()
     } else {
         vec![width / ncols as f32; ncols]
     };
@@ -378,10 +367,8 @@ pub(crate) fn measure_table(
         }
     };
     let table_borders = computed.boxp.borders(&table_text);
-    let row_borders: Vec<[BorderSide; 4]> = row_styles
-        .iter()
-        .map(|s| s.boxp.borders(&s.text))
-        .collect();
+    let row_borders: Vec<[BorderSide; 4]> =
+        row_styles.iter().map(|s| s.boxp.borders(&s.text)).collect();
     let cell_borders: Vec<[BorderSide; 4]> = cell_styles
         .iter()
         .map(|s| s.boxp.borders(&s.text))
@@ -500,15 +487,14 @@ pub(crate) fn measure_table(
             Some(flow) => flow,
             None => {
                 let cell_path = BlockPath::new(&[sr, sc]);
-                let items = measure_blocks(&cell.blocks, &style.text, content_width, &cell_path, ctx);
+                let items =
+                    measure_blocks(&cell.blocks, &style.text, content_width, &cell_path, ctx);
                 Arc::new(Flow::stack(items))
             }
         };
         cells.push(CellBox {
             row: r,
-            col,
             row_span: rs,
-            col_span: cs,
             source: (sr, sc),
             x0,
             x1,
@@ -559,15 +545,12 @@ pub(crate) fn measure_table(
         row_boxes.push(RowBox {
             y,
             height: heights[r],
-            min_height: min_heights[r],
-            header: r < header_rows,
             break_inside: row_styles[r].boxp.break_inside,
         });
         y += heights[r];
     }
     TableBox {
         x,
-        width,
         height: y,
         margin_top: margins.top,
         margin_bottom: margins.bottom,
@@ -581,7 +564,6 @@ pub(crate) fn measure_table(
         h_edges,
         v_edges,
         header_rows,
-        rtl,
         cell_styles,
         available,
     }

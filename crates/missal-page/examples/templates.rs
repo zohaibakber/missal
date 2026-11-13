@@ -72,8 +72,12 @@ fn block_fields(blocks: &[Block], fields: &dyn FieldSource, out: &mut Vec<Value>
                 for item in l.items.iter().filter_map(Child::node) {
                     for child in &item.children {
                         match child {
-                            ListItemChild::Inline(i) => inline_fields(std::slice::from_ref(i), fields, out),
-                            ListItemChild::List(n) => block_fields(&[Block::List(n.clone())], fields, out),
+                            ListItemChild::Inline(i) => {
+                                inline_fields(std::slice::from_ref(i), fields, out)
+                            }
+                            ListItemChild::List(n) => {
+                                block_fields(&[Block::List(n.clone())], fields, out)
+                            }
                         }
                     }
                 }
@@ -84,18 +88,27 @@ fn block_fields(blocks: &[Block], fields: &dyn FieldSource, out: &mut Vec<Value>
 }
 
 fn path_string(path: &missal_page::BlockPath) -> String {
-    path.steps().iter().map(|s| s.to_string()).collect::<Vec<_>>().join(".")
+    path.steps()
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let opt = |name: &str| args.iter().position(|a| a == name).map(|i| args[i + 1].clone());
+    let opt = |name: &str| {
+        args.iter()
+            .position(|a| a == name)
+            .map(|i| args[i + 1].clone())
+    };
     let out = opt("--out").unwrap_or_else(|| ".".into());
     let filter: Vec<String> = opt("--templates")
         .map(|t| t.split(',').map(str::to_owned).collect())
         .unwrap_or_default();
     let values: Option<Values> = opt("--values").map(|path| {
-        let v: HashMap<String, String> = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let v: HashMap<String, String> =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
         Values(v)
     });
     let fields: &dyn FieldSource = match &values {
@@ -106,10 +119,21 @@ fn main() {
     let all = bundle();
     let mut engine = PageEngine::new();
     for (name, document) in &all {
-        if !filter.is_empty() && !filter.iter().any(|f| name == f || name.starts_with(f.as_str())) {
+        if !filter.is_empty()
+            && !filter
+                .iter()
+                .any(|f| name == f || name.starts_with(f.as_str()))
+        {
             continue;
         }
-        let slug: String = name.as_bytes().iter().map(|b| format!("{b:02x}")).collect::<String>().chars().take(24).collect();
+        let slug: String = name
+            .as_bytes()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
+            .chars()
+            .take(24)
+            .collect();
         let dir = format!("{out}/{slug}");
         std::fs::create_dir_all(&dir).unwrap();
         let started = Instant::now();
@@ -130,11 +154,25 @@ fn main() {
             .collect();
         let mut field_list = Vec::new();
         block_fields(&document.blocks, fields, &mut field_list);
-        std::fs::write(format!("{dir}/fields.json"), serde_json::to_string(&field_list).unwrap()).unwrap();
+        std::fs::write(
+            format!("{dir}/fields.json"),
+            serde_json::to_string(&field_list).unwrap(),
+        )
+        .unwrap();
         let summary = json!({"name": name, "pages": packet.page_count(), "layout_ms": elapsed, "lines": lines, "cells": cells});
-        std::fs::write(format!("{dir}/{tag}.json"), serde_json::to_string(&summary).unwrap()).unwrap();
+        std::fs::write(
+            format!("{dir}/{tag}.json"),
+            serde_json::to_string(&summary).unwrap(),
+        )
+        .unwrap();
         let pdf_started = Instant::now();
-        let (bytes, stats) = write_packet(&packet, &PdfOptions { title: Some(name.clone()), compress: true });
+        let (bytes, stats) = write_packet(
+            &packet,
+            &PdfOptions {
+                title: Some(name.clone()),
+                compress: true,
+            },
+        );
         let pdf_ms = pdf_started.elapsed().as_secs_f64() * 1e3;
         std::fs::write(format!("{dir}/{tag}.pdf"), &bytes).unwrap();
         println!(

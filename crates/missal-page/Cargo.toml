@@ -29,3 +29,10 @@ workspace = true
 
 [[example]]
 name = "templates"
+
+[[example]]
+name = "bench"
+
+[[example]]
+name = "render_pages"
+required-features = ["headless"]

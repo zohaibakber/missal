@@ -1,6 +1,8 @@
 use std::sync::OnceLock;
 
-use missal_text::{FaceId, FontFamily, URDU_FAMILY, fonts::UI_FAMILY_ALIASES, fonts::URDU_FAMILY_ALIASES};
+use missal_text::{
+    FaceId, FontFamily, URDU_FAMILY, fonts::UI_FAMILY_ALIASES, fonts::URDU_FAMILY_ALIASES,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FaceMetrics {
@@ -24,7 +26,9 @@ impl FaceMetrics {
     }
 
     pub fn normal_line_height(&self, size: f32) -> f32 {
-        self.ascent_px(size) + self.descent_px(size) + (self.line_gap * size / self.units_per_em).round()
+        self.ascent_px(size)
+            + self.descent_px(size)
+            + (self.line_gap * size / self.units_per_em).round()
     }
 
     pub fn scaled(&self, value: f32, size: f32) -> f32 {
@@ -83,7 +87,12 @@ fn measure(data: &[u8]) -> FaceMetrics {
                 advance,
             )
         }
-        None => (-units_per_em * 0.1, units_per_em * 0.05, units_per_em * 0.3, units_per_em * 0.25),
+        None => (
+            -units_per_em * 0.1,
+            units_per_em * 0.05,
+            units_per_em * 0.3,
+            units_per_em * 0.25,
+        ),
     };
     FaceMetrics {
         units_per_em,
@@ -116,10 +125,6 @@ pub fn metrics(face: FaceId) -> &'static FaceMetrics {
     &all[(face.0 as usize).min(all.len() - 1)]
 }
 
-pub fn face_count() -> usize {
-    missal_text::fonts::bundled_faces().len()
-}
-
 pub fn is_urdu_name(name: &str) -> bool {
     URDU_FAMILY_ALIASES
         .iter()
@@ -127,14 +132,18 @@ pub fn is_urdu_name(name: &str) -> bool {
 }
 
 pub fn is_ui_name(name: &str) -> bool {
-    UI_FAMILY_ALIASES.iter().any(|alias| alias.eq_ignore_ascii_case(name))
+    UI_FAMILY_ALIASES
+        .iter()
+        .any(|alias| alias.eq_ignore_ascii_case(name))
 }
 
 pub fn family_for(name: &str) -> FontFamily {
     let lower = name.to_ascii_lowercase();
     if is_urdu_name(name) || matches!(lower.as_str(), "serif" | "cursive" | "fantasy") {
         FontFamily::Document
-    } else if is_ui_name(name) || matches!(lower.as_str(), "sans-serif" | "system-ui" | "ui-sans-serif") {
+    } else if is_ui_name(name)
+        || matches!(lower.as_str(), "sans-serif" | "system-ui" | "ui-sans-serif")
+    {
         FontFamily::Interface
     } else {
         FontFamily::named(name)
@@ -165,8 +174,4 @@ pub fn primary_face(family: &FontFamily, weight: u16, italic: bool) -> FaceId {
         }
     }
     FaceId(best as u16)
-}
-
-pub fn face_data(face: FaceId) -> &'static [u8] {
-    missal_text::face(face).data
 }

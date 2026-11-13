@@ -96,8 +96,15 @@ pub(crate) struct TablePiece {
 pub(crate) enum Piece {
     Text(TextPiece),
     Table(TablePiece),
-    Rule { path: BlockPath, rect: Rect },
-    Image { path: BlockPath, rect: Rect, image: Arc<ImageBox> },
+    Rule {
+        path: BlockPath,
+        rect: Rect,
+    },
+    Image {
+        path: BlockPath,
+        rect: Rect,
+        image: Arc<ImageBox>,
+    },
 }
 
 impl Piece {
@@ -113,7 +120,6 @@ impl Piece {
 pub(crate) struct Outcome {
     pub next: Option<FlowToken>,
     pub forced: bool,
-    pub bottom: f32,
     pub placed: bool,
 }
 
@@ -196,7 +202,6 @@ pub(crate) fn fragment_flow(
             return Outcome {
                 next: Some(FlowToken::at(index)),
                 forced: true,
-                bottom: y,
                 placed,
             };
         }
@@ -219,7 +224,11 @@ pub(crate) fn fragment_flow(
                     _ => 0,
                 };
                 let first = start_line == 0;
-                let top_ref = if first { 0.0 } else { text.lines[start_line].top };
+                let top_ref = if first {
+                    0.0
+                } else {
+                    text.lines[start_line].top
+                };
                 let total = text.lines.len();
                 let remaining = text.height() - top_ref;
                 if remaining <= available + 0.01 || total == 0 {
@@ -252,7 +261,9 @@ pub(crate) fn fragment_flow(
                     }
                     if fit == 0 {
                         if page_empty {
-                            fit = lines_fit(text, start_line, top_ref, available).max(1).min(left);
+                            fit = lines_fit(text, start_line, top_ref, available)
+                                .max(1)
+                                .min(left);
                         } else {
                             if let Some(back) = avoid_backtrack(items, index, &placed_marks, out) {
                                 return back;
@@ -263,7 +274,6 @@ pub(crate) fn fragment_flow(
                                     inner: inner.clone(),
                                 }),
                                 forced: false,
-                                bottom: y,
                                 placed,
                             };
                         }
@@ -285,7 +295,6 @@ pub(crate) fn fragment_flow(
                                 inner: Some(Inner::Lines(end)),
                             }),
                             forced: false,
-                            bottom: region.limit,
                             placed: true,
                         };
                     }
@@ -328,7 +337,6 @@ pub(crate) fn fragment_flow(
                                     inner: inner.clone(),
                                 }),
                                 forced: false,
-                                bottom: y,
                                 placed,
                             };
                         }
@@ -338,7 +346,6 @@ pub(crate) fn fragment_flow(
                                 inner: Some(Inner::Table(Box::new(token))),
                             }),
                             forced: false,
-                            bottom: region.limit,
                             placed: true,
                         };
                     }
@@ -353,7 +360,6 @@ pub(crate) fn fragment_flow(
                     return Outcome {
                         next: Some(FlowToken::at(index)),
                         forced: false,
-                        bottom: y,
                         placed,
                     };
                 }
@@ -382,7 +388,6 @@ pub(crate) fn fragment_flow(
     Outcome {
         next: None,
         forced: false,
-        bottom: y + previous_margin.unwrap_or(0.0).max(0.0),
         placed,
     }
 }
@@ -398,7 +403,7 @@ fn avoid_backtrack(
     if !avoid || marks.len() < 2 {
         return None;
     }
-    let &(previous, pieces, y, _) = marks.last()?;
+    let &(previous, pieces, _, _) = marks.last()?;
     if previous + 1 != index {
         return None;
     }
@@ -406,14 +411,16 @@ fn avoid_backtrack(
     Some(Outcome {
         next: Some(FlowToken::at(previous)),
         forced: false,
-        bottom: y,
         placed: true,
     })
 }
 
 enum TableResult {
     Done(f32),
-    Break { token: TableToken, placed_rows: bool },
+    Break {
+        token: TableToken,
+        placed_rows: bool,
+    },
 }
 
 fn cont_of(conts: &[(usize, FlowToken)], cell: usize) -> Option<&FlowToken> {
@@ -470,7 +477,7 @@ fn fragment_table(
     region: Region,
     out: &mut Vec<Piece>,
 ) -> TableResult {
-    let x = region.x;
+    let x = region.x + table.x;
     let mut y = region.top;
     let table_piece_index = out.len();
     out.push(Piece::Table(TablePiece {
@@ -484,13 +491,26 @@ fn fragment_table(
     let mut cells: Vec<CellPiece> = Vec::new();
     let mut page_empty = region.page_empty;
     let nrows = table.rows.len();
-    if continuing && region.repeat_headers && table.header_rows > 0 && token.row >= table.header_rows {
-        let header_height: f32 = table.rows[..table.header_rows].iter().map(|r| r.height).sum();
+    if continuing
+        && region.repeat_headers
+        && table.header_rows > 0
+        && token.row >= table.header_rows
+    {
+        let header_height: f32 = table.rows[..table.header_rows]
+            .iter()
+            .map(|r| r.height)
+            .sum();
         if y + header_height <= region.limit {
             for r in 0..table.header_rows {
                 let height = table.rows[r].height;
                 place_full_row(path, table, r, x, y, height, &[], region, &mut cells, out);
-                rows.push(RowPiece { row: r, y, height, starts: true, ends: true });
+                rows.push(RowPiece {
+                    row: r,
+                    y,
+                    height,
+                    starts: true,
+                    ends: true,
+                });
                 y += height;
             }
         }
@@ -511,8 +531,16 @@ fn fragment_table(
             table.rows[r].height
         };
         if y + row_height <= region.limit + 0.01 {
-            place_full_row(path, table, r, x, y, row_height, &conts, region, &mut cells, out);
-            rows.push(RowPiece { row: r, y, height: row_height, starts: !continuing_row, ends: true });
+            place_full_row(
+                path, table, r, x, y, row_height, &conts, region, &mut cells, out,
+            );
+            rows.push(RowPiece {
+                row: r,
+                y,
+                height: row_height,
+                starts: !continuing_row,
+                ends: true,
+            });
             y += row_height;
             r += 1;
             conts.clear();
@@ -562,7 +590,13 @@ fn fragment_table(
         }
         let height = available.max(0.0);
         push_cell_boxes(table, r, x, y, height, &mut cells);
-        rows.push(RowPiece { row: r, y, height, starts: !continuing_row, ends: false });
+        rows.push(RowPiece {
+            row: r,
+            y,
+            height,
+            starts: !continuing_row,
+            ends: false,
+        });
         placed_rows = true;
         if next_conts.is_empty() {
             for (cell, c) in table.cells_in_row(r) {
@@ -603,7 +637,14 @@ fn finish_table_piece(out: &mut [Piece], index: usize, rows: Vec<RowPiece>, cell
     }
 }
 
-fn push_cell_boxes(table: &TableBox, row: usize, x: f32, y: f32, height: f32, cells: &mut Vec<CellPiece>) {
+fn push_cell_boxes(
+    table: &TableBox,
+    row: usize,
+    x: f32,
+    y: f32,
+    height: f32,
+    cells: &mut Vec<CellPiece>,
+) {
     for (index, c) in table.cells_in_row(row) {
         if let Some(existing) = cells.iter_mut().find(|p| p.cell == index) {
             let bottom = y + height;
@@ -633,7 +674,18 @@ fn place_full_row(
     push_cell_boxes(table, row, x, y, height, cells);
     for (index, c) in table.cells_in_row(row) {
         if let Some(token) = cont_of(conts, index) {
-            place_cell_content(&path.0, table, index, token, x, y, f32::INFINITY, true, region, out);
+            place_cell_content(
+                &path.0,
+                table,
+                index,
+                token,
+                x,
+                y,
+                f32::INFINITY,
+                true,
+                region,
+                out,
+            );
         } else if c.row == row && conts.is_empty() {
             let full = row_box_height(table, index);
             let offset = valign_offset(table, index, full);

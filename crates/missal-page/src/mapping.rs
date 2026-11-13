@@ -55,7 +55,11 @@ impl Packet {
             })
     }
 
-    fn pieces_for<'a>(&'a self, document: usize, path: &'a BlockPath) -> impl Iterator<Item = Located<'a>> + 'a {
+    fn pieces_for<'a>(
+        &'a self,
+        document: usize,
+        path: &'a BlockPath,
+    ) -> impl Iterator<Item = Located<'a>> + 'a {
         let offset = self.page_offsets.get(document).copied().unwrap_or(0);
         self.docs
             .get(document)
@@ -133,7 +137,9 @@ impl Packet {
             .find(|l| l.piece.lines.contains(&line))?;
         Some(LineHit {
             page: located.page,
-            rect: node.line_rect(line).translate(located.piece.dx, located.piece.dy),
+            rect: node
+                .line_rect(line)
+                .translate(located.piece.dx, located.piece.dy),
         })
     }
 
@@ -181,10 +187,15 @@ impl Packet {
                         let (_, caret) = node.caret_local(end_position);
                         let lb = node.lines[last];
                         let width = 6.0;
-                        let x = if node.layout.is_rtl() { caret.x - width } else { caret.x };
+                        let x = if node.layout.is_rtl() {
+                            caret.x - width
+                        } else {
+                            caret.x
+                        };
                         rects.push((
                             located.page,
-                            Rect::new(x, lb.top, width, lb.bottom - lb.top).translate(piece.dx, piece.dy),
+                            Rect::new(x, lb.top, width, lb.bottom - lb.top)
+                                .translate(piece.dx, piece.dy),
                         ));
                     }
                 }
@@ -237,11 +248,14 @@ impl Packet {
         let current = self
             .pieces_for(position.document, &position.path)
             .find(|l| l.piece.lines.contains(&current_line))?;
-        let line_box = node.line_rect(current_line).translate(current.piece.dx, current.piece.dy);
+        let line_box = node
+            .line_rect(current_line)
+            .translate(current.piece.dx, current.piece.dy);
         let x = goal_x.unwrap_or(caret.rect.x);
         let pages = self.document_pages(position.document);
         let mut page = caret.page;
-        loop {
+        let mut fallback: Option<(&TextPiece, usize)> = None;
+        let found = loop {
             let mut best: Option<((bool, f32, f32), &TextPiece, usize)> = None;
             for piece in self.page_text_pieces(page) {
                 let node = &piece.node;
@@ -273,25 +287,32 @@ impl Packet {
                     }
                 }
             }
-            if let Some((_, piece, line)) = best {
-                let target = piece.node.hit_line(line, x - piece.dx);
-                let (offset, affinity) = piece.node.map.to_logical(target);
-                return Some((
-                    Position {
-                        document: position.document,
-                        path: piece.path.clone(),
-                        offset,
-                        affinity,
-                    },
-                    x,
-                ));
+            if let Some(((outside, _, _), piece, line)) = best {
+                if !outside {
+                    break Some((piece, line));
+                }
+                if fallback.is_none() {
+                    fallback = Some((piece, line));
+                }
             }
             match direction {
                 VerticalDirection::Down if page + 1 < pages.end => page += 1,
                 VerticalDirection::Up if page > pages.start => page -= 1,
-                _ => return None,
+                _ => break None,
             }
-        }
+        };
+        let (piece, line) = found.or(fallback)?;
+        let target = piece.node.hit_line(line, x - piece.dx);
+        let (offset, affinity) = piece.node.map.to_logical(target);
+        Some((
+            Position {
+                document: position.document,
+                path: piece.path.clone(),
+                offset,
+                affinity,
+            },
+            x,
+        ))
     }
 
     pub fn move_horizontal(&self, position: &Position, direction: HorizontalDirection) -> Position {
@@ -347,7 +368,7 @@ fn page_may_contain(pieces: &[Piece], path: &BlockPath) -> bool {
     let Some(first) = texts.next() else {
         return false;
     };
-    let last = texts.last().unwrap_or(first);
+    let last = texts.next_back().unwrap_or(first);
     path >= first && path <= last
 }
 
@@ -375,7 +396,9 @@ impl Packet {
             let piece = located.piece;
             let node = &piece.node;
             for line in piece.lines.clone() {
-                let Some(lb) = node.lines.get(line) else { continue };
+                let Some(lb) = node.lines.get(line) else {
+                    continue;
+                };
                 let range = node
                     .layout
                     .lines()
@@ -400,7 +423,9 @@ impl Packet {
     pub fn cells(&self, document: usize) -> Vec<PlacedCell> {
         let mut out = Vec::new();
         let offset = self.page_offsets.get(document).copied().unwrap_or(0);
-        let Some(doc) = self.docs.get(document) else { return out };
+        let Some(doc) = self.docs.get(document) else {
+            return out;
+        };
         for (local, page) in doc.pages.iter().enumerate() {
             for piece in page.pieces.iter() {
                 if let Piece::Table(table) = piece {

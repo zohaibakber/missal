@@ -71,7 +71,10 @@ fn image_key(image: &Arc<ImageData>) -> usize {
     Arc::as_ptr(&image.bytes) as *const u8 as usize
 }
 
-pub fn write_pages<'a>(pages: impl IntoIterator<Item = &'a Page>, options: &PdfOptions) -> (Vec<u8>, PdfStats) {
+pub fn write_pages<'a>(
+    pages: impl IntoIterator<Item = &'a Page>,
+    options: &PdfOptions,
+) -> (Vec<u8>, PdfStats) {
     let pages: Vec<&Page> = pages.into_iter().collect();
     let mut alloc = Alloc(0);
     let catalog_id = alloc.next();
@@ -92,8 +95,10 @@ pub fn write_pages<'a>(pages: impl IntoIterator<Item = &'a Page>, options: &PdfO
                 }
                 DisplayItem::Image { image, .. } => {
                     let key = image_key(image);
-                    if !image_index.contains_key(&key) {
-                        image_index.insert(key, images.len());
+                    let next = images.len();
+                    if let std::collections::hash_map::Entry::Vacant(slot) = image_index.entry(key)
+                    {
+                        slot.insert(next);
                         images.push(image.clone());
                     }
                 }
@@ -153,7 +158,8 @@ pub fn write_pages<'a>(pages: impl IntoIterator<Item = &'a Page>, options: &PdfO
         }
         if options.compress {
             let compressed = deflate(&content);
-            pdf.stream(content_id, &compressed).filter(Filter::FlateDecode);
+            pdf.stream(content_id, &compressed)
+                .filter(Filter::FlateDecode);
         } else {
             pdf.stream(content_id, &content);
         }
@@ -164,11 +170,15 @@ pub fn write_pages<'a>(pages: impl IntoIterator<Item = &'a Page>, options: &PdfO
     pdf.catalog(catalog_id).pages(tree_id);
     if let Some(title) = &options.title {
         let info = alloc.next();
-        pdf.document_info(info).title(TextStr(title)).producer(TextStr("Missal"));
+        pdf.document_info(info)
+            .title(TextStr(title))
+            .producer(TextStr("Missal"));
     }
     for plan in &plans {
         let sizes = write_font(&mut pdf, &mut alloc, plan);
-        stats.fonts.push((plan.name.clone(), plan.glyphs.len(), sizes));
+        stats
+            .fonts
+            .push((plan.name.clone(), plan.glyphs.len(), sizes));
     }
     for (image, id) in images.iter().zip(&image_refs) {
         write_image(&mut pdf, &mut alloc, image, *id);
@@ -305,11 +315,15 @@ fn write_image(pdf: &mut Pdf, alloc: &mut Alloc, image: &Arc<ImageData>, id: Ref
         x.bits_per_component(8);
         return;
     };
-    let DecodedImage { width, height, rgba } = decoded.as_ref();
+    let DecodedImage {
+        width,
+        height,
+        rgba,
+    } = decoded.as_ref();
     let mut rgb_bytes = Vec::with_capacity((*width * *height * 3) as usize);
     let mut alpha = Vec::with_capacity((*width * *height) as usize);
     let mut translucent = false;
-    for px in rgba.chunks_exact(4) {
+    for px in rgba.as_chunks::<4>().0 {
         rgb_bytes.extend_from_slice(&px[..3]);
         alpha.push(px[3]);
         translucent |= px[3] != 255;
@@ -338,16 +352,16 @@ fn write_image(pdf: &mut Pdf, alloc: &mut Alloc, image: &Arc<ImageData>, id: Ref
     }
 }
 
-fn utf16_text(text: &str) -> String {
-    text.to_owned()
-}
-
 fn page_content(page: &Page, plans: &[FontPlan], images: &HashMap<usize, usize>) -> Vec<u8> {
     let list: &DisplayList = page.display_list();
     let mut content = Content::new();
     let height = page.size.height * PT_PER_PX;
     content.transform([PT_PER_PX, 0.0, 0.0, -PT_PER_PX, 0.0, height]);
-    let font_index: HashMap<u16, usize> = plans.iter().enumerate().map(|(i, p)| (p.face.0, i)).collect();
+    let font_index: HashMap<u16, usize> = plans
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.face.0, i))
+        .collect();
     let mut open_line: Option<u32> = None;
     let mut fill: Option<Rgba> = None;
     for item in &list.items {
@@ -369,13 +383,22 @@ fn page_content(page: &Page, plans: &[FontPlan], images: &HashMap<usize, usize>)
                     content.set_fill_rgb(r, g, b);
                     fill = Some(*color);
                 }
-                content.rect(rect.x, rect.y, rect.width, rect.height).fill_nonzero();
+                content
+                    .rect(rect.x, rect.y, rect.width, rect.height)
+                    .fill_nonzero();
             }
             DisplayItem::FieldHighlight { .. } => {}
             DisplayItem::Image { rect, image } => {
                 if let Some(index) = images.get(&image_key(image)) {
                     content.save_state();
-                    content.transform([rect.width, 0.0, 0.0, -rect.height, rect.x, rect.y + rect.height]);
+                    content.transform([
+                        rect.width,
+                        0.0,
+                        0.0,
+                        -rect.height,
+                        rect.x,
+                        rect.y + rect.height,
+                    ]);
                     content.x_object(Name(format!("Im{index}").as_bytes()));
                     content.restore_state();
                 }
@@ -385,7 +408,7 @@ fn page_content(page: &Page, plans: &[FontPlan], images: &HashMap<usize, usize>)
                     let text = list
                         .lines
                         .get(run.line as usize)
-                        .map(|l| utf16_text(&l.text))
+                        .map(|l| l.text.clone())
                         .unwrap_or_default();
                     content
                         .begin_marked_content_with_properties(Name(b"Span"))
@@ -393,7 +416,9 @@ fn page_content(page: &Page, plans: &[FontPlan], images: &HashMap<usize, usize>)
                         .actual_text(TextStr(&text));
                     open_line = Some(run.line);
                 }
-                let Some(&font) = font_index.get(&run.face.0) else { continue };
+                let Some(&font) = font_index.get(&run.face.0) else {
+                    continue;
+                };
                 if fill != Some(run.color) {
                     let (r, g, b) = rgb(run.color);
                     content.set_fill_rgb(r, g, b);
@@ -409,14 +434,22 @@ fn page_content(page: &Page, plans: &[FontPlan], images: &HashMap<usize, usize>)
     content.finish().into_vec()
 }
 
-fn glyph_run(content: &mut Content, list: &DisplayList, run: &GlyphRun, plan: &FontPlan, font: usize) {
+fn glyph_run(
+    content: &mut Content,
+    list: &DisplayList,
+    run: &GlyphRun,
+    plan: &FontPlan,
+    font: usize,
+) {
     let glyphs = list.glyphs(run);
     if glyphs.is_empty() {
         return;
     }
     let data = missal_text::face(plan.face).data;
     let metrics = fonts::metrics(plan.face);
-    let Some(font_ref) = swash::FontRef::from_index(data, 0) else { return };
+    let Some(font_ref) = swash::FontRef::from_index(data, 0) else {
+        return;
+    };
     let glyph_metrics = font_ref.glyph_metrics(&[]);
     let size = run.size;
     let skew = run.synthesis.skew.to_radians().tan();

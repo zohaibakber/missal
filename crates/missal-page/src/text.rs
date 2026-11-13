@@ -14,9 +14,7 @@ use crate::css::Length;
 use crate::fonts;
 use crate::geom::Rect;
 use crate::image::ImageData;
-use crate::style::{
-    self, BoxProps, Computed, Decoration, Declarations, Dir, Edges, TextProps, UnicodeBidi,
-};
+use crate::style::{self, BoxProps, Computed, Declarations, Decoration, TextProps, UnicodeBidi};
 
 pub const OBJECT: char = '\u{FFFC}';
 pub const OBJECT_LEN: usize = 3;
@@ -133,9 +131,13 @@ impl OffsetMap {
         let mut after: Option<&Seg> = None;
         for seg in &self.segs {
             if seg.kind == SegKind::Text && seg.logical.start < offset && offset < seg.logical.end {
-                return TextPosition::new(seg.layout.start + (offset - seg.logical.start), affinity);
+                return TextPosition::new(
+                    seg.layout.start + (offset - seg.logical.start),
+                    affinity,
+                );
             }
-            if seg.kind == SegKind::Atomic && seg.logical.start < offset && offset < seg.logical.end {
+            if seg.kind == SegKind::Atomic && seg.logical.start < offset && offset < seg.logical.end
+            {
                 return TextPosition::new(seg.layout.end, Affinity::Upstream);
             }
             if seg.logical.end == offset {
@@ -150,10 +152,9 @@ impl OffsetMap {
                 TextPosition::new(b.layout.end, Affinity::Upstream)
             }
             (_, Some(a), _) => TextPosition::new(a.layout.start, Affinity::Downstream),
-            (None, None, _) => TextPosition::new(
-                if offset == 0 { 0 } else { self.layout_len },
-                affinity,
-            ),
+            (None, None, _) => {
+                TextPosition::new(if offset == 0 { 0 } else { self.layout_len }, affinity)
+            }
         }
     }
 
@@ -163,7 +164,9 @@ impl OffsetMap {
         for seg in &self.segs {
             if index < seg.layout.start {
                 return match previous_end {
-                    Some(end) if position.affinity == Affinity::Upstream => (end, Affinity::Upstream),
+                    Some(end) if position.affinity == Affinity::Upstream => {
+                        (end, Affinity::Upstream)
+                    }
                     _ => (seg.logical.start, Affinity::Downstream),
                 };
             }
@@ -308,7 +311,8 @@ const ARABIC_SPACE_UNITS: f32 = 5.0;
 
 fn script_of(c: char) -> Option<bool> {
     let cp = c as u32;
-    if matches!(cp, 0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF) {
+    if matches!(cp, 0x0600..=0x06FF | 0x0750..=0x077F | 0x08A0..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFF)
+    {
         let digit = matches!(cp, 0x0660..=0x0669 | 0x06F0..=0x06F9);
         let common = matches!(cp, 0x060C | 0x061B | 0x061F | 0x0640 | 0x06DD);
         return if digit || common { None } else { Some(true) };
@@ -323,22 +327,30 @@ fn arabic_context(text: &str, range: Range<usize>) -> bool {
     if let Some(found) = text[..range.start].chars().rev().find_map(script_of) {
         return found;
     }
-    text[range.end..].chars().find_map(script_of).unwrap_or(true)
+    text[range.end..]
+        .chars()
+        .find_map(script_of)
+        .unwrap_or(true)
 }
 
 fn bidi_open(text: &TextProps, bidi: UnicodeBidi, auto: bool) -> (Vec<char>, Vec<char>) {
     let rtl = text.direction.is_rtl();
-    let isolate = if auto { FSI } else if rtl { RLI } else { LRI };
+    let isolate = if auto {
+        FSI
+    } else if rtl {
+        RLI
+    } else {
+        LRI
+    };
     match bidi {
         UnicodeBidi::Normal => (Vec::new(), Vec::new()),
         UnicodeBidi::Isolate => (vec![isolate], vec![PDI]),
         UnicodeBidi::Plaintext => (vec![FSI], vec![PDI]),
         UnicodeBidi::Embed => (vec![if rtl { RLE } else { LRE }], vec![PDF]),
         UnicodeBidi::Override => (vec![if rtl { RLO } else { LRO }], vec![PDF]),
-        UnicodeBidi::IsolateOverride => (
-            vec![isolate, if rtl { RLO } else { LRO }],
-            vec![PDF, PDI],
-        ),
+        UnicodeBidi::IsolateOverride => {
+            (vec![isolate, if rtl { RLO } else { LRO }], vec![PDF, PDI])
+        }
     }
 }
 
@@ -355,7 +367,8 @@ impl Builder<'_> {
         }
         let base = self.base;
         if props.family != base.family {
-            self.spans.push((range.clone(), Attr::Family(props.family.clone())));
+            self.spans
+                .push((range.clone(), Attr::Family(props.family.clone())));
         }
         if props.size != base.size {
             self.spans.push((range.clone(), Attr::Size(props.size)));
@@ -401,8 +414,10 @@ impl Builder<'_> {
                 metrics.space_advance / metrics.units_per_em * space.size
             };
             let target = (natural + space.word_spacing).max(0.0);
-            self.spans.push((space.range.clone(), Attr::Family(FontFamily::Interface)));
-            self.spans.push((space.range, Attr::Size(target / inter_space)));
+            self.spans
+                .push((space.range.clone(), Attr::Family(FontFamily::Interface)));
+            self.spans
+                .push((space.range, Attr::Size(target / inter_space)));
         }
     }
 
@@ -685,7 +700,6 @@ pub struct TextBox {
     pub(crate) margin_top: f32,
     pub(crate) margin_bottom: f32,
     pub(crate) borders: [style::BorderSide; 4],
-    pub(crate) border_widths: Edges,
     pub(crate) background: Option<Rgba>,
     pub(crate) color: Rgba,
     pub(crate) decorations: Vec<DecoSpan>,
@@ -698,7 +712,7 @@ pub struct TextBox {
     pub(crate) break_inside: style::BreakValue,
     pub(crate) orphans: usize,
     pub(crate) widows: usize,
-    pub(crate) first_line_shift: f32,
+    pub(crate) layout_dx: f32,
 }
 
 impl TextBox {
@@ -722,15 +736,8 @@ impl TextBox {
         &self.fields
     }
 
-    pub(crate) fn line_x_shift(&self, line: usize) -> f32 {
-        if line == 0 { self.first_line_shift } else { 0.0 }
-    }
-
-    pub(crate) fn line_of_layout(&self, position: TextPosition) -> usize {
-        if self.layout.lines().is_empty() {
-            return 0;
-        }
-        self.layout.caret(position).line.min(self.lines.len().saturating_sub(1))
+    pub(crate) fn layout_dx(&self) -> f32 {
+        self.layout_dx
     }
 
     pub(crate) fn caret_local(&self, position: TextPosition) -> (usize, Rect) {
@@ -748,23 +755,44 @@ impl TextBox {
             } else {
                 self.content.x
             };
-            return (0, Rect::new(x, line.content_top, 0.0, line.content_bottom - line.content_top));
+            return (
+                0,
+                Rect::new(
+                    x,
+                    line.content_top,
+                    0.0,
+                    line.content_bottom - line.content_top,
+                ),
+            );
         }
         let caret = self.layout.caret(position);
         let line = caret.line.min(self.lines.len() - 1);
         let lb = self.lines[line];
-        let x = self.content.x + caret.x + self.line_x_shift(line);
-        (line, Rect::new(x, lb.content_top, 0.0, lb.content_bottom - lb.content_top))
+        let x = self.content.x + caret.x + self.layout_dx();
+        (
+            line,
+            Rect::new(x, lb.content_top, 0.0, lb.content_bottom - lb.content_top),
+        )
     }
 
     pub(crate) fn line_rect(&self, line: usize) -> Rect {
         let lb = self.lines[line];
-        Rect::new(self.content.x, lb.top, self.content.width, lb.bottom - lb.top)
+        Rect::new(
+            self.content.x,
+            lb.top,
+            self.content.width,
+            lb.bottom - lb.top,
+        )
     }
 
     pub(crate) fn line_rect_full(&self, line: usize) -> Rect {
         let lb = self.lines[line];
-        Rect::new(self.border_box.x, lb.top, self.border_box.width, lb.bottom - lb.top)
+        Rect::new(
+            self.border_box.x,
+            lb.top,
+            self.border_box.width,
+            lb.bottom - lb.top,
+        )
     }
 
     pub(crate) fn selection_local(&self, range: Range<usize>) -> Vec<(usize, Rect)> {
@@ -774,12 +802,15 @@ impl TextBox {
             return rects;
         }
         for rect in self.layout.selection_rects(layout_range.clone()) {
-            let line = self.layout.line_at_y(rect.y + rect.height * 0.5).min(self.lines.len() - 1);
+            let line = self
+                .layout
+                .line_at_y(rect.y + rect.height * 0.5)
+                .min(self.lines.len() - 1);
             let lb = self.lines[line];
             rects.push((
                 line,
                 Rect::new(
-                    self.content.x + rect.x + self.line_x_shift(line),
+                    self.content.x + rect.x + self.layout_dx(),
                     lb.top,
                     rect.width,
                     lb.bottom - lb.top,
@@ -818,14 +849,7 @@ impl TextBox {
         }
         let line = line.min(self.layout.lines().len() - 1);
         self.layout
-            .hit_test_line(line, x - self.content.x - self.line_x_shift(line))
-    }
-
-    pub(crate) fn line_index_at(&self, y: f32) -> usize {
-        self.lines
-            .iter()
-            .position(|l| y < l.bottom)
-            .unwrap_or(self.lines.len().saturating_sub(1))
+            .hit_test_line(line, x - self.content.x - self.layout_dx())
     }
 }
 
@@ -834,7 +858,6 @@ pub(crate) struct TextBlockInput<'a> {
     pub inlines: &'a [Inline],
     pub marker: Option<MarkerKind>,
     pub available: f32,
-    pub empty_line_strut: bool,
 }
 
 pub(crate) fn content_hash(
@@ -909,7 +932,12 @@ pub(crate) fn collect_field_refs(inlines: &[Inline], out: &mut Vec<FieldReferenc
     }
 }
 
-fn layout_paragraph(engine: &mut TextEngine, text: &AttributedText, props: &TextProps, width: f32) -> Arc<TextLayout> {
+fn layout_paragraph(
+    engine: &mut TextEngine,
+    text: &AttributedText,
+    props: &TextProps,
+    width: f32,
+) -> Arc<TextLayout> {
     let paragraph = ParagraphStyle {
         direction: if props.direction.is_rtl() {
             missal_text::Direction::Rtl
@@ -938,15 +966,58 @@ pub(crate) fn measure_text_block(
     let border_widths = boxp.border_widths(text_props);
     let mut border_width = available - margins.horizontal();
     if let Some(width) = boxp.width.filter(|w| *w != Length::Auto) {
-        border_width = width.resolve(text_props.size, available) + paddings.horizontal() + border_widths.horizontal();
+        border_width = width.resolve(text_props.size, available)
+            + paddings.horizontal()
+            + border_widths.horizontal();
     }
     if let Some(max) = boxp.max_width.filter(|w| *w != Length::Auto) {
-        border_width = border_width.min(max.resolve(text_props.size, available) + paddings.horizontal() + border_widths.horizontal());
+        border_width = border_width.min(
+            max.resolve(text_props.size, available)
+                + paddings.horizontal()
+                + border_widths.horizontal(),
+        );
     }
-    let content_width = (border_width - paddings.horizontal() - border_widths.horizontal()).max(0.0);
+    let content_width =
+        (border_width - paddings.horizontal() - border_widths.horizontal()).max(0.0);
     let indent = text_props.indent.resolve(text_props.size, content_width);
-    let content = build_inline(computed, input.inlines, fields, indent.max(0.0));
-    let layout = layout_paragraph(engine, &content.text, text_props, content_width);
+    let mut content = build_inline(computed, input.inlines, fields, indent.max(0.0));
+    let mut layout = layout_paragraph(engine, &content.text, text_props, content_width);
+    let mut layout_dx = 0.0;
+    if indent < 0.0 {
+        let hang = -indent;
+        let wide = content_width + hang;
+        let base_objects = content.text.objects.clone();
+        let mut starts: Vec<usize> = Vec::new();
+        for _ in 0..6 {
+            let mut text = content.text.clone();
+            text.objects = base_objects.clone();
+            for (k, start) in starts.iter().enumerate() {
+                text.objects.push(InlineObject {
+                    id: INDENT_OBJECT - 1 - k as u64,
+                    index: *start,
+                    width: hang,
+                    height: 0.0,
+                    baseline: Some(0.0),
+                });
+            }
+            let candidate = layout_paragraph(engine, &text, text_props, wide);
+            let next: Vec<usize> = candidate
+                .lines()
+                .iter()
+                .skip(1)
+                .map(|l| l.text_range.start)
+                .collect();
+            layout = candidate;
+            content.text = text;
+            if next == starts {
+                break;
+            }
+            starts = next;
+        }
+        if !text_props.direction.is_rtl() {
+            layout_dx = -hang;
+        }
+    }
     let strut = InlineBox::of(text_props);
     let mut lines = Vec::with_capacity(layout.lines().len().max(1));
     let content_top = border_widths.top + paddings.top;
@@ -979,7 +1050,7 @@ pub(crate) fn measure_text_block(
                 }
             }
             for object in layout.objects() {
-                if object.line == index && object.id != INDENT_OBJECT {
+                if object.line == index && object.id < INDENT_OBJECT - 64 {
                     above = above.max(object.rect.height);
                     content_above = content_above.max(object.rect.height);
                 }
@@ -996,18 +1067,16 @@ pub(crate) fn measure_text_block(
         });
         y = baseline + below;
     }
-    if !input.empty_line_strut && content.map.logical_len == 0 && infos.len() <= 1 {
-        let line = &mut lines[0];
-        let height = line.bottom - line.top;
-        let _ = height;
-    }
     let lines_height = y - content_top;
     let min_height = boxp
         .min_height
         .map(|m| m.resolve(text_props.size, 0.0))
         .unwrap_or(0.0);
     let mut content_height = lines_height.max(min_height);
-    if let Some(height) = boxp.height.and_then(|h| h.resolve_absolute(text_props.size)) {
+    if let Some(height) = boxp
+        .height
+        .and_then(|h| h.resolve_absolute(text_props.size))
+    {
         content_height = content_height.max(height);
     }
     let border_height = content_height + paddings.vertical() + border_widths.vertical();
@@ -1018,11 +1087,6 @@ pub(crate) fn measure_text_block(
         content_width,
         content_height,
     );
-    let first_line_shift = if indent < 0.0 {
-        if text_props.direction.is_rtl() { -indent } else { indent }
-    } else {
-        0.0
-    };
     let marker = input.marker.map(|kind| {
         let label: String = match &kind {
             MarkerKind::Bullet => "\u{2022} ".to_owned(),
@@ -1063,7 +1127,6 @@ pub(crate) fn measure_text_block(
         margin_top: margins.top,
         margin_bottom: margins.bottom,
         borders,
-        border_widths,
         background: boxp.background,
         color: text_props.color,
         decorations: content.decorations,
@@ -1076,10 +1139,6 @@ pub(crate) fn measure_text_block(
         break_inside: boxp.break_inside,
         orphans: text_props.orphans as usize,
         widows: text_props.widows as usize,
-        first_line_shift,
+        layout_dx,
     }
-}
-
-pub(crate) fn dir_of(text: &TextProps) -> Dir {
-    text.direction
 }

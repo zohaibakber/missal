@@ -6,6 +6,7 @@ use missal_core::document::{
 };
 use missal_text::{Rgba, TextEngine};
 
+use crate::FieldSource;
 use crate::css::Length;
 use crate::geom::Rect;
 use crate::image::ImageData;
@@ -15,7 +16,6 @@ use crate::style::{
 };
 use crate::table::{self, TableBox};
 use crate::text::{self, MarkerKind, TextBlockInput, TextBox};
-use crate::FieldSource;
 
 #[derive(Clone, Debug)]
 pub struct ImageBox {
@@ -62,7 +62,13 @@ impl FlowItem {
         self.node.height()
     }
 
-    fn simple(node: Node, path: BlockPath, x: f32, margin_top: f32, margin_bottom: f32) -> FlowItem {
+    fn simple(
+        node: Node,
+        path: BlockPath,
+        x: f32,
+        margin_top: f32,
+        margin_bottom: f32,
+    ) -> FlowItem {
         FlowItem {
             node,
             path,
@@ -136,6 +142,21 @@ impl TextCache {
         self.map.len()
     }
 
+    pub(crate) fn sync_generation(&mut self, other: &TextCache) {
+        self.generation = other.generation;
+    }
+
+    pub(crate) fn absorb(&mut self, other: &mut TextCache) {
+        let generation = self.generation;
+        for (key, (value, _)) in other.map.drain() {
+            self.map.entry(key).or_insert((value, generation));
+        }
+        self.hits += other.hits;
+        self.misses += other.misses;
+        other.hits = 0;
+        other.misses = 0;
+    }
+
     pub(crate) fn clear(&mut self) {
         self.map.clear();
     }
@@ -170,7 +191,6 @@ impl Ctx<'_> {
                 inlines,
                 marker,
                 available,
-                empty_line_strut: true,
             },
             self.fields,
         ));

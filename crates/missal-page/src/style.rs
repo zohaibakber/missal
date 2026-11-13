@@ -206,7 +206,11 @@ pub struct BorderSide {
 
 impl BorderSide {
     pub fn used_width(&self) -> f32 {
-        if self.style.visible() { self.width.max(0.0) } else { 0.0 }
+        if self.style.visible() {
+            self.width.max(0.0)
+        } else {
+            0.0
+        }
     }
 
     pub fn solid(width: f32, color: Rgba) -> BorderSide {
@@ -379,13 +383,6 @@ pub struct Edges {
 }
 
 impl Edges {
-    pub const ZERO: Edges = Edges {
-        top: 0.0,
-        right: 0.0,
-        bottom: 0.0,
-        left: 0.0,
-    };
-
     pub fn horizontal(&self) -> f32 {
         self.left + self.right
     }
@@ -401,7 +398,8 @@ impl BoxProps {
     }
 
     pub fn paddings(&self, text: &TextProps, containing_width: f32) -> Edges {
-        let mut edges = self.resolve_edges(self.padding, self.padding_inline, text, containing_width);
+        let mut edges =
+            self.resolve_edges(self.padding, self.padding_inline, text, containing_width);
         edges.top = edges.top.max(0.0);
         edges.right = edges.right.max(0.0);
         edges.bottom = edges.bottom.max(0.0);
@@ -439,7 +437,11 @@ impl BoxProps {
         containing_width: f32,
     ) -> Edges {
         let mut values = physical;
-        let (start, end) = if text.direction.is_rtl() { (1, 3) } else { (3, 1) };
+        let (start, end) = if text.direction.is_rtl() {
+            (1, 3)
+        } else {
+            (3, 1)
+        };
         if let Some(l) = inline[0] {
             values[start] = l;
         }
@@ -559,13 +561,12 @@ pub fn doc_dir(direction: DocDirection) -> Dir {
     }
 }
 
-fn border_shorthand(value: &str, current: BorderSide) -> BorderSide {
+fn border_shorthand(value: &str) -> BorderSide {
     let mut side = BorderSide {
         width: 3.0,
         style: BorderStyle::None,
         color: None,
     };
-    let _ = current;
     for part in css::split_values(css::clean(value)) {
         if let Some(style) = BorderStyle::parse(part) {
             side.style = style;
@@ -583,7 +584,9 @@ fn border_width(value: &str) -> Option<f32> {
         "thin" => Some(1.0),
         "medium" => Some(3.0),
         "thick" => Some(5.0),
-        other => css::length(other)?.resolve_absolute(16.0).map(|w| w.max(0.0)),
+        other => css::length(other)?
+            .resolve_absolute(16.0)
+            .map(|w| w.max(0.0)),
     }
 }
 
@@ -642,10 +645,6 @@ impl<'a> Declarations<'a> {
         self.list.push((property, value));
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.list.is_empty()
-    }
-
     pub fn iter(&self) -> impl Iterator<Item = (&'a str, &'a str)> + '_ {
         self.list.iter().copied()
     }
@@ -673,7 +672,13 @@ pub fn compute(parent: &TextProps, base: BoxProps, decls: &Declarations<'_>) -> 
     Computed { text, boxp }
 }
 
-fn apply(property: &str, value: &str, parent: &TextProps, text: &mut TextProps, boxp: &mut BoxProps) {
+fn apply(
+    property: &str,
+    value: &str,
+    parent: &TextProps,
+    text: &mut TextProps,
+    boxp: &mut BoxProps,
+) {
     let property = property.trim().to_ascii_lowercase();
     let value = css::clean(value);
     if value.to_ascii_lowercase().contains("var(") {
@@ -717,14 +722,18 @@ fn apply(property: &str, value: &str, parent: &TextProps, text: &mut TextProps, 
             text.letter_spacing = if lower == "normal" {
                 0.0
             } else {
-                len().map(|l| l.resolve(text.size, 0.0)).unwrap_or(text.letter_spacing)
+                len()
+                    .map(|l| l.resolve(text.size, 0.0))
+                    .unwrap_or(text.letter_spacing)
             }
         }
         "word-spacing" => {
             text.word_spacing = if lower == "normal" {
                 0.0
             } else {
-                len().map(|l| l.resolve(text.size, 0.0)).unwrap_or(text.word_spacing)
+                len()
+                    .map(|l| l.resolve(text.size, 0.0))
+                    .unwrap_or(text.word_spacing)
             }
         }
         "white-space" => {
@@ -741,7 +750,9 @@ fn apply(property: &str, value: &str, parent: &TextProps, text: &mut TextProps, 
             boxp.decoration = decoration(value, boxp.decoration)
         }
         "text-decoration-color" => boxp.decoration.color = css::color(value),
-        "text-decoration-style" => boxp.decoration.dashed = matches!(lower.as_str(), "dashed" | "dotted"),
+        "text-decoration-style" => {
+            boxp.decoration.dashed = matches!(lower.as_str(), "dashed" | "dotted")
+        }
         "vertical-align" => {
             if let Some(v) = vertical_align(value) {
                 boxp.vertical_align = v;
@@ -802,7 +813,7 @@ fn apply(property: &str, value: &str, parent: &TextProps, text: &mut TextProps, 
             }
         }
         "border" => {
-            let side = border_shorthand(value, BorderSide::default());
+            let side = border_shorthand(value);
             boxp.border = [side; 4];
             boxp.border_inline_start = None;
         }
@@ -839,7 +850,11 @@ fn apply(property: &str, value: &str, parent: &TextProps, text: &mut TextProps, 
         }
         "break-inside" | "page-break-inside" => {
             if let Some(b) = BreakValue::parse(value) {
-                boxp.break_inside = if b == BreakValue::Page { BreakValue::Auto } else { b };
+                boxp.break_inside = if b == BreakValue::Page {
+                    BreakValue::Auto
+                } else {
+                    b
+                };
             }
         }
         other => apply_side(other, value, boxp),
@@ -913,12 +928,12 @@ fn apply_side(property: &str, value: &str, boxp: &mut BoxProps) {
             None => (rest, None),
         };
         if side == "inline" && part == Some("start") {
-            boxp.border_inline_start = Some(border_shorthand(value, BorderSide::default()));
+            boxp.border_inline_start = Some(border_shorthand(value));
             return;
         }
         let Some(i) = side_index(side) else { return };
         match part {
-            None => boxp.border[i] = border_shorthand(value, boxp.border[i]),
+            None => boxp.border[i] = border_shorthand(value),
             Some("width") => {
                 if let Some(w) = border_width(value) {
                     boxp.border[i].width = w;

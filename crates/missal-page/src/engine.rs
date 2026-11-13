@@ -8,8 +8,8 @@ use missal_text::TextEngine;
 use crate::FieldSource;
 use crate::display::{self, DisplayList};
 use crate::geom::{Rect, Size, mm_to_px};
-use crate::measure::{Ctx, FlowItem, Node, TextCache, measure_block};
-use crate::paginate::{FlowToken, Inner, Piece, Region, fragment_flow};
+use crate::measure::{Ctx, FlowItem, TextCache, measure_block};
+use crate::paginate::{FlowToken, Piece, Region, fragment_flow};
 use crate::position::BlockPath;
 use crate::style::TextProps;
 use crate::text::collect_field_refs;
@@ -123,7 +123,10 @@ impl Packet {
     }
 
     pub(crate) fn locate_page(&self, index: usize) -> Option<(usize, usize)> {
-        let doc = self.page_offsets.partition_point(|&o| o <= index).checked_sub(1)?;
+        let doc = self
+            .page_offsets
+            .partition_point(|&o| o <= index)
+            .checked_sub(1)?;
         let local = index - self.page_offsets[doc];
         (local < self.docs[doc].pages.len()).then_some((doc, local))
     }
@@ -141,6 +144,7 @@ impl Packet {
 pub struct PageEngine {
     text: TextEngine,
     cache: TextCache,
+    workers: Vec<(TextEngine, TextCache)>,
     options: LayoutOptions,
     last: RelayoutStats,
 }
@@ -193,7 +197,9 @@ fn list_field_refs(list: &missal_core::document::List, out: &mut Vec<FieldRefere
     for item in list.items.iter().filter_map(Child::node) {
         for child in &item.children {
             match child {
-                ListItemChild::Inline(inline) => collect_field_refs(std::slice::from_ref(inline), out),
+                ListItemChild::Inline(inline) => {
+                    collect_field_refs(std::slice::from_ref(inline), out)
+                }
                 ListItemChild::List(nested) => list_field_refs(nested, out),
             }
         }
@@ -219,6 +225,7 @@ impl PageEngine {
         PageEngine {
             text: TextEngine::new(),
             cache: TextCache::new(),
+            workers: Vec::new(),
             options: LayoutOptions::default(),
             last: RelayoutStats::default(),
         }
@@ -269,13 +276,11 @@ impl PageEngine {
 
     fn measure_top(
         &mut self,
-        document: usize,
         source: &DocSource<'_>,
         content_width: f32,
         index: usize,
         previous: Option<(&[FlowItem], &[u32])>,
     ) -> Vec<FlowItem> {
-        let _ = document;
         let body = TextProps::body();
         let mut ctx = Ctx {
             engine: &mut self.text,
@@ -297,15 +302,28 @@ impl PageEngine {
         out
     }
 
-    fn layout_document(&mut self, index: usize, source: &DocSource<'_>, stats: &mut RelayoutStats) -> DocLayout {
+    fn layout_document(
+        &mut self,
+        index: usize,
+        source: &DocSource<'_>,
+        stats: &mut RelayoutStats,
+    ) -> DocLayout {
         let (page_size, content) = page_geometry(source.document.page_layout.as_ref());
         let mut items = Vec::new();
         let mut block_starts = Vec::with_capacity(source.document.blocks.len() + 1);
         let mut field_refs = Vec::with_capacity(source.document.blocks.len());
         let mut field_texts = Vec::with_capacity(source.document.blocks.len());
+        let mut measured = self.measure_parallel(source, content.width);
         for (block_index, block) in source.document.blocks.iter().enumerate() {
             block_starts.push(items.len());
-            items.extend(self.measure_top(index, source, content.width, block_index, None));
+            match measured
+                .as_mut()
+                .and_then(|m| m.get_mut(block_index))
+                .map(std::mem::take)
+            {
+                Some(found) => items.extend(found),
+                None => items.extend(self.measure_top(source, content.width, block_index, None)),
+            }
             let mut refs = Vec::new();
             block_field_refs(block, &mut refs);
             field_texts.push(refs.iter().map(|r| source.fields.display(r)).collect());
@@ -322,9 +340,101 @@ impl PageEngine {
             field_texts,
             pages: Vec::new(),
         };
-        let pages = self.paginate(&doc, index, 0, PageStart { token: FlowToken::start(), forced: false }, None, stats);
+        let pages = self.paginate(
+            &doc,
+            index,
+            0,
+            PageStart {
+                token: FlowToken::start(),
+                forced: false,
+            },
+            None,
+            stats,
+        );
         doc.pages = pages;
         doc
+    }
+
+    fn measure_parallel(
+        &mut self,
+        source: &DocSource<'_>,
+        width: f32,
+    ) -> Option<Vec<Vec<FlowItem>>> {
+        let all: Vec<usize> = (0..source.document.blocks.len()).collect();
+        self.measure_set(source, width, &all, 48)
+    }
+
+    fn measure_set(
+        &mut self,
+        source: &DocSource<'_>,
+        width: f32,
+        wanted: &[usize],
+        threshold: usize,
+    ) -> Option<Vec<Vec<FlowItem>>> {
+        let blocks = &source.document.blocks;
+        let threads = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+            .min(8);
+        if threads < 2 || wanted.len() < threshold {
+            return None;
+        }
+        while self.workers.len() < threads {
+            self.workers.push((TextEngine::new(), TextCache::new()));
+        }
+        let main_cache = &self.cache;
+        let fields = source.fields;
+        let results: Vec<Vec<(usize, Vec<FlowItem>)>> = std::thread::scope(|scope| {
+            let handles: Vec<_> = self
+                .workers
+                .iter_mut()
+                .take(threads)
+                .enumerate()
+                .map(|(worker, (engine, cache))| {
+                    cache.sync_generation(main_cache);
+                    scope.spawn(move || {
+                        let body = TextProps::body();
+                        let mut ctx = Ctx {
+                            engine,
+                            cache,
+                            fields,
+                        };
+                        let mut out = Vec::new();
+                        let mut slot = worker;
+                        while slot < wanted.len() {
+                            let block = wanted[slot];
+                            let mut items = Vec::new();
+                            measure_block(
+                                &blocks[block],
+                                &body,
+                                width,
+                                BlockPath::top(block),
+                                &mut ctx,
+                                None,
+                                &mut items,
+                            );
+                            out.push((block, items));
+                            slot += threads;
+                        }
+                        out
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("measure worker"))
+                .collect()
+        });
+        for (_, cache) in self.workers.iter_mut() {
+            self.cache.absorb(cache);
+        }
+        let mut measured: Vec<Vec<FlowItem>> = vec![Vec::new(); blocks.len()];
+        for chunk in results {
+            for (block, items) in chunk {
+                measured[block] = items;
+            }
+        }
+        Some(measured)
     }
 
     fn region(&self, doc: &DocLayout, start: &PageStart, first_page: bool) -> Region {
@@ -384,11 +494,7 @@ impl PageEngine {
                     token: old_token,
                     forced: next_state.forced,
                 };
-                if let Some(found) = realign
-                    .old_pages
-                    .iter()
-                    .position(|p| p.start == old_state)
-                {
+                if let Some(found) = realign.old_pages.iter().position(|p| p.start == old_state) {
                     for old in &realign.old_pages[found..] {
                         let mut page = old.clone();
                         shift_page(&mut page, realign.item_delta, realign.block_delta);
@@ -405,7 +511,13 @@ impl PageEngine {
         pages
     }
 
-    pub fn update(&mut self, packet: &mut Packet, document: usize, source: &DocSource<'_>, edit: &Edit) {
+    pub fn update(
+        &mut self,
+        packet: &mut Packet,
+        document: usize,
+        source: &DocSource<'_>,
+        edit: &Edit,
+    ) {
         let started = Instant::now();
         let mut stats = RelayoutStats::default();
         self.cache.next_generation();
@@ -414,7 +526,10 @@ impl PageEngine {
         };
         let (page_size, content) = page_geometry(source.document.page_layout.as_ref());
         let geometry_changed = page_size != doc.page_size || content != doc.content;
-        let edit = if geometry_changed || doc.block_starts.len() != source.document.blocks.len() + 1 && !matches!(edit, Edit::Splice { .. }) {
+        let edit = if geometry_changed
+            || doc.block_starts.len() != source.document.blocks.len() + 1
+                && !matches!(edit, Edit::Splice { .. })
+        {
             Edit::Document
         } else {
             edit.clone()
@@ -434,7 +549,7 @@ impl PageEngine {
                 let previous: Vec<FlowItem> = doc.items[range.clone()].to_vec();
                 let tail: Vec<u32> = path.steps()[1..].to_vec();
                 let width = doc.content.width;
-                let items = self.measure_top(document, source, width, k, Some((&previous, &tail)));
+                let items = self.measure_top(source, width, k, Some((&previous, &tail)));
                 stats.blocks_measured += 1;
                 let mut refs = Vec::new();
                 block_field_refs(&source.document.blocks[k], &mut refs);
@@ -454,7 +569,7 @@ impl PageEngine {
                 let mut new_refs = Vec::with_capacity(inserted);
                 let mut new_texts = Vec::with_capacity(inserted);
                 for k in start..start + inserted {
-                    new_items.push(self.measure_top(document, source, width, k, None));
+                    new_items.push(self.measure_top(source, width, k, None));
                     let mut refs = Vec::new();
                     if let Some(block) = source.document.blocks.get(k) {
                         block_field_refs(block, &mut refs);
@@ -468,7 +583,15 @@ impl PageEngine {
                 doc.field_refs.splice(start..start + removed, new_refs);
                 doc.field_texts.splice(start..start + removed, new_texts);
                 let block_delta = inserted as isize - removed as isize;
-                self.replace_blocks(doc, document, start, removed, new_items, block_delta, &mut stats);
+                self.replace_blocks(
+                    doc,
+                    document,
+                    start,
+                    removed,
+                    new_items,
+                    block_delta,
+                    &mut stats,
+                );
             }
         }
         packet.refresh_offsets();
@@ -489,7 +612,6 @@ impl PageEngine {
     ) {
         let old_first = doc.block_starts[start];
         let old_end = doc.block_starts[(start + removed).min(doc.block_starts.len() - 1)];
-        let inserted_blocks = new_blocks.len();
         let flat: Vec<FlowItem> = new_blocks.iter().flatten().cloned().collect();
         let inserted_items = flat.len();
         let item_delta = inserted_items as isize - (old_end - old_first) as isize;
@@ -510,9 +632,16 @@ impl PageEngine {
             starts.push((s as isize + item_delta) as usize);
         }
         doc.block_starts = starts;
-        let _ = inserted_blocks;
         let new_end_item = old_first + inserted_items;
-        self.repaginate(doc, document, old_first, old_end, new_end_item, item_delta, block_delta, stats);
+        self.repaginate(
+            doc,
+            document,
+            old_first,
+            new_end_item,
+            item_delta,
+            block_delta,
+            stats,
+        );
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -521,13 +650,11 @@ impl PageEngine {
         doc: &mut DocLayout,
         document: usize,
         first_item: usize,
-        old_end_item: usize,
         new_end_item: usize,
         item_delta: isize,
         block_delta: isize,
         stats: &mut RelayoutStats,
     ) {
-        let _ = old_end_item;
         let p = doc
             .pages
             .iter()
@@ -536,10 +663,14 @@ impl PageEngine {
                     || (page.start.token.item == first_item && page.start.token.inner.is_none())
             })
             .unwrap_or(0);
-        let start = doc.pages.get(p).map(|page| page.start.clone()).unwrap_or(PageStart {
-            token: FlowToken::start(),
-            forced: false,
-        });
+        let start = doc
+            .pages
+            .get(p)
+            .map(|page| page.start.clone())
+            .unwrap_or(PageStart {
+                token: FlowToken::start(),
+                forced: false,
+            });
         let old_tail: Vec<Page> = doc.pages.split_off(p);
         let realign = Realign {
             old_pages: &old_tail[1.min(old_tail.len())..],
@@ -557,13 +688,16 @@ impl PageEngine {
         self.cache.next_generation();
         let mut total = 0;
         for (document, source) in sources.iter().enumerate() {
-            let Some(doc) = packet.docs.get(document) else { continue };
+            let Some(doc) = packet.docs.get(document) else {
+                continue;
+            };
             let mut dirty = Vec::new();
             for (k, refs) in doc.field_refs.iter().enumerate() {
                 if refs.is_empty() {
                     continue;
                 }
-                let texts: Vec<FieldDisplayText> = refs.iter().map(|r| source.fields.display(r)).collect();
+                let texts: Vec<FieldDisplayText> =
+                    refs.iter().map(|r| source.fields.display(r)).collect();
                 if texts != doc.field_texts[k] {
                     dirty.push((k, texts));
                 }
@@ -575,6 +709,8 @@ impl PageEngine {
             let width = doc.content.width;
             let first_block = dirty[0].0;
             let last_block = dirty[dirty.len() - 1].0;
+            let dirty_blocks: Vec<usize> = dirty.iter().map(|(k, _)| *k).collect();
+            let mut parallel = self.measure_set(source, width, &dirty_blocks, 8);
             let mut measured = Vec::with_capacity(last_block - first_block + 1);
             let doc_items: Vec<Vec<FlowItem>> = (first_block..=last_block)
                 .map(|k| {
@@ -584,7 +720,10 @@ impl PageEngine {
                 .collect();
             for (offset, k) in (first_block..=last_block).enumerate() {
                 if dirty.iter().any(|(d, _)| *d == k) {
-                    measured.push(self.measure_top(document, source, width, k, None));
+                    match parallel.as_mut().map(|m| std::mem::take(&mut m[k])) {
+                        Some(items) => measured.push(items),
+                        None => measured.push(self.measure_top(source, width, k, None)),
+                    }
                     stats.blocks_measured += 1;
                 } else {
                     measured.push(doc_items[offset].clone());
@@ -609,12 +748,4 @@ pub(crate) struct Realign<'a> {
     new_end_item: usize,
     item_delta: isize,
     block_delta: isize,
-}
-
-pub(crate) fn text_items(items: &[FlowItem]) -> impl Iterator<Item = &FlowItem> {
-    items.iter().filter(|i| matches!(i.node, Node::Text(_)))
-}
-
-pub(crate) fn inner_is_none(token: &FlowToken) -> bool {
-    !matches!(token.inner, Some(Inner::Lines(_)) | Some(Inner::Table(_)))
 }
