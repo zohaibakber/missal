@@ -177,7 +177,7 @@ fn run(dark: bool, out: &Path) {
     h.click("add-templates-trigger");
     h.shot("11-add-templates");
     h.press("escape");
-    h.click("edit-custom-values");
+    h.click("custom-values-button");
     h.shot("12-custom-values");
     h.reset();
 

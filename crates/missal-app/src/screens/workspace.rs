@@ -1000,6 +1000,11 @@ impl Render for WorkspaceScreen {
                             .on_click(cx.listener(|this, _, window, cx| this.save_active(window, cx, None)))
                     }))
                     .child(
+                        icon_button("custom-values-button", IconName::Braces)
+                            .tooltip("Custom field values")
+                            .on_click(cx.listener(|this, _, window, cx| this.edit_custom_values(window, cx))),
+                    )
+                    .child(
                         icon_button("workspace-print", IconName::Printer)
                             .tooltip("Print preview")
                             .disabled(!printable)
