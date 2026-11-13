@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/missal-app", "crates/missal-core", "crates/missal-docx", "crates/missal-page", "crates/missal-store", "crates/missal-text"]
+members = ["crates/missal-app", "crates/missal-core", "crates/missal-docx", "crates/missal-editor", "crates/missal-page", "crates/missal-store", "crates/missal-text"]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,10 +11,14 @@ publish = false
 
 [workspace.dependencies]
 missal-core = { path = "crates/missal-core" }
+missal-docx = { path = "crates/missal-docx" }
+missal-editor = { path = "crates/missal-editor" }
+missal-page = { path = "crates/missal-page" }
 missal-store = { path = "crates/missal-store" }
 missal-text = { path = "crates/missal-text" }
 serde_json = { version = "1.0.154", features = ["preserve_order", "float_roundtrip"] }
 unicode-general-category = "1.1.0"
+unicode-segmentation = "1.13.3"
 rusqlite = { version = "0.42", features = ["bundled"] }
 flate2 = "1.1.11"
 uuid = { version = "1.29.2", features = ["v4"] }

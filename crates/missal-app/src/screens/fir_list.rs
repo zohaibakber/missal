@@ -24,7 +24,7 @@ use crate::prefs::{Column, Sort};
 use crate::screens::edit_sheet::open_edit_sheet;
 use crate::shortcuts::*;
 use crate::state::firs::FirsEvent;
-use crate::state::rows::{FirRow, derive};
+use crate::state::rows::{FirRow, ListIndex};
 use crate::state::{Load, Models, Route, run_db_in, toast_error, toast_success};
 use crate::theme::{Palette, ROW_HEIGHT};
 use crate::ui::dialogs::confirm_delete;
@@ -53,6 +53,7 @@ pub struct FirListScreen {
     statuses: Vec<FirStatus>,
     hidden: Vec<Column>,
     visible: Vec<u32>,
+    index: ListIndex,
     stale: bool,
     selected: HashSet<FirId>,
     focused: Option<usize>,
@@ -87,6 +88,7 @@ impl FirListScreen {
             statuses: prefs.statuses,
             hidden: prefs.hidden,
             visible: Vec::new(),
+            index: ListIndex::default(),
             stale: true,
             selected: HashSet::new(),
             focused: None,
@@ -148,7 +150,9 @@ impl FirListScreen {
         }
         self.stale = false;
         let firs = self.models.firs.read(cx);
-        self.visible = derive(&firs.rows, &self.query, &self.statuses, self.sort);
+        let shown = self.index.update(&firs.rows, firs.version(), &self.query, &self.statuses, self.sort);
+        self.visible.clear();
+        self.visible.extend_from_slice(shown);
         if self.focused.is_some_and(|index| index >= self.visible.len()) {
             self.focused = None;
         }

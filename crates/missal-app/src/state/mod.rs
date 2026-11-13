@@ -5,7 +5,9 @@ pub mod prefs_model;
 pub mod rows;
 pub mod templates;
 
+use std::cell::RefCell;
 use std::future::Future;
+use std::rc::Rc;
 
 use gpui_kit::{App, AppContext, Context, Entity, Global, Task, Window};
 use gpui_kit::component::notification::Notification;
@@ -115,20 +117,77 @@ pub fn await_reply<T: Send + 'static>(
     reply
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToastKind {
+    Info,
+    Success,
+    Warning,
+    Error,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Toast {
+    pub kind: ToastKind,
+    pub title: Option<String>,
+    pub message: String,
+}
+
+#[derive(Clone, Default)]
+pub struct ToastLog(pub Rc<RefCell<Vec<Toast>>>);
+
+impl Global for ToastLog {}
+
+fn push_toast(
+    window: &mut Window,
+    cx: &mut App,
+    kind: ToastKind,
+    title: Option<gpui_kit::SharedString>,
+    message: gpui_kit::SharedString,
+) {
+    if let Some(log) = cx.try_global::<ToastLog>() {
+        log.0.borrow_mut().push(Toast {
+            kind,
+            title: title.as_ref().map(|title| title.to_string()),
+            message: message.to_string(),
+        });
+    }
+    let notification = match kind {
+        ToastKind::Info => Notification::info(message),
+        ToastKind::Success => Notification::success(message),
+        ToastKind::Warning => Notification::warning(message),
+        ToastKind::Error => Notification::error(message),
+    };
+    let notification = match title {
+        Some(title) => notification.title(title),
+        None => notification,
+    };
+    window.push_notification(notification, cx);
+}
+
+pub fn toast_detailed(
+    window: &mut Window,
+    cx: &mut App,
+    kind: ToastKind,
+    title: impl Into<gpui_kit::SharedString>,
+    message: impl Into<gpui_kit::SharedString>,
+) {
+    push_toast(window, cx, kind, Some(title.into()), message.into());
+}
+
 pub fn toast_success(window: &mut Window, cx: &mut App, message: impl Into<gpui_kit::SharedString>) {
-    window.push_notification(Notification::success(message), cx);
+    push_toast(window, cx, ToastKind::Success, None, message.into());
 }
 
 pub fn toast_error(window: &mut Window, cx: &mut App, message: impl Into<gpui_kit::SharedString>) {
-    window.push_notification(Notification::error(message), cx);
+    push_toast(window, cx, ToastKind::Error, None, message.into());
 }
 
 pub fn toast_warning(window: &mut Window, cx: &mut App, message: impl Into<gpui_kit::SharedString>) {
-    window.push_notification(Notification::warning(message), cx);
+    push_toast(window, cx, ToastKind::Warning, None, message.into());
 }
 
 pub fn toast_info(window: &mut Window, cx: &mut App, message: impl Into<gpui_kit::SharedString>) {
-    window.push_notification(Notification::info(message), cx);
+    push_toast(window, cx, ToastKind::Info, None, message.into());
 }
 
 pub fn not_available_yet(window: &mut Window, cx: &mut App, what: &str) {

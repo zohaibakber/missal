@@ -8,6 +8,7 @@ use missal_app::launch::{init_app, open_shell};
 use missal_app::prefs::{Column, Preferences};
 use missal_app::seed::seed_firs;
 use missal_app::state::Models;
+use missal_app::state::rows::ListIndex;
 use missal_store::Store;
 
 fn stats(name: &str, mut samples: Vec<Duration>) {
@@ -106,14 +107,51 @@ fn main() {
     let search = cx.update(|cx| list.read(cx).search_input(cx));
     cx.update_window(handle, |_, window, cx| search.update(cx, |input, cx| input.focus(window, cx))).unwrap();
     let mut typing = Vec::new();
+    let mut typing_input = Vec::new();
+    let mut typing_draw = Vec::new();
     for character in "چوری 379".chars() {
         let t = Instant::now();
         cx.update_window(handle, |_, window, cx| window.input(&character.to_string(), cx)).unwrap();
         cx.run_until_parked();
+        typing_input.push(t.elapsed());
+        let d = Instant::now();
         draw(&mut cx);
+        typing_draw.push(d.elapsed());
         typing.push(t.elapsed());
     }
+    stats("  of which input dispatch", typing_input);
+    stats("  of which draw", typing_draw);
     stats("search keystroke (filter 50k + frame)", typing);
     println!("matches after typing: {}", cx.update(|cx| list.read(cx).visible_count()));
+
+    let (rows_snapshot, version) = cx.update(|cx| {
+        let firs = models.firs.read(cx);
+        (firs.rows.clone(), firs.version())
+    });
+    let sort = cx.update(|cx| list.read(cx).sort());
+    let mut index = ListIndex::default();
+    let first = Instant::now();
+    index.update(&rows_snapshot, version, "", &[], sort);
+    println!("index: first sort of {} rows: {:.2}ms", rows_snapshot.len(), first.elapsed().as_secs_f64() * 1e3);
+    let mut query = String::new();
+    let mut filter = Vec::new();
+    for character in "چوری 379".chars() {
+        query.push(character);
+        let t = Instant::now();
+        let shown = index.update(&rows_snapshot, version, &query, &[], sort).len();
+        filter.push(t.elapsed());
+        let _ = shown;
+    }
+    stats("index update per keystroke (no frame)", filter);
+    let mut full = Vec::new();
+    let mut query = String::new();
+    for character in "چوری 379".chars() {
+        query.push(character);
+        let t = Instant::now();
+        let shown = missal_app::state::rows::derive(&rows_snapshot, &query, &[], sort).len();
+        full.push(t.elapsed());
+        let _ = shown;
+    }
+    stats("full filter and sort per keystroke (previous path)", full);
     let _ = Models::get;
 }

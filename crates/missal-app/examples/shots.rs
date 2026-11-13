@@ -199,9 +199,68 @@ fn run(dark: bool, out: &Path) {
     h.shot("17-command-palette");
     h.press("escape");
     h.shot("18-fir-list-after");
+
+    h.go(Route::Fir(FirId::new(3).expect("id")));
+    h.press("secondary-p");
+    h.wait_for_preview();
+    h.shot("19-print-preview-fir");
+    h.press("pagedown");
+    h.press("pagedown");
+    h.shot("20-print-preview-page-3");
+    h.press("secondary-=");
+    h.press("secondary-=");
+    h.shot("21-print-preview-zoomed");
+    h.press("secondary-0");
+    h.click("preview-zoom");
+    h.shot("22-print-preview-zoom-menu");
+    h.press("escape");
+    h.reset();
+    h.press("escape");
+
+    let template = h.models_template_id();
+    h.go(Route::Template(template));
+    h.press("secondary-p");
+    h.wait_for_preview();
+    h.shot("23-print-preview-template");
+    h.press("escape");
+
+    h.go(Route::Fir(FirId::new(3).expect("id")));
+    h.open_failing_preview();
+    h.shot("24-print-preview-error");
+    h.press("escape");
+    h.go(Route::Firs);
 }
 
 impl Harness {
+    fn wait_for_preview(&mut self) {
+        for _ in 0..40 {
+            self.settle();
+            let ready = self.cx.update(|cx| {
+                let shell = missal_app::app::ShellHandle::get(cx);
+                shell.and_then(|shell| shell.read(cx).print_preview()).is_some_and(|preview| preview.read(cx).is_ready())
+            });
+            if ready {
+                break;
+            }
+        }
+    }
+
+    fn open_failing_preview(&mut self) {
+        self.with_window(|window, cx| {
+            let catalog = Models::get(cx).catalog.read(cx).field_catalog();
+            let request = missal_app::ui::print_preview::PrintRequest {
+                title: "FIR 3/2026".to_owned(),
+                note: None,
+                export_name: "FIR 3-2026".to_owned(),
+                catalog: (*catalog).clone(),
+                values: None,
+                mode: missal_core::DisplayMode::Labels,
+                documents: vec![missal_app::ui::print_preview::PreviewDocument::Stored(missal_core::FirDocumentId::new(999_999).expect("id"))],
+            };
+            missal_app::app::open_print_preview(request, window, cx);
+        });
+    }
+
     fn models_template_id(&mut self) -> TemplateId {
         self.cx.update(|cx| {
             let models = Models::get(cx);

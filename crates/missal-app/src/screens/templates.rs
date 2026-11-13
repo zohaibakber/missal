@@ -11,21 +11,23 @@ use gpui_kit::component::menu::DropdownMenu as _;
 
 use gpui_kit::{
     AnyElement, App, AppContext, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
-    KeyDownEvent, ParentElement, Render, ScrollStrategy, StatefulInteractiveElement, Styled,
+    ExternalPaths, KeyDownEvent, ParentElement, Render, ScrollStrategy, StatefulInteractiveElement, Styled,
     Subscription, UniformListScrollHandle, Window, div, px, uniform_list,
 };
-use missal_core::{Document, Revision, TemplateId};
+use missal_core::{DisplayMode, Document, Revision, TemplateId};
 use missal_store::TemplateSummary;
 use missal_text::{TextInput, TextInputEvent, label};
 
-use crate::app::{navigate, navigate_replace};
+use crate::app::{navigate, navigate_replace, open_print_preview};
 use crate::editor::{DocumentEditor, EditorEvent, EditorFactory, FieldContext, LoadRequest};
 use crate::shortcuts::*;
 use crate::state::rows::fold_for_search;
 use crate::state::templates::TemplatesEvent;
-use crate::state::{Load, Models, Route, not_available_yet, run_db_in, toast_error, toast_success};
+use crate::state::{Load, Models, Route, ToastKind, run_db_in, toast_detailed, toast_error, toast_success};
 use crate::theme::{Palette, RAIL_WIDTH};
-use crate::ui::dialogs::confirm_delete;
+use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
+use crate::ui::print_preview::{PreviewDocument, PrintRequest};
+use crate::word::{WordImport, is_docx};
 use crate::ui::input::{Kind, text_input};
 use crate::ui::{empty_state, icon_button, pane_header, rail_header};
 
@@ -47,6 +49,10 @@ pub struct TemplatePage {
     editor: Rc<dyn DocumentEditor>,
     editor_dirty: bool,
     saving: bool,
+    picking: bool,
+    importing: bool,
+    imported: bool,
+    imports: u64,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -83,6 +89,10 @@ impl TemplatePage {
             editor,
             editor_dirty: false,
             saving: false,
+            picking: false,
+            importing: false,
+            imported: false,
+            imports: 0,
             _subscriptions: vec![editor_subscription, title_subscription],
         };
         page.load(window, cx);
@@ -132,7 +142,10 @@ impl TemplatePage {
 
     pub fn is_dirty(&self, cx: &App) -> bool {
         self.state == PageState::Ready
-            && (self.title.read(cx).text() != self.initial_name || self.editor_dirty || self.editor.is_dirty(cx))
+            && (self.title.read(cx).text() != self.initial_name
+                || self.editor_dirty
+                || self.imported
+                || self.editor.is_dirty(cx))
     }
 
     pub fn title_input(&self) -> &Entity<TextInput> {
@@ -145,6 +158,167 @@ impl TemplatePage {
 
     pub fn state(&self) -> &PageState {
         &self.state
+    }
+
+    pub fn is_importing(&self) -> bool {
+        self.importing
+    }
+
+    pub fn open_print_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.state != PageState::Ready {
+            return;
+        }
+        let name = self.title.read(cx).text().trim().to_owned();
+        let title = if name.is_empty() { "Untitled template".to_owned() } else { name };
+        let request = PrintRequest {
+            export_name: title.clone(),
+            title,
+            note: Some("Placeholders show their names".to_owned()),
+            catalog: (*self.models.catalog.read(cx).field_catalog()).clone(),
+            values: None,
+            mode: DisplayMode::Labels,
+            documents: vec![PreviewDocument::Content(self.editor.snapshot(cx).document)],
+        };
+        open_print_preview(request, window, cx);
+    }
+
+    pub fn request_import(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.picking || self.importing || self.saving || self.state != PageState::Ready {
+            return;
+        }
+        self.picking = true;
+        let chosen = cx.prompt_for_paths(gpui_kit::PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some("Choose a Word document (.docx)".into()),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let outcome = chosen.await;
+            this.update_in(cx, |this, window, cx| {
+                this.picking = false;
+                match outcome {
+                    Ok(Ok(Some(paths))) => {
+                        if let Some(path) = paths.into_iter().next() {
+                            this.choose_import(path, window, cx);
+                        }
+                    }
+                    Ok(Err(error)) => toast_detailed(
+                        window,
+                        cx,
+                        ToastKind::Error,
+                        "Could not import Word document",
+                        format!("The file dialog could not be opened ({error})."),
+                    ),
+                    _ => {}
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    pub fn choose_import(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        if self.importing || self.saving || self.state != PageState::Ready {
+            return;
+        }
+        if !is_docx(&path) {
+            toast_detailed(
+                window,
+                cx,
+                ToastKind::Error,
+                "Could not import Word document",
+                "Choose a Word document with the .docx extension.",
+            );
+            return;
+        }
+        let projections = self.editor.snapshot(cx).document.projections();
+        let has_content = self.id.is_some()
+            || self.editor_dirty
+            || self.imported
+            || self.editor.is_dirty(cx)
+            || !projections.plain_text.trim().is_empty()
+            || projections.field_count > 0;
+        if !has_content {
+            self.run_import(path, window, cx);
+            return;
+        }
+        let weak = cx.entity().downgrade();
+        open_choice(
+            window,
+            cx,
+            "Replace template content?",
+            "Importing replaces all text and formatting in this editor. The saved template stays unchanged until you save.",
+            vec![
+                Choice::new("cancel", "Cancel", Tone::Neutral, |_, _| {}),
+                Choice::new("import-replace", "Import and replace", Tone::Primary, move |window, cx| {
+                    let path = path.clone();
+                    weak.update(cx, |this, cx| this.run_import(path, window, cx)).ok();
+                }),
+            ],
+        );
+    }
+
+    fn run_import(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        self.importing = true;
+        cx.notify();
+        let catalog = self.models.catalog.read(cx);
+        let fields = (*catalog.field_catalog()).clone();
+        let markers = catalog.settings.field_markers.clone();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { crate::word::import_file(path, &fields, &markers) })
+                .await;
+            this.update_in(cx, |this, window, cx| this.finish_import(result, window, cx)).ok();
+        })
+        .detach();
+    }
+
+    fn finish_import(&mut self, result: Result<WordImport, String>, window: &mut Window, cx: &mut Context<Self>) {
+        self.importing = false;
+        match result {
+            Ok(imported) => {
+                self.imports += 1;
+                let key = match self.id {
+                    Some(id) => format!("template:{id}:import:{}", self.imports),
+                    None => format!("template:new:import:{}", self.imports),
+                };
+                let request = LoadRequest {
+                    key,
+                    document: imported.document,
+                    fields: self.field_context(cx),
+                };
+                self.editor.load(request, window, cx);
+                self.editor_dirty = false;
+                self.imported = true;
+                if self.title.read(cx).text().trim().is_empty()
+                    && let Some(name) = imported.name
+                {
+                    self.title.update(cx, |input, cx| input.set_text(name, cx));
+                }
+                if imported.notices.is_empty() {
+                    toast_detailed(
+                        window,
+                        cx,
+                        ToastKind::Success,
+                        "Word document imported",
+                        "Review the layout and placeholders, then save the template.",
+                    );
+                } else {
+                    toast_detailed(window, cx, ToastKind::Warning, "Word document imported", imported.notices.join(" "));
+                }
+            }
+            Err(message) => toast_detailed(window, cx, ToastKind::Error, "Could not import Word document", message),
+        }
+        cx.notify();
+    }
+
+    fn dropped(&mut self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(path) = paths.paths().first().cloned() else {
+            return;
+        };
+        self.choose_import(path, window, cx);
     }
 
     pub fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -180,6 +354,7 @@ impl TemplatePage {
                         let new_id = summary.id;
                         this.models.templates.update(cx, |templates, cx| templates.upsert(summary, cx));
                         this.editor.mark_saved(revision_token, cx);
+                        this.imported = false;
                         this.initial_name = name.clone();
                         toast_success(window, cx, "Template created");
                         navigate_replace(Route::Template(new_id), cx);
@@ -188,6 +363,7 @@ impl TemplatePage {
                         this.revision = Some(ack.revision);
                         this.initial_name = name.clone();
                         this.editor.mark_saved(revision_token, cx);
+                        this.imported = false;
                         let created_at = this
                             .id
                             .and_then(|id| this.models.templates.read(cx).get(id).map(|item| item.created_at.clone()));
@@ -259,7 +435,8 @@ impl Render for TemplatePage {
         let dirty = self.is_dirty(cx);
         let name_empty = self.title.read(cx).text().trim().is_empty();
         let is_new = self.id.is_none();
-        let save_enabled = !name_empty && (is_new || dirty) && !self.saving;
+        let importing = self.importing;
+        let save_enabled = !name_empty && (is_new || dirty) && !self.saving && !importing;
         let weak = cx.entity().downgrade();
         v_flex()
             .size_full()
@@ -292,16 +469,20 @@ impl Render for TemplatePage {
                             .label(if is_new { "Create template" } else if dirty { "Save" } else { "Saved" })
                             .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
                     )
-                    .child(icon_button("template-print", IconName::Printer).tooltip("Print preview").on_click(|_, window, cx| {
-                        not_available_yet(window, cx, "Print preview");
-                    }))
+                    .child(
+                        icon_button("template-print", IconName::Printer)
+                            .tooltip("Print preview")
+                            .on_click(cx.listener(|this, _, window, cx| this.open_print_preview(window, cx))),
+                    )
                     .child(
                         Button::new("template-import")
                             .outline()
                             .small()
                             .icon(IconName::FileUp)
                             .label("Upload Word file")
-                            .on_click(|_, window, cx| not_available_yet(window, cx, "Word import")),
+                            .loading(importing)
+                            .disabled(importing || self.saving)
+                            .on_click(cx.listener(|this, _, window, cx| this.request_import(window, cx))),
                     ),
             )
             .child(
@@ -309,6 +490,8 @@ impl Render for TemplatePage {
                     .id("template-editor")
                     .flex_1()
                     .min_h_0()
+                    .drag_over::<ExternalPaths>(|style, _, _, cx| style.bg(Palette::get(cx).accent))
+                    .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| this.dropped(paths, window, cx)))
                     .child(self.editor.view()),
             )
             .into_any_element()

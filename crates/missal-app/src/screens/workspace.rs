@@ -23,7 +23,7 @@ use missal_core::{
 use missal_store::{FirDocumentSummary, FirWorkspace};
 use missal_text::{TextInput, TextInputEvent, label};
 
-use crate::app::navigate_replace;
+use crate::app::{navigate_replace, open_print_preview};
 use crate::editor::{DocumentEditor, EditorEvent, EditorFactory, FieldContext, LoadRequest};
 use crate::screens::custom_values::open_custom_values;
 use crate::screens::edit_sheet::open_edit_sheet;
@@ -31,9 +31,10 @@ use crate::shortcuts::*;
 use crate::state::catalog::CatalogEvent;
 use crate::state::firs::FirsEvent;
 use crate::state::rows::fold_for_search;
-use crate::state::{Models, Route, not_available_yet, run_db_in, toast_error, toast_success, toast_warning};
+use crate::state::{Models, Route, run_db_in, toast_error, toast_success, toast_warning};
 use crate::theme::{DETAILS_RAIL_WIDTH, Palette};
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
+use crate::ui::print_preview::{PreviewDocument, PrintRequest};
 use crate::ui::input::{Kind, text_input};
 use crate::ui::status::status_icon;
 use crate::ui::{empty_state, icon_button, pane_header, rail_header, small_icon, status_bar};
@@ -527,6 +528,49 @@ impl WorkspaceScreen {
         });
     }
 
+    pub fn open_print_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.state != WorkspaceState::Ready {
+            return;
+        }
+        let included: Vec<FirDocumentId> = self
+            .documents
+            .iter()
+            .map(|document| document.id)
+            .filter(|id| !self.excluded.contains(id))
+            .collect();
+        if included.is_empty() {
+            toast_warning(window, cx, "Select at least one document to print");
+            return;
+        }
+        let Some(values) = self.values.clone() else {
+            return;
+        };
+        let live = self
+            .active
+            .filter(|id| self.document_state == DocumentState::Idle && self.loaded.is_some_and(|(loaded, _)| loaded == *id));
+        let documents = included
+            .iter()
+            .map(|id| {
+                if Some(*id) == live {
+                    PreviewDocument::Content(self.editor.snapshot(cx).document)
+                } else {
+                    PreviewDocument::Stored(*id)
+                }
+            })
+            .collect();
+        let title = format!("FIR {}", values.fir.fir.fir_no);
+        let request = PrintRequest {
+            export_name: title.clone(),
+            title,
+            note: None,
+            catalog: (*self.models.catalog.read(cx).field_catalog()).clone(),
+            values: Some((*values).clone()),
+            mode: DisplayMode::Values,
+            documents,
+        };
+        open_print_preview(request, window, cx);
+    }
+
     fn included_count(&self) -> usize {
         self.documents.iter().filter(|document| !self.excluded.contains(&document.id)).count()
     }
@@ -1008,7 +1052,7 @@ impl Render for WorkspaceScreen {
                         icon_button("workspace-print", IconName::Printer)
                             .tooltip("Print preview")
                             .disabled(!printable)
-                            .on_click(|_, window, cx| not_available_yet(window, cx, "Print preview")),
+                            .on_click(cx.listener(|this, _, window, cx| this.open_print_preview(window, cx))),
                     ),
             );
         let rail = v_flex()

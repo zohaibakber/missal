@@ -2,6 +2,7 @@ pub mod cheatsheet;
 pub mod dialogs;
 pub mod input;
 pub mod palette;
+pub mod print_preview;
 pub mod sidebar;
 pub mod status;
 pub mod titlebar;

@@ -13,16 +13,23 @@ use crate::screens::templates::TemplatesScreen;
 use crate::screens::workspace::WorkspaceScreen;
 use crate::shortcuts::*;
 use crate::state::nav::NavEvent;
-use crate::state::{Models, Route, toast_info};
+use crate::state::{Models, Route};
 use crate::theme::{self, Palette};
 use crate::ui::cheatsheet;
 use crate::ui::palette::CommandPalette;
+use crate::ui::print_preview::{PreviewClosed, PrintPreview, PrintRequest};
 use crate::ui::sidebar::SidebarView;
 use crate::ui::titlebar::TitleBarView;
 
 pub struct ShellHandle(pub WeakEntity<AppShell>);
 
 impl Global for ShellHandle {}
+
+impl ShellHandle {
+    pub fn get(cx: &App) -> Option<Entity<AppShell>> {
+        cx.try_global::<ShellHandle>().and_then(|handle| handle.0.upgrade())
+    }
+}
 
 enum Screen {
     Firs(Entity<FirListScreen>),
@@ -84,6 +91,7 @@ pub struct AppShell {
     screen: Screen,
     route: Route,
     palette: Option<Entity<CommandPalette>>,
+    print_preview: Option<Entity<PrintPreview>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -112,6 +120,7 @@ impl AppShell {
             screen,
             route,
             palette: None,
+            print_preview: None,
             _subscriptions: subscriptions,
         };
         shell.activate(window, cx);
@@ -169,6 +178,54 @@ impl AppShell {
         }
     }
 
+    pub fn print_preview(&self) -> Option<Entity<PrintPreview>> {
+        self.print_preview.clone()
+    }
+
+    pub fn show_print_preview(&mut self, request: PrintRequest, window: &mut Window, cx: &mut Context<Self>) {
+        if self.print_preview.is_some() {
+            return;
+        }
+        self.palette = None;
+        let preview = cx.new(|cx| PrintPreview::new(request, window, cx));
+        cx.subscribe_in(&preview, window, |this, _, _: &PreviewClosed, window, cx| {
+            this.print_preview = None;
+            this.screen.focus(window, cx);
+            cx.notify();
+        })
+        .detach();
+        preview.update(cx, |preview, cx| preview.focus(window, cx));
+        self.print_preview = Some(preview);
+        cx.notify();
+    }
+
+    fn print_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(preview) = self.print_preview.clone() {
+            preview.update(cx, |preview, cx| preview.print(window, cx));
+            return;
+        }
+        match &self.screen {
+            Screen::Workspace(view) => view.update(cx, |screen, cx| screen.open_print_preview(window, cx)),
+            Screen::Templates(view) => {
+                if let Some(page) = view.read(cx).page().cloned() {
+                    page.update(cx, |page, cx| page.open_print_preview(window, cx));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn import_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.print_preview.is_some() {
+            return;
+        }
+        if let Screen::Templates(view) = &self.screen
+            && let Some(page) = view.read(cx).page().cloned()
+        {
+            page.update(cx, |page, cx| page.request_import(window, cx));
+        }
+    }
+
     pub fn palette_entity(&self) -> Option<Entity<CommandPalette>> {
         self.palette.clone()
     }
@@ -201,6 +258,7 @@ impl AppShell {
             return;
         }
         self.palette = None;
+        self.print_preview = None;
         let stays_in_templates = matches!(
             (&self.screen, route),
             (Screen::Templates(_), Route::Templates | Route::NewTemplate | Route::Template(_))
@@ -279,6 +337,14 @@ pub fn open_palette(window: &mut Window, cx: &mut App) {
     }
 }
 
+pub fn open_print_preview(request: PrintRequest, window: &mut Window, cx: &mut App) {
+    if let Some(handle) = cx.try_global::<ShellHandle>().map(|handle| handle.0.clone()) {
+        window.defer(cx, move |window, cx| {
+            handle.update(cx, |shell, cx| shell.show_print_preview(request, window, cx)).ok();
+        });
+    }
+}
+
 pub fn show_shortcuts(window: &mut Window, cx: &mut App) {
     cheatsheet::open(window, cx);
 }
@@ -321,18 +387,16 @@ impl Render for AppShell {
                 cx.listener(move |_, _: &HistoryForward, window, cx| nav.update(cx, |nav, cx| nav.forward(window, cx)))
             })
             .on_action(cx.listener(|this, _: &BlurFocus, window, cx| {
-                if this.palette.is_some() {
+                if let Some(preview) = this.print_preview.clone() {
+                    preview.update(cx, |preview, cx| preview.focus(window, cx));
+                } else if this.palette.is_some() {
                     this.close_palette(window, cx);
                 } else {
                     window.focus(&this.focus, cx);
                 }
             }))
-            .on_action(cx.listener(|_, _: &Print, window, cx| {
-                toast_info(window, cx, "Print preview is not available yet");
-            }))
-            .on_action(cx.listener(|_, _: &ImportWord, window, cx| {
-                toast_info(window, cx, "Word import is not available yet");
-            }))
+            .on_action(cx.listener(|this, _: &Print, window, cx| this.print_action(window, cx)))
+            .on_action(cx.listener(|this, _: &ImportWord, window, cx| this.import_action(window, cx)))
             .child(self.titlebar.clone())
             .child(
                 h_flex()
@@ -360,5 +424,6 @@ impl Render for AppShell {
                     ),
             )
             .children(self.palette.clone().map(|palette| palette.into_any_element()))
+            .children(self.print_preview.clone().map(|preview| preview.into_any_element()))
     }
 }

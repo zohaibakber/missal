@@ -34,6 +34,12 @@ actions!(
         ImportWord,
         NextTemplate,
         PreviousTemplate,
+        PreviewNextPage,
+        PreviewPreviousPage,
+        PreviewZoomIn,
+        PreviewZoomOut,
+        PreviewZoomFit,
+        PreviewClose,
     ]
 );
 
@@ -42,6 +48,8 @@ pub const FIR_LIST: &str = "FirList";
 pub const WORKSPACE: &str = "Workspace";
 pub const TEMPLATES: &str = "Templates";
 pub const TEXT_INPUT: &str = "MissalTextInput";
+pub const PRINT_PREVIEW: &str = "PrintPreview";
+pub const PRINT_PREVIEW_CONTEXT: &str = "PrintPreview MissalTextInput";
 pub const NOT_TYPING: &str = "Missal && !MissalTextInput";
 const FIR_LIST_NOT_TYPING: &str = "FirList && !MissalTextInput";
 const WORKSPACE_NOT_TYPING: &str = "Workspace && !MissalTextInput";
@@ -107,6 +115,11 @@ pub const SHORTCUTS: &[Shortcut] = &[
     Shortcut { keys: "Alt+Up", label: "Previous document", group: Group::Documents },
     Shortcut { keys: "A", label: "Add templates to FIR", group: Group::Documents },
     Shortcut { keys: "Mod+Shift+L", label: "Show field names", group: Group::Documents },
+    Shortcut { keys: "PageDown", label: "Next page in print preview", group: Group::Documents },
+    Shortcut { keys: "PageUp", label: "Previous page in print preview", group: Group::Documents },
+    Shortcut { keys: "Mod+=", label: "Zoom in print preview", group: Group::Documents },
+    Shortcut { keys: "Mod+-", label: "Zoom out print preview", group: Group::Documents },
+    Shortcut { keys: "Mod+0", label: "Fit width in print preview", group: Group::Documents },
     Shortcut { keys: "Shift+N", label: "New template", group: Group::Templates },
     Shortcut { keys: "Mod+O", label: "Upload Word", group: Group::Templates },
     Shortcut { keys: "Alt+Down", label: "Next template", group: Group::Templates },
@@ -162,6 +175,14 @@ pub fn bind_keys(cx: &mut App) {
         binding(cx, "secondary-o", ImportWord, Some(TEMPLATES)),
         binding(cx, "alt-down", NextTemplate, Some(TEMPLATES)),
         binding(cx, "alt-up", PreviousTemplate, Some(TEMPLATES)),
+        binding(cx, "pagedown", PreviewNextPage, Some(PRINT_PREVIEW)),
+        binding(cx, "pageup", PreviewPreviousPage, Some(PRINT_PREVIEW)),
+        binding(cx, "secondary-=", PreviewZoomIn, Some(PRINT_PREVIEW)),
+        binding(cx, "secondary-+", PreviewZoomIn, Some(PRINT_PREVIEW)),
+        binding(cx, "secondary-shift-=", PreviewZoomIn, Some(PRINT_PREVIEW)),
+        binding(cx, "secondary--", PreviewZoomOut, Some(PRINT_PREVIEW)),
+        binding(cx, "secondary-0", PreviewZoomFit, Some(PRINT_PREVIEW)),
+        binding(cx, "escape", PreviewClose, Some(PRINT_PREVIEW)),
         binding(cx, "down", NextTemplate, Some(TEMPLATES_NOT_TYPING)),
         binding(cx, "up", PreviousTemplate, Some(TEMPLATES_NOT_TYPING)),
     ];
