@@ -2,9 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use parley::{
     FontContext,
-    fontique::{
-        Blob, Collection, CollectionOptions, FallbackKey, FamilyId, Script, SourceCache,
-    },
+    fontique::{Blob, Collection, CollectionOptions, FallbackKey, FamilyId, Script, SourceCache},
 };
 
 pub const URDU_FAMILY: &str = "Missal Jameel Noori Nastaleeq";

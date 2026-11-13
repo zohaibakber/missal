@@ -1,8 +1,6 @@
 use std::{borrow::Cow, sync::Arc};
 
-use gpui_kit::{
-    App, Font, FontFeatures, FontId, FontStyle, FontWeight, Global, Hsla, px,
-};
+use gpui_kit::{App, Font, FontFeatures, FontId, FontStyle, FontWeight, Global, Hsla, px};
 
 use crate::{
     fonts::{FaceId, bundled_faces},
@@ -31,7 +29,10 @@ pub fn init(cx: &mut App) {
     }
     let font_ids = faces
         .iter()
-        .map(|face| cx.text_system().resolve_font(&gpui_font(face.family, face.weight, face.italic)))
+        .map(|face| {
+            cx.text_system()
+                .resolve_font(&gpui_font(face.family, face.weight, face.italic))
+        })
         .collect();
     cx.set_global(TextSystem {
         engine: TextEngine::new(),

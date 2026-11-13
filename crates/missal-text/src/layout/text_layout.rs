@@ -253,21 +253,20 @@ impl TextLayout {
         self.max_width = max_width;
         let options = AlignmentOptions::default();
         let alignment = parley_alignment(self.paragraph.align);
-        let dx;
-        if self.paragraph.wrap && max_width.is_some() {
+        let dx = if self.paragraph.wrap && max_width.is_some() {
             self.inner.break_all_lines(max_width);
             self.inner.align(alignment, options);
-            dx = 0.0;
+            0.0
         } else {
             self.inner.break_all_lines(None);
             self.inner.align(alignment, options);
-            dx = match max_width {
+            match max_width {
                 Some(width) => {
                     alignment_factor(self.paragraph.align, self.rtl) * (width - self.inner.width())
                 }
                 None => 0.0,
-            };
-        }
+            }
+        };
         self.geo = self.extract(dx);
     }
 
@@ -576,10 +575,7 @@ impl TextLayout {
         let mut order: Vec<usize> = (0..clusters.len()).collect();
         order.sort_by_key(|&i| {
             let c = &clusters[i];
-            (
-                c.range.start,
-                !matches!(c.kind, ClusterKind::Object(_)),
-            )
+            (c.range.start, !matches!(c.kind, ClusterKind::Object(_)))
         });
         let mut trailing = Vec::new();
         for &i in order.iter().rev() {

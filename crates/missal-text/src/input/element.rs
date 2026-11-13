@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
+use gpui_kit::component::ActiveTheme;
 use gpui_kit::{
     App, Bounds, ContentMask, CursorStyle, DispatchPhase, Element, ElementId, ElementInputHandler,
     Entity, GlobalElementId, Hitbox, HitboxBehavior, InspectorElementId, IntoElement, LayoutId,
     MouseMoveEvent, MouseUpEvent, Pixels, Style, Window, point, px, relative, size,
 };
-use gpui_kit::component::ActiveTheme;
 
 use super::TextInput;
 use crate::{
@@ -57,9 +57,9 @@ impl Element for TextInputElement {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let ((min_rows, max_rows), row, multiline) = self
-            .input
-            .update(cx, |input, cx| (input.rows(), input.row_height(cx), input.is_multiline()));
+        let ((min_rows, max_rows), row, multiline) = self.input.update(cx, |input, cx| {
+            (input.rows(), input.row_height(cx), input.is_multiline())
+        });
         let mut style = Style::default();
         style.size.width = relative(1.).into();
         if !multiline {
@@ -198,7 +198,10 @@ impl Element for TextInputElement {
         } else {
             Bounds::new(
                 point(bounds.origin.x - px(10.), bounds.origin.y - px(row)),
-                size(bounds.size.width + px(20.), bounds.size.height + px(row * 2.0)),
+                size(
+                    bounds.size.width + px(20.),
+                    bounds.size.height + px(row * 2.0),
+                ),
             )
         };
         let origin = point(
@@ -209,7 +212,13 @@ impl Element for TextInputElement {
         let placeholder = prepaint.placeholder.clone();
         window.with_content_mask(Some(ContentMask { bounds: mask }), |window| {
             if let Some(placeholder) = &placeholder {
-                paint_text(placeholder, bounds.origin, &TextPaint::default(), window, cx);
+                paint_text(
+                    placeholder,
+                    bounds.origin,
+                    &TextPaint::default(),
+                    window,
+                    cx,
+                );
             }
             let selection = (anchor.index != head.index).then(|| {
                 (

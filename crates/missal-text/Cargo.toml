@@ -28,6 +28,7 @@ required-features = ["headless"]
 
 [[example]]
 name = "bench"
+required-features = ["headless"]
 
 [lints]
 workspace = true

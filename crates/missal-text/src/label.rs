@@ -3,15 +3,12 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 use gpui_kit::{
     AbsoluteLength, App, AvailableSpace, Bounds, DefiniteLength, Element, ElementId,
     GlobalElementId, InspectorElementId, IntoElement, LayoutId, Pixels, Refineable, SharedString,
-    Size, Style,
-    StyleRefinement, Styled, TextAlign, TextOverflow, WhiteSpace, Window, px, size,
+    Size, Style, StyleRefinement, Styled, TextAlign, TextOverflow, WhiteSpace, Window, px, size,
 };
 
 use crate::{
     fonts::{FontFamily, UI_FAMILY_ALIASES, URDU_FAMILY_ALIASES},
-    layout::{
-        Align, AttributedText, Direction, LineHeight, ParagraphStyle, TextLayout, TextStyle,
-    },
+    layout::{Align, AttributedText, Direction, LineHeight, ParagraphStyle, TextLayout, TextStyle},
     paint::{TextPaint, paint_text},
     system::{TextSystem, to_rgba},
 };
@@ -130,16 +127,18 @@ impl Label {
                 rich
             }
         };
-        let line_height = self.line_height.unwrap_or_else(|| match refinement.line_height {
-            Some(DefiniteLength::Absolute(AbsoluteLength::Pixels(px))) => {
-                LineHeight::Px(px.into())
-            }
-            Some(DefiniteLength::Absolute(AbsoluteLength::Rems(rems))) => {
-                LineHeight::Px(rems.to_pixels(rem).into())
-            }
-            Some(DefiniteLength::Fraction(f)) => LineHeight::Relative(f),
-            _ => LineHeight::Normal,
-        });
+        let line_height = self
+            .line_height
+            .unwrap_or_else(|| match refinement.line_height {
+                Some(DefiniteLength::Absolute(AbsoluteLength::Pixels(px))) => {
+                    LineHeight::Px(px.into())
+                }
+                Some(DefiniteLength::Absolute(AbsoluteLength::Rems(rems))) => {
+                    LineHeight::Px(rems.to_pixels(rem).into())
+                }
+                Some(DefiniteLength::Fraction(f)) => LineHeight::Relative(f),
+                _ => LineHeight::Normal,
+            });
         let align = self.align.unwrap_or(match refinement.text_align {
             Some(TextAlign::Left) => Align::Left,
             Some(TextAlign::Center) => Align::Center,
@@ -148,7 +147,8 @@ impl Label {
         });
         let truncate = text_style.text_overflow.is_some();
         let max_lines = text_style.line_clamp;
-        let wrap = text_style.white_space == WhiteSpace::Normal && (!truncate || max_lines.is_some());
+        let wrap =
+            text_style.white_space == WhiteSpace::Normal && (!truncate || max_lines.is_some());
         Spec {
             text,
             paragraph: ParagraphStyle {
@@ -200,7 +200,8 @@ impl Spec {
                     let layout = engine.layout(&candidate, &self.paragraph, Some(width));
                     (layout.lines().len() <= lines.max(1)).then_some(layout)
                 };
-                let boundaries = boundaries(&full, cut_line.text_range.start, cut_line.text_range.end);
+                let boundaries =
+                    boundaries(&full, cut_line.text_range.start, cut_line.text_range.end);
                 best_fit(&boundaries, |cut| fits(cut, engine)).unwrap_or(full)
             }
             _ => {
@@ -218,7 +219,12 @@ impl Spec {
         }
     }
 
-    fn measure(&self, known: Size<Option<Pixels>>, available: Size<AvailableSpace>, cx: &mut App) -> (Size<Pixels>, Arc<TextLayout>) {
+    fn measure(
+        &self,
+        known: Size<Option<Pixels>>,
+        available: Size<AvailableSpace>,
+        cx: &mut App,
+    ) -> (Size<Pixels>, Arc<TextLayout>) {
         let constraint = known.width.map(f32::from).or(match available.width {
             AvailableSpace::Definite(w) => Some(f32::from(w)),
             AvailableSpace::MinContent => Some(0.0),

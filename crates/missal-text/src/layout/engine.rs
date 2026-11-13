@@ -96,7 +96,9 @@ impl TextEngine {
         let style = &text.style;
         builder.push_default(family_property(&style.family));
         builder.push_default(StyleProperty::FontSize(style.size));
-        builder.push_default(StyleProperty::FontWeight(FontWeight::new(style.weight as f32)));
+        builder.push_default(StyleProperty::FontWeight(FontWeight::new(
+            style.weight as f32,
+        )));
         builder.push_default(StyleProperty::FontStyle(if style.italic {
             FontStyle::Italic
         } else {

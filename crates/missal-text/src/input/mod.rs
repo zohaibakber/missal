@@ -3,13 +3,13 @@ mod history;
 
 use std::{ops::Range, sync::Arc, time::Duration};
 
+use gpui_kit::component::{ActiveTheme, Colorize, ThemeStyled};
 use gpui_kit::{
     App, Bounds, ClipboardItem, Context, EntityInputHandler, EventEmitter, FocusHandle, Focusable,
     InteractiveElement, IntoElement, KeyBinding, MouseButton, MouseDownEvent, ParentElement,
-    Pixels, Point, Render, SharedString, Styled, Subscription, Task,
-    UTF16Selection, Window, actions, div, prelude::FluentBuilder, px,
+    Pixels, Point, Render, SharedString, Styled, Subscription, Task, UTF16Selection, Window,
+    actions, div, prelude::FluentBuilder, px,
 };
-use gpui_kit::component::{ActiveTheme, Colorize, ThemeStyled};
 
 pub use element::TextInputElement;
 use history::{EditKind, History, Snapshot};
@@ -18,9 +18,8 @@ use crate::{
     fonts::FontFamily,
     layout::{
         Affinity, Align, AttributedText, Direction, HorizontalDirection, LineHeight,
-        ParagraphStyle, TextLayout, TextPosition, TextStyle, next_cluster_boundary,
-        next_word_end, paragraph_range_at, previous_char_boundary, previous_word_start,
-        word_range_at,
+        ParagraphStyle, TextLayout, TextPosition, TextStyle, next_cluster_boundary, next_word_end,
+        paragraph_range_at, previous_char_boundary, previous_word_start, word_range_at,
     },
     system::{TextSystem, to_rgba},
 };
@@ -360,7 +359,11 @@ impl TextInput {
         cx.notify();
     }
 
-    pub fn set_placeholder(&mut self, placeholder: impl Into<SharedString>, cx: &mut Context<Self>) {
+    pub fn set_placeholder(
+        &mut self,
+        placeholder: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
         self.placeholder = placeholder.into();
         cx.notify();
     }
@@ -439,13 +442,12 @@ impl TextInput {
         };
         let mut paragraph = self.paragraph(row_height);
         if text.is_empty() && self.direction == Direction::Auto && !self.placeholder.is_empty() {
-            paragraph.direction = if crate::layout::first_strong_is_rtl(&self.placeholder)
-                .unwrap_or(true)
-            {
-                Direction::Rtl
-            } else {
-                Direction::Ltr
-            };
+            paragraph.direction =
+                if crate::layout::first_strong_is_rtl(&self.placeholder).unwrap_or(true) {
+                    Direction::Rtl
+                } else {
+                    Direction::Ltr
+                };
         }
         TextSystem::layout(cx, &AttributedText::new(text, style), &paragraph, width)
     }
@@ -505,7 +507,13 @@ impl TextInput {
         cx.notify();
     }
 
-    fn replace(&mut self, range: Range<usize>, new_text: &str, kind: EditKind, cx: &mut Context<Self>) {
+    fn replace(
+        &mut self,
+        range: Range<usize>,
+        new_text: &str,
+        kind: EditKind,
+        cx: &mut Context<Self>,
+    ) {
         if !self.editable() {
             return;
         }
@@ -517,11 +525,14 @@ impl TextInput {
         let snapshot = self.snapshot();
         self.history.record(snapshot, kind);
         self.text.replace_range(range.clone(), &new_text);
-        let caret = TextPosition::new(range.start + new_text.len(), if new_text.is_empty() {
-            Affinity::Downstream
-        } else {
-            Affinity::Upstream
-        });
+        let caret = TextPosition::new(
+            range.start + new_text.len(),
+            if new_text.is_empty() {
+                Affinity::Downstream
+            } else {
+                Affinity::Upstream
+            },
+        );
         self.anchor = caret;
         self.head = caret;
         self.marked = None;
@@ -555,7 +566,13 @@ impl TextInput {
         cx.notify();
     }
 
-    fn horizontal(&mut self, direction: HorizontalDirection, select: bool, word: bool, cx: &mut Context<Self>) {
+    fn horizontal(
+        &mut self,
+        direction: HorizontalDirection,
+        select: bool,
+        word: bool,
+        cx: &mut Context<Self>,
+    ) {
         let layout = self.layout(cx);
         self.sticky_x = None;
         if !select && !word && self.anchor.index != self.head.index {
@@ -676,10 +693,20 @@ impl TextInput {
     fn on_action_word_right(&mut self, _: &WordRight, _: &mut Window, cx: &mut Context<Self>) {
         self.horizontal(HorizontalDirection::Right, false, true, cx);
     }
-    fn on_action_select_word_left(&mut self, _: &SelectWordLeft, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_action_select_word_left(
+        &mut self,
+        _: &SelectWordLeft,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.horizontal(HorizontalDirection::Left, true, true, cx);
     }
-    fn on_action_select_word_right(&mut self, _: &SelectWordRight, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_action_select_word_right(
+        &mut self,
+        _: &SelectWordRight,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.horizontal(HorizontalDirection::Right, true, true, cx);
     }
     fn on_action_move_up(&mut self, _: &MoveUp, _: &mut Window, cx: &mut Context<Self>) {
@@ -700,22 +727,47 @@ impl TextInput {
     fn on_action_line_end(&mut self, _: &LineEnd, _: &mut Window, cx: &mut Context<Self>) {
         self.line_edge(true, false, cx);
     }
-    fn on_action_select_line_start(&mut self, _: &SelectLineStart, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_action_select_line_start(
+        &mut self,
+        _: &SelectLineStart,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.line_edge(false, true, cx);
     }
-    fn on_action_select_line_end(&mut self, _: &SelectLineEnd, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_action_select_line_end(
+        &mut self,
+        _: &SelectLineEnd,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.line_edge(true, true, cx);
     }
-    fn on_action_document_start(&mut self, _: &DocumentStart, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_action_document_start(
+        &mut self,
+        _: &DocumentStart,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.document_edge(false, false, cx);
     }
     fn on_action_document_end(&mut self, _: &DocumentEnd, _: &mut Window, cx: &mut Context<Self>) {
         self.document_edge(true, false, cx);
     }
-    fn on_action_select_document_start(&mut self, _: &SelectDocumentStart, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_action_select_document_start(
+        &mut self,
+        _: &SelectDocumentStart,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.document_edge(false, true, cx);
     }
-    fn on_action_select_document_end(&mut self, _: &SelectDocumentEnd, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_action_select_document_end(
+        &mut self,
+        _: &SelectDocumentEnd,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.document_edge(true, true, cx);
     }
     fn on_action_backspace(&mut self, _: &Backspace, _: &mut Window, cx: &mut Context<Self>) {
@@ -724,10 +776,20 @@ impl TextInput {
     fn on_action_delete(&mut self, _: &Delete, _: &mut Window, cx: &mut Context<Self>) {
         self.delete_forward(false, cx);
     }
-    fn on_action_delete_word_backward(&mut self, _: &DeleteWordBackward, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_action_delete_word_backward(
+        &mut self,
+        _: &DeleteWordBackward,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.delete_backward(true, cx);
     }
-    fn on_action_delete_word_forward(&mut self, _: &DeleteWordForward, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_action_delete_word_forward(
+        &mut self,
+        _: &DeleteWordForward,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.delete_forward(true, cx);
     }
     fn on_action_select_all(&mut self, _: &SelectAll, _: &mut Window, cx: &mut Context<Self>) {
@@ -747,7 +809,9 @@ impl TextInput {
         if range.is_empty() || !self.editable() {
             return;
         }
-        cx.write_to_clipboard(ClipboardItem::new_string(self.text[range.clone()].to_string()));
+        cx.write_to_clipboard(ClipboardItem::new_string(
+            self.text[range.clone()].to_string(),
+        ));
         self.replace(range, "", EditKind::Other, cx);
     }
     fn on_action_paste(&mut self, _: &Paste, _: &mut Window, cx: &mut Context<Self>) {
@@ -782,7 +846,12 @@ impl TextInput {
             cx.emit(TextInputEvent::Submit);
         }
     }
-    fn on_action_insert_newline(&mut self, _: &InsertNewline, _: &mut Window, cx: &mut Context<Self>) {
+    fn on_action_insert_newline(
+        &mut self,
+        _: &InsertNewline,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.multiline {
             let range = self.selected_range();
             self.replace(range, "\n", EditKind::Other, cx);
@@ -799,7 +868,12 @@ impl TextInput {
         ))
     }
 
-    fn on_mouse_down(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+    fn on_mouse_down(
+        &mut self,
+        event: &MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.disabled {
             return;
         }
@@ -964,7 +1038,11 @@ impl EntityInputHandler for TextInput {
         })
     }
 
-    fn marked_text_range(&self, _window: &mut Window, _cx: &mut Context<Self>) -> Option<Range<usize>> {
+    fn marked_text_range(
+        &self,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
+    ) -> Option<Range<usize>> {
         self.marked.as_ref().map(|range| self.range_to_utf16(range))
     }
 
@@ -1041,7 +1119,11 @@ impl EntityInputHandler for TextInput {
     ) -> Option<Bounds<Pixels>> {
         let range = self.range_from_utf16(&range_utf16);
         let layout = self.layout(cx);
-        let origin = self.frame.bounds.map(|b| b.origin).unwrap_or(element_bounds.origin)
+        let origin = self
+            .frame
+            .bounds
+            .map(|b| b.origin)
+            .unwrap_or(element_bounds.origin)
             + gpui_kit::point(px(self.frame.scroll.x), px(self.frame.scroll.y));
         let rect = layout
             .selection_rects(range.clone())
@@ -1096,7 +1178,9 @@ impl Render for TextInput {
             .border_1()
             .border_color(border)
             .rounded(radius)
-            .when(focused, |this| this.border_color(ring).focus_ring_style(window, cx))
+            .when(focused, |this| {
+                this.border_color(ring).focus_ring_style(window, cx)
+            })
             .on_action(cx.listener(Self::on_action_move_left))
             .on_action(cx.listener(Self::on_action_move_right))
             .on_action(cx.listener(Self::on_action_move_up))

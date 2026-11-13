@@ -1,22 +1,29 @@
 use std::{ops::Range, sync::Arc};
 
 use gpui_kit::{
-    prelude::FluentBuilder,
     AppContext, Bounds, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
-    Styled, Window, canvas, div, hsla, point, px, rgb, size,
+    Styled, Window, canvas, div, hsla, point, prelude::FluentBuilder, px, rgb, size,
 };
 use missal_text::{
-    Align, Attr, AttributedText, InlineObject, LineHeight, ParagraphStyle, Rgba,
-    TextLayout, TextPaint, TextStyle, TextSystem, label, paint_text,
+    Align, Attr, AttributedText, InlineObject, LineHeight, ParagraphStyle, Rgba, TextLayout,
+    TextPaint, TextStyle, TextSystem, label, paint_text,
 };
 
 const P1: &str = "مدعی مقدمہ نے تھانہ صدر میں درخواست دی کہ مورخہ بارہ مارچ کی رات نامعلوم ملزمان اس کے گھر میں داخل ہوئے اور قیمتی سامان چوری کر کے فرار ہو گئے۔ تفتیشی افسر نے موقع پر پہنچ کر گواہان کے بیانات قلمبند کیے اور برآمدگی کی کارروائی شروع کی۔";
 const P2: &str = "مقدمہ نمبر 412/2026 بجرم 379 PPC تھانہ صدر";
 const P3: &str = "ایف آئی آر نمبر 412/2026 مورخہ 15-03-2026 کو درج ہوئی، ملزم کا ایمی نمبر 356789012345678 اور سم نمبر 0300-1234567 ہے (Section 380 PPC) جبکہ تحریر کنندہ نے ضمنی میں تاریخ گرفتاری درج کی۔";
-const P4: [&str; 6] = ["تفتیشی افسر ", "تحر", "یر", " کنندہ ", "ملزمان", " اور گواہان"];
+const P4: [&str; 6] = [
+    "تفتیشی افسر ",
+    "تحر",
+    "یر",
+    " کنندہ ",
+    "ملزمان",
+    " اور گواہان",
+];
 const P5: &str = "یہ سطر درمیان میں ہے";
 const P6: &str = "Section 380 PPC کے تحت مقدمہ درج کیا گیا اور ملزم کو گرفتار کر لیا گیا";
-const P8: &str = "The complainant (مدعی) filed FIR 412/2026 at تھانہ صدر on 15-03-2026 under Section 380 PPC.";
+const P8: &str =
+    "The complainant (مدعی) filed FIR 412/2026 at تھانہ صدر on 15-03-2026 under Section 380 PPC.";
 const P9: &str = "ملزم کا نام: Muhammad Aslam ولد Akram، عمر 35 سال";
 const P10: &str = "Draft – not yet registered with تھانہ صدر";
 
@@ -82,7 +89,10 @@ fn samples(with_chip: bool) -> Vec<Sample> {
         P4[5].replace("گواہان", "<u>گواہان</u>")
     );
     let p6 = doc(P6)
-        .with(range_of(P6, "Section 380 PPC"), Attr::Background(Rgba::rgb(0xfff0a0)))
+        .with(
+            range_of(P6, "Section 380 PPC"),
+            Attr::Background(Rgba::rgb(0xfff0a0)),
+        )
         .with(range_of(P6, "گرفتار"), Attr::Strikethrough(true));
     let p6_html = P6
         .replace(
@@ -97,33 +107,82 @@ fn samples(with_chip: bool) -> Vec<Sample> {
         .with(range_of(P8, "FIR 412/2026"), Attr::Weight(600))
         .with(range_of(P8, "تھانہ صدر"), Attr::Color(RED));
     let p8_html = esc(P8)
-        .replace("FIR 412/2026", "<span style=\"font-weight:600\">FIR 412/2026</span>")
+        .replace(
+            "FIR 412/2026",
+            "<span style=\"font-weight:600\">FIR 412/2026</span>",
+        )
         .replace("تھانہ صدر", "<span style=\"color:#c00\">تھانہ صدر</span>");
     let p9 = ui(P9, 14.0).with(range_of(P9, "Muhammad Aslam"), Attr::Weight(700));
     let p9_html = P9.replace("Muhammad Aslam", "<b>Muhammad Aslam</b>");
-    let p10 = ui(P10, 15.0).with(0..P10.len(), Attr::Italic(true)).with(
-        range_of(P10, "تھانہ صدر"),
-        Attr::Weight(700),
-    );
-    let p10_html = format!(
-        "<i>{}</i>",
-        P10.replace("تھانہ صدر", "<b>تھانہ صدر</b>")
-    );
+    let p10 = ui(P10, 15.0)
+        .with(0..P10.len(), Attr::Italic(true))
+        .with(range_of(P10, "تھانہ صدر"), Attr::Weight(700));
+    let p10_html = format!("<i>{}</i>", P10.replace("تھانہ صدر", "<b>تھانہ صدر</b>"));
     let normal = |dir: missal_text::Direction| ParagraphStyle {
         direction: dir,
         ..ParagraphStyle::default()
     };
     vec![
-        Sample { text: doc(P1), paragraph: nastaleeq_paragraph(Align::Start), html: P1.into(), chip: None },
-        Sample { text: doc(P2), paragraph: nastaleeq_paragraph(Align::Start), html: P2.into(), chip: None },
-        Sample { text: doc(P3), paragraph: nastaleeq_paragraph(Align::Start), html: P3.into(), chip: None },
-        Sample { text: p4_text, paragraph: nastaleeq_paragraph(Align::Start), html: p4_html, chip: with_chip.then_some(chip_label) },
-        Sample { text: doc(P5), paragraph: nastaleeq_paragraph(Align::Center), html: P5.into(), chip: None },
-        Sample { text: p6, paragraph: nastaleeq_paragraph(Align::Start), html: p6_html, chip: None },
-        Sample { text: doc(P1), paragraph: nastaleeq_paragraph(Align::Justify), html: P1.into(), chip: None },
-        Sample { text: p8, paragraph: normal(missal_text::Direction::Ltr), html: p8_html, chip: None },
-        Sample { text: p9, paragraph: normal(missal_text::Direction::Rtl), html: p9_html, chip: None },
-        Sample { text: p10, paragraph: normal(missal_text::Direction::Ltr), html: p10_html, chip: None },
+        Sample {
+            text: doc(P1),
+            paragraph: nastaleeq_paragraph(Align::Start),
+            html: P1.into(),
+            chip: None,
+        },
+        Sample {
+            text: doc(P2),
+            paragraph: nastaleeq_paragraph(Align::Start),
+            html: P2.into(),
+            chip: None,
+        },
+        Sample {
+            text: doc(P3),
+            paragraph: nastaleeq_paragraph(Align::Start),
+            html: P3.into(),
+            chip: None,
+        },
+        Sample {
+            text: p4_text,
+            paragraph: nastaleeq_paragraph(Align::Start),
+            html: p4_html,
+            chip: with_chip.then_some(chip_label),
+        },
+        Sample {
+            text: doc(P5),
+            paragraph: nastaleeq_paragraph(Align::Center),
+            html: P5.into(),
+            chip: None,
+        },
+        Sample {
+            text: p6,
+            paragraph: nastaleeq_paragraph(Align::Start),
+            html: p6_html,
+            chip: None,
+        },
+        Sample {
+            text: doc(P1),
+            paragraph: nastaleeq_paragraph(Align::Justify),
+            html: P1.into(),
+            chip: None,
+        },
+        Sample {
+            text: p8,
+            paragraph: normal(missal_text::Direction::Ltr),
+            html: p8_html,
+            chip: None,
+        },
+        Sample {
+            text: p9,
+            paragraph: normal(missal_text::Direction::Rtl),
+            html: p9_html,
+            chip: None,
+        },
+        Sample {
+            text: p10,
+            paragraph: normal(missal_text::Direction::Ltr),
+            html: p10_html,
+            chip: None,
+        },
     ]
 }
 
@@ -275,7 +334,23 @@ impl Render for LabelPage {
             .flex_col()
             .gap(px(6.))
             .child(label("ملزم کا نام: Muhammad Aslam").text_size(px(14.)))
-            .child(label("Section 380 PPC کے تحت").text_size(px(14.)).font_weight(gpui_kit::FontWeight::BOLD))
+            .child(
+                label("Section 380 PPC کے تحت")
+                    .text_size(px(14.))
+                    .font_weight(gpui_kit::FontWeight::BOLD),
+            )
+            .child(
+                label("ترچھا مصنوعی: تھانہ صدر")
+                    .document_font()
+                    .text_size(px(20.))
+                    .italic(),
+            )
+            .child(
+                label("موٹا مصنوعی: تھانہ صدر")
+                    .document_font()
+                    .text_size(px(20.))
+                    .font_weight(gpui_kit::FontWeight::BOLD),
+            )
             .child(
                 div()
                     .w(px(160.))
@@ -294,9 +369,23 @@ impl Render for LabelPage {
     }
 }
 
-
-const NAMES: [&str; 8] = ["محمد اسلم", "Muhammad Aslam", "غلام رسول ولد اللہ دتہ", "شازیہ بی بی", "Rana Tariq", "عبدالستار خان", "نامعلوم ملزمان", "Zahid Hussain عرف زاہدی"];
-const OFFENCES: [&str; 5] = ["379 PPC چوری", "380 PPC گھر میں چوری", "302 PPC قتل", "Section 489-F چیک", "تفتیش جاری ہے"];
+const NAMES: [&str; 8] = [
+    "محمد اسلم",
+    "Muhammad Aslam",
+    "غلام رسول ولد اللہ دتہ",
+    "شازیہ بی بی",
+    "Rana Tariq",
+    "عبدالستار خان",
+    "نامعلوم ملزمان",
+    "Zahid Hussain عرف زاہدی",
+];
+const OFFENCES: [&str; 5] = [
+    "379 PPC چوری",
+    "380 PPC گھر میں چوری",
+    "302 PPC قتل",
+    "Section 489-F چیک",
+    "تفتیش جاری ہے",
+];
 
 pub(crate) fn row_cells(i: usize) -> [String; 4] {
     [
@@ -315,18 +404,52 @@ struct WidgetsPage {
 impl WidgetsPage {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         use missal_text::TextInput;
-        let mk = |cx: &mut Context<Self>, window: &mut Window, f: &dyn Fn(TextInput) -> TextInput| {
-            cx.new(|cx| f(TextInput::new(window, cx)))
-        };
-        let focused = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text("ملزم محمد اسلم ولد اکرم"));
-        let selected = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text("مقدمہ نمبر 412/2026 بجرم 379 PPC"));
-        let composing = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text("تھانہ "));
-        let placeholder = mk(cx, window, &|i| i.document_font().text_size(20.0).placeholder("مدعی کا نام لکھیں"));
-        let ui_placeholder = mk(cx, window, &|i| i.placeholder("Search FIRs / ایف آئی آر تلاش کریں"));
-        let disabled = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text("تھانہ صدر، ضلع لاہور").disabled(true));
-        let read_only = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text("یہ خانہ صرف پڑھنے کے لیے ہے").read_only(true));
-        let long = mk(cx, window, &|i| i.document_font().text_size(20.0).default_text(P3));
-        let area = mk(cx, window, &|i| i.document_font().text_size(20.0).multiline(3, 6).default_text(P1));
+        let mk =
+            |cx: &mut Context<Self>, window: &mut Window, f: &dyn Fn(TextInput) -> TextInput| {
+                cx.new(|cx| f(TextInput::new(window, cx)))
+            };
+        let focused = mk(cx, window, &|i| {
+            i.document_font()
+                .text_size(20.0)
+                .default_text("ملزم محمد اسلم ولد اکرم")
+        });
+        let selected = mk(cx, window, &|i| {
+            i.document_font()
+                .text_size(20.0)
+                .default_text("مقدمہ نمبر 412/2026 بجرم 379 PPC")
+        });
+        let composing = mk(cx, window, &|i| {
+            i.document_font().text_size(20.0).default_text("تھانہ ")
+        });
+        let placeholder = mk(cx, window, &|i| {
+            i.document_font()
+                .text_size(20.0)
+                .placeholder("مدعی کا نام لکھیں")
+        });
+        let ui_placeholder = mk(cx, window, &|i| {
+            i.placeholder("Search FIRs / ایف آئی آر تلاش کریں")
+        });
+        let disabled = mk(cx, window, &|i| {
+            i.document_font()
+                .text_size(20.0)
+                .default_text("تھانہ صدر، ضلع لاہور")
+                .disabled(true)
+        });
+        let read_only = mk(cx, window, &|i| {
+            i.document_font()
+                .text_size(20.0)
+                .default_text("یہ خانہ صرف پڑھنے کے لیے ہے")
+                .read_only(true)
+        });
+        let long = mk(cx, window, &|i| {
+            i.document_font().text_size(20.0).default_text(P3)
+        });
+        let area = mk(cx, window, &|i| {
+            i.document_font()
+                .text_size(20.0)
+                .multiline(3, 6)
+                .default_text(P1)
+        });
         selected.update(cx, |i, cx| {
             let t = i.text().to_string();
             let s = t.find("412").unwrap_or(0);
@@ -358,27 +481,54 @@ impl Render for WidgetsPage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         use gpui_kit::component::ActiveTheme;
         let theme = cx.theme().clone();
-        let table = gpui_kit::uniform_list("table", 5000, |range, _, _| {
-            range
-                .map(|i| {
-                    let cells = row_cells(i);
-                    div()
-                        .flex()
-                        .flex_row_reverse()
-                        .h(px(30.))
-                        .items_center()
-                        .border_b_1()
-                        .border_color(rgb(0xe5e5e5))
-                        .when(i % 2 == 1, |d| d.bg(rgb(0xfafafa)))
-                        .child(div().w(px(80.)).px(px(6.)).child(label(cells[0].clone()).text_size(px(13.)).truncate()))
-                        .child(div().w(px(150.)).px(px(6.)).child(label(cells[1].clone()).text_size(px(13.)).truncate()))
-                        .child(div().w(px(130.)).px(px(6.)).child(label(cells[2].clone()).text_size(px(13.)).truncate()))
-                        .child(div().flex_1().px(px(6.)).child(label(cells[3].clone()).text_size(px(13.)).truncate()))
-                })
-                .collect()
-        })
-        .h(px(270.));
-        let sidebar = ["تمام ایف آئی آر", "نئی ایف آئی آر", "Templates / سانچے", "مقامی ترتیبات", "ضمنی رپورٹس", "Archive"];
+        let table =
+            gpui_kit::uniform_list("table", 5000, |range, _, _| {
+                range
+                    .map(|i| {
+                        let cells = row_cells(i);
+                        div()
+                            .flex()
+                            .flex_row_reverse()
+                            .w_full()
+                            .h(px(30.))
+                            .items_center()
+                            .border_b_1()
+                            .border_color(rgb(0xe5e5e5))
+                            .when(i % 2 == 1, |d| d.bg(rgb(0xfafafa)))
+                            .child(
+                                div()
+                                    .w(px(80.))
+                                    .px(px(6.))
+                                    .child(label(cells[0].clone()).text_size(px(13.)).truncate()),
+                            )
+                            .child(
+                                div().w(px(150.)).px(px(6.)).child(
+                                    label(cells[1].clone()).rtl().text_size(px(13.)).truncate(),
+                                ),
+                            )
+                            .child(
+                                div().w(px(130.)).px(px(6.)).child(
+                                    label(cells[2].clone()).rtl().text_size(px(13.)).truncate(),
+                                ),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .px(px(6.))
+                                    .child(label(cells[3].clone()).text_size(px(13.)).truncate()),
+                            )
+                    })
+                    .collect()
+            })
+            .h(px(270.));
+        let sidebar = [
+            "تمام ایف آئی آر",
+            "نئی ایف آئی آر",
+            "Templates / سانچے",
+            "مقامی ترتیبات",
+            "ضمنی رپورٹس",
+            "Archive",
+        ];
         let _ = &self.focused;
         div()
             .size_full()
@@ -403,7 +553,11 @@ impl Render for WidgetsPage {
                             .py(px(6.))
                             .rounded(px(6.))
                             .when(i == 1, |d| d.bg(theme.sidebar_accent))
-                            .child(label(*s).text_size(px(14.)).when(i == 1, |l| l.font_weight(gpui_kit::FontWeight::SEMIBOLD)))
+                            .child(
+                                label(*s).rtl().text_size(px(14.)).when(i == 1, |l| {
+                                    l.font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                                }),
+                            )
                     })),
             )
             .child(
@@ -413,17 +567,38 @@ impl Render for WidgetsPage {
                     .flex()
                     .flex_col()
                     .gap(px(8.))
-                    .child(label("ایف آئی آر فارم — Inputs").text_size(px(18.)).font_weight(gpui_kit::FontWeight::SEMIBOLD))
+                    .child(
+                        label("ایف آئی آر فارم — Inputs")
+                            .text_size(px(18.))
+                            .font_weight(gpui_kit::FontWeight::SEMIBOLD),
+                    )
                     .children(self.inputs.iter().map(|(caption, input)| {
                         div()
                             .flex()
                             .flex_col()
                             .gap(px(2.))
-                            .child(label(*caption).ltr().text_size(px(11.)).text_color(theme.muted_foreground))
+                            .child(
+                                label(*caption)
+                                    .ltr()
+                                    .text_size(px(11.))
+                                    .text_color(theme.muted_foreground),
+                            )
                             .child(input.clone())
                     }))
-                    .child(label("جدول — 5000 rows (uniform_list, virtualised)").text_size(px(14.)).font_weight(gpui_kit::FontWeight::SEMIBOLD).mt(px(6.)))
-                    .child(div().border_1().border_color(theme.border).rounded(px(6.)).overflow_hidden().child(table)),
+                    .child(
+                        label("جدول — 5000 rows (uniform_list, virtualised)")
+                            .text_size(px(14.))
+                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                            .mt(px(6.)),
+                    )
+                    .child(
+                        div()
+                            .border_1()
+                            .border_color(theme.border)
+                            .rounded(px(6.))
+                            .overflow_hidden()
+                            .child(table),
+                    ),
             )
     }
 }
@@ -444,7 +619,7 @@ fn main() {
     let mut cx = gpui_kit::HeadlessAppContext::with_platform(
         text_system,
         Arc::new(gpui_kit::assets::Assets),
-        || gpui_kit::platform::current_headless_renderer(),
+        gpui_kit::platform::current_headless_renderer,
     );
     cx.update(|cx| {
         gpui_kit::init(cx);
@@ -454,24 +629,43 @@ fn main() {
             Err(e) => println!("font mapping problems:\n{e}"),
         }
     });
-    let shots: Vec<(&str, f32, f32, Box<dyn Fn(&mut gpui_kit::App) -> gpui_kit::AnyView>)> = vec![
-        ("compare", 560.0, 1240.0, Box::new(|cx| {
-            let page = ComparePage::new(cx, false);
-            let e: Entity<ComparePage> = cx.new(|_| page);
-            e.into()
-        })),
-        ("compare_chip", 560.0, 520.0, Box::new(|cx| {
-            let page = ComparePage::new(cx, true);
-            let e: Entity<ComparePage> = cx.new(|_| page);
-            e.into()
-        })),
-        ("labels", 560.0, 300.0, Box::new(|cx| {
-            let e: Entity<LabelPage> = cx.new(|_| LabelPage);
-            e.into()
-        })),
+    let shots: Vec<Shot> = vec![
+        (
+            "compare",
+            560.0,
+            1240.0,
+            Box::new(|cx| {
+                let page = ComparePage::new(cx, false);
+                let e: Entity<ComparePage> = cx.new(|_| page);
+                e.into()
+            }),
+        ),
+        (
+            "compare_chip",
+            560.0,
+            520.0,
+            Box::new(|cx| {
+                let page = ComparePage::new(cx, true);
+                let e: Entity<ComparePage> = cx.new(|_| page);
+                e.into()
+            }),
+        ),
+        (
+            "labels",
+            560.0,
+            300.0,
+            Box::new(|cx| {
+                let e: Entity<LabelPage> = cx.new(|_| LabelPage);
+                e.into()
+            }),
+        ),
     ];
     let mut shots = shots;
-    shots.truncate(if args.iter().any(|a| a == "--widgets-only") { 0 } else { shots.len() });
+    shots.truncate(if args.iter().any(|a| a == "--widgets-only") {
+        0
+    } else {
+        shots.len()
+    });
     {
         let window = cx
             .open_window(size(px(900.), px(1040.)), |window, cx| {
@@ -482,7 +676,8 @@ fn main() {
             })
             .expect("window");
         cx.run_until_parked();
-        cx.update_window(window.into(), |_, window, _| window.refresh()).ok();
+        cx.update_window(window.into(), |_, window, _| window.refresh())
+            .ok();
         cx.run_until_parked();
         let image = cx.capture_screenshot(window.into()).expect("screenshot");
         let path = format!("{out_dir}/widgets.png");
@@ -504,6 +699,13 @@ fn main() {
     }
 }
 
+type Shot = (
+    &'static str,
+    f32,
+    f32,
+    Box<dyn Fn(&mut gpui_kit::App) -> gpui_kit::AnyView>,
+);
+
 struct Host {
     view: gpui_kit::AnyView,
 }
@@ -516,5 +718,11 @@ impl Render for Host {
 
 #[cfg(not(feature = "headless"))]
 fn main() {
-    let _ = (reference_html, ComparePage::new, LabelPage, WidgetsPage::new, row_cells);
+    let _ = (
+        reference_html,
+        ComparePage::new,
+        LabelPage,
+        WidgetsPage::new,
+        row_cells,
+    );
 }

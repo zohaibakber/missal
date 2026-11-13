@@ -1,9 +1,9 @@
+use gpui_kit::test::TestInput;
 use gpui_kit::{
     AppContext, Context, ElementInputHandler, Entity, IntoElement, Modifiers, MouseButton,
-    MouseDownEvent, MouseUpEvent, ParentElement, Render, Styled, TestAppContext,
-    VisualTestContext, Window, div, point, px,
+    MouseDownEvent, MouseUpEvent, ParentElement, Render, Styled, TestAppContext, VisualTestContext,
+    Window, div, point, px,
 };
-use gpui_kit::test::TestInput;
 use missal_text::{TextInput, TextInputEvent};
 
 struct Host {
@@ -71,12 +71,24 @@ fn typing_urdu_and_visual_arrows(cx: &mut TestAppContext) {
     assert_eq!(changes, SALAM.chars().count());
 
     cx.simulate_keystrokes("left");
-    assert_eq!(caret(&input, cx), SALAM.len(), "left at the logical end of RTL text is the left edge");
+    assert_eq!(
+        caret(&input, cx),
+        SALAM.len(),
+        "left at the logical end of RTL text is the left edge"
+    );
     cx.simulate_keystrokes("right");
     let after_right = caret(&input, cx);
-    assert_eq!(after_right, SALAM.len() - 'ا'.len_utf8(), "right moves back one letter in RTL");
+    assert_eq!(
+        after_right,
+        SALAM.len() - 'ا'.len_utf8(),
+        "right moves back one letter in RTL"
+    );
     cx.simulate_keystrokes("right right right right");
-    assert_eq!(caret(&input, cx), "سلام".len(), "the zero-width space stop is skipped");
+    assert_eq!(
+        caret(&input, cx),
+        "سلام".len(),
+        "the zero-width space stop is skipped"
+    );
     cx.simulate_keystrokes("home");
     assert_eq!(caret(&input, cx), 0);
     cx.simulate_keystrokes("left");
@@ -90,12 +102,36 @@ fn selection_clipboard_and_undo(cx: &mut TestAppContext) {
     let (_, input, cx) = setup(cx, |i| i.default_text(SALAM));
     cx.simulate_keystrokes("home shift-left shift-left shift-left shift-left");
     assert_eq!(selection(&input, cx), 0.."سلام".len());
-    let copy = if cfg!(target_os = "macos") { "cmd-c" } else { "ctrl-c" };
-    let cut = if cfg!(target_os = "macos") { "cmd-x" } else { "ctrl-x" };
-    let paste = if cfg!(target_os = "macos") { "cmd-v" } else { "ctrl-v" };
-    let undo = if cfg!(target_os = "macos") { "cmd-z" } else { "ctrl-z" };
-    let redo = if cfg!(target_os = "macos") { "cmd-shift-z" } else { "ctrl-y" };
-    let all = if cfg!(target_os = "macos") { "cmd-a" } else { "ctrl-a" };
+    let copy = if cfg!(target_os = "macos") {
+        "cmd-c"
+    } else {
+        "ctrl-c"
+    };
+    let cut = if cfg!(target_os = "macos") {
+        "cmd-x"
+    } else {
+        "ctrl-x"
+    };
+    let paste = if cfg!(target_os = "macos") {
+        "cmd-v"
+    } else {
+        "ctrl-v"
+    };
+    let undo = if cfg!(target_os = "macos") {
+        "cmd-z"
+    } else {
+        "ctrl-z"
+    };
+    let redo = if cfg!(target_os = "macos") {
+        "cmd-shift-z"
+    } else {
+        "ctrl-y"
+    };
+    let all = if cfg!(target_os = "macos") {
+        "cmd-a"
+    } else {
+        "ctrl-a"
+    };
     cx.simulate_keystrokes(copy);
     assert_eq!(
         cx.read_from_clipboard().and_then(|c| c.text()).as_deref(),
@@ -124,7 +160,11 @@ fn typing_coalesces_into_one_undo_step(cx: &mut TestAppContext) {
     cx.simulate_input("مقدمہ");
     cx.simulate_keystrokes("backspace");
     assert_eq!(text(&input, cx), "مقدم");
-    let undo = if cfg!(target_os = "macos") { "cmd-z" } else { "ctrl-z" };
+    let undo = if cfg!(target_os = "macos") {
+        "cmd-z"
+    } else {
+        "ctrl-z"
+    };
     cx.simulate_keystrokes(undo);
     assert_eq!(text(&input, cx), "مقدمہ");
     cx.simulate_keystrokes(undo);
@@ -151,10 +191,16 @@ fn mixed_direction_arrows_follow_the_screen(cx: &mut TestAppContext) {
         .windows(2)
         .take_while(|w| w[0].0 != w[1].0 || w[0].1 != w[1].1)
         .collect();
-    assert!(moving.iter().all(|w| w[1].1 < w[0].1 - 0.5), "every left press moves left: {stops:?}");
+    assert!(
+        moving.iter().all(|w| w[1].1 < w[0].1 - 0.5),
+        "every left press moves left: {stops:?}"
+    );
     let digits = value.find("412").expect("digits");
     for d in digits..digits + 3 {
-        assert!(stops.iter().any(|s| s.0 == d), "a stop inside the number at {d}: {stops:?}");
+        assert!(
+            stops.iter().any(|s| s.0 == d),
+            "a stop inside the number at {d}: {stops:?}"
+        );
     }
     assert_eq!(stops.last().expect("stops").0, value.len(), "{stops:?}");
 }
@@ -162,14 +208,26 @@ fn mixed_direction_arrows_follow_the_screen(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn word_and_delete_commands(cx: &mut TestAppContext) {
     let (_, input, cx) = setup(cx, |i| i.default_text("مقدمہ نمبر درج"));
-    let word_delete = if cfg!(target_os = "macos") { "alt-backspace" } else { "ctrl-backspace" };
+    let word_delete = if cfg!(target_os = "macos") {
+        "alt-backspace"
+    } else {
+        "ctrl-backspace"
+    };
     cx.simulate_keystrokes(word_delete);
     assert_eq!(text(&input, cx), "مقدمہ نمبر ");
     cx.simulate_keystrokes("home delete");
     assert_eq!(text(&input, cx), "قدمہ نمبر ");
-    let word_left = if cfg!(target_os = "macos") { "alt-left" } else { "ctrl-left" };
+    let word_left = if cfg!(target_os = "macos") {
+        "alt-left"
+    } else {
+        "ctrl-left"
+    };
     cx.simulate_keystrokes(word_left);
-    assert_eq!(caret(&input, cx), "قدمہ".len(), "word-left in RTL moves forward to the end of the word");
+    assert_eq!(
+        caret(&input, cx),
+        "قدمہ".len(),
+        "word-left in RTL moves forward to the end of the word"
+    );
 }
 
 #[gpui_kit::test]
@@ -198,7 +256,11 @@ fn disabled_and_read_only(cx: &mut TestAppContext) {
     cx.simulate_input("x");
     cx.simulate_keystrokes("backspace");
     assert_eq!(text(&input, cx), "ثابت");
-    let all = if cfg!(target_os = "macos") { "cmd-a" } else { "ctrl-a" };
+    let all = if cfg!(target_os = "macos") {
+        "cmd-a"
+    } else {
+        "ctrl-a"
+    };
     cx.simulate_keystrokes(all);
     assert_eq!(selection(&input, cx), 0.."ثابت".len());
 }
@@ -213,7 +275,9 @@ fn disabled_ignores_input(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn ime_composition(cx: &mut TestAppContext) {
     let (host, input, cx) = setup(cx, |i| i.default_text("نام "));
-    let bounds = input.read_with(cx, |i, _| i.frame_bounds()).expect("painted");
+    let bounds = input
+        .read_with(cx, |i, _| i.frame_bounds())
+        .expect("painted");
     cx.update(|window, cx| {
         let mut ime = TestInput::new(ElementInputHandler::new(bounds, input.clone()), window);
         ime.compose_text(None, "ک", None, cx);
@@ -228,17 +292,29 @@ fn ime_composition(cx: &mut TestAppContext) {
         assert_eq!(ime.marked_text_range(cx), None);
     });
     assert_eq!(text(&input, cx), "نام کیا");
-    let undo = if cfg!(target_os = "macos") { "cmd-z" } else { "ctrl-z" };
+    let undo = if cfg!(target_os = "macos") {
+        "cmd-z"
+    } else {
+        "ctrl-z"
+    };
     cx.simulate_keystrokes(undo);
     assert_eq!(text(&input, cx), "نام ");
-    assert!(host.read_with(cx, |h, _| h.events.iter().filter(|e| **e == TextInputEvent::Change).count() >= 3));
+    assert!(host.read_with(cx, |h, _| {
+        h.events
+            .iter()
+            .filter(|e| **e == TextInputEvent::Change)
+            .count()
+            >= 3
+    }));
 }
 
 #[gpui_kit::test]
 fn mouse_click_double_click_and_drag(cx: &mut TestAppContext) {
     let value = "مقدمہ نمبر درج";
     let (_, input, cx) = setup(cx, move |i| i.default_text(value));
-    let bounds = input.read_with(cx, |i, _| i.frame_bounds()).expect("painted");
+    let bounds = input
+        .read_with(cx, |i, _| i.frame_bounds())
+        .expect("painted");
     let right = point(bounds.right() - px(1.), bounds.center().y);
     let left = point(bounds.left() + px(1.), bounds.center().y);
     let click = |cx: &mut VisualTestContext, position, count, shift: bool| {
@@ -261,14 +337,27 @@ fn mouse_click_double_click_and_drag(cx: &mut TestAppContext) {
         });
     };
     click(cx, right, 1, false);
-    assert_eq!(caret(&input, cx), 0, "clicking the right edge of RTL text puts the caret at the start");
-    let layout_left = input.read_with(cx, |i, _| i.frame_layout()).expect("layout");
+    assert_eq!(
+        caret(&input, cx),
+        0,
+        "clicking the right edge of RTL text puts the caret at the start"
+    );
+    let layout_left = input
+        .read_with(cx, |i, _| i.frame_layout())
+        .expect("layout");
     let line = layout_left.lines()[0].clone();
     let end_x = bounds.left() + px(line.left - 2.0);
     click(cx, point(end_x.max(left.x), left.y), 1, true);
     assert_eq!(selection(&input, cx), 0..value.len());
-    let word = layout_left.caret(missal_text::TextPosition::downstream(value.find("نمبر").expect("word")));
-    click(cx, point(bounds.left() + px(word.x - 6.0), left.y), 2, false);
+    let word = layout_left.caret(missal_text::TextPosition::downstream(
+        value.find("نمبر").expect("word"),
+    ));
+    click(
+        cx,
+        point(bounds.left() + px(word.x - 6.0), left.y),
+        2,
+        false,
+    );
     let start = value.find("نمبر").expect("word");
     assert_eq!(selection(&input, cx), start..start + "نمبر".len());
     click(cx, right, 3, false);
