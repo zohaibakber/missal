@@ -4353,6 +4353,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "missal-editor"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "gpui-kit",
+ "gpui-pre-wgpu",
+ "image",
+ "missal-core",
+ "missal-page",
+ "missal-text",
+ "serde_json",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "missal-page"
 version = "0.1.0"
 dependencies = [

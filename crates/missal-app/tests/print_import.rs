@@ -440,16 +440,3 @@ fn the_upload_button_opens_the_same_picker(cx: &mut TestAppContext) {
     fixture.settle(cx);
     assert!(fixture.toasts().is_empty());
 }
-
-#[gpui_kit::test]
-fn debug_scroll(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    fir_workspace(&fixture, cx);
-    let preview = fixture.open_preview(cx);
-    fixture.with(cx, |_, cx| preview.update(cx, |preview, cx| preview.go_to_page(3, cx)));
-    cx.update(|cx| {
-        let p = preview.read(cx);
-        eprintln!("DEBUG fraction {} current {} pages {} zoom {:?}%", p.scroll_fraction(), p.current_page(), p.page_count(), p.zoom_percent());
-        eprintln!("DEBUG {}", p.debug_geometry());
-    });
-}

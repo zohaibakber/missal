@@ -455,7 +455,7 @@ pub fn cells_of_table(table: &Table, path: &BlockPath) -> Vec<BlockPath> {
 }
 
 pub fn table_at<'a>(doc: &'a Document, table_path: &[u32]) -> Option<&'a Table> {
-    let (prefix, last) = table_path.split_last()?;
+    let (last, prefix) = table_path.split_last()?;
     match container(doc, prefix)?.get(*last as usize)? {
         Block::Table(table) => Some(table),
         _ => None,

@@ -37,7 +37,7 @@ const ZOOM_STEPS: [u16; 6] = [50, 75, 100, 125, 150, 200];
 
 #[derive(Clone)]
 pub enum PreviewDocument {
-    Content(Document),
+    Content(Box<Document>),
     Stored(FirDocumentId),
 }
 
@@ -52,8 +52,10 @@ pub struct PrintRequest {
     pub documents: Vec<PreviewDocument>,
 }
 
+pub type HandOff = Rc<dyn Fn(&Path, &mut App) -> Handoff>;
+
 #[derive(Clone)]
-pub struct PrintHandler(pub Rc<dyn Fn(&Path, &mut App) -> Handoff>);
+pub struct PrintHandler(pub HandOff);
 
 impl Global for PrintHandler {}
 
@@ -150,7 +152,7 @@ impl PrintPreview {
             busy: None,
             _subscriptions: subscriptions,
         };
-        preview.viewport.width = preview.viewport.width * 0.8;
+        preview.viewport.width *= 0.8;
         preview.start(window, cx);
         preview
     }
@@ -203,10 +205,6 @@ impl PrintPreview {
     pub fn scroll_fraction(&self) -> f32 {
         let (_, total) = self.layout(self.scale());
         if total > 0.0 { self.scroll_top() / total } else { 0.0 }
-    }
-
-    pub fn debug_geometry(&self) -> String {
-        format!("offset {:?} max {:?} bounds {:?} viewport {:?}", self.scroll.offset(), self.scroll.max_offset(), self.scroll.bounds(), self.viewport)
     }
 
     pub fn busy(&self) -> Option<Busy> {
@@ -265,7 +263,7 @@ impl PrintPreview {
                         .documents
                         .iter()
                         .filter_map(|document| match document {
-                            PreviewDocument::Content(document) => Some(document.clone()),
+                            PreviewDocument::Content(document) => Some((**document).clone()),
                             PreviewDocument::Stored(_) => stored.next().map(|record| record.document),
                         })
                         .collect();
@@ -685,6 +683,7 @@ impl PrintPreview {
                     .size_full()
                     .relative()
                     .flex()
+                    .items_start()
                     .track_scroll(&self.scroll)
                     .overflow_scroll()
                     .child(

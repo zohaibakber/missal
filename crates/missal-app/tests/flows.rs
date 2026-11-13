@@ -178,9 +178,7 @@ fn search_filter_and_sort_the_list(cx: &mut TestAppContext) {
             (y.parse().unwrap(), n.parse().unwrap())
         })
         .collect();
-    let by_number: Vec<i64> = numbers.iter().map(|n| n.split('/').next().unwrap().parse().unwrap()).collect();
-    assert!(by_number.windows(2).all(|pair| pair[0] <= pair[1]), "natural ascending: {numbers:?}");
-    let _ = keys;
+    assert!(keys.windows(2).all(|pair| pair[0] <= pair[1]), "year then number ascending: {numbers:?}");
     fixture.with(cx, |_, cx| list.update(cx, |list, cx| list.set_search("", cx)));
     fixture.with(cx, |_, cx| list.update(cx, |list, cx| list.toggle_status(FirStatus::Open, cx)));
     let open = cx.update(|cx| fixture.models.firs.read(cx).rows.iter().filter(|row| row.status == FirStatus::Open).count());

@@ -329,7 +329,7 @@ fn previous_sibling(doc: &Document, path: &BlockPath) -> Option<(BlockPath, Bloc
     Some((BlockPath(base), blocks[found.block - 1].clone()))
 }
 
-fn next_sibling_path(doc: &Document, path: &BlockPath) -> Option<(BlockPath, &Block)> {
+fn next_sibling_path<'a>(doc: &'a Document, path: &BlockPath) -> Option<(BlockPath, &'a Block)> {
     let found = anatomy(doc, path)?;
     let blocks = container(doc, &found.container)?;
     let next = blocks.get(found.block + 1)?;

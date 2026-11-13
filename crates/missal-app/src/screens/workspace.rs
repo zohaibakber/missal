@@ -552,7 +552,7 @@ impl WorkspaceScreen {
             .iter()
             .map(|id| {
                 if Some(*id) == live {
-                    PreviewDocument::Content(self.editor.snapshot(cx).document)
+                    PreviewDocument::Content(Box::new(self.editor.snapshot(cx).document))
                 } else {
                     PreviewDocument::Stored(*id)
                 }

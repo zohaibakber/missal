@@ -177,7 +177,7 @@ impl TemplatePage {
             catalog: (*self.models.catalog.read(cx).field_catalog()).clone(),
             values: None,
             mode: DisplayMode::Labels,
-            documents: vec![PreviewDocument::Content(self.editor.snapshot(cx).document)],
+            documents: vec![PreviewDocument::Content(Box::new(self.editor.snapshot(cx).document))],
         };
         open_print_preview(request, window, cx);
     }
