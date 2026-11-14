@@ -443,7 +443,7 @@ fn workspace_edit_save_and_discard_flow(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn workspace_documents_reorder_toggle_and_remove(cx: &mut TestAppContext) {
+fn workspace_documents_reorder_add_and_remove(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
     let fir = FirId::new(3).unwrap();
     fixture.go(cx, Route::Fir(fir));
@@ -468,10 +468,6 @@ fn workspace_documents_reorder_toggle_and_remove(cx: &mut TestAppContext) {
             .collect()
     });
     assert_eq!(reordered, [ids[1], ids[0], ids[2]]);
-    fixture.with(cx, |_, cx| {
-        workspace.update(cx, |ws, cx| ws.toggle_included(ids[2], cx))
-    });
-    assert_eq!(cx.update(|cx| workspace.read(cx).excluded_count()), 1);
     fixture.with(cx, |window, cx| {
         workspace.update(cx, |ws, cx| ws.remove_document(ids[2], window, cx))
     });

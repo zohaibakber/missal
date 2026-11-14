@@ -27,9 +27,7 @@ use crate::shortcuts::*;
 use crate::state::catalog::CatalogEvent;
 use crate::state::firs::FirsEvent;
 use crate::state::rows::fold_for_search;
-use crate::state::{
-    Models, PrintTarget, Route, run_db_in, toast_error, toast_success, toast_warning,
-};
+use crate::state::{Models, Route, run_db_in, toast_error, toast_success, toast_warning};
 use crate::theme::{ICON_SM, Palette, RAIL_WIDTH};
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
 use crate::ui::input::{Kind, field_input};
@@ -147,7 +145,6 @@ pub struct WorkspaceScreen {
     active: Option<FirDocumentId>,
     loaded: Option<(FirDocumentId, Revision)>,
     document_state: DocumentState,
-    excluded: HashSet<FirDocumentId>,
     mode: DisplayMode,
     editor: Rc<dyn DocumentEditor>,
     editor_dirty: bool,
@@ -260,7 +257,6 @@ impl WorkspaceScreen {
             active: None,
             loaded: None,
             document_state: DocumentState::Idle,
-            excluded: HashSet::new(),
             mode: DisplayMode::Values,
             editor,
             editor_dirty: false,
@@ -292,8 +288,41 @@ impl WorkspaceScreen {
         screen
     }
 
-    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+    pub fn focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus, cx);
+        if self.state == WorkspaceState::Ready {
+            self.reload_order(window, cx);
+            if crate::ui::print_preview::take_fill_request(self.id, cx) {
+                self.show_fields(window, cx);
+            }
+            self.take_pending_fields(window, cx);
+        }
+    }
+
+    fn reload_order(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let fir = self.id;
+        run_db_in(
+            window,
+            cx,
+            move |store| store.fir_documents(fir),
+            |this, result, _, cx| {
+                if let Ok(documents) = result
+                    && documents
+                        .iter()
+                        .map(|d| d.id)
+                        .ne(this.documents.iter().map(|d| d.id))
+                {
+                    let mut documents = documents;
+                    for document in &mut documents {
+                        if let Some(current) = this.documents.iter().find(|d| d.id == document.id) {
+                            *document = current.clone();
+                        }
+                    }
+                    this.documents = documents;
+                    cx.notify();
+                }
+            },
+        );
     }
 
     pub fn is_dirty(&self, cx: &App) -> bool {
@@ -330,10 +359,6 @@ impl WorkspaceScreen {
 
     pub fn panel(&self) -> &Entity<FieldsPanel> {
         &self.panel
-    }
-
-    pub fn excluded_count(&self) -> usize {
-        self.excluded.len()
     }
 
     pub fn is_panel_open(&self, window: &Window) -> bool {
@@ -638,13 +663,6 @@ impl WorkspaceScreen {
         cx.notify();
     }
 
-    pub fn toggle_included(&mut self, id: FirDocumentId, cx: &mut Context<Self>) {
-        if !self.excluded.remove(&id) {
-            self.excluded.insert(id);
-        }
-        cx.notify();
-    }
-
     pub fn move_document(
         &mut self,
         id: FirDocumentId,
@@ -700,7 +718,6 @@ impl WorkspaceScreen {
                     Ok(()) => {
                         let position = this.documents.iter().position(|document| document.id == id);
                         this.documents.retain(|document| document.id != id);
-                        this.excluded.remove(&id);
                         if this.active == Some(id) {
                             let next = position
                                 .and_then(|position| {
@@ -803,7 +820,7 @@ impl WorkspaceScreen {
     }
 
     pub fn print(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        navigate(Route::Print(PrintTarget::Fir(self.id)), window, cx);
+        self.open_print_preview(window, cx);
     }
 
     fn request_delete(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -855,16 +872,13 @@ impl WorkspaceScreen {
         if self.state != WorkspaceState::Ready {
             return;
         }
+        let excluded = crate::ui::print_preview::excluded_documents(self.id, cx);
         let included: Vec<FirDocumentId> = self
             .documents
             .iter()
             .map(|document| document.id)
-            .filter(|id| !self.excluded.contains(id))
+            .filter(|id| !excluded.contains(id))
             .collect();
-        if included.is_empty() {
-            toast_warning(window, cx, "Select at least one document to print");
-            return;
-        }
         let Some(values) = self.values.clone() else {
             return;
         };

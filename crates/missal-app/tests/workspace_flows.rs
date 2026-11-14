@@ -308,3 +308,36 @@ fn the_unified_form_folds_digits_adds_entries_and_guards_cancel(cx: &mut TestApp
     let unchanged = Store::open(&fixture.database).unwrap().fir(id).unwrap().fir;
     assert_eq!(unchanged.offence, "ڈکیتی");
 }
+
+#[gpui_kit::test]
+fn fill_them_in_on_the_print_screen_returns_to_the_first_empty_field(cx: &mut TestAppContext) {
+    let fixture = boot(cx, 4);
+    let fir = FirId::new(3).unwrap();
+    fixture.go(cx, Route::Fir(fir));
+    let workspace = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
+    fixture.press(cx, "secondary-.");
+    assert!(!fixture.with(cx, |window, cx| workspace.read(cx).is_panel_open(window)));
+    fixture.click(cx, "header-print");
+    let preview = cx.update(|cx| fixture.shell.read(cx).print_preview().unwrap());
+    fixture.with(cx, |_, cx| {
+        preview.update(cx, |preview, cx| preview.fill_in(cx))
+    });
+    assert_eq!(fixture.route(cx), Route::Fir(fir));
+    let restored = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
+    assert_eq!(restored, workspace);
+    let first = empty_items(&fixture, cx)
+        .into_iter()
+        .find(|item| !matches!(item.scope, Scope::Fir(_)))
+        .unwrap();
+    let input = cx.update(|cx| {
+        workspace
+            .read(cx)
+            .panel()
+            .read(cx)
+            .input_for(&first.reference)
+            .unwrap()
+    });
+    assert!(fixture.with(cx, |window, cx| {
+        workspace.read(cx).is_panel_open(window) && input.focus_handle(cx).is_focused(window)
+    }));
+}

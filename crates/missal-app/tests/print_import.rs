@@ -228,6 +228,7 @@ impl ActiveIds for App {
 fn print_preview_respects_the_include_when_printing_choice(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
     let workspace = fir_workspace(&fixture, cx);
+    let fir = cx.update(|cx| workspace.read(cx).id());
     let ids: Vec<_> = cx.update(|cx| {
         workspace
             .read(cx)
@@ -236,24 +237,17 @@ fn print_preview_respects_the_include_when_printing_choice(cx: &mut TestAppConte
             .map(|d| d.id)
             .collect()
     });
+    let preview = fixture.open_preview(cx);
+    assert_eq!(cx.update(|cx| preview.read(cx).document_count()), 3);
     fixture.with(cx, |_, cx| {
-        workspace.update(cx, |ws, cx| ws.toggle_included(ids[1], cx))
+        preview.update(cx, |preview, cx| preview.toggle_included(1, cx))
     });
+    assert_eq!(cx.update(|cx| preview.read(cx).document_count()), 2);
+    let excluded = cx.update(|cx| missal_app::ui::print_preview::excluded_documents(fir, cx));
+    assert_eq!(excluded.into_iter().collect::<Vec<_>>(), [ids[1]]);
+    fixture.press(cx, "escape");
     let preview = fixture.open_preview(cx);
     assert_eq!(cx.update(|cx| preview.read(cx).document_count()), 2);
-    let stored: Vec<_> = cx.update(|cx| {
-        preview
-            .read(cx)
-            .request()
-            .documents
-            .iter()
-            .filter_map(|document| match document {
-                PreviewDocument::Stored(id) => Some(*id),
-                PreviewDocument::Content(_) => None,
-            })
-            .collect()
-    });
-    assert_eq!(stored, [ids[2]]);
 }
 
 #[gpui_kit::test]
@@ -301,28 +295,17 @@ fn print_preview_zoom_steps_fit_and_preserves_the_scroll_position(cx: &mut TestA
 }
 
 #[gpui_kit::test]
-fn nothing_selected_to_print_warns_instead_of_opening(cx: &mut TestAppContext) {
+fn printing_from_the_workspace_offers_every_document_on_the_print_screen(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
     let workspace = fir_workspace(&fixture, cx);
-    let ids: Vec<_> = cx.update(|cx| {
-        workspace
-            .read(cx)
-            .documents()
-            .iter()
-            .map(|d| d.id)
-            .collect()
-    });
-    for id in ids {
-        fixture.with(cx, |_, cx| {
-            workspace.update(cx, |ws, cx| ws.toggle_included(id, cx))
-        });
-    }
-    fixture.press(cx, "secondary-p");
-    assert!(fixture.preview(cx).is_none());
-    let toasts = fixture.toasts();
-    assert_eq!(toasts.len(), 1);
-    assert_eq!(toasts[0].kind, ToastKind::Warning);
-    assert_eq!(toasts[0].message, "Select at least one document to print");
+    let count = cx.update(|cx| workspace.read(cx).documents().len());
+    fixture.click(cx, "header-print");
+    let preview = fixture.preview(cx).expect("the Print screen opens");
+    assert_eq!(
+        cx.update(|cx| preview.read(cx).request().documents.len()),
+        count
+    );
+    assert!(fixture.toasts().is_empty());
 }
 
 #[gpui_kit::test]
