@@ -5,7 +5,7 @@ mod toolbar;
 
 use std::ops::Range;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use gpui_kit::{
     App, AppContext, Bounds, ClipboardEntry, ClipboardItem, Context, Entity, EntityInputHandler,
@@ -57,6 +57,20 @@ impl EditorFields {
         }
     }
 
+    pub fn for_fir(
+        catalog: Rc<FieldCatalog>,
+        values: Rc<FirValues>,
+        mode: DisplayMode,
+        markers: FieldMarkers,
+    ) -> EditorFields {
+        EditorFields {
+            catalog,
+            values: Some(values),
+            mode,
+            markers,
+        }
+    }
+
     pub fn presentation(&self) -> FieldPresentation<'_> {
         match &self.values {
             Some(values) => FieldPresentation::for_fir(&self.catalog, values, self.mode),
@@ -82,15 +96,6 @@ pub enum EditorEvent {
 struct SessionZoom(Option<f32>);
 
 impl gpui_kit::Global for SessionZoom {}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Timings {
-    pub load: Duration,
-    pub edit: Duration,
-    pub relayout: Duration,
-    pub blocks_measured: usize,
-    pub pages_rebuilt: usize,
-}
 
 #[derive(Clone, Debug, Default)]
 pub struct Placement {
@@ -140,7 +145,6 @@ pub struct Editor {
     fields: EditorFields,
     engine: PageEngine,
     packet: Packet,
-    key: String,
     read_only: bool,
     mode_toggle: bool,
     zoom_override: Option<f32>,
@@ -155,7 +159,6 @@ pub struct Editor {
     drag: Option<Drag>,
     autoscroll_task: Option<Task<()>>,
     dirty: bool,
-    timings: Timings,
     field_menu_open: bool,
     field_query: String,
     field_search: Entity<TextInput>,
@@ -258,7 +261,6 @@ impl Editor {
             fields,
             engine,
             packet,
-            key: String::new(),
             read_only: false,
             mode_toggle: false,
             zoom_override,
@@ -273,7 +275,6 @@ impl Editor {
             drag: None,
             autoscroll_task: None,
             dirty: false,
-            timings: Timings::default(),
             field_menu_open: false,
             field_query: String::new(),
             field_search,
@@ -285,14 +286,11 @@ impl Editor {
 
     pub fn load(
         &mut self,
-        key: String,
         document: Document,
         fields: EditorFields,
         dirty: bool,
         cx: &mut Context<Self>,
     ) {
-        let started = Instant::now();
-        self.key = key;
         self.fields = fields;
         self.core
             .set_fields(self.fields.catalog.clone(), self.fields.markers.clone());
@@ -302,7 +300,6 @@ impl Editor {
             self.core.load(document);
         }
         self.relayout_all();
-        self.timings.load = started.elapsed();
         self.scroll = PagePoint::default();
         self.goal_x = None;
         self.drag = None;
@@ -318,20 +315,12 @@ impl Editor {
             .layout(&[DocSource::new(self.core.document(), &presentation)]);
     }
 
-    pub fn key(&self) -> &str {
-        &self.key
-    }
-
     pub fn core(&self) -> &EditorCore {
         &self.core
     }
 
     pub fn packet(&self) -> &Packet {
         &self.packet
-    }
-
-    pub fn timings(&self) -> Timings {
-        self.timings
     }
 
     pub fn fields(&self) -> &EditorFields {
@@ -432,13 +421,11 @@ impl Editor {
         self.fields = fields;
         self.core
             .set_fields(self.fields.catalog.clone(), self.fields.markers.clone());
-        let started = Instant::now();
         let presentation = self.fields.presentation();
         self.engine.refresh_fields(
             &mut self.packet,
             &[DocSource::new(self.core.document(), &presentation)],
         );
-        self.timings.relayout = started.elapsed();
         cx.notify();
     }
 
@@ -481,7 +468,6 @@ impl Editor {
 
     pub fn apply(&mut self, change: Option<Change>, _window: &mut Window, cx: &mut Context<Self>) {
         if let Some(change) = change {
-            let started = Instant::now();
             let presentation = self.fields.presentation();
             let total = self.core.document().blocks.len();
             let edit = match change.edit {
@@ -498,10 +484,6 @@ impl Editor {
                 &DocSource::new(self.core.document(), &presentation),
                 &edit,
             );
-            let stats = self.engine.last_stats();
-            self.timings.relayout = started.elapsed();
-            self.timings.blocks_measured = stats.blocks_measured;
-            self.timings.pages_rebuilt = stats.pages_rebuilt;
             self.refresh_dirty(cx);
         }
         self.moved(cx);
@@ -522,11 +504,9 @@ impl Editor {
     where
         R: Into<Option<Change>> + Clone,
     {
-        let started = Instant::now();
         let result = f(&mut self.core);
         let change: Option<Change> = result.clone().into();
         self.apply(change, window, cx);
-        self.timings.edit = started.elapsed();
         result
     }
 
@@ -539,11 +519,9 @@ impl Editor {
         if self.read_only {
             return;
         }
-        let started = Instant::now();
         let change = f(&mut self.core);
         self.goal_x = None;
         self.apply(change, window, cx);
-        self.timings.edit = started.elapsed();
     }
 
     pub fn set_selection(

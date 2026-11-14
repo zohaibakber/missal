@@ -434,10 +434,6 @@ impl SettingsScreen {
         (self.marker_open.clone(), self.marker_close.clone())
     }
 
-    pub fn custom_inputs(&self) -> Vec<Entity<TextInput>> {
-        self.customs.iter().map(|row| row.name.clone()).collect()
-    }
-
     pub fn built_in_open(&self) -> bool {
         self.built_in_open
     }

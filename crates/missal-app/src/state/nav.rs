@@ -22,19 +22,6 @@ pub enum Route {
     Templates,
     NewTemplate,
     Template(TemplateId),
-    Components,
-}
-
-impl Route {
-    pub fn section(&self) -> &'static str {
-        match self {
-            Route::Firs | Route::NewFir | Route::Fir(_) | Route::EditFir(_) => "FIRs",
-            Route::Print(_) => "Print",
-            Route::Settings => "Settings",
-            Route::Templates | Route::NewTemplate | Route::Template(_) => "Templates",
-            Route::Components => "Components",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

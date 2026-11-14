@@ -155,8 +155,6 @@ fn shell(cx: &gpui_kit::App) -> gpui_kit::Entity<AppShell> {
 }
 
 fn run_wp0(h: &mut Harness) {
-    h.go(Route::Components);
-    h.shot("00-components");
     h.go(Route::Firs);
     h.shot("01-fir-list");
     h.with_window(toggle_nav_menu);
@@ -281,7 +279,7 @@ fn run(dark: bool, out: &Path, only_wp0: bool) {
     h.shot("15-settings");
 
     h.with_window(show_shortcuts);
-    h.shot("16b-shortcuts-legacy-path");
+    h.shot("16b-shortcuts-second-open");
     h.reset();
 
     h.go(Route::Firs);

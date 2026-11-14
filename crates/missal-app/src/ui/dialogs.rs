@@ -181,26 +181,6 @@ pub fn confirm_delete(
     );
 }
 
-pub fn confirm_unsaved(
-    window: &mut Window,
-    cx: &mut App,
-    name: &str,
-    on_save: impl Fn(&mut Window, &mut App) + 'static,
-    on_discard: impl Fn(&mut Window, &mut App) + 'static,
-) {
-    open_choice(
-        window,
-        cx,
-        format!("Save changes to {}?", crate::ui::isolate_urdu(name)),
-        "Your changes will be lost if you don't save them.",
-        vec![
-            Choice::new("dont-save", "Don't save", Tone::Ghost, on_discard),
-            Choice::new("cancel", "Cancel", Tone::Neutral, |_, _| {}),
-            Choice::new("save", "Save", Tone::Primary, on_save),
-        ],
-    );
-}
-
 pub fn confirm_discard(
     window: &mut Window,
     cx: &mut App,

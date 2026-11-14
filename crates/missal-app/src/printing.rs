@@ -59,7 +59,6 @@ pub fn choose_route(environment: &Environment<'_>) -> Route {
         let mut candidates: Vec<PathBuf> = Vec::new();
         if let Some(directory) = &environment.executable_directory {
             candidates.push(directory.join("SumatraPDF.exe"));
-            candidates.push(directory.join("resources").join("SumatraPDF.exe"));
         }
         for (variable, suffix) in [
             ("LOCALAPPDATA", "SumatraPDF"),

@@ -1,7 +1,6 @@
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
@@ -81,17 +80,12 @@ type Opened = StoreResult<Store>;
 type Job = Box<dyn FnOnce(&mut Opened) + Send>;
 
 enum Mode {
-    Thread(Mutex<Sender<Job>>),
+    Thread(Sender<Job>),
     Inline(Mutex<Opened>),
 }
 
-struct Inner {
-    mode: Mode,
-    pending: AtomicUsize,
-}
-
 #[derive(Clone)]
-pub struct Db(Arc<Inner>);
+pub struct Db(Arc<Mode>);
 
 impl Global for Db {}
 
@@ -109,21 +103,11 @@ impl Db {
         if let Err(error) = started {
             eprintln!("missal: could not start the database thread: {error}");
         }
-        Db(Arc::new(Inner {
-            mode: Mode::Thread(Mutex::new(sender)),
-            pending: AtomicUsize::new(0),
-        }))
+        Db(Arc::new(Mode::Thread(sender)))
     }
 
     pub fn inline(store: Store) -> Db {
-        Db(Arc::new(Inner {
-            mode: Mode::Inline(Mutex::new(Ok(store))),
-            pending: AtomicUsize::new(0),
-        }))
-    }
-
-    pub fn pending(&self) -> usize {
-        self.0.pending.load(Ordering::SeqCst)
+        Db(Arc::new(Mode::Inline(Mutex::new(Ok(store)))))
     }
 
     pub fn run<T, F>(&self, operation: F) -> Reply<StoreResult<T>>
@@ -132,30 +116,21 @@ impl Db {
         F: FnOnce(&mut Store) -> StoreResult<T> + Send + 'static,
     {
         let (completer, reply) = reply();
-        let inner = self.0.clone();
-        inner.pending.fetch_add(1, Ordering::SeqCst);
-        let finish = {
-            let inner = inner.clone();
-            move |opened: &mut Opened, completer: Completer<StoreResult<T>>| {
-                let result = match opened {
-                    Ok(store) => operation(store),
-                    Err(error) => Err(error.clone()),
-                };
-                inner.pending.fetch_sub(1, Ordering::SeqCst);
-                completer.complete(result);
-            }
+        let finish = move |opened: &mut Opened, completer: Completer<StoreResult<T>>| {
+            let result = match opened {
+                Ok(store) => operation(store),
+                Err(error) => Err(error.clone()),
+            };
+            completer.complete(result);
         };
-        match &self.0.mode {
+        match &*self.0 {
             Mode::Inline(store) => {
                 let mut store = store.lock().unwrap_or_else(|error| error.into_inner());
                 finish(&mut store, completer);
             }
             Mode::Thread(sender) => {
-                let sender = sender.lock().unwrap_or_else(|error| error.into_inner());
                 let job: Job = Box::new(move |opened| finish(opened, completer));
-                if sender.send(job).is_err() {
-                    inner.pending.fetch_sub(1, Ordering::SeqCst);
-                }
+                sender.send(job).ok();
             }
         }
         reply
@@ -187,7 +162,6 @@ mod tests {
         assert_eq!(ran_elsewhere, Ok(true));
         let count = block_on(db.run(|store| store.firs().map(|firs| firs.len())));
         assert_eq!(count, Ok(0));
-        assert_eq!(db.pending(), 0);
         let failed = block_on(
             db.run(|_| -> StoreResult<()> { Err(RepositoryError::storage("test", "boom")) }),
         );

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use missal_core::{FirId, FirStatus};
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ThemeChoice {
@@ -106,7 +106,7 @@ impl Default for Sort {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TablePrefs {
     pub sort: Sort,
-    pub statuses: Vec<FirStatus>,
+    pub status: Option<FirStatus>,
     pub hidden: Vec<Column>,
 }
 
@@ -114,7 +114,7 @@ impl Default for TablePrefs {
     fn default() -> TablePrefs {
         TablePrefs {
             sort: Sort::default(),
-            statuses: Vec::new(),
+            status: None,
             hidden: vec![Column::IncidentDate, Column::ArrestDate],
         }
     }
@@ -176,12 +176,12 @@ impl Preferences {
         {
             preferences.theme = theme;
         }
-        if let Some(recent) = value.get("recentFirs").and_then(Value::as_array) {
+        if let Some(recent) = value.get("recent_firs").and_then(Value::as_array) {
             preferences.recent_firs = recent
                 .iter()
                 .filter_map(|entry| {
                     let id = FirId::new(entry.get("id")?.as_i64()?)?;
-                    let opened_at = entry.get("openedAt")?.as_i64()?;
+                    let opened_at = entry.get("opened_at")?.as_i64()?;
                     Some(RecentFir { id, opened_at })
                 })
                 .take(RECENT_FIRS)
@@ -208,26 +208,23 @@ impl Preferences {
                     .unwrap_or(false),
             });
         }
-        if let Some(table) = value.get("firTable") {
+        if let Some(table) = value.get("fir_table") {
             if let Some(column) = table
-                .get("sortColumn")
+                .get("sort_column")
                 .and_then(Value::as_str)
                 .and_then(Column::parse)
             {
                 preferences.table.sort.column = column;
                 preferences.table.sort.descending = table
-                    .get("sortDescending")
+                    .get("sort_descending")
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
             }
-            if let Some(statuses) = table.get("statuses").and_then(Value::as_array) {
-                preferences.table.statuses = statuses
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .filter_map(FirStatus::parse)
-                    .collect();
-            }
-            if let Some(hidden) = table.get("hiddenColumns").and_then(Value::as_array) {
+            preferences.table.status = table
+                .get("status")
+                .and_then(Value::as_str)
+                .and_then(FirStatus::parse);
+            if let Some(hidden) = table.get("hidden_columns").and_then(Value::as_array) {
                 preferences.table.hidden = hidden
                     .iter()
                     .filter_map(Value::as_str)
@@ -238,54 +235,46 @@ impl Preferences {
         preferences
     }
 
-    pub fn merge_into(&self, object: &mut Map<String, Value>) {
+    pub fn to_json(&self) -> Value {
+        let mut object = serde_json::Map::new();
         object.insert("theme".into(), json!(self.theme.as_str()));
-        object.remove("sidebarOpen");
         object.insert(
-            "recentFirs".into(),
+            "recent_firs".into(),
             json!(
                 self.recent_firs
                     .iter()
-                    .map(|recent| json!({"id": recent.id.get(), "openedAt": recent.opened_at}))
+                    .map(|recent| json!({"id": recent.id.get(), "opened_at": recent.opened_at}))
                     .collect::<Vec<_>>()
             ),
         );
-        match self.window {
-            Some(window) => {
-                object.insert(
-                    "window".into(),
-                    json!({
-                        "x": window.x,
-                        "y": window.y,
-                        "width": window.width,
-                        "height": window.height,
-                        "maximized": window.maximized,
-                    }),
-                );
-            }
-            None => {
-                object.remove("window");
-            }
+        if let Some(window) = self.window {
+            object.insert(
+                "window".into(),
+                json!({
+                    "x": window.x,
+                    "y": window.y,
+                    "width": window.width,
+                    "height": window.height,
+                    "maximized": window.maximized,
+                }),
+            );
         }
         object.insert(
-            "firTable".into(),
+            "fir_table".into(),
             json!({
-                "sortColumn": self.table.sort.column.key(),
-                "sortDescending": self.table.sort.descending,
-                "statuses": self.table.statuses.iter().map(|status| status.as_str()).collect::<Vec<_>>(),
-                "hiddenColumns": self.table.hidden.iter().map(|column| column.key()).collect::<Vec<_>>(),
+                "sort_column": self.table.sort.column.key(),
+                "sort_descending": self.table.sort.descending,
+                "status": self.table.status.map(|status| status.as_str()),
+                "hidden_columns": self.table.hidden.iter().map(|column| column.key()).collect::<Vec<_>>(),
             }),
         );
+        Value::Object(object)
     }
 
     pub fn record_recent(&mut self, id: FirId, opened_at: i64) {
         self.recent_firs.retain(|recent| recent.id != id);
         self.recent_firs.insert(0, RecentFir { id, opened_at });
         self.recent_firs.truncate(RECENT_FIRS);
-    }
-
-    pub fn forget_recent(&mut self, ids: &[FirId]) {
-        self.recent_firs.retain(|recent| !ids.contains(&recent.id));
     }
 
     pub fn load(path: &Path) -> Preferences {
@@ -297,16 +286,7 @@ impl Preferences {
     }
 
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
-        let mut object = std::fs::read_to_string(path)
-            .ok()
-            .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-            .and_then(|value| match value {
-                Value::Object(object) => Some(object),
-                _ => None,
-            })
-            .unwrap_or_default();
-        self.merge_into(&mut object);
-        let text = serde_json::to_string_pretty(&Value::Object(object))
+        let text = serde_json::to_string_pretty(&self.to_json())
             .map_err(|error| std::io::Error::other(error.to_string()))?;
         let temporary = path.with_extension("json.tmp");
         std::fs::write(&temporary, text)?;
@@ -319,17 +299,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reads_the_electron_preferences_file() {
-        let preferences = Preferences::from_json(&json!({"theme": "dark"}));
-        assert_eq!(preferences.theme, ThemeChoice::Dark);
-        assert_eq!(preferences.table, TablePrefs::default());
-    }
-
-    #[test]
-    fn round_trips_and_keeps_unknown_keys() {
+    fn round_trips() {
         let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("preferences.json");
-        std::fs::write(&path, r#"{"theme":"light","other":1,"sidebarOpen":false}"#).unwrap();
+        let path = directory.path().join("missal-preferences.json");
         let mut preferences = Preferences::load(&path);
         preferences.theme = ThemeChoice::Dark;
         preferences.record_recent(FirId::new(4).unwrap(), 100);
@@ -347,7 +319,7 @@ mod tests {
             column: Column::Date,
             descending: false,
         };
-        preferences.table.statuses = vec![FirStatus::Closed];
+        preferences.table.status = Some(FirStatus::Closed);
         preferences.table.hidden = vec![Column::ArrestDate];
         preferences.window = Some(WindowPrefs {
             x: 10.0,
@@ -358,10 +330,6 @@ mod tests {
         });
         preferences.save(&path).unwrap();
         assert_eq!(Preferences::load(&path), preferences);
-        let value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(value["other"], 1);
-        assert_eq!(value["theme"], "dark");
-        assert!(value.get("sidebarOpen").is_none());
     }
 
     #[test]
@@ -379,11 +347,11 @@ mod tests {
         let preferences = Preferences::from_json(&json!({
             "theme": "purple",
             "window": {"x": 0, "y": 0, "width": 10, "height": 10},
-            "firTable": {"sortColumn": "nope", "statuses": ["Closed", "x"]}
+            "fir_table": {"sort_column": "nope", "status": "Closed"}
         }));
         assert_eq!(preferences.theme, ThemeChoice::System);
         assert_eq!(preferences.window, None);
         assert_eq!(preferences.table.sort, Sort::default());
-        assert_eq!(preferences.table.statuses, vec![FirStatus::Closed]);
+        assert_eq!(preferences.table.status, Some(FirStatus::Closed));
     }
 }

@@ -78,7 +78,7 @@ impl Harness {
                 .page()
                 .cloned()
                 .unwrap();
-            page.read(cx).editor().editor_entity().unwrap()
+            page.read(cx).editor().clone()
         })
     }
 
@@ -91,8 +91,7 @@ impl Harness {
                 .unwrap()
                 .read(cx)
                 .editor()
-                .editor_entity()
-                .unwrap()
+                .clone()
         })
     }
 

@@ -17,7 +17,6 @@ use crate::state::nav::NavEvent;
 use crate::state::{Models, Route};
 use crate::theme::{self, Palette};
 use crate::ui::cheatsheet;
-use crate::ui::components::ComponentsScreen;
 use crate::ui::nav_menu::{self, NavMenu};
 use crate::ui::palette::CommandPalette;
 use crate::ui::print_preview::{PrintEvent, PrintPreview, PrintRequest, PrintSource};
@@ -48,7 +47,6 @@ enum Screen {
     Workspace(Entity<WorkspaceScreen>),
     Settings(Entity<SettingsScreen>),
     Templates(Entity<TemplatesScreen>),
-    Components(Entity<ComponentsScreen>),
     Print(Entity<PrintPreview>),
 }
 
@@ -68,7 +66,6 @@ impl Screen {
             Screen::Workspace(view) => view.clone().into(),
             Screen::Settings(view) => view.clone().into(),
             Screen::Templates(view) => view.clone().into(),
-            Screen::Components(view) => view.clone().into(),
             Screen::Print(view) => view.clone().into(),
         }
     }
@@ -80,7 +77,6 @@ impl Screen {
             Screen::Workspace(view) => header_of(view, window, cx),
             Screen::Settings(view) => header_of(view, window, cx),
             Screen::Templates(view) => header_of(view, window, cx),
-            Screen::Components(view) => header_of(view, window, cx),
             Screen::Print(view) => header_of(view, window, cx),
         }
     }
@@ -92,14 +88,13 @@ impl Screen {
             Screen::Workspace(view) => cx.observe(view, |_, _, cx| cx.notify()),
             Screen::Settings(view) => cx.observe(view, |_, _, cx| cx.notify()),
             Screen::Templates(view) => cx.observe(view, |_, _, cx| cx.notify()),
-            Screen::Components(view) => cx.observe(view, |_, _, cx| cx.notify()),
             Screen::Print(view) => cx.observe(view, |_, _, cx| cx.notify()),
         }
     }
 
     fn guard(&self) -> crate::state::nav::Guard {
         match self {
-            Screen::Firs(_) | Screen::Components(_) | Screen::Print(_) => Rc::new(|_| false),
+            Screen::Firs(_) | Screen::Print(_) => Rc::new(|_| false),
             Screen::NewFir(view) => {
                 let view = view.clone();
                 Rc::new(move |cx| view.read(cx).is_dirty(cx))
@@ -126,7 +121,6 @@ impl Screen {
             Screen::Workspace(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
             Screen::Settings(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
             Screen::Templates(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
-            Screen::Components(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
             Screen::Print(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
         }
     }
@@ -244,13 +238,6 @@ impl AppShell {
     pub fn templates(&self) -> Option<Entity<TemplatesScreen>> {
         match &self.screen {
             Screen::Templates(view) => Some(view.clone()),
-            _ => None,
-        }
-    }
-
-    pub fn components(&self) -> Option<Entity<ComponentsScreen>> {
-        match &self.screen {
-            Screen::Components(view) => Some(view.clone()),
             _ => None,
         }
     }
@@ -469,7 +456,6 @@ impl AppShell {
             Route::Templates | Route::NewTemplate | Route::Template(_) => Screen::Templates(
                 cx.new(|cx| TemplatesScreen::new(models.clone(), route, window, cx)),
             ),
-            Route::Components => Screen::Components(cx.new(|cx| ComponentsScreen::new(window, cx))),
         }
     }
 

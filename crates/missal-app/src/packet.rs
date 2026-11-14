@@ -3,7 +3,7 @@ use std::ops::Range;
 use missal_core::{
     DisplayMode, Document, FieldCatalog, FieldPresentation, FieldReference, FirValues,
 };
-use missal_page::{DocSource, Packet, Page, PageEngine};
+use missal_page::{DocSource, Page, PageEngine};
 
 pub struct PacketJob {
     pub catalog: FieldCatalog,
@@ -13,7 +13,6 @@ pub struct PacketJob {
 }
 
 pub struct LaidOut {
-    pub packet: Packet,
     pub pages: Vec<Page>,
     pub ranges: Vec<Range<usize>>,
     pub empty: Vec<Vec<String>>,
@@ -36,7 +35,6 @@ impl PacketJob {
             .map(|document| packet.document_pages(document))
             .collect();
         LaidOut {
-            packet,
             pages,
             ranges,
             empty: self.empty_fields(),
@@ -86,12 +84,4 @@ pub fn distinct_empty<'a>(lists: impl IntoIterator<Item = &'a Vec<String>>) -> V
         }
     }
     names
-}
-
-fn _assert_send() {
-    fn send<T: Send>() {}
-    send::<PacketJob>();
-    send::<LaidOut>();
-    fn sync<T: Sync + Send>() {}
-    sync::<Packet>();
 }

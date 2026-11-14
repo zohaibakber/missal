@@ -15,11 +15,12 @@ use gpui_kit::{
     StatefulInteractiveElement, Styled, Subscription, Task, WeakEntity, Window, div, px,
 };
 use missal_core::{DisplayMode, FirDocumentId, FirId, FirValues, Revision, TemplateId};
+use missal_editor::{Editor, EditorEvent, EditorFields};
 use missal_store::{FirDocumentSummary, FirWorkspace};
 use missal_text::{TextInput, TextInputEvent};
 
 use crate::app::{navigate, navigate_replace, open_print_preview};
-use crate::editor::{DocumentEditor, EditorEvent, EditorFactory, FieldContext, LoadRequest};
+use crate::editor;
 use crate::screens::fields_panel::{
     AUTO_HIDE_BELOW, FieldsPanel, FieldsPanelEvent, FieldsTab, take_pending_fields,
 };
@@ -146,7 +147,7 @@ pub struct WorkspaceScreen {
     loaded: Option<(FirDocumentId, Revision)>,
     document_state: DocumentState,
     mode: DisplayMode,
-    editor: Rc<dyn DocumentEditor>,
+    editor: Entity<Editor>,
     editor_dirty: bool,
     saving: bool,
     slow: bool,
@@ -169,33 +170,27 @@ impl WorkspaceScreen {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> WorkspaceScreen {
-        let editor = EditorFactory::create(cx).build(window, cx);
-        editor.set_mode_toggle(true, cx);
-        let weak = cx.entity().downgrade();
-        let editor_subscription = editor.on_event(cx, {
-            let weak = weak.clone();
-            Box::new(move |event, cx| {
-                let event = event.clone();
-                weak.update(cx, |this, cx| match event {
-                    EditorEvent::DirtyChanged(dirty) => {
-                        this.editor_dirty = dirty;
-                        this.refresh_references(cx);
-                        cx.notify();
+        let editor = cx.new(|cx| Editor::new(window, cx));
+        editor.update(cx, |editor, cx| editor.set_mode_toggle(true, cx));
+        let editor_subscription =
+            cx.subscribe(&editor, |this, _, event: &EditorEvent, cx| match event {
+                EditorEvent::DirtyChanged(dirty) => {
+                    this.editor_dirty = *dirty;
+                    this.refresh_references(cx);
+                    cx.notify();
+                }
+                EditorEvent::ModeRequested(mode) => {
+                    if this.mode != *mode {
+                        this.toggle_field_names(cx);
                     }
-                    EditorEvent::ModeRequested(mode) => {
-                        if this.mode != mode {
-                            this.toggle_field_names(cx);
-                        }
-                    }
-                    EditorEvent::SaveRequested => {}
-                })
-                .ok();
-            })
-        });
+                }
+                EditorEvent::SaveRequested => {}
+            });
         let add_search = field_input(window, cx, Kind::SearchRtl, "تلاش", "");
         let panel = cx.new(|cx| FieldsPanel::new(models.clone(), id, window, cx));
-        let mut subscriptions = vec![
+        let subscriptions = vec![
             editor_subscription,
+            cx.observe(&editor, |this, _, cx| this.schedule_references(cx)),
             cx.subscribe(&add_search, |this, input, event: &TextInputEvent, cx| {
                 if *event == TextInputEvent::Change {
                     this.add_query = input.read(cx).text().to_owned();
@@ -234,7 +229,9 @@ impl WorkspaceScreen {
                         this.set_values(values.clone(), cx);
                     }
                     FieldsPanelEvent::Reveal(reference, focus) => {
-                        this.editor.reveal_field(reference, window, cx);
+                        this.editor.update(cx, |editor, cx| {
+                            editor.reveal_reference(reference, window, cx)
+                        });
                         if !focus && let Some(input) = this.panel.read(cx).input_for(reference) {
                             input.update(cx, |input, cx| input.focus(window, cx));
                         }
@@ -243,9 +240,6 @@ impl WorkspaceScreen {
                 },
             ),
         ];
-        if let Some(entity) = editor.editor_entity() {
-            subscriptions.push(cx.observe(&entity, |this, _, cx| this.schedule_references(cx)));
-        }
         let mut screen = WorkspaceScreen {
             models,
             id,
@@ -326,7 +320,7 @@ impl WorkspaceScreen {
     }
 
     pub fn is_dirty(&self, cx: &App) -> bool {
-        self.editor_dirty || self.editor.is_dirty(cx)
+        self.editor_dirty || self.editor.read(cx).is_dirty()
     }
 
     pub fn state(&self) -> &WorkspaceState {
@@ -345,7 +339,7 @@ impl WorkspaceScreen {
         self.active
     }
 
-    pub fn editor(&self) -> &Rc<dyn DocumentEditor> {
+    pub fn editor(&self) -> &Entity<Editor> {
         &self.editor
     }
 
@@ -389,10 +383,10 @@ impl WorkspaceScreen {
         }
     }
 
-    fn field_context(&self, cx: &App) -> Option<FieldContext> {
+    fn field_context(&self, cx: &App) -> Option<EditorFields> {
         let values = self.values.clone()?;
         let catalog = self.models.catalog.read(cx);
-        Some(FieldContext::for_fir(
+        Some(EditorFields::for_fir(
             catalog.field_catalog(),
             values,
             self.mode,
@@ -402,7 +396,8 @@ impl WorkspaceScreen {
 
     fn push_fields(&self, cx: &mut App) {
         if let Some(fields) = self.field_context(cx) {
-            self.editor.set_fields(fields, cx);
+            self.editor
+                .update(cx, |editor, cx| editor.set_fields(fields, cx));
         }
     }
 
@@ -417,7 +412,7 @@ impl WorkspaceScreen {
     fn refresh_references(&mut self, cx: &mut Context<Self>) {
         let loaded = self.document_state == DocumentState::Idle && self.loaded.is_some();
         let references = if loaded {
-            self.editor.field_references(cx)
+            self.editor.read(cx).document().field_references()
         } else {
             Vec::new()
         };
@@ -517,16 +512,9 @@ impl WorkspaceScreen {
                         };
                         this.loaded = Some((record.id, record.revision));
                         this.document_state = DocumentState::Idle;
-                        this.editor.load(
-                            LoadRequest {
-                                key: format!("fir-document:{}:{}", record.id, record.revision),
-                                document: record.document,
-                                fields,
-                                dirty: false,
-                            },
-                            window,
-                            cx,
-                        );
+                        this.editor.update(cx, |editor, cx| {
+                            editor.load(record.document, fields, false, cx)
+                        });
                         this.editor_dirty = false;
                         this.refresh_references(cx);
                         this.take_pending_fields(window, cx);
@@ -563,7 +551,7 @@ impl WorkspaceScreen {
                 Choice::new("discard", "Don't save", Tone::Ghost, move |window, cx| {
                     discard
                         .update(cx, |this, cx| {
-                            this.editor.discard(window, cx);
+                            this.editor.update(cx, |editor, cx| editor.discard(cx));
                             this.editor_dirty = false;
                             this.open_document(id, window, cx);
                         })
@@ -619,11 +607,9 @@ impl WorkspaceScreen {
             }
             return;
         }
-        let snapshot = self.editor.snapshot(cx);
+        let (document, token) = self.editor.read(cx).snapshot();
         self.saving = true;
         cx.notify();
-        let token = snapshot.revision;
-        let document = snapshot.document;
         run_db_in(
             window,
             cx,
@@ -633,8 +619,9 @@ impl WorkspaceScreen {
                 match result {
                     Ok(ack) => {
                         this.loaded = Some((id, ack.revision));
-                        this.editor.mark_saved(token, cx);
-                        this.editor_dirty = this.editor.is_dirty(cx);
+                        this.editor
+                            .update(cx, |editor, cx| editor.mark_saved(token, cx));
+                        this.editor_dirty = this.editor.read(cx).is_dirty();
                         if let Some(summary) =
                             this.documents.iter_mut().find(|document| document.id == id)
                         {
@@ -804,10 +791,6 @@ impl WorkspaceScreen {
         cx.notify();
     }
 
-    pub fn is_add_open(&self) -> bool {
-        self.add_open
-    }
-
     pub fn toggle_template(&mut self, id: TemplateId, cx: &mut Context<Self>) {
         if !self.add_selected.remove(&id) {
             self.add_selected.insert(id);
@@ -859,7 +842,7 @@ impl WorkspaceScreen {
                         .firs
                         .update(cx, |firs, cx| firs.remove(&[id], cx));
                     this.editor_dirty = false;
-                    this.editor.discard(window, cx);
+                    this.editor.update(cx, |editor, cx| editor.discard(cx));
                     navigate_replace(Route::Firs, cx);
                     toast_success(window, cx, "FIR deleted");
                 }
@@ -890,7 +873,7 @@ impl WorkspaceScreen {
             .iter()
             .map(|id| {
                 if Some(*id) == live {
-                    PreviewDocument::Content(Box::new(self.editor.snapshot(cx).document))
+                    PreviewDocument::Content(Box::new(self.editor.read(cx).snapshot().0))
                 } else {
                     PreviewDocument::Stored(*id)
                 }
@@ -911,14 +894,13 @@ impl WorkspaceScreen {
 
     fn cycle_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let panel_focus = self.panel.read(cx).focus_handle().clone();
-        let editor_focused = self.editor.editor_entity().is_some_and(|editor| {
-            editor
-                .read(cx)
-                .focus_handle_ref()
-                .contains_focused(window, cx)
-        });
+        let editor_focused = self
+            .editor
+            .read(cx)
+            .focus_handle_ref()
+            .contains_focused(window, cx);
         if self.rail_focus.is_focused(window) {
-            self.editor.focus(window, cx);
+            editor::focus(&self.editor, window, cx);
         } else if editor_focused {
             if self.is_panel_open(window) {
                 window.focus(&panel_focus, cx);
@@ -1156,7 +1138,7 @@ impl WorkspaceScreen {
                 match event.keystroke.key.as_str() {
                     "down" => this.step_document(1, window, cx),
                     "up" => this.step_document(-1, window, cx),
-                    "enter" => this.editor.focus(window, cx),
+                    "enter" => editor::focus(&this.editor, window, cx),
                     _ => return,
                 }
                 cx.stop_propagation();
@@ -1519,7 +1501,7 @@ impl WorkspaceScreen {
                 .into_any_element(),
             DocumentState::Idle => div()
                 .size_full()
-                .child(self.editor.view())
+                .child(self.editor.clone())
                 .into_any_element(),
         }
     }

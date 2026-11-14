@@ -3,6 +3,7 @@ use gpui_kit::{
     AnyWindowHandle, App, AppContext, Bounds, Entity, Size, TitlebarOptions, WindowBounds,
     WindowDecorations, WindowOptions, point, px, size,
 };
+#[cfg(debug_assertions)]
 use missal_text::TextSystem;
 
 use crate::app::{AppShell, ShellHandle};
@@ -17,6 +18,7 @@ use crate::ui::window_controls::MAC_TRAFFIC_LIGHT_POSITION;
 pub fn init_app(cx: &mut App, db: Db, paths: Option<&Paths>, preferences: Preferences) -> Models {
     gpui_kit::init(cx);
     missal_text::init(cx);
+    #[cfg(debug_assertions)]
     if let Err(problems) = TextSystem::check_font_mapping(cx) {
         eprintln!("missal: font mapping check failed:\n{problems}");
     }

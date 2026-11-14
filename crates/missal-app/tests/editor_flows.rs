@@ -91,18 +91,20 @@ fn bundled_template_type_and_save_bumps_the_revision(cx: &mut TestAppContext) {
             .unwrap()
     });
     let editor = cx.update(|cx| page.read(cx).editor().clone());
-    let loaded = cx.update(|cx| editor.snapshot(cx).document);
+    let loaded = cx.update(|cx| editor.read(cx).snapshot().0);
     assert_eq!(
         loaded.blocks.len(),
         before.document.blocks.len(),
         "the real template is in the editor"
     );
-    assert!(!cx.update(|cx| editor.is_dirty(cx)));
-    fixture.with(cx, |window, cx| editor.focus(window, cx));
+    assert!(!cx.update(|cx| editor.read(cx).is_dirty()));
+    fixture.with(cx, |window, cx| {
+        missal_app::editor::focus(&editor, window, cx)
+    });
     fixture.with(cx, |window, cx| window.input("نیا متن", cx));
-    assert!(cx.update(|cx| editor.is_dirty(cx)));
+    assert!(cx.update(|cx| editor.read(cx).is_dirty()));
     fixture.with(cx, |window, cx| window.press("secondary-s", cx));
-    assert!(!cx.update(|cx| editor.is_dirty(cx)));
+    assert!(!cx.update(|cx| editor.read(cx).is_dirty()));
     let after = Store::open(&fixture.database)
         .unwrap()
         .template(template)
@@ -138,7 +140,9 @@ fn switching_documents_offers_save_first_and_saves(cx: &mut TestAppContext) {
         .fir_document(first)
         .unwrap()
         .revision;
-    fixture.with(cx, |window, cx| editor.focus(window, cx));
+    fixture.with(cx, |window, cx| {
+        missal_app::editor::focus(&editor, window, cx)
+    });
     fixture.with(cx, |window, cx| window.input("پہلی تبدیلی", cx));
     fixture.with(cx, |window, cx| {
         workspace.update(cx, |ws, cx| ws.select_document(ids[1], window, cx))
@@ -161,8 +165,10 @@ fn switching_documents_offers_save_first_and_saves(cx: &mut TestAppContext) {
             .plain_text
             .contains("پہلی تبدیلی")
     );
-    assert!(!cx.update(|cx| editor.is_dirty(cx)));
-    fixture.with(cx, |window, cx| editor.focus(window, cx));
+    assert!(!cx.update(|cx| editor.read(cx).is_dirty()));
+    fixture.with(cx, |window, cx| {
+        missal_app::editor::focus(&editor, window, cx)
+    });
     fixture.with(cx, |window, cx| window.input("zzdiscarded", cx));
     fixture.with(cx, |window, cx| {
         workspace.update(cx, |ws, cx| ws.select_document(ids[2], window, cx))
@@ -190,25 +196,28 @@ fn field_names_toggle_keeps_edits_and_history(cx: &mut TestAppContext) {
     });
     let workspace = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
     let editor = cx.update(|cx| workspace.read(cx).editor().clone());
-    fixture.with(cx, |window, cx| editor.focus(window, cx));
+    fixture.with(cx, |window, cx| {
+        missal_app::editor::focus(&editor, window, cx)
+    });
     fixture.with(cx, |window, cx| window.input("zztoggle", cx));
-    let before = cx.update(|cx| editor.snapshot(cx).document.encode());
+    let before = cx.update(|cx| editor.read(cx).snapshot().0.encode());
     fixture.with(cx, |window, cx| window.press("secondary-shift-l", cx));
     assert_eq!(
         cx.update(|cx| workspace.read(cx).mode()),
         DisplayMode::Labels
     );
     assert_eq!(
-        cx.update(|cx| editor.snapshot(cx).document.encode()),
+        cx.update(|cx| editor.read(cx).snapshot().0.encode()),
         before,
         "presentation does not edit the document"
     );
-    assert!(cx.update(|cx| editor.is_dirty(cx)));
+    assert!(cx.update(|cx| editor.read(cx).is_dirty()));
     fixture.with(cx, |window, cx| window.press("secondary-z", cx));
     assert!(
         !cx.update(|cx| editor
-            .snapshot(cx)
-            .document
+            .read(cx)
+            .snapshot()
+            .0
             .projections()
             .plain_text
             .contains("zztoggle")),

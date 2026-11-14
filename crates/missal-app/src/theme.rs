@@ -284,9 +284,6 @@ pub const CAPTION_RESERVE: f32 = 138.0;
 
 pub const RAIL_WIDTH: f32 = 248.0;
 pub const DETAILS_RAIL_WIDTH: f32 = 296.0;
-pub const PANE_HEADER_HEIGHT: f32 = 48.0;
-pub const RAIL_HEADER_HEIGHT: f32 = 40.0;
-pub const STATUS_BAR_HEIGHT: f32 = 32.0;
 
 pub const MOTION_FAST: Duration = Duration::from_millis(120);
 pub const MOTION_BASE: Duration = Duration::from_millis(180);

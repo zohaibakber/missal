@@ -10,7 +10,7 @@ use missal_app::launch::{init_app, open_shell};
 use missal_app::prefs::Preferences;
 use missal_app::printing::Handoff;
 use missal_app::seed::seed_firs;
-use missal_app::state::{Models, Route, Toast, ToastKind, ToastLog};
+use missal_app::state::{Models, Route, ToastKind};
 use missal_app::ui::print_preview::{PreviewDocument, PrintHandler, PrintPreview, Zoom};
 use missal_core::FirId;
 use missal_store::Store;
@@ -20,7 +20,6 @@ struct Fixture {
     shell: Entity<AppShell>,
     models: Models,
     database: PathBuf,
-    toasts: ToastLog,
     printed: Rc<std::cell::RefCell<Vec<PathBuf>>>,
     _directory: tempfile::TempDir,
 }
@@ -32,10 +31,8 @@ fn boot(cx: &mut TestAppContext, count: usize) -> Fixture {
         seed_firs(&database, count).unwrap();
     }
     let store = Store::open(&database).unwrap();
-    let toasts = ToastLog::default();
     let printed = Rc::new(std::cell::RefCell::new(Vec::new()));
     let (handle, shell, models) = cx.update(|cx| {
-        cx.set_global(toasts.clone());
         let log = printed.clone();
         cx.set_global(PrintHandler(Rc::new(move |path, _| {
             log.borrow_mut().push(path.to_path_buf());
@@ -51,7 +48,6 @@ fn boot(cx: &mut TestAppContext, count: usize) -> Fixture {
         shell,
         models,
         database,
-        toasts,
         printed,
         _directory: directory,
     };
@@ -109,8 +105,15 @@ impl Fixture {
         preview
     }
 
-    fn toasts(&self) -> Vec<Toast> {
-        self.toasts.0.borrow().clone()
+    fn toasts(
+        &self,
+        cx: &mut TestAppContext,
+    ) -> Vec<(
+        ToastKind,
+        Option<gpui_kit::SharedString>,
+        gpui_kit::SharedString,
+    )> {
+        cx.update(|cx| self.shell.read(cx).toasts().read(cx).shown())
     }
 }
 
@@ -186,7 +189,9 @@ fn print_preview_uses_the_live_editor_content_of_the_active_document(cx: &mut Te
     let workspace = fir_workspace(&fixture, cx);
     let editor = cx.update(|cx| workspace.read(cx).editor().clone());
     let active = cx.update(|cx| workspace.read(cx).active().unwrap());
-    fixture.with(cx, |window, cx| editor.focus(window, cx));
+    fixture.with(cx, |window, cx| {
+        missal_app::editor::focus(&editor, window, cx)
+    });
     fixture.with(cx, |window, cx| window.input("zzlive", cx));
     let preview = fixture.open_preview(cx);
     cx.update(|cx| {
@@ -305,7 +310,7 @@ fn printing_from_the_workspace_offers_every_document_on_the_print_screen(cx: &mu
         cx.update(|cx| preview.read(cx).request().documents.len()),
         count
     );
-    assert!(fixture.toasts().is_empty());
+    assert!(fixture.toasts(cx).is_empty());
 }
 
 #[gpui_kit::test]
@@ -326,10 +331,9 @@ fn export_pdf_writes_a_valid_pdf_with_every_page(cx: &mut TestAppContext) {
     assert_eq!(count_pdf_pages(&bytes), pages);
     assert!(
         fixture
-            .toasts()
+            .toasts(cx)
             .iter()
-            .any(|toast| toast.kind == ToastKind::Success
-                && toast.message.contains("FIR export.pdf"))
+            .any(|toast| toast.0 == ToastKind::Success && toast.2.contains("FIR export.pdf"))
     );
     assert!(fixture.preview(cx).is_some());
     assert_eq!(cx.update(|cx| preview.read(cx).busy()), None);
@@ -343,7 +347,7 @@ fn cancelling_the_save_dialog_writes_nothing(cx: &mut TestAppContext) {
     fixture.click(cx, "preview-export");
     cx.simulate_new_path_selection(|_| None);
     fixture.settle(cx);
-    assert!(fixture.toasts().is_empty());
+    assert!(fixture.toasts(cx).is_empty());
     assert_eq!(cx.update(|cx| preview.read(cx).busy()), None);
 }
 
@@ -362,9 +366,9 @@ fn print_hands_a_spooled_pdf_to_the_system_and_closes_the_preview(cx: &mut TestA
     assert!(fixture.preview(cx).is_none());
     assert!(
         fixture
-            .toasts()
+            .toasts(cx)
             .iter()
-            .any(|toast| toast.kind == ToastKind::Success)
+            .any(|toast| toast.0 == ToastKind::Success)
     );
     std::fs::remove_file(&printed[0]).ok();
 }
@@ -433,7 +437,7 @@ fn word_import_fills_a_new_template_through_the_file_picker(cx: &mut TestAppCont
     let (text, dirty, name) = cx.update(|cx| {
         let page = page.read(cx);
         (
-            page.editor().snapshot(cx).document.projections().plain_text,
+            page.editor().read(cx).snapshot().0.projections().plain_text,
             page.is_dirty(cx),
             page.title_input().read(cx).text().to_owned(),
         )
@@ -442,7 +446,7 @@ fn word_import_fills_a_new_template_through_the_file_picker(cx: &mut TestAppCont
     assert!(dirty);
     assert!(!name.trim().is_empty());
     assert!(cx.update(|cx| page.read(cx).is_reviewing()));
-    assert!(fixture.toasts().is_empty());
+    assert!(fixture.toasts(cx).is_empty());
 
     fixture.click(cx, "template-save");
     let saved = Store::open(&fixture.database).unwrap().templates().unwrap();
@@ -482,8 +486,9 @@ fn word_import_into_an_existing_template_asks_before_replacing(cx: &mut TestAppC
     let before = cx.update(|cx| {
         page.read(cx)
             .editor()
-            .snapshot(cx)
-            .document
+            .read(cx)
+            .snapshot()
+            .0
             .projections()
             .plain_text
     });
@@ -500,8 +505,9 @@ fn word_import_into_an_existing_template_asks_before_replacing(cx: &mut TestAppC
         cx.update(|cx| page
             .read(cx)
             .editor()
-            .snapshot(cx)
-            .document
+            .read(cx)
+            .snapshot()
+            .0
             .projections()
             .plain_text),
         before
@@ -515,7 +521,7 @@ fn word_import_into_an_existing_template_asks_before_replacing(cx: &mut TestAppC
     let (after, dirty, name) = cx.update(|cx| {
         let page = page.read(cx);
         (
-            page.editor().snapshot(cx).document.projections().plain_text,
+            page.editor().read(cx).snapshot().0.projections().plain_text,
             page.is_dirty(cx),
             page.title_input().read(cx).text().to_owned(),
         )
@@ -549,11 +555,11 @@ fn word_import_rejects_files_that_are_not_docx(cx: &mut TestAppContext) {
     cx.simulate_path_prompt_response(|_| Some(vec![PathBuf::from("/tmp/notes.txt")]));
     fixture.settle(cx);
     assert!(!cx.update(|cx| page.read(cx).is_dirty(cx)));
-    let toasts = fixture.toasts();
+    let toasts = fixture.toasts(cx);
     assert_eq!(toasts.len(), 1);
-    assert_eq!(toasts[0].kind, ToastKind::Error);
+    assert_eq!(toasts[0].0, ToastKind::Error);
     assert_eq!(
-        toasts[0].title.as_deref(),
+        toasts[0].1.as_deref(),
         Some("Could not import Word document")
     );
 }
@@ -567,14 +573,14 @@ fn word_import_reports_a_corrupt_file(cx: &mut TestAppContext) {
     fixture.press(cx, "secondary-o");
     cx.simulate_path_prompt_response(move |_| Some(vec![broken]));
     fixture.settle(cx);
-    let toasts = fixture.toasts();
+    let toasts = fixture.toasts(cx);
     assert_eq!(toasts.len(), 1);
-    assert_eq!(toasts[0].kind, ToastKind::Error);
+    assert_eq!(toasts[0].0, ToastKind::Error);
     assert_eq!(
-        toasts[0].title.as_deref(),
+        toasts[0].1.as_deref(),
         Some("Could not import Word document")
     );
-    assert!(!toasts[0].message.is_empty());
+    assert!(!toasts[0].2.is_empty());
 }
 
 #[gpui_kit::test]
@@ -585,5 +591,5 @@ fn the_upload_button_opens_the_same_picker(cx: &mut TestAppContext) {
     assert!(cx.did_prompt_for_paths());
     cx.simulate_path_prompt_response(|_| None);
     fixture.settle(cx);
-    assert!(fixture.toasts().is_empty());
+    assert!(fixture.toasts(cx).is_empty());
 }

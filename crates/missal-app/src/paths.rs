@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::platform;
 
 pub const DATABASE_FILE: &str = "missal.db";
-pub const PREFERENCES_FILE: &str = "preferences.json";
+pub const PREFERENCES_FILE: &str = "missal-preferences.json";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Paths {
@@ -49,7 +49,10 @@ mod tests {
         assert!(paths.is_default);
         assert_eq!(paths.directory.file_name().unwrap(), "Missal");
         assert_eq!(paths.database.file_name().unwrap(), "missal.db");
-        assert_eq!(paths.preferences.file_name().unwrap(), "preferences.json");
+        assert_eq!(
+            paths.preferences.file_name().unwrap(),
+            "missal-preferences.json"
+        );
         assert_eq!(paths.database.parent(), Some(paths.directory.as_path()));
     }
 

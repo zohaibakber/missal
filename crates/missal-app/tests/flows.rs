@@ -402,30 +402,34 @@ fn workspace_edit_save_and_discard_flow(cx: &mut TestAppContext) {
     let workspace = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
     assert_eq!(cx.update(|cx| workspace.read(cx).documents().len()), 3);
     let editor = cx.update(|cx| workspace.read(cx).editor().clone());
-    assert!(!cx.update(|cx| editor.is_dirty(cx)));
+    assert!(!cx.update(|cx| editor.read(cx).is_dirty()));
     let id = cx.update(|cx| workspace.read(cx).active().unwrap());
     let before = Store::open(&fixture.database)
         .unwrap()
         .fir_document(id)
         .unwrap()
         .revision;
-    fixture.with(cx, |window, cx| editor.focus(window, cx));
+    fixture.with(cx, |window, cx| {
+        missal_app::editor::focus(&editor, window, cx)
+    });
     fixture.type_text(cx, "zzsaved");
-    assert!(cx.update(|cx| editor.is_dirty(cx)));
+    assert!(cx.update(|cx| editor.read(cx).is_dirty()));
     fixture.go(cx, Route::Settings);
     assert_eq!(fixture.route(cx), Route::Fir(FirId::new(3).unwrap()));
     fixture.click(cx, "keep");
     fixture.press(cx, "secondary-s");
-    assert!(!cx.update(|cx| editor.is_dirty(cx)));
+    assert!(!cx.update(|cx| editor.read(cx).is_dirty()));
     let after = Store::open(&fixture.database)
         .unwrap()
         .fir_document(id)
         .unwrap();
     assert_eq!(after.revision.get(), before.get() + 1);
     assert!(after.document.projections().plain_text.contains("zzsaved"));
-    fixture.with(cx, |window, cx| editor.focus(window, cx));
+    fixture.with(cx, |window, cx| {
+        missal_app::editor::focus(&editor, window, cx)
+    });
     fixture.type_text(cx, "zzdiscarded");
-    assert!(cx.update(|cx| editor.is_dirty(cx)));
+    assert!(cx.update(|cx| editor.read(cx).is_dirty()));
     fixture.go(cx, Route::Settings);
     fixture.click(cx, "discard");
     assert_eq!(fixture.route(cx), Route::Settings);

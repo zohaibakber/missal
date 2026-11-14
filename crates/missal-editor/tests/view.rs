@@ -60,7 +60,6 @@ fn setup(
     cx.update(|window, cx| {
         editor.update(cx, |e, cx| {
             e.load(
-                "test".into(),
                 document,
                 EditorFields::labels(catalog(), FieldMarkers::default()),
                 false,

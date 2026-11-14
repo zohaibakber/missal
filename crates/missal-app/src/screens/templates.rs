@@ -14,13 +14,14 @@ use gpui_kit::{
     Subscription, UniformListScrollHandle, Window, div, px, uniform_list,
 };
 use missal_core::{DisplayMode, Document, Revision, TemplateId};
+use missal_editor::{Editor, EditorEvent, EditorFields};
 use missal_store::TemplateSummary;
 use missal_text::{
     Attr, AttributedText, FontFamily, Label, TextInput, TextInputEvent, TextStyle, label, to_rgba,
 };
 
 use crate::app::{import_word_file, navigate, navigate_replace, open_print_preview};
-use crate::editor::{DocumentEditor, EditorEvent, EditorFactory, FieldContext, LoadRequest};
+use crate::editor;
 use crate::shortcuts::*;
 use crate::state::rows::fold_for_search;
 use crate::state::templates::TemplatesEvent;
@@ -56,12 +57,11 @@ pub struct TemplatePage {
     initial_name: String,
     revision: Option<Revision>,
     state: PageState,
-    editor: Rc<dyn DocumentEditor>,
+    editor: Entity<Editor>,
     editor_dirty: bool,
     saving: bool,
     picking: bool,
     importing: bool,
-    imports: u64,
     renaming: bool,
     review: Option<ImportReview>,
     _subscriptions: Vec<Subscription>,
@@ -82,20 +82,12 @@ impl TemplatePage {
         cx: &mut Context<Self>,
     ) -> TemplatePage {
         let title = field_input(window, cx, Kind::Urdu, "Template name", "");
-        let editor = EditorFactory::create(cx).build(window, cx);
-        let weak = cx.entity().downgrade();
-        let editor_subscription = editor.on_event(cx, {
-            let weak = weak.clone();
-            Box::new(move |event, cx| {
-                let event = event.clone();
-                weak.update(cx, |this, cx| {
-                    if let EditorEvent::DirtyChanged(dirty) = event {
-                        this.editor_dirty = dirty;
-                        cx.notify();
-                    }
-                })
-                .ok();
-            })
+        let editor = cx.new(|cx| Editor::new(window, cx));
+        let editor_subscription = cx.subscribe(&editor, |this, _, event: &EditorEvent, cx| {
+            if let EditorEvent::DirtyChanged(dirty) = event {
+                this.editor_dirty = *dirty;
+                cx.notify();
+            }
         });
         let title_subscription = cx.subscribe_in(
             &title,
@@ -119,7 +111,6 @@ impl TemplatePage {
             saving: false,
             picking: false,
             importing: false,
-            imports: 0,
             renaming: id.is_none(),
             review: None,
             _subscriptions: vec![editor_subscription, title_subscription],
@@ -128,9 +119,9 @@ impl TemplatePage {
         page
     }
 
-    fn field_context(&self, cx: &App) -> FieldContext {
+    fn field_context(&self, cx: &App) -> EditorFields {
         let catalog = self.models.catalog.read(cx);
-        FieldContext::labels(
+        EditorFields::labels(
             catalog.field_catalog(),
             catalog.settings.field_markers.clone(),
         )
@@ -140,13 +131,10 @@ impl TemplatePage {
         match self.id {
             None => {
                 self.state = PageState::Ready;
-                let request = LoadRequest {
-                    key: format!("template:new:{}", self.imports),
-                    document: Document::empty(),
-                    fields: self.field_context(cx),
-                    dirty: false,
-                };
-                self.editor.load(request, window, cx);
+                let fields = self.field_context(cx);
+                self.editor.update(cx, |editor, cx| {
+                    editor.load(Document::empty(), fields, false, cx)
+                });
                 self.title.update(cx, |input, cx| input.focus(window, cx));
             }
             Some(id) => {
@@ -154,7 +142,7 @@ impl TemplatePage {
                     window,
                     cx,
                     move |store| store.template(id),
-                    move |this, result, window, cx| {
+                    move |this, result, _window, cx| {
                         match result {
                             Ok(record) => {
                                 this.revision = Some(record.revision);
@@ -162,16 +150,10 @@ impl TemplatePage {
                                 this.title.update(cx, |input, cx| {
                                     input.set_text(record.name.clone(), cx)
                                 });
-                                let request = LoadRequest {
-                                    key: format!(
-                                        "template:{}:{}:{}",
-                                        record.id, record.revision, this.imports
-                                    ),
-                                    document: record.document,
-                                    fields: this.field_context(cx),
-                                    dirty: false,
-                                };
-                                this.editor.load(request, window, cx);
+                                let fields = this.field_context(cx);
+                                this.editor.update(cx, |editor, cx| {
+                                    editor.load(record.document, fields, false, cx)
+                                });
                                 this.state = PageState::Ready;
                             }
                             Err(missal_core::RepositoryError::NotFound { .. }) => {
@@ -190,14 +172,14 @@ impl TemplatePage {
         self.state == PageState::Ready
             && (self.title.read(cx).text() != self.initial_name
                 || self.editor_dirty
-                || self.editor.is_dirty(cx))
+                || self.editor.read(cx).is_dirty())
     }
 
     pub fn title_input(&self) -> &Entity<TextInput> {
         &self.title
     }
 
-    pub fn editor(&self) -> &Rc<dyn DocumentEditor> {
+    pub fn editor(&self) -> &Entity<Editor> {
         &self.editor
     }
 
@@ -227,7 +209,7 @@ impl TemplatePage {
             values: None,
             mode: DisplayMode::Labels,
             documents: vec![PreviewDocument::Content(Box::new(
-                self.editor.snapshot(cx).document,
+                self.editor.read(cx).snapshot().0,
             ))],
         };
         open_print_preview(request, window, cx);
@@ -288,10 +270,10 @@ impl TemplatePage {
             );
             return;
         }
-        let projections = self.editor.snapshot(cx).document.projections();
+        let projections = self.editor.read(cx).snapshot().0.projections();
         let has_content = self.id.is_some()
             || self.editor_dirty
-            || self.editor.is_dirty(cx)
+            || self.editor.read(cx).is_dirty()
             || !projections.plain_text.trim().is_empty()
             || projections.field_count > 0;
         if !has_content {
@@ -353,18 +335,10 @@ impl TemplatePage {
         self.importing = false;
         match result {
             Ok(imported) => {
-                self.imports += 1;
-                let key = match self.id {
-                    Some(id) => format!("template:{id}:import:{}", self.imports),
-                    None => format!("template:new:import:{}", self.imports),
-                };
-                let request = LoadRequest {
-                    key,
-                    document: imported.document,
-                    fields: self.field_context(cx),
-                    dirty: true,
-                };
-                self.editor.load(request, window, cx);
+                let fields = self.field_context(cx);
+                self.editor.update(cx, |editor, cx| {
+                    editor.load(imported.document, fields, true, cx)
+                });
                 self.editor_dirty = false;
                 if self.title.read(cx).text().trim().is_empty()
                     && let Some(name) = imported.name
@@ -398,7 +372,6 @@ impl TemplatePage {
         if self.review.take().is_none() {
             return;
         }
-        self.imports += 1;
         self.editor_dirty = false;
         if self.id.is_none() {
             self.title.update(cx, |input, cx| input.set_text("", cx));
@@ -432,14 +405,14 @@ impl TemplatePage {
         let initial = self.initial_name.clone();
         self.title
             .update(cx, |input, cx| input.set_text(initial, cx));
-        self.editor.focus(window, cx);
+        editor::focus(&self.editor, window, cx);
         cx.notify();
     }
 
     fn commit_rename(&mut self, submitted: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.id.is_none() {
             if submitted {
-                self.editor.focus(window, cx);
+                editor::focus(&self.editor, window, cx);
             }
             return;
         }
@@ -456,7 +429,7 @@ impl TemplatePage {
             self.save(window, cx);
         }
         if submitted {
-            self.editor.focus(window, cx);
+            editor::focus(&self.editor, window, cx);
         }
         cx.notify();
     }
@@ -466,7 +439,7 @@ impl TemplatePage {
             return;
         }
         let name = format!("{} کاپی", self.title.read(cx).text().trim());
-        let document = self.editor.snapshot(cx).document;
+        let document = self.editor.read(cx).snapshot().0;
         run_db_in(
             window,
             cx,
@@ -499,11 +472,9 @@ impl TemplatePage {
         if self.id.is_some() && !self.is_dirty(cx) {
             return;
         }
-        let snapshot = self.editor.snapshot(cx);
+        let (document, revision_token) = self.editor.read(cx).snapshot();
         self.saving = true;
         cx.notify();
-        let revision_token = snapshot.revision;
-        let document = snapshot.document;
         let id = self.id;
         let revision = self.revision;
         let job_name = name.clone();
@@ -525,7 +496,8 @@ impl TemplatePage {
                         this.models
                             .templates
                             .update(cx, |templates, cx| templates.upsert(summary, cx));
-                        this.editor.mark_saved(revision_token, cx);
+                        this.editor
+                            .update(cx, |editor, cx| editor.mark_saved(revision_token, cx));
                         this.initial_name = name.clone();
                         this.review = None;
                         navigate_replace(Route::Template(new_id), cx);
@@ -533,7 +505,8 @@ impl TemplatePage {
                     Ok((None, Some(ack))) => {
                         this.revision = Some(ack.revision);
                         this.initial_name = name.clone();
-                        this.editor.mark_saved(revision_token, cx);
+                        this.editor
+                            .update(cx, |editor, cx| editor.mark_saved(revision_token, cx));
                         let created_at = this.id.and_then(|id| {
                             this.models
                                 .templates
@@ -841,7 +814,7 @@ impl Render for TemplatePage {
                     .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                         this.dropped(paths, window, cx)
                     }))
-                    .child(self.editor.view()),
+                    .child(self.editor.clone()),
             )
             .into_any_element()
     }
@@ -1337,7 +1310,7 @@ impl Render for TemplatesScreen {
                     && let Some(page) = &this.page
                 {
                     let editor = page.read(cx).editor.clone();
-                    editor.focus(window, cx);
+                    editor::focus(&editor, window, cx);
                 }
             }))
             .child(body)

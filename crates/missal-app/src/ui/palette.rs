@@ -219,10 +219,6 @@ impl CommandPalette {
         self.results.iter().map(|entry| entry.group).collect()
     }
 
-    pub fn selected_index(&self) -> usize {
-        self.selected
-    }
-
     fn refresh(&mut self, cx: &mut Context<Self>) {
         let query = self.input.read(cx).text().to_owned();
         let words = search_words(&query);

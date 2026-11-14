@@ -1,21 +1,15 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use gpui_kit::{Context, EventEmitter, Task};
+use gpui_kit::{Context, Task};
 
 use crate::prefs::Preferences;
-
-pub enum PrefsEvent {
-    Changed,
-}
 
 pub struct PrefsModel {
     prefs: Preferences,
     path: Option<PathBuf>,
     save_task: Option<Task<()>>,
 }
-
-impl EventEmitter<PrefsEvent> for PrefsModel {}
 
 impl PrefsModel {
     pub fn new(prefs: Preferences, path: Option<PathBuf>) -> PrefsModel {
@@ -36,7 +30,6 @@ impl PrefsModel {
         if self.prefs == before {
             return;
         }
-        cx.emit(PrefsEvent::Changed);
         cx.notify();
         if self.path.is_some() {
             self.save_task = Some(cx.spawn(async move |this, cx| {

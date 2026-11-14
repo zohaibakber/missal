@@ -396,30 +396,10 @@ impl FirForm {
         &self.offence
     }
 
-    pub fn officer_input(&self) -> &Entity<TextInput> {
-        &self.officer
-    }
-
-    pub fn writer_input(&self) -> &Entity<TextInput> {
-        &self.writer
-    }
-
-    pub fn imei_inputs(&self) -> &[Entity<TextInput>; 2] {
-        &self.imei
-    }
-
-    pub fn sim_inputs(&self) -> &[Entity<TextInput>; 2] {
-        &self.sim
-    }
-
     pub fn errors(&self) -> Vec<&'static str> {
         let mut fields: Vec<_> = self.errors.keys().copied().collect();
         fields.sort_unstable();
         fields
-    }
-
-    pub fn error_message(&self, key: &str) -> Option<&'static str> {
-        self.errors.get(key).copied()
     }
 
     fn refresh_dirty(&mut self, cx: &mut Context<Self>) {
@@ -1359,10 +1339,6 @@ impl NewFirScreen {
 
     pub fn form(&self) -> &Entity<FirForm> {
         self.form.as_ref().expect("the form is loaded")
-    }
-
-    pub fn loaded_form(&self) -> Option<&Entity<FirForm>> {
-        self.form.as_ref()
     }
 
     pub fn editing(&self) -> Option<FirId> {

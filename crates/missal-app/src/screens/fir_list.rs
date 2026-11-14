@@ -145,8 +145,7 @@ impl FirListScreen {
             })
             .detach();
         }
-        let mut statuses = prefs.statuses;
-        statuses.truncate(1);
+        let statuses: Vec<FirStatus> = prefs.status.into_iter().collect();
         FirListScreen {
             focus: cx.focus_handle(),
             search,
@@ -195,20 +194,8 @@ impl FirListScreen {
         self.selected.len()
     }
 
-    pub fn focused_row(&self) -> Option<usize> {
-        self.focused
-    }
-
     pub fn status_filter(&self) -> Option<FirStatus> {
         self.statuses.first().copied()
-    }
-
-    pub fn hidden_columns(&self) -> &[Column] {
-        &self.hidden
-    }
-
-    pub fn menu_labels(&self, cx: &App) -> Option<Vec<String>> {
-        self.menu.as_ref().map(|menu| menu.read(cx).labels())
     }
 
     pub fn status_count(&mut self, status: Option<FirStatus>, cx: &App) -> usize {
@@ -267,11 +254,11 @@ impl FirListScreen {
     }
 
     fn save_table_prefs(&self, cx: &mut Context<Self>) {
-        let (sort, statuses, hidden) = (self.sort, self.statuses.clone(), self.hidden.clone());
+        let (sort, status, hidden) = (self.sort, self.status_filter(), self.hidden.clone());
         self.models.prefs.update(cx, |prefs, cx| {
             prefs.update(cx, |preferences| {
                 preferences.table.sort = sort;
-                preferences.table.statuses = statuses;
+                preferences.table.status = status;
                 preferences.table.hidden = hidden;
             })
         });
@@ -329,14 +316,6 @@ impl FirListScreen {
             }
             None => self.hidden.push(column),
         }
-        self.save_table_prefs(cx);
-        cx.notify();
-    }
-
-    pub fn clear_filters(&mut self, cx: &mut Context<Self>) {
-        self.statuses.clear();
-        self.search.update(cx, |input, cx| input.set_text("", cx));
-        self.stale = true;
         self.save_table_prefs(cx);
         cx.notify();
     }

@@ -105,7 +105,7 @@ impl Fixture {
 fn shown_value(fixture: &Fixture, cx: &mut TestAppContext, reference: &FieldReference) -> String {
     cx.update(|cx| {
         let workspace = fixture.shell.read(cx).workspace().unwrap();
-        let editor = workspace.read(cx).editor().editor_entity().unwrap();
+        let editor = workspace.read(cx).editor().clone();
         let fields = editor.read(cx).fields().clone();
         let values = fields.values.clone().unwrap();
         let shown = FieldPresentation::for_fir(&fields.catalog, &values, DisplayMode::Values)

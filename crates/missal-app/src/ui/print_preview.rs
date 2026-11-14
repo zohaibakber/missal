@@ -15,12 +15,10 @@ use gpui_kit::{
     ParentElement, Pixels, Render, ScrollHandle, SharedString, Size, StatefulInteractiveElement,
     Styled, Subscription, TestSupportExt as _, Window, canvas, div, point, px,
 };
-use missal_core::{
-    DisplayMode, Document, FieldCatalog, FirDocumentId, FirId, FirValues, TemplateId,
-};
+use missal_core::{DisplayMode, Document, FieldCatalog, FirDocumentId, FirId, FirValues};
+use missal_page::Page;
 use missal_page::paint::{PagePaint, paint_page};
 use missal_page::pdf::{PdfOptions, write_pages};
-use missal_page::{Packet, Page};
 use missal_text::{
     Align, Attr, AttributedText, Direction, FontFamily, LineHeight, TextInput, TextInputEvent,
     TextStyle, to_rgba,
@@ -29,9 +27,7 @@ use missal_text::{
 use crate::packet::{LaidOut, PacketJob, distinct_empty};
 use crate::printing::{self, Handoff};
 use crate::shortcuts::*;
-use crate::state::{
-    Models, PrintTarget, Toast, ToastKind, ToastLog, db, show_toast, toast_success,
-};
+use crate::state::{Models, PrintTarget, ToastKind, db, show_toast, toast_success};
 use crate::theme::{ICON_SM, ICON_XS, PANEL_PADDING, Palette, RADIUS, RADIUS_PAPER};
 use crate::ui::popup_menu::{Dismissed, Placement, PopupEntry, PopupList, PopupRow};
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
@@ -166,7 +162,6 @@ struct Ready {
     pages: Vec<Page>,
     ranges: Vec<Range<usize>>,
     empty: Vec<Vec<String>>,
-    _packet: Arc<Packet>,
 }
 
 enum State {
@@ -360,12 +355,6 @@ impl PrintPreview {
     pub fn document_count(&self) -> usize {
         self.plan.as_ref().map_or(0, |plan| {
             plan.docs.iter().filter(|doc| doc.included).count()
-        })
-    }
-
-    pub fn document_titles(&self) -> Vec<String> {
-        self.plan.as_ref().map_or_else(Vec::new, |plan| {
-            plan.docs.iter().map(|doc| doc.title.to_string()).collect()
         })
     }
 
@@ -591,7 +580,6 @@ impl PrintPreview {
                         pages: laid.pages,
                         ranges: laid.ranges,
                         empty: laid.empty,
-                        _packet: Arc::new(laid.packet),
                     }),
                     Err(message) => State::Failed(message),
                 };
@@ -917,7 +905,7 @@ impl PrintPreview {
                 Ok(Err(error)) => {
                     this.update_in(cx, |this, window, cx| {
                         this.busy = None;
-                        logged_toast(
+                        show_toast(
                             window,
                             cx,
                             ToastSpec::new(
@@ -964,7 +952,7 @@ impl PrintPreview {
                             .map(|name| name.to_string_lossy().into_owned())
                             .unwrap_or_default();
                         let reveal = path.clone();
-                        logged_toast(
+                        show_toast(
                             window,
                             cx,
                             ToastSpec::new(ToastKind::Success, format!("Saved {shown}"))
@@ -973,7 +961,7 @@ impl PrintPreview {
                     }
                     Err(error) => {
                         let retry = cx.entity().downgrade();
-                        logged_toast(
+                        show_toast(
                             window,
                             cx,
                             ToastSpec::new(
@@ -1044,7 +1032,7 @@ impl PrintPreview {
                     }
                     Err(error) => {
                         let retry = cx.entity().downgrade();
-                        logged_toast(
+                        show_toast(
                             window,
                             cx,
                             ToastSpec::new(
@@ -1548,17 +1536,6 @@ fn tabular() -> FontFeatures {
     FontFeatures(Arc::new(vec![("tnum".into(), 1)]))
 }
 
-fn logged_toast(window: &mut Window, cx: &mut App, spec: ToastSpec) {
-    if let Some(log) = cx.try_global::<ToastLog>() {
-        log.0.borrow_mut().push(Toast {
-            kind: spec.kind,
-            title: spec.title.as_ref().map(|title| title.to_string()),
-            message: spec.message.to_string(),
-        });
-    }
-    show_toast(window, cx, spec);
-}
-
 type PendingPlan = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Plan, String>>>>;
 
 enum PlanFetch {
@@ -1568,11 +1545,7 @@ enum PlanFetch {
 
 fn fetch_plan(source: PrintSource, catalog: FieldCatalog, cx: &App) -> PlanFetch {
     match source {
-        PrintSource::Request {
-            request,
-            target,
-            live,
-        } => {
+        PrintSource::Request { request, live, .. } => {
             let fir = request.values.as_ref().map(|values| values.fir.id);
             let Some(fir) = fir else {
                 let docs = request
@@ -1588,7 +1561,6 @@ fn fetch_plan(source: PrintSource, catalog: FieldCatalog, cx: &App) -> PlanFetch
                         included: true,
                     })
                     .collect();
-                let _ = target;
                 return PlanFetch::Ready(Box::new(Plan {
                     fir: None,
                     title: request.title,
@@ -1693,18 +1665,13 @@ fn fetch_plan(source: PrintSource, catalog: FieldCatalog, cx: &App) -> PlanFetch
             let reply = db(cx).run(move |store| store.template(template));
             PlanFetch::Pending(Box::pin(async move {
                 let record = reply.await.map_err(|error| error.message())?;
-                Ok(template_plan(
-                    template,
-                    record.name,
-                    record.document,
-                    catalog,
-                ))
+                Ok(template_plan(record.name, record.document, catalog))
             }))
         }
     }
 }
 
-fn template_plan(_: TemplateId, name: String, document: Document, catalog: FieldCatalog) -> Plan {
+fn template_plan(name: String, document: Document, catalog: FieldCatalog) -> Plan {
     Plan {
         fir: None,
         title: name.clone(),

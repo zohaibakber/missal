@@ -51,14 +51,6 @@ pub fn leading_inset(window: &Window, cx: &App) -> Pixels {
     }
 }
 
-pub fn trailing_width(window: &Window, cx: &App) -> Pixels {
-    match style(window, cx) {
-        ControlsStyle::Windows => px(CAPTION_BUTTON_WIDTH * 3.0),
-        ControlsStyle::Linux => px(3.0 * 24.0 + 2.0 * 12.0 + 20.0),
-        _ => px(0.),
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Control {
     Minimize,

@@ -97,19 +97,6 @@ fn configure(input: TextInput, kind: Kind, placeholder: &str, text: &str, cx: &A
     input
 }
 
-pub fn text_input(
-    window: &mut Window,
-    cx: &mut App,
-    kind: Kind,
-    placeholder: &str,
-    text: &str,
-) -> Entity<TextInput> {
-    cx.new(|cx| {
-        let input = TextInput::new(window, cx);
-        configure(input, kind, placeholder, text, cx)
-    })
-}
-
 pub fn field_input(
     window: &mut Window,
     cx: &mut App,
@@ -121,19 +108,6 @@ pub fn field_input(
         let input = TextInput::new(window, cx).bare();
         let line = if kind.holds_urdu() { 30. } else { 20. };
         configure(input, kind, placeholder, text, cx).line_height(LineHeight::Px(line))
-    })
-}
-
-pub fn text_area(
-    window: &mut Window,
-    cx: &mut App,
-    placeholder: &str,
-    text: &str,
-    rows: usize,
-) -> Entity<TextInput> {
-    cx.new(|cx| {
-        let input = TextInput::new(window, cx).multiline(rows, rows + 4);
-        configure(input, Kind::Urdu, placeholder, text, cx).line_height(LineHeight::Px(30.))
     })
 }
 

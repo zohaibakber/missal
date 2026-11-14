@@ -5,12 +5,7 @@ pub mod prefs_model;
 pub mod rows;
 pub mod templates;
 
-use std::cell::RefCell;
-use std::future::Future;
-use std::rc::Rc;
-
-use gpui_kit::{App, AppContext, Context, Entity, Global, Task, Window};
-use missal_core::RepositoryError;
+use gpui_kit::{App, AppContext, Context, Entity, Global, Window};
 use missal_store::Store;
 
 use crate::db::{Db, StoreResult};
@@ -108,21 +103,6 @@ where
     .detach();
 }
 
-pub fn spawn_db<T, J>(cx: &mut App, job: J) -> Task<StoreResult<T>>
-where
-    T: Send + 'static,
-    J: FnOnce(&mut Store) -> StoreResult<T> + Send + 'static,
-{
-    let reply = db(cx).run(job);
-    cx.spawn(async move |_| reply.await)
-}
-
-pub fn await_reply<T: Send + 'static>(
-    reply: impl Future<Output = StoreResult<T>> + 'static,
-) -> impl Future<Output = StoreResult<T>> {
-    reply
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToastKind {
     Info,
@@ -131,18 +111,6 @@ pub enum ToastKind {
     Error,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Toast {
-    pub kind: ToastKind,
-    pub title: Option<String>,
-    pub message: String,
-}
-
-#[derive(Clone, Default)]
-pub struct ToastLog(pub Rc<RefCell<Vec<Toast>>>);
-
-impl Global for ToastLog {}
-
 fn push_toast(
     window: &mut Window,
     cx: &mut App,
@@ -150,13 +118,6 @@ fn push_toast(
     title: Option<gpui_kit::SharedString>,
     message: gpui_kit::SharedString,
 ) {
-    if let Some(log) = cx.try_global::<ToastLog>() {
-        log.0.borrow_mut().push(Toast {
-            kind,
-            title: title.as_ref().map(|title| title.to_string()),
-            message: message.to_string(),
-        });
-    }
     let mut spec = crate::ui::toast::ToastSpec::new(kind, message);
     if let Some(title) = title {
         spec = spec.title(title);
@@ -204,12 +165,4 @@ pub fn toast_warning(
 
 pub fn toast_info(window: &mut Window, cx: &mut App, message: impl Into<gpui_kit::SharedString>) {
     push_toast(window, cx, ToastKind::Info, None, message.into());
-}
-
-pub fn not_available_yet(window: &mut Window, cx: &mut App, what: &str) {
-    toast_info(window, cx, format!("{what} is not available yet"));
-}
-
-pub fn error_text(error: &RepositoryError) -> String {
-    error.message()
 }

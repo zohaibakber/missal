@@ -1,5 +1,4 @@
 pub mod cheatsheet;
-pub mod components;
 pub mod dialogs;
 pub mod input;
 pub mod menu;
@@ -29,8 +28,8 @@ use missal_text::{Align, Label, LineHeight, label};
 use crate::shortcuts::key_caps;
 use crate::theme::{
     BUTTON_MD, BUTTON_SM, CHECKBOX, ICON, ICON_BUTTON, ICON_BUTTON_DENSE, ICON_SM, ICON_XS, KEYCAP,
-    PANE_HEADER_HEIGHT, Palette, RADIUS, RADIUS_LG, RADIUS_PILL, RADIUS_SM, RAIL_HEADER_HEIGHT,
-    SEGMENTED_ITEM, SEGMENTED_TRACK, STATUS_BAR_HEIGHT, TOOLTIP_DELAY,
+    Palette, RADIUS, RADIUS_LG, RADIUS_PILL, RADIUS_SM, SEGMENTED_ITEM, SEGMENTED_TRACK,
+    TOOLTIP_DELAY,
 };
 
 pub type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
@@ -154,10 +153,6 @@ pub fn keycap_toned(palette: &Palette, text: impl Into<SharedString>, tone: KeyT
         .child(text.into())
 }
 
-pub fn keycaps(palette: &Palette, keys: &str) -> Div {
-    keycaps_toned(palette, keys, KeyTone::Plain)
-}
-
 pub fn keycaps_toned(palette: &Palette, keys: &str, tone: KeyTone) -> Div {
     h_flex().flex_none().items_center().gap(px(3.)).children(
         key_caps(keys)
@@ -232,13 +227,6 @@ pub fn tooltip(
         })
         .into()
     }
-}
-
-pub fn tooltip_with_keys(
-    text: &'static str,
-    keys: Option<&'static str>,
-) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
-    tooltip(text, keys)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -326,11 +314,6 @@ impl ActionButton {
 
     pub fn sm(mut self) -> Self {
         self.size = ButtonSize::Sm;
-        self
-    }
-
-    pub fn md(mut self) -> Self {
-        self.size = ButtonSize::Md;
         self
     }
 
@@ -659,15 +642,6 @@ pub fn section_label(palette: &Palette, text: impl Into<SharedString>) -> Div {
         .child(text.into())
 }
 
-pub fn caption(palette: &Palette, text: impl Into<SharedString>) -> Div {
-    div()
-        .text_size(px(11.))
-        .line_height(px(16.))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(palette.ink_faint)
-        .child(text.into().to_uppercase())
-}
-
 pub fn empty_state(
     palette: &Palette,
     name: IconName,
@@ -865,48 +839,8 @@ pub fn pill(palette: &Palette) -> Div {
         .border_color(palette.line)
 }
 
-pub fn hairline(palette: &Palette) -> Div {
-    div().h(px(1.)).w_full().bg(palette.line)
-}
-
 pub fn vertical_rule(palette: &Palette) -> Div {
     div().w(px(1.)).h(px(20.)).bg(palette.line)
-}
-
-pub fn pane_header(palette: &Palette) -> Div {
-    h_flex()
-        .flex_shrink_0()
-        .h(px(PANE_HEADER_HEIGHT))
-        .items_center()
-        .gap_2()
-        .pl_4()
-        .pr_2()
-        .border_b_1()
-        .border_color(palette.line)
-}
-
-pub fn rail_header(palette: &Palette, title: &'static str) -> Div {
-    h_flex()
-        .flex_shrink_0()
-        .h(px(RAIL_HEADER_HEIGHT))
-        .items_center()
-        .gap_2()
-        .pl_4()
-        .pr_1p5()
-        .child(section_label(palette, title).flex_1().min_w_0())
-}
-
-pub fn status_bar(palette: &Palette) -> Div {
-    h_flex()
-        .flex_shrink_0()
-        .h(px(STATUS_BAR_HEIGHT))
-        .items_center()
-        .gap_3()
-        .px_4()
-        .border_t_1()
-        .border_color(palette.line)
-        .text_size(px(12.))
-        .text_color(palette.ink_muted)
 }
 
 pub fn dirty_dot(palette: &Palette, dirty: bool) -> Div {
@@ -943,30 +877,4 @@ pub fn save_state(palette: &Palette, state: SaveState) -> Div {
             .child("Unsaved"),
         SaveState::Saving => row.text_color(palette.ink_faint).child("Saving…"),
     }
-}
-
-pub fn save_status(palette: &Palette, dirty: bool) -> impl IntoElement {
-    save_state(
-        palette,
-        if dirty {
-            SaveState::Unsaved
-        } else {
-            SaveState::Saved
-        },
-    )
-}
-
-pub fn key_cap(palette: &Palette, text: impl Into<SharedString>) -> Div {
-    keycap(palette, text)
-}
-
-pub fn key_hint(palette: &Palette, keys: &str) -> Div {
-    keycaps(palette, keys)
-}
-
-pub fn spinner_text(palette: &Palette, text: &'static str) -> Div {
-    div()
-        .text_size(px(12.))
-        .text_color(palette.ink_muted)
-        .child(text)
 }

@@ -82,11 +82,17 @@ impl ToastHost {
             .and_then(|handle| handle.0.upgrade())
     }
 
-    pub fn messages(&self) -> Vec<String> {
+    pub fn shown(&self) -> Vec<(ToastKind, Option<SharedString>, SharedString)> {
         self.toasts
             .iter()
             .filter(|toast| !toast.leaving)
-            .map(|toast| toast.spec.message.to_string())
+            .map(|toast| {
+                (
+                    toast.spec.kind,
+                    toast.spec.title.clone(),
+                    toast.spec.message.clone(),
+                )
+            })
             .collect()
     }
 

@@ -88,7 +88,7 @@ fn main() {
     let started = Instant::now();
     cx.update(|cx| {
         editor.update(cx, |e, cx| {
-            e.load("perf".into(), document.clone(), fields.clone(), false, cx)
+            e.load(document.clone(), fields.clone(), false, cx)
         })
     });
     let loaded = started.elapsed();

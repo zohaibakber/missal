@@ -92,14 +92,13 @@ impl NavEntry {
         matches!(self, NavEntry::NewFir | NavEntry::Shortcuts)
     }
 
-    pub fn destination(route: Route) -> Option<NavEntry> {
+    pub fn destination(route: Route) -> NavEntry {
         match route {
             Route::Firs | Route::Fir(_) | Route::EditFir(_) | Route::NewFir | Route::Print(_) => {
-                Some(NavEntry::Firs)
+                NavEntry::Firs
             }
-            Route::Templates | Route::Template(_) | Route::NewTemplate => Some(NavEntry::Templates),
-            Route::Settings => Some(NavEntry::Settings),
-            Route::Components => None,
+            Route::Templates | Route::Template(_) | Route::NewTemplate => NavEntry::Templates,
+            Route::Settings => NavEntry::Settings,
         }
     }
 }
@@ -122,8 +121,10 @@ impl Focusable for NavMenu {
 impl NavMenu {
     pub fn new(cx: &mut Context<Self>) -> NavMenu {
         let route = Models::get(cx).nav.read(cx).current();
-        let highlighted = NavEntry::destination(route)
-            .and_then(|entry| NavEntry::ALL.iter().position(|e| *e == entry))
+        let entry = NavEntry::destination(route);
+        let highlighted = NavEntry::ALL
+            .iter()
+            .position(|candidate| *candidate == entry)
             .unwrap_or(0);
         NavMenu {
             focus: cx.focus_handle(),
