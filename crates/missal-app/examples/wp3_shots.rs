@@ -83,7 +83,7 @@ impl Harness {
 
 fn build(dark: bool, out: &Path, strip_customs: bool) -> (Harness, tempfile::TempDir) {
     let directory = tempfile::tempdir().expect("tempdir");
-    let database = directory.path().join("missal.sqlite");
+    let database = directory.path().join("missal.db");
     seed_firs(&database, 5).expect("seed");
     let mut store = Store::open(&database).expect("open");
     if strip_customs {

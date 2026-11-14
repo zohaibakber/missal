@@ -103,7 +103,7 @@ impl Harness {
 
 fn build(dark: bool, out: &Path, count: usize) -> (Harness, tempfile::TempDir) {
     let directory = tempfile::tempdir().expect("tempdir");
-    let database = directory.path().join("missal.sqlite");
+    let database = directory.path().join("missal.db");
     seed_firs(&database, count).expect("seed");
     let store = Store::open(&database).expect("open");
     let text_system = Arc::new(gpui_wgpu::CosmicTextSystem::new("sans-serif"));

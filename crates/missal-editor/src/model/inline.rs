@@ -7,7 +7,7 @@ pub fn inline_len(inline: &Inline) -> usize {
     match inline {
         Inline::Text(text) => text.text.len(),
         Inline::LineBreak(_) => 1,
-        Inline::Field(_) | Inline::Image(_) => OBJECT_LEN,
+        Inline::Field(_) => OBJECT_LEN,
         Inline::Link(link) => len(&link.children),
     }
 }
@@ -237,7 +237,7 @@ pub fn object_at(inlines: &[Inline], offset: usize) -> Option<&Inline> {
     let mut acc = 0;
     for inline in inlines {
         let l = inline_len(inline);
-        if acc == offset && matches!(inline, Inline::Field(_) | Inline::Image(_)) {
+        if acc == offset && matches!(inline, Inline::Field(_)) {
             return Some(inline);
         }
         if let Inline::Link(link) = inline

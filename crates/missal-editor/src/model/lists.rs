@@ -260,9 +260,7 @@ pub fn indent(doc: &mut Document, path: &BlockPath) -> Option<Position> {
     let template = sibling_list(parent, Vec::new());
     let new_tail_end: Vec<u32> = match previous_holder {
         Some(child_index) => {
-            let Some(previous) = parent.items.get_mut(i - 1) else {
-                return None;
-            };
+            let previous = parent.items.get_mut(i - 1)?;
             let ListItemChild::List(nested) = &mut previous.children[child_index] else {
                 return None;
             };

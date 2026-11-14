@@ -141,10 +141,10 @@ impl Store {
         find_fir(&transaction, fir_id, operation)?;
         let existing = summaries_for(&transaction, fir_id, operation)?;
         let mut seen: HashSet<TemplateId> = existing.iter().map(|d| d.template_id).collect();
-        let mut position = existing.iter().map(|d| d.position).max().unwrap_or(-1);
+        let start = existing.iter().map(|d| d.position).max().unwrap_or(-1) + 1;
         let now = Timestamp::now().unix_millis();
-        for template in template_ids.iter().copied().filter(|t| seen.insert(*t)) {
-            position += 1;
+        let added = template_ids.iter().copied().filter(|t| seen.insert(*t));
+        for (position, template) in (start..).zip(added) {
             let document_id: i64 = transaction
                 .prepare_cached(
                     "INSERT INTO documents (fir_id, template_id, source_revision, title, revision, position, field_count, created_at, updated_at, preview) SELECT ?1, id, revision, name, 1, ?2, field_count, ?3, ?3, preview FROM templates WHERE id = ?4 RETURNING id",

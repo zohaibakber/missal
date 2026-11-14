@@ -25,7 +25,7 @@ struct Fixture {
 
 fn boot(cx: &mut TestAppContext, count: usize) -> Fixture {
     let directory = tempfile::tempdir().unwrap();
-    let database = directory.path().join("missal.sqlite");
+    let database = directory.path().join("missal.db");
     seed_firs(&database, count).unwrap();
     let store = Store::open(&database).unwrap();
     let (handle, shell, models) = cx.update(|cx| {
@@ -165,10 +165,7 @@ fn the_fields_panel_fills_empty_global_and_custom_fields_in_the_document(cx: &mu
     };
     let settings = Store::open(&fixture.database).unwrap().settings().unwrap();
     assert_eq!(
-        settings
-            .shared_placeholders
-            .get(setting)
-            .map(String::as_str),
+        settings.shared_values.get(setting).map(String::as_str),
         Some("تھانہ صدر")
     );
     assert_eq!(shown_value(&fixture, cx, &global.reference), "تھانہ صدر");

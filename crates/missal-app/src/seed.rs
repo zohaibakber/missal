@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn seeds_valid_records_quickly() {
         let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("missal.sqlite");
+        let path = directory.path().join("missal.db");
         assert_eq!(seed_firs(&path, 3000).unwrap(), 3000);
         let store = Store::open(&path).unwrap();
         let firs = store.firs().unwrap();

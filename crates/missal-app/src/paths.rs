@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::platform;
 
-pub const DATABASE_FILE: &str = "missal.sqlite";
+pub const DATABASE_FILE: &str = "missal.db";
 pub const PREFERENCES_FILE: &str = "preferences.json";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,11 +44,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_location_is_the_electron_user_data_directory() {
+    fn default_location_is_the_shared_missal_directory_with_its_own_database() {
         let paths = Paths::resolve(None);
         assert!(paths.is_default);
         assert_eq!(paths.directory.file_name().unwrap(), "Missal");
-        assert_eq!(paths.database.file_name().unwrap(), "missal.sqlite");
+        assert_eq!(paths.database.file_name().unwrap(), "missal.db");
         assert_eq!(paths.preferences.file_name().unwrap(), "preferences.json");
         assert_eq!(paths.database.parent(), Some(paths.directory.as_path()));
     }
@@ -57,6 +57,6 @@ mod tests {
     fn override_is_not_the_default() {
         let paths = Paths::resolve(Some(Path::new("/tmp/scratch")));
         assert!(!paths.is_default);
-        assert_eq!(paths.database, Path::new("/tmp/scratch/missal.sqlite"));
+        assert_eq!(paths.database, Path::new("/tmp/scratch/missal.db"));
     }
 }

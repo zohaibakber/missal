@@ -94,7 +94,6 @@ fn collect_marks(
             }
             for (r, row) in table.rows.iter().enumerate() {
                 for (c, cell) in row.cells.iter().enumerate() {
-                    let cell = cell;
                     let prefix = path.child(r as u32).child(c as u32);
                     for (b, inner) in cell.blocks.iter().enumerate() {
                         collect_marks(inner, prefix.child(b as u32), s, e, marks);

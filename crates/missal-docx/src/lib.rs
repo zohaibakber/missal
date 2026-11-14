@@ -1,6 +1,5 @@
 mod convert;
 mod format;
-mod media;
 mod package;
 mod props;
 mod styles;
@@ -49,8 +48,8 @@ impl std::error::Error for ImportError {}
 pub enum Notice {
     DifferentPageLayouts,
     HeadersFootersAsContent,
-    DrawingsNeedChecking,
-    ImageOmitted,
+    EquationsNeedChecking,
+    DrawingsOmitted,
     FloatingFlattened,
     FootnotesOmitted,
     EmbeddedContentOmitted,
@@ -66,10 +65,10 @@ impl Notice {
             Notice::HeadersFootersAsContent => {
                 "Headers and footers were added as editable content at the start and end of the document."
             }
-            Notice::DrawingsNeedChecking => {
-                "Some drawings or equations may need to be checked after import."
+            Notice::EquationsNeedChecking => {
+                "Equations were imported as plain text and may need to be checked."
             }
-            Notice::ImageOmitted => "An image could not be embedded and was omitted.",
+            Notice::DrawingsOmitted => "Pictures and drawings were not imported.",
             Notice::FloatingFlattened => "Floating layout was flattened to keep text.",
             Notice::FootnotesOmitted => "Footnotes and endnotes were not imported.",
             Notice::EmbeddedContentOmitted => "Embedded objects or documents were omitted.",
@@ -265,7 +264,7 @@ fn inline_content(inline: &Inline) -> bool {
             .text
             .chars()
             .any(|c| !c.is_whitespace() && c != '\u{2003}'),
-        Inline::Field(_) | Inline::Image(_) => true,
+        Inline::Field(_) => true,
         Inline::Link(link) => link.children.iter().any(inline_content),
         Inline::LineBreak(_) => false,
     }

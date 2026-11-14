@@ -74,9 +74,7 @@ fn paragraphs(blocks: &[Block]) -> Vec<&Paragraph> {
             Block::Paragraph(paragraph) => found.push(paragraph),
             Block::Table(table) => {
                 for row in &table.rows {
-                    let row = row;
                     for cell in &row.cells {
-                        let cell = cell;
                         found.extend(paragraphs(&cell.blocks));
                     }
                 }
@@ -546,12 +544,8 @@ fn page_breaks_from_breaks_paragraph_properties_and_sections_are_deduplicated_an
     assert!((layout.margin_left_mm - 25.4).abs() < 0.001);
 }
 
-const PNG: &[u8] = &[
-    0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1a, b'\n', 0, 0, 0, 0,
-];
-
 #[test]
-fn embeds_pictures_as_data_uris_and_drops_what_cannot_be_embedded() {
+fn drops_pictures_and_keeps_the_surrounding_text() {
     let picture = |id: &str, anchor: bool| {
         let (open, close) = if anchor {
             ("<wp:anchor>", "</wp:anchor>")
@@ -563,13 +557,12 @@ fn embeds_pictures_as_data_uris_and_drops_what_cannot_be_embedded() {
         )
     };
     let body = format!(
-        "<w:p>{}{}{}</w:p>",
+        "<w:p><w:r><w:t>before</w:t></w:r>{}{}<w:r><w:t> after</w:t></w:r></w:p>",
         picture("rId5", false),
-        picture("rId6", false),
-        picture("rId7", true)
+        picture("rId6", true)
     );
     let rels = document_rels(
-        r#"<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/><Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image2.emf"/><Relationship Id="rId7" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="http://example.com/x.png" TargetMode="External"/>"#,
+        r#"<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/><Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="http://example.com/x.png" TargetMode="External"/>"#,
     );
     let document = document_xml(&body);
     let bytes = archive(&[
@@ -577,34 +570,15 @@ fn embeds_pictures_as_data_uris_and_drops_what_cannot_be_embedded() {
         ("_rels/.rels", ROOT_RELS.as_bytes()),
         ("word/document.xml", document.as_bytes()),
         ("word/_rels/document.xml.rels", rels.as_bytes()),
-        ("word/media/image1.png", PNG),
-        ("word/media/image2.emf", b"\x01\x00\x00\x00"),
+        ("word/media/image1.png", b"\x89PNG\r\n\x1a\n"),
     ]);
     let imported = run_import(&bytes);
-    let paragraph = paragraphs(&imported.document.blocks)[0];
-    let images: Vec<_> = paragraph
-        .children
-        .iter()
-        .filter_map(|inline| match inline {
-            Inline::Image(image) => Some(image),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(images.len(), 1);
-    assert!(
-        images[0]
-            .src
-            .as_deref()
-            .unwrap()
-            .starts_with("data:image/png;base64,iVBORw0KGgo")
-    );
-    assert_eq!(
-        (images[0].width, images[0].height),
-        (Some(100.0), Some(50.0))
-    );
+    let found = paragraphs(&imported.document.blocks);
+    assert_eq!(found.len(), 1);
+    assert_eq!(plain(found[0]), "before after");
     assert_eq!(
         imported.notices,
-        [Notice::ImageOmitted, Notice::FloatingFlattened]
+        [Notice::DrawingsOmitted, Notice::FloatingFlattened]
     );
 }
 

@@ -539,7 +539,7 @@ impl TemplatePage {
                                 .templates
                                 .read(cx)
                                 .get(id)
-                                .map(|item| item.created_at.clone())
+                                .map(|item| item.created_at)
                         });
                         if let (Some(id), Some(created_at)) = (this.id, created_at) {
                             let summary = TemplateSummary {

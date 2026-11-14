@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 
@@ -164,10 +165,14 @@ pub(crate) fn install(connection: &mut Connection, bundle: &TemplateBundle) -> R
         .map(|label| (label, true))
         .chain(bundle.custom.iter().map(|label| (label, false)));
     for (label, shared) in labels {
-        let key = field_lookup_key(label);
-        if !ids.contains_key(&key) {
-            let id = placeholders::insert(&transaction, label, shared, "", operation)?;
-            ids.insert(key, id);
+        if let Entry::Vacant(entry) = ids.entry(field_lookup_key(label)) {
+            entry.insert(placeholders::insert(
+                &transaction,
+                label,
+                shared,
+                "",
+                operation,
+            )?);
         }
     }
     let existing: HashSet<String> = transaction

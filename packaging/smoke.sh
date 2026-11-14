@@ -12,7 +12,7 @@ cp "$binary" "$scratch/bin/missal"
 cd "$scratch/bin"
 
 ./missal --data-dir "$scratch/data" --seed 3
-test -s "$scratch/data/missal.sqlite"
+test -s "$scratch/data/missal.db"
 
 xvfb-run -a -s "-screen 0 1600x1000x24" ./missal --data-dir "$scratch/data" &
 pid=$!

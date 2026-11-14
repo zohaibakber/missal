@@ -10,7 +10,7 @@ Test machine matrix, at minimum: one single-monitor 100% display, one 125% or 15
 - [ ] The install folder is `%LOCALAPPDATA%\Missal`, with a Start menu shortcut named Missal and the app icon on the shortcut, the taskbar and the title bar.
 - [ ] Right-click the exe, Properties, Details: product name, version and copyright are filled in.
 - [ ] No console window appears when launching, from the shortcut or from Explorer.
-- [ ] With the Electron version installed, existing data in `%APPDATA%\Missal` (missal.sqlite and preferences.json) opens untouched in the native app, and the Electron app still works afterwards.
+- [ ] With the Electron version installed, the native app creates its own `missal.db` in `%APPDATA%\Missal`, leaves the Electron app's `missal.sqlite` untouched, and the Electron app still works afterwards.
 - [ ] Uninstalling from Settings, Apps removes the app folder and shortcut and leaves `%APPDATA%\Missal` intact.
 - [ ] Windows SmartScreen behaviour for an unsigned installer is understood, and the signing decision is recorded (see docs/packaging.md).
 - [ ] Update path: install version N, publish N+1 as a native release, start N. Within a minute after startup a toast reads "Update ready" with a Restart now button. Nothing blocks typing while it downloads.

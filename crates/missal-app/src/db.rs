@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn jobs_run_on_the_database_thread_and_report_failures() {
         let directory = tempfile::tempdir().unwrap();
-        let db = Db::spawn(directory.path().join("missal.sqlite"));
+        let db = Db::spawn(directory.path().join("missal.db"));
         let caller = std::thread::current().id();
         let ran_elsewhere = block_on(db.run(move |_| Ok(std::thread::current().id() != caller)));
         assert_eq!(ran_elsewhere, Ok(true));
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn an_unopenable_database_fails_every_job() {
         let directory = tempfile::tempdir().unwrap();
-        let db = Db::spawn(directory.path().join("missing/dir/missal.sqlite"));
+        let db = Db::spawn(directory.path().join("missing/dir/missal.db"));
         let result = block_on(db.run(|store| store.firs().map(|firs| firs.len())));
         assert!(result.is_err());
     }

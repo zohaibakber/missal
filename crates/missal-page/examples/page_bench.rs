@@ -36,9 +36,7 @@ fn find_cell_paragraph(doc: &Document, from: usize) -> BlockPath {
     for (i, block) in doc.blocks.iter().enumerate().skip(from) {
         if let Block::Table(t) = block {
             for (r, row) in t.rows.iter().enumerate() {
-                let row = row;
                 for (c, cell) in row.cells.iter().enumerate() {
-                    let cell = cell;
                     for (b, inner) in cell.blocks.iter().enumerate() {
                         if text_of(&mut inner.clone()).is_some() {
                             return BlockPath::new(&[i as u32, r as u32, c as u32, b as u32]);

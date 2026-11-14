@@ -120,7 +120,7 @@ fn first_field_block(editor: &Editor) -> Option<BlockPath> {
 
 fn run(dark: bool, out: &Path) {
     let directory = tempfile::tempdir().expect("tempdir");
-    let database = directory.path().join("missal.sqlite");
+    let database = directory.path().join("missal.db");
     seed_firs(&database, 12).expect("seed");
     let store = Store::open(&database).expect("open");
     let largest = store

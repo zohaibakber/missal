@@ -22,7 +22,7 @@ struct Fixture {
 
 fn boot(cx: &mut TestAppContext, count: usize) -> Fixture {
     let directory = tempfile::tempdir().unwrap();
-    let database = directory.path().join("missal.sqlite");
+    let database = directory.path().join("missal.db");
     if count > 0 {
         seed_firs(&database, count).unwrap();
     }

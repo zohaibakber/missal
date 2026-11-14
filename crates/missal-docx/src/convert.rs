@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use missal_core::document::{
-    Align, Block, Direction, ElementProps, Field, Image, Inline, Leaf, Link, List, ListItem,
+    Align, Block, Direction, ElementProps, Field, Inline, Leaf, Link, List, ListItem,
     ListItemChild, ListTag, ListType, PageLayout, Paragraph, Style, Table, TableCell, TableRow,
     Text, TextFormat,
 };
@@ -13,15 +13,14 @@ use crate::Notice;
 use crate::format::{
     Css, Line, RunFormat, Script, align_css, four, physical, pt, px, round2, script,
 };
-use crate::media;
 use crate::package::{Package, Relationships};
 use crate::props::{
     Border, CellProps, Jc, ParaProps, Rgb, RowProps, RunProps, Sides, TableProps, VMerge, Width,
 };
 use crate::styles::{Numbering, Resolved, Styles, Theme};
 use crate::xml::{
-    M, MC, V, WP, alternate_branch, attr, child, is_ns, is_w, measure, number, plain_attr, r_attr,
-    text_of, twips, val, w_name,
+    M, MC, V, WP, alternate_branch, attr, child, is_ns, is_w, plain_attr, r_attr, text_of, twips,
+    val, w_name,
 };
 
 pub struct RunStyle {
@@ -42,7 +41,6 @@ enum Atom {
     Text(String, Rc<RunStyle>),
     LineBreak,
     PageBreak,
-    Image(Image),
     Begin(Rc<RunStyle>),
     Separate,
     End,
@@ -57,7 +55,6 @@ enum Piece {
     Field(FieldReference, Rc<RunStyle>, bool),
     LineBreak,
     PageBreak,
-    Image(Image),
     LinkStart(Option<String>),
     LinkEnd,
 }
@@ -226,7 +223,6 @@ pub struct Converter<'p, 'b> {
     css_cache: HashMap<(usize, u64, u8), Option<Style>>,
     pub sections: Vec<Section>,
     section_index: usize,
-    images: HashMap<String, Option<(String, bool)>>,
 }
 
 impl<'p, 'b> Converter<'p, 'b> {
@@ -263,7 +259,6 @@ impl<'p, 'b> Converter<'p, 'b> {
             css_cache: HashMap::new(),
             sections,
             section_index: 0,
-            images: HashMap::new(),
         }
     }
 
@@ -612,7 +607,7 @@ impl<'p, 'b> Converter<'p, 'b> {
             }
             if element.tag_name().namespace() == Some(M) {
                 if matches!(element.tag_name().name(), "oMath" | "oMathPara") {
-                    self.notice(Notice::DrawingsNeedChecking);
+                    self.notice(Notice::EquationsNeedChecking);
                     let text = text_of(element);
                     if !text.trim().is_empty() {
                         let style = self.run_style(base, None);
@@ -728,12 +723,12 @@ impl<'p, 'b> Converter<'p, 'b> {
                 }
                 Some("drawing") => {
                     if !hidden {
-                        self.drawing(element, atoms, deferred);
+                        self.drawing(element, deferred);
                     }
                 }
                 Some("pict" | "object") => {
                     if !hidden {
-                        self.vml(element, atoms, deferred);
+                        self.vml(element, deferred);
                     }
                 }
                 Some("footnoteReference" | "endnoteReference") => {
@@ -765,53 +760,20 @@ impl<'p, 'b> Converter<'p, 'b> {
         found
     }
 
-    fn drawing<'a, 'i>(
-        &mut self,
-        drawing: Node<'a, 'i>,
-        atoms: &mut Vec<Atom>,
-        deferred: &mut Vec<Node<'a, 'i>>,
-    ) {
-        let anchored = drawing.children().any(|node| is_ns(node, WP, "anchor"));
-        if anchored {
+    fn drawing<'a, 'i>(&mut self, drawing: Node<'a, 'i>, deferred: &mut Vec<Node<'a, 'i>>) {
+        if drawing.children().any(|node| is_ns(node, WP, "anchor")) {
             self.notice(Notice::FloatingFlattened);
         }
         let has_text = self.text_boxes(drawing, deferred);
-        let blip = drawing
+        let picture = drawing
             .descendants()
-            .find(|node| node.is_element() && node.tag_name().name() == "blip");
-        let extent = drawing
-            .descendants()
-            .find(|node| is_ns(*node, WP, "extent"));
-        let size = extent.map(|extent| {
-            let emu = |name: &str| number(plain_attr(extent, name)).unwrap_or(0.0) / 9525.0;
-            (round2(emu("cx")), round2(emu("cy")))
-        });
-        match blip {
-            Some(blip) => {
-                let embed = r_attr(blip, "embed");
-                let linked = r_attr(blip, "link").is_some();
-                match embed.and_then(|id| self.image(id)) {
-                    Some(src) => atoms.push(Atom::Image(Image {
-                        src: Some(src),
-                        width: size.map(|size| size.0).filter(|width| *width > 0.0),
-                        height: size.map(|size| size.1).filter(|height| *height > 0.0),
-                        ..Image::default()
-                    })),
-                    None if embed.is_some() || linked => self.notice(Notice::ImageOmitted),
-                    None => self.notice(Notice::ImageOmitted),
-                }
-            }
-            None if !has_text => self.notice(Notice::DrawingsNeedChecking),
-            None => {}
+            .any(|node| node.is_element() && node.tag_name().name() == "blip");
+        if picture || !has_text {
+            self.notice(Notice::DrawingsOmitted);
         }
     }
 
-    fn vml<'a, 'i>(
-        &mut self,
-        node: Node<'a, 'i>,
-        atoms: &mut Vec<Atom>,
-        deferred: &mut Vec<Node<'a, 'i>>,
-    ) {
+    fn vml<'a, 'i>(&mut self, node: Node<'a, 'i>, deferred: &mut Vec<Node<'a, 'i>>) {
         let floating = node.descendants().any(|shape| {
             shape.tag_name().namespace() == Some(V)
                 && plain_attr(shape, "style")
@@ -821,56 +783,12 @@ impl<'p, 'b> Converter<'p, 'b> {
             self.notice(Notice::FloatingFlattened);
         }
         let has_text = self.text_boxes(node, deferred);
-        let image = node.descendants().find(|item| is_ns(*item, V, "imagedata"));
-        match image {
-            Some(image) => {
-                let id = r_attr(image, "id").or_else(|| {
-                    image
-                        .attributes()
-                        .find(|attribute| attribute.name() == "relid")
-                        .map(|attribute| attribute.value())
-                });
-                let shape = image.parent().and_then(|shape| plain_attr(shape, "style"));
-                let dimension = |name: &str| {
-                    shape.and_then(|style| {
-                        style.split(';').find_map(|declaration| {
-                            let (property, value) = declaration.split_once(':')?;
-                            (property.trim() == name)
-                                .then(|| measure(value))
-                                .flatten()
-                                .map(|twips| round2(twips / 15.0))
-                        })
-                    })
-                };
-                match id.and_then(|id| self.image(id)) {
-                    Some(src) => atoms.push(Atom::Image(Image {
-                        src: Some(src),
-                        width: dimension("width"),
-                        height: dimension("height"),
-                        ..Image::default()
-                    })),
-                    None => self.notice(Notice::ImageOmitted),
-                }
-            }
-            None if is_w(node, "object") => self.notice(Notice::EmbeddedContentOmitted),
-            None if !has_text => self.notice(Notice::DrawingsNeedChecking),
-            None => {}
+        let picture = node.descendants().any(|item| is_ns(item, V, "imagedata"));
+        if !picture && is_w(node, "object") {
+            self.notice(Notice::EmbeddedContentOmitted);
+        } else if picture || !has_text {
+            self.notice(Notice::DrawingsOmitted);
         }
-    }
-
-    fn image(&mut self, id: &str) -> Option<String> {
-        let relationship = self.rels.get(id)?.clone();
-        if relationship.external {
-            return None;
-        }
-        if let Some(cached) = self.images.get(&relationship.target) {
-            return cached.as_ref().map(|(src, _)| src.clone());
-        }
-        let bytes = self.package.read(&relationship.target);
-        let src = bytes.and_then(|bytes| media::data_uri(&relationship.target, &bytes));
-        self.images
-            .insert(relationship.target, src.clone().map(|src| (src, true)));
-        src
     }
 
     fn resolve_fields(&mut self, atoms: Vec<Atom>) -> Vec<Piece> {
@@ -943,11 +861,6 @@ impl<'p, 'b> Converter<'p, 'b> {
                 Atom::PageBreak => {
                     if visible(&self.fields) {
                         out.push(Piece::PageBreak);
-                    }
-                }
-                Atom::Image(image) => {
-                    if visible(&self.fields) {
-                        out.push(Piece::Image(image));
                     }
                 }
                 Atom::LinkStart(url) => out.push(Piece::LinkStart(url)),
@@ -1072,11 +985,6 @@ impl<'p, 'b> Converter<'p, 'b> {
                 Piece::LineBreak => {
                     if let Some((_, current)) = stack.last_mut() {
                         current.push(Inline::LineBreak(Leaf::default()));
-                    }
-                }
-                Piece::Image(image) => {
-                    if let Some((_, current)) = stack.last_mut() {
-                        current.push(Inline::Image(image.clone()));
                     }
                 }
                 Piece::LinkStart(url) => stack.push((url.clone(), Vec::new())),

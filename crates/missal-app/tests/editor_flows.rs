@@ -20,7 +20,7 @@ struct Fixture {
 
 fn boot(cx: &mut TestAppContext, count: usize) -> Fixture {
     let directory = tempfile::tempdir().unwrap();
-    let database = directory.path().join("missal.sqlite");
+    let database = directory.path().join("missal.db");
     seed_firs(&database, count).unwrap();
     let store = Store::open(&database).unwrap();
     let (handle, shell, models) = cx.update(|cx| {

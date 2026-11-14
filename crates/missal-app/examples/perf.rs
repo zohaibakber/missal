@@ -30,7 +30,7 @@ fn main() {
         .and_then(|value| value.parse().ok())
         .unwrap_or(50_000);
     let directory = tempfile::tempdir().unwrap();
-    let database = directory.path().join("missal.sqlite");
+    let database = directory.path().join("missal.db");
     let started = Instant::now();
     seed_firs(&database, count).unwrap();
     println!(

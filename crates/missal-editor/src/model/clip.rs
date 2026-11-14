@@ -137,7 +137,6 @@ fn inline_text(
             Inline::LineBreak(_) => out.push('\n'),
             Inline::Field(field) => out.push_str(&display(&field.reference).text),
             Inline::Link(link) => inline_text(&link.children, display, out),
-            Inline::Image(_) => {}
         }
     }
 }

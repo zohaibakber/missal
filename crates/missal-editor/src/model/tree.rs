@@ -316,7 +316,6 @@ pub fn leaves_of_block(block: &Block, path: BlockPath, out: &mut Vec<Leaf>) {
         Block::Table(table) => {
             for (r, row) in table.rows.iter().enumerate() {
                 for (c, cell) in row.cells.iter().enumerate() {
-                    let cell = cell;
                     let prefix = path.child(r as u32).child(c as u32);
                     for (b, inner) in cell.blocks.iter().enumerate() {
                         leaves_of_block(inner, prefix.child(b as u32), out);
@@ -324,9 +323,7 @@ pub fn leaves_of_block(block: &Block, path: BlockPath, out: &mut Vec<Leaf>) {
                 }
             }
         }
-        Block::PageBreak(_) | Block::HorizontalRule(_) | Block::Image(_) => {
-            out.push(Leaf::Opaque(path))
-        }
+        Block::PageBreak(_) | Block::HorizontalRule(_) => out.push(Leaf::Opaque(path)),
     }
 }
 
