@@ -6,6 +6,8 @@ Inter typeface (assets/fonts/Inter-*.ttf)
 Jameel Noori Nastaleeq (assets/fonts/JameelNooriNastaleeq.ttf)
   Embedded in the Missal executable. Redistribution terms must be confirmed by the
   project owner before a public release.
+  The shipped file is a subset of the original font (glyph names removed, unreachable glyphs
+  dropped); the name table and the original Unicode coverage are unchanged.
 
 SumatraPDF (SumatraPDF.exe, Windows installer only, when bundled)
   GNU General Public License v3. SumatraPDF is a separate program that Missal starts as a
