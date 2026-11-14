@@ -1,0 +1,54 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="missal.css"><script src="chrome.js"></script>
+<style>
+.body { flex: 1; min-height: 0; display: flex; }
+.nav { width: 220px; flex: none; padding: 20px 12px; display: flex; flex-direction: column; gap: 2px; }
+.nav div { height: 32px; border-radius: 6px; padding: 0 10px; display: flex; align-items: center; font-size: 13px; font-weight: 500; color: var(--muted); }
+.nav div.on { background: var(--hover); color: var(--fg); }
+.main { flex: 1; min-width: 0; overflow: hidden; padding: 20px 0 0 24px; }
+.wrap { width: 680px; }
+.sec { padding: 0 0 28px; margin-bottom: 28px; border-bottom: 1px solid var(--border); }
+.sec h2 { font-size: 16px; line-height: 24px; font-weight: 600; }
+.sec p { font-size: 13px; color: var(--muted); margin: 2px 0 14px; }
+.segc { display: inline-flex; padding: 3px; border-radius: 8px; background: var(--hover); gap: 2px; }
+.segc span { height: 28px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.segc span.on { background: var(--bg); color: var(--fg); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
+.gv { display: flex; flex-direction: row-reverse; align-items: center; gap: 10px; padding: 4px 0; }
+.gv .name { width: 150px; flex: none; height: 36px; border: 1px solid transparent; border-radius: 6px; padding: 0 10px; display: flex; flex-direction: row-reverse; align-items: center; }
+.gv .val { flex: 1; height: 36px; border: 1px solid var(--input); border-radius: 6px; padding: 0 10px; display: flex; flex-direction: row-reverse; align-items: center; }
+.gv .val.focus { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent); }
+.gv .ur { font-size: 16px; line-height: 30px; margin-top: -2px; }
+.gv .eph { color: var(--subtle); font-size: 13px; }
+.mk { width: 56px; height: 36px; border: 1px solid var(--input); border-radius: 6px; display: grid; place-items: center; font-size: 16px; }
+.cf { display: flex; flex-direction: row-reverse; align-items: center; height: 40px; border-bottom: 1px solid var(--border); padding: 0 8px; gap: 10px; }
+.cf .ur { font-size: 16px; line-height: 30px; }
+.addb { height: 28px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--muted); padding: 0 8px; border-radius: 6px; margin-top: 8px; }
+</style></head>
+<body><div class="app" id="app"></div>
+<script>
+const gv = [["تھانہ نام", "تھانہ صدر"], ["ضلع نام", "فیصل آباد"], ["SHO نام", "انسپکٹر چوہدری نذیر"], ["DSP نام", ""], ["محرر", "اے ایس آئی رشید احمد"]];
+const cf = ["چالانی ضمنی تاریخ", "مختصر حالات", "تاریخ ضمنی", "حلیہ ملزم"];
+document.getElementById('app').innerHTML = `
+${titlebar({ title: 'Settings' })}
+<div class="body">
+  <div class="nav"><div class="on">Global values</div><div>Field markers</div><div>Custom fields</div><div>Built-in fields</div><div>Appearance</div><div>About</div></div>
+  <div class="main"><div class="wrap">
+    <div class="sec">
+      <h2>Global values</h2>
+      <p>Filled into every FIR's documents, such as the police station name.</p>
+      ${gv.map((g, i) => `<div class="gv"><div class="name"><span class="ur">${g[0]}</span></div><div class="val${i === 3 ? ' focus' : ''}">${g[1] ? `<span class="ur trunc">${g[1]}</span>` : i === 3 ? `<span class="caret"></span>` : ''}${i === 3 ? '' : ''}<div class="grow"></div>${!g[1] && i !== 3 ? `<span class="eph">Empty</span>` : ''}</div><div class="ib sm s">${ICON('trash', 'i14')}</div></div>`).join('')}
+      <div class="addb">${ICON('plus', 'i14')}Add global value</div>
+    </div>
+    <div class="sec">
+      <h2>Field markers</h2>
+      <p>The symbols around a field name when you type it into a document.</p>
+      <div class="row" style="gap:10px"><div class="mk">«</div><span class="ur ur16 m">نام</span><div class="mk">»</div><div class="vr" style="margin:6px 8px"></div><span class="t13 m">Example</span><span class="ur ur16" style="color:var(--accent-text);background:var(--field-fill);padding:0 4px;border-radius:3px">«جرم»</span></div>
+    </div>
+    <div class="sec" style="border:0">
+      <div class="row"><h2>Custom fields</h2><span class="m t13 num" style="margin-left:8px">35</span></div>
+      <p>Extra fields you fill per FIR. Renaming keeps templates linked.</p>
+      ${cf.map((c) => `<div class="cf"><span class="ur">${c}</span><div class="grow"></div><div class="ib sm s">${ICON('ellipsis', 'i14')}</div></div>`).join('')}
+    </div>
+  </div></div>
+</div>`;
+</script></body></html>
