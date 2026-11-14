@@ -531,7 +531,7 @@ impl TextInput {
 
     pub(crate) fn layout(&self, cx: &mut App) -> Arc<TextLayout> {
         let color = self.text_color(cx);
-        self.build_layout(&self.text.clone(), color, self.frame.wrap_width, cx)
+        self.build_layout(&self.text, color, self.frame.wrap_width, cx)
     }
 
     fn restart_blink(&mut self, cx: &mut Context<Self>) {

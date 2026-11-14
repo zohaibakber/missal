@@ -1,9 +1,14 @@
-use std::{collections::HashMap, ops::Range, sync::Arc};
+use std::{
+    collections::HashMap,
+    mem::size_of,
+    ops::Range,
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 use parley::{Alignment, AlignmentOptions, PositionedInlineBox, PositionedLayoutItem};
 
 use super::style::{Align, AttributedText, ParagraphStyle, Rgba};
-use crate::fonts::FaceId;
+use crate::fonts::{FaceId, face_for_blob};
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct Rect {
@@ -138,7 +143,7 @@ pub(crate) enum ClusterKind {
     Text,
     Space,
     Newline,
-    Object(u64),
+    Object(u32),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -150,15 +155,64 @@ pub(crate) struct LineDecoration {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct VisualCluster {
-    pub(crate) range: Range<usize>,
+    start: u32,
+    end: u32,
     pub(crate) x0: f32,
     pub(crate) x1: f32,
-    pub(crate) rtl: bool,
-    pub(crate) kind: ClusterKind,
     pub(crate) line: u32,
+    pub(crate) kind: ClusterKind,
+    pub(crate) rtl: bool,
     pub(crate) trailing: bool,
-    underline: Option<LineDecoration>,
-    strikethrough: Option<LineDecoration>,
+    decoration: u16,
+}
+
+impl VisualCluster {
+    pub(crate) fn start(&self) -> usize {
+        self.start as usize
+    }
+
+    pub(crate) fn end(&self) -> usize {
+        self.end as usize
+    }
+
+    fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
+}
+
+type ClusterDecoration = (Option<LineDecoration>, Option<LineDecoration>);
+
+struct Decorations(Vec<ClusterDecoration>);
+
+impl Decorations {
+    fn new() -> Self {
+        Self(vec![(None, None)])
+    }
+
+    fn intern(&mut self, decoration: ClusterDecoration) -> u16 {
+        if decoration == (None, None) {
+            return 0;
+        }
+        let last = self.0.len() - 1;
+        if self.0[last] == decoration {
+            return last as u16;
+        }
+        match u16::try_from(self.0.len()) {
+            Ok(index) if index < u16::MAX => {
+                self.0.push(decoration);
+                index
+            }
+            _ => self
+                .0
+                .iter()
+                .position(|d| *d == decoration)
+                .map_or(0, |i| i as u16),
+        }
+    }
+
+    fn get(&self, cluster: &VisualCluster) -> ClusterDecoration {
+        self.0[cluster.decoration as usize]
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -183,14 +237,39 @@ pub(crate) struct Geometry {
     pub(crate) height: f32,
 }
 
+impl Geometry {
+    fn shrink_to_fit(&mut self) {
+        self.lines.shrink_to_fit();
+        self.clusters.shrink_to_fit();
+        self.logical.shrink_to_fit();
+        self.objects_by_index.shrink_to_fit();
+        self.runs.shrink_to_fit();
+        self.glyphs.shrink_to_fit();
+        self.decorations.shrink_to_fit();
+        self.backgrounds.shrink_to_fit();
+        self.objects.shrink_to_fit();
+    }
+
+    fn heap_bytes(&self) -> usize {
+        self.lines.capacity() * size_of::<LineInfo>()
+            + self.clusters.capacity() * size_of::<VisualCluster>()
+            + self.logical.capacity() * size_of::<u32>()
+            + self.objects_by_index.capacity() * size_of::<(usize, u32)>()
+            + self.runs.capacity() * size_of::<GlyphRun>()
+            + self.glyphs.capacity() * size_of::<PositionedGlyph>()
+            + self.decorations.capacity() * size_of::<Decoration>()
+            + self.backgrounds.capacity() * size_of::<Background>()
+            + self.objects.capacity() * size_of::<PlacedObject>()
+    }
+}
+
 #[derive(Clone)]
 pub struct TextLayout {
     pub(crate) source: AttributedText,
     pub(crate) paragraph: ParagraphStyle,
     pub(crate) rtl: bool,
     pub(crate) max_width: Option<f32>,
-    pub(crate) inner: parley::Layout<Rgba>,
-    pub(crate) faces: Arc<HashMap<u64, FaceId>>,
+    inner: Arc<Mutex<parley::Layout<Rgba>>>,
     pub(crate) geo: Geometry,
 }
 
@@ -232,7 +311,6 @@ impl TextLayout {
         paragraph: ParagraphStyle,
         rtl: bool,
         inner: parley::Layout<Rgba>,
-        faces: Arc<HashMap<u64, FaceId>>,
         max_width: Option<f32>,
     ) -> Self {
         let mut layout = Self {
@@ -240,8 +318,7 @@ impl TextLayout {
             paragraph,
             rtl,
             max_width: None,
-            inner,
-            faces,
+            inner: Arc::new(Mutex::new(inner)),
             geo: Geometry::default(),
         };
         layout.set_max_width(max_width);
@@ -253,21 +330,39 @@ impl TextLayout {
         self.max_width = max_width;
         let options = AlignmentOptions::default();
         let alignment = parley_alignment(self.paragraph.align);
+        let inner = self.inner.clone();
+        let mut inner = lock(&inner);
         let dx = if self.paragraph.wrap && max_width.is_some() {
-            self.inner.break_all_lines(max_width);
-            self.inner.align(alignment, options);
+            inner.break_all_lines(max_width);
+            inner.align(alignment, options);
             0.0
         } else {
-            self.inner.break_all_lines(None);
-            self.inner.align(alignment, options);
+            inner.break_all_lines(None);
+            inner.align(alignment, options);
             match max_width {
                 Some(width) => {
-                    alignment_factor(self.paragraph.align, self.rtl) * (width - self.inner.width())
+                    alignment_factor(self.paragraph.align, self.rtl) * (width - inner.width())
                 }
                 None => 0.0,
             }
         };
-        self.geo = self.extract(dx);
+        let mut geo = self.extract(&inner, dx);
+        geo.shrink_to_fit();
+        self.geo = geo;
+    }
+
+    pub fn estimated_bytes(&self) -> usize {
+        self.geometry_bytes() + self.shaping_bytes()
+    }
+
+    pub(crate) fn geometry_bytes(&self) -> usize {
+        size_of::<Self>()
+            + self.geo.heap_bytes()
+            + self.source.spans.capacity() * size_of::<(Range<usize>, super::style::Attr)>()
+    }
+
+    pub(crate) fn shaping_bytes(&self) -> usize {
+        4 * 1024 + self.source.text.len() * 16 + self.geo.glyphs.len() * 16
     }
 
     pub fn with_max_width(&self, max_width: Option<f32>) -> Self {
@@ -276,28 +371,32 @@ impl TextLayout {
         copy
     }
 
-    fn extract(&self, dx: f32) -> Geometry {
+    fn extract(&self, inner: &parley::Layout<Rgba>, dx: f32) -> Geometry {
         let mut geo = Geometry::default();
         let text: &str = &self.source.text;
         let has_backgrounds = self.source.has_backgrounds();
-        let object_index: HashMap<u64, usize> = self
-            .source
-            .objects
+        let objects = &self.source.objects;
+        let object_index: HashMap<u64, u32> = objects
             .iter()
-            .map(|o| (o.id, o.index))
+            .enumerate()
+            .map(|(i, o)| (o.id, i as u32))
             .collect();
-        let mut object_y: HashMap<u64, (f32, f32)> = HashMap::new();
-        for (line_index, line) in self.inner.lines().enumerate() {
+        let mut object_y: Vec<(f32, f32)> = vec![(0.0, 0.0); objects.len()];
+        let mut decorations = Decorations::new();
+        let mut boxes: Vec<PositionedInlineBox> = Vec::new();
+        for (line_index, line) in inner.lines().enumerate() {
             let metrics = *line.metrics();
             let start_x = metrics.offset + metrics.inline_min_coord + dx;
             let first = geo.clusters.len();
-            let mut boxes: Vec<PositionedInlineBox> = Vec::new();
-            for item in line.items() {
-                if let PositionedLayoutItem::InlineBox(b) = item {
-                    boxes.push(b);
+            boxes.clear();
+            if !objects.is_empty() {
+                for item in line.items() {
+                    if let PositionedLayoutItem::InlineBox(b) = item {
+                        boxes.push(b);
+                    }
                 }
             }
-            let mut boxes = boxes.into_iter();
+            let mut boxes = boxes.drain(..);
             let mut runs = line.runs().peekable();
             let mut x = start_x;
             let mut item = 0usize;
@@ -334,15 +433,15 @@ impl TextLayout {
                             color: d.brush,
                         });
                         geo.clusters.push(VisualCluster {
-                            range,
+                            start: range.start as u32,
+                            end: range.end as u32,
                             x0: x,
                             x1: x + advance,
-                            rtl: cluster.is_rtl(),
-                            kind,
                             line: line_index as u32,
+                            kind,
+                            rtl: cluster.is_rtl(),
                             trailing: false,
-                            underline,
-                            strikethrough,
+                            decoration: decorations.intern((underline, strikethrough)),
                         });
                         x += advance;
                     }
@@ -350,19 +449,21 @@ impl TextLayout {
                     continue;
                 }
                 if let Some(b) = boxes.next() {
-                    let index = object_index.get(&b.id).copied().unwrap_or(0);
-                    object_y.insert(b.id, (b.y, b.height));
-                    geo.clusters.push(VisualCluster {
-                        range: index..index,
-                        x0: x,
-                        x1: x + b.width,
-                        rtl: self.rtl,
-                        kind: ClusterKind::Object(b.id),
-                        line: line_index as u32,
-                        trailing: false,
-                        underline: None,
-                        strikethrough: None,
-                    });
+                    if let Some(&slot) = object_index.get(&b.id) {
+                        let index = objects[slot as usize].index as u32;
+                        object_y[slot as usize] = (b.y, b.height);
+                        geo.clusters.push(VisualCluster {
+                            start: index,
+                            end: index,
+                            x0: x,
+                            x1: x + b.width,
+                            line: line_index as u32,
+                            kind: ClusterKind::Object(slot),
+                            rtl: self.rtl,
+                            trailing: false,
+                            decoration: 0,
+                        });
+                    }
                     x += b.width;
                     item += 1;
                     continue;
@@ -418,7 +519,7 @@ impl TextLayout {
                     continue;
                 };
                 let run = glyph_run.run();
-                let Some(&face) = self.faces.get(&run.font().data.id()) else {
+                let Some(face) = face_for_blob(run.font().data.id()) else {
                     continue;
                 };
                 let synthesis = run.synthesis();
@@ -457,9 +558,10 @@ impl TextLayout {
                     .iter()
                     .filter(|c| !c.trailing && c.kind != ClusterKind::Newline)
                 {
+                    let (underline, strikethrough) = decorations.get(c);
                     let deco = match kind {
-                        DecorationKind::Underline => c.underline,
-                        DecorationKind::Strikethrough => c.strikethrough,
+                        DecorationKind::Underline => underline,
+                        DecorationKind::Strikethrough => strikethrough,
                     };
                     let Some(deco) = deco else {
                         if let Some(d) = current.take() {
@@ -503,7 +605,7 @@ impl TextLayout {
                 for c in line_clusters.iter().filter(|c| {
                     !c.trailing && matches!(c.kind, ClusterKind::Text | ClusterKind::Space)
                 }) {
-                    let Some(color) = self.source.background_at(c.range.start) else {
+                    let Some(color) = self.source.background_at(c.start()) else {
                         if let Some(b) = current.take() {
                             geo.backgrounds.push(b);
                         }
@@ -533,15 +635,15 @@ impl TextLayout {
             }
         }
         for (i, c) in geo.clusters.iter().enumerate() {
-            if let ClusterKind::Object(id) = c.kind {
-                let (y, height) = object_y.get(&id).copied().unwrap_or_default();
+            if let ClusterKind::Object(slot) = c.kind {
+                let (y, height) = object_y[slot as usize];
                 geo.objects.push(PlacedObject {
-                    id,
-                    index: c.range.start,
+                    id: objects[slot as usize].id,
+                    index: c.start(),
                     rect: Rect::new(c.x0, y, c.x1 - c.x0, height),
                     line: c.line as usize,
                 });
-                geo.objects_by_index.push((c.range.start, i as u32));
+                geo.objects_by_index.push((c.start(), i as u32));
             }
         }
         geo.objects_by_index.sort_by_key(|(index, _)| *index);
@@ -549,18 +651,18 @@ impl TextLayout {
             .clusters
             .iter()
             .enumerate()
-            .filter(|(_, c)| !matches!(c.kind, ClusterKind::Object(_)) && !c.range.is_empty())
+            .filter(|(_, c)| !matches!(c.kind, ClusterKind::Object(_)) && !c.is_empty())
             .map(|(i, _)| i as u32)
             .collect();
-        logical.sort_by_key(|&i| geo.clusters[i as usize].range.start);
+        logical.sort_by_key(|&i| geo.clusters[i as usize].start);
         geo.logical = logical;
         geo.natural_width = geo
             .lines
             .iter()
             .map(|l| l.right - l.left)
             .fold(0.0, f32::max);
-        geo.height = self.inner.height();
-        geo.width = self.max_width.unwrap_or(self.inner.width());
+        geo.height = inner.height();
+        geo.width = self.max_width.unwrap_or(inner.width());
         geo
     }
 
@@ -575,7 +677,7 @@ impl TextLayout {
         let mut order: Vec<usize> = (0..clusters.len()).collect();
         order.sort_by_key(|&i| {
             let c = &clusters[i];
-            (c.range.start, !matches!(c.kind, ClusterKind::Object(_)))
+            (c.start, !matches!(c.kind, ClusterKind::Object(_)))
         });
         let mut trailing = Vec::new();
         for &i in order.iter().rev() {
@@ -656,11 +758,15 @@ impl TextLayout {
     }
 
     pub fn min_content_width(&self) -> f32 {
-        self.inner.calculate_content_widths().min
+        lock(&self.inner).calculate_content_widths().min
     }
 
     pub fn max_content_width(&self) -> f32 {
-        self.inner.calculate_content_widths().max
+        lock(&self.inner).calculate_content_widths().max
+    }
+
+    pub(crate) fn shares_shaping_with(&self, other: &TextLayout) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
     }
 
     pub fn lines(&self) -> &[LineInfo] {
@@ -698,20 +804,20 @@ impl TextLayout {
     pub(crate) fn cluster_starting_at(&self, index: usize) -> Option<usize> {
         let logical = &self.geo.logical;
         let clusters = &self.geo.clusters;
-        let pos = logical.partition_point(|&i| clusters[i as usize].range.start < index);
+        let pos = logical.partition_point(|&i| clusters[i as usize].start() < index);
         logical
             .get(pos)
-            .filter(|&&i| clusters[i as usize].range.start == index)
+            .filter(|&&i| clusters[i as usize].start() == index)
             .map(|&i| i as usize)
     }
 
     pub(crate) fn cluster_ending_at(&self, index: usize) -> Option<usize> {
         let logical = &self.geo.logical;
         let clusters = &self.geo.clusters;
-        let pos = logical.partition_point(|&i| clusters[i as usize].range.end < index);
+        let pos = logical.partition_point(|&i| clusters[i as usize].end() < index);
         logical
             .get(pos)
-            .filter(|&&i| clusters[i as usize].range.end == index)
+            .filter(|&&i| clusters[i as usize].end() == index)
             .map(|&i| i as usize)
     }
 
@@ -735,11 +841,9 @@ impl TextLayout {
         }
         let logical = &self.geo.logical;
         let clusters = &self.geo.clusters;
-        let pos = logical.partition_point(|&i| clusters[i as usize].range.end <= index);
+        let pos = logical.partition_point(|&i| clusters[i as usize].end() <= index);
         match logical.get(pos) {
-            Some(&i) if clusters[i as usize].range.start < index => {
-                clusters[i as usize].range.start
-            }
+            Some(&i) if clusters[i as usize].start() < index => clusters[i as usize].start(),
             _ => index,
         }
     }
@@ -854,11 +958,9 @@ impl TextLayout {
             let mut line_rects: Vec<Rect> = Vec::new();
             for c in &self.geo.clusters[line.clusters.clone()] {
                 let selected = match c.kind {
-                    ClusterKind::Object(_) => {
-                        range.start <= c.range.start && c.range.start < range.end
-                    }
+                    ClusterKind::Object(_) => range.start <= c.start() && c.start() < range.end,
                     ClusterKind::Newline => false,
-                    _ => c.range.start >= range.start && c.range.end <= range.end,
+                    _ => c.start() >= range.start && c.end() <= range.end,
                 };
                 if !selected {
                     continue;
@@ -919,20 +1021,20 @@ impl TextLayout {
     pub(crate) fn left_edge_position(&self, cluster: usize) -> TextPosition {
         let c = &self.geo.clusters[cluster];
         match (c.kind, c.rtl) {
-            (ClusterKind::Object(_), true) => TextPosition::downstream(c.range.start),
-            (ClusterKind::Object(_), false) => TextPosition::upstream(c.range.start),
-            (_, true) => TextPosition::upstream(c.range.end),
-            (_, false) => TextPosition::downstream(c.range.start),
+            (ClusterKind::Object(_), true) => TextPosition::downstream(c.start()),
+            (ClusterKind::Object(_), false) => TextPosition::upstream(c.start()),
+            (_, true) => TextPosition::upstream(c.end()),
+            (_, false) => TextPosition::downstream(c.start()),
         }
     }
 
     pub(crate) fn right_edge_position(&self, cluster: usize) -> TextPosition {
         let c = &self.geo.clusters[cluster];
         match (c.kind, c.rtl) {
-            (ClusterKind::Object(_), true) => TextPosition::upstream(c.range.start),
-            (ClusterKind::Object(_), false) => TextPosition::downstream(c.range.start),
-            (_, true) => TextPosition::downstream(c.range.start),
-            (_, false) => TextPosition::upstream(c.range.end),
+            (ClusterKind::Object(_), true) => TextPosition::upstream(c.start()),
+            (ClusterKind::Object(_), false) => TextPosition::downstream(c.start()),
+            (_, true) => TextPosition::downstream(c.start()),
+            (_, false) => TextPosition::upstream(c.end()),
         }
     }
 
@@ -949,6 +1051,12 @@ pub struct Caret {
     pub baseline: f32,
     pub line: usize,
     pub rtl: bool,
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn shift_for(shifts: &[(f32, f32, f32)], x: f32) -> f32 {

@@ -19,6 +19,7 @@ const SUBPIXEL_STEPS: f32 = 4.0;
 const GAMMA: f32 = 1.8;
 const ENHANCED_CONTRAST: f32 = 1.0;
 const EMBOLDEN_DIVISOR: f32 = 48.0;
+const RASTER_BUDGET: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct Key {
@@ -43,6 +44,7 @@ struct Raster {
 pub(crate) struct SynthCache {
     context: ScaleContext,
     rasters: HashMap<Key, Option<Raster>>,
+    bytes: usize,
 }
 
 pub(crate) struct SynthGlyph {
@@ -75,11 +77,21 @@ impl SynthCache {
             skew: glyph.synthesis.skew.to_bits(),
             color: glyph.color.0,
         };
-        let context = &mut self.context;
-        let raster = self
-            .rasters
-            .entry(key)
-            .or_insert_with(|| rasterize(context, glyph, scale_factor, subpixel));
+        if !self.rasters.contains_key(&key) {
+            let raster = rasterize(&mut self.context, glyph, scale_factor, subpixel);
+            let bytes = raster
+                .as_ref()
+                .map_or(0, |r| r.width as usize * r.height as usize * 4);
+            if self.bytes + bytes > RASTER_BUDGET {
+                for raster in std::mem::take(&mut self.rasters).into_values().flatten() {
+                    window.drop_image(raster.image).ok();
+                }
+                self.bytes = 0;
+            }
+            self.bytes += bytes;
+            self.rasters.insert(key, raster);
+        }
+        let raster = &self.rasters[&key];
         let Some(raster) = raster else {
             return;
         };

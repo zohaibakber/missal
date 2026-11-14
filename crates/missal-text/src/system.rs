@@ -1,16 +1,24 @@
-use std::{borrow::Cow, sync::Arc};
+use std::{
+    borrow::Cow,
+    hint::black_box,
+    sync::{Arc, OnceLock},
+};
 
-use gpui_kit::{App, Font, FontFeatures, FontId, FontStyle, FontWeight, Global, Hsla, px};
+use gpui_kit::{
+    App, Font, FontFeatures, FontId, FontStyle, FontWeight, Global, Hsla, TextSystem as GpuiText,
+    px,
+};
 
 use crate::{
-    fonts::{FaceId, bundled_faces},
+    fonts::{Face, FaceId, UI_FAMILY, bundled_faces, face},
     layout::{AttributedText, ParagraphStyle, Rgba, TextEngine, TextLayout},
     synth::SynthCache,
 };
 
 pub struct TextSystem {
     engine: TextEngine,
-    font_ids: Vec<FontId>,
+    gpui: Arc<GpuiText>,
+    font_ids: Vec<OnceLock<FontId>>,
     pub(crate) synth: SynthCache,
 }
 
@@ -21,25 +29,59 @@ pub fn init(cx: &mut App) {
         return;
     }
     let faces = bundled_faces();
-    if let Err(error) = cx
-        .text_system()
-        .add_fonts(faces.iter().map(|f| Cow::Borrowed(f.data)).collect())
-    {
-        eprintln!("missal-text: registering bundled fonts with GPUI failed: {error:#}");
-    }
+    let gpui = cx.text_system().clone();
+    register(
+        &gpui,
+        faces
+            .iter()
+            .filter(|f| is_eager(f))
+            .map(|f| f.data)
+            .collect(),
+    );
     let font_ids = faces
         .iter()
         .map(|face| {
-            cx.text_system()
-                .resolve_font(&gpui_font(face.family, face.weight, face.italic))
+            let slot = OnceLock::new();
+            if is_eager(face) {
+                slot.set(resolve(&gpui, face)).ok();
+            }
+            slot
         })
         .collect();
+    let deferred: Vec<&'static [u8]> = faces
+        .iter()
+        .filter(|f| !is_eager(f))
+        .map(|f| f.data)
+        .collect();
+    std::thread::Builder::new()
+        .name("missal-font-prefetch".into())
+        .spawn(move || {
+            for data in deferred {
+                black_box(data.iter().step_by(4096).fold(0u8, |a, &b| a ^ b));
+            }
+        })
+        .ok();
     cx.set_global(TextSystem {
         engine: TextEngine::new(),
+        gpui,
         font_ids,
         synth: SynthCache::default(),
     });
     crate::input::bind_keys(cx);
+}
+
+fn is_eager(face: &Face) -> bool {
+    face.family == UI_FAMILY
+}
+
+fn register(gpui: &GpuiText, data: Vec<&'static [u8]>) {
+    if let Err(error) = gpui.add_fonts(data.into_iter().map(Cow::Borrowed).collect()) {
+        eprintln!("missal-text: registering bundled fonts with GPUI failed: {error:#}");
+    }
+}
+
+fn resolve(gpui: &GpuiText, face: &Face) -> FontId {
+    gpui.resolve_font(&gpui_font(face.family, face.weight, face.italic))
 }
 
 pub(crate) fn gpui_font(family: &'static str, weight: u16, italic: bool) -> Font {
@@ -69,8 +111,12 @@ impl TextSystem {
         &mut self.engine
     }
 
-    pub fn font_id(&self, face: FaceId) -> FontId {
-        self.font_ids[face.0 as usize]
+    pub fn font_id(&self, id: FaceId) -> FontId {
+        *self.font_ids[id.0 as usize].get_or_init(|| {
+            let face = face(id);
+            register(&self.gpui, vec![face.data]);
+            resolve(&self.gpui, face)
+        })
     }
 
     pub fn layout(
@@ -88,7 +134,7 @@ impl TextSystem {
         let system = cx.global::<Self>();
         let mut problems = Vec::new();
         for (index, face) in bundled_faces().iter().enumerate() {
-            let font_id = system.font_ids[index];
+            let font_id = system.font_id(FaceId(index as u16));
             let font = swash::FontRef::from_index(face.data, 0)
                 .ok_or_else(|| format!("{} is not a font", face.file_name))?;
             let metrics = font.metrics(&[]);

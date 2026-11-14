@@ -336,7 +336,7 @@ pub fn next_cluster_boundary(layout: &TextLayout, index: usize) -> usize {
         return text.len();
     }
     let next = match layout.cluster_starting_at(index) {
-        Some(c) => layout.geo.clusters[c].range.end,
+        Some(c) => layout.geo.clusters[c].end(),
         None => index + text[index..].chars().next().map_or(0, char::len_utf8),
     };
     next.max(index + text[index..].chars().next().map_or(0, char::len_utf8))

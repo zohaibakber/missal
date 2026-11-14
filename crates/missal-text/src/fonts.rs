@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use parley::{
     FontContext,
@@ -74,29 +74,27 @@ impl FontFamily {
     }
 }
 
-pub(crate) struct FontRegistry {
-    pub(crate) fcx: FontContext,
-    faces_by_blob: HashMap<u64, FaceId>,
+struct Shared {
+    collection: Mutex<Collection>,
+    blob_ids: [u64; FACES.len()],
 }
 
-impl FontRegistry {
-    pub(crate) fn new() -> Self {
-        let mut fcx = FontContext {
-            collection: Collection::new(CollectionOptions {
-                shared: false,
-                system_fonts: false,
-            }),
-            source_cache: SourceCache::default(),
-        };
-        let mut faces_by_blob = HashMap::new();
-        for (index, face) in FACES.iter().enumerate() {
+fn shared() -> &'static Shared {
+    static SHARED: OnceLock<Shared> = OnceLock::new();
+    SHARED.get_or_init(|| {
+        let mut collection = Collection::new(CollectionOptions {
+            shared: false,
+            system_fonts: false,
+        });
+        let mut blob_ids = [0; FACES.len()];
+        for (id, face) in blob_ids.iter_mut().zip(FACES.iter()) {
             let blob = Blob::new(Arc::new(face.data));
-            faces_by_blob.insert(blob.id(), FaceId(index as u16));
-            fcx.collection.register_fonts(blob, None);
+            *id = blob.id();
+            collection.register_fonts(blob, None);
         }
-        let urdu = fcx.collection.family_id(URDU_FAMILY);
-        let ui = fcx.collection.family_id(UI_FAMILY);
-        let fallback = |collection: &mut Collection, script: &[u8; 4], family: Option<FamilyId>| {
+        let urdu = collection.family_id(URDU_FAMILY);
+        let ui = collection.family_id(UI_FAMILY);
+        let mut fallback = |script: &[u8; 4], family: Option<FamilyId>| {
             if let Some(family) = family {
                 collection.append_fallbacks(
                     FallbackKey::new(Script::from_bytes(*script), None),
@@ -105,14 +103,33 @@ impl FontRegistry {
             }
         };
         for script in [b"Arab", b"Zyyy", b"Zinh"] {
-            fallback(&mut fcx.collection, script, urdu);
+            fallback(script, urdu);
         }
-        fallback(&mut fcx.collection, b"Latn", ui);
-        fallback(&mut fcx.collection, b"Zyyy", ui);
-        Self { fcx, faces_by_blob }
-    }
+        fallback(b"Latn", ui);
+        fallback(b"Zyyy", ui);
+        Shared {
+            collection: Mutex::new(collection),
+            blob_ids,
+        }
+    })
+}
 
-    pub(crate) fn faces_by_blob(&self) -> &HashMap<u64, FaceId> {
-        &self.faces_by_blob
+pub(crate) fn face_for_blob(blob_id: u64) -> Option<FaceId> {
+    shared()
+        .blob_ids
+        .iter()
+        .position(|&id| id == blob_id)
+        .map(|index| FaceId(index as u16))
+}
+
+pub(crate) fn font_context() -> FontContext {
+    let collection = shared()
+        .collection
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    FontContext {
+        collection,
+        source_cache: SourceCache::default(),
     }
 }
