@@ -173,7 +173,10 @@ impl Preferences {
                 y,
                 width,
                 height,
-                maximized: window.get("maximized").and_then(Value::as_bool).unwrap_or(false),
+                maximized: window
+                    .get("maximized")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
             });
         }
         if let Some(table) = value.get("firTable") {

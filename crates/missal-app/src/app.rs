@@ -27,7 +27,8 @@ impl Global for ShellHandle {}
 
 impl ShellHandle {
     pub fn get(cx: &App) -> Option<Entity<AppShell>> {
-        cx.try_global::<ShellHandle>().and_then(|handle| handle.0.upgrade())
+        cx.try_global::<ShellHandle>()
+            .and_then(|handle| handle.0.upgrade())
     }
 }
 
@@ -102,12 +103,15 @@ impl AppShell {
         let sidebar = cx.new(|cx| SidebarView::new(models.clone(), cx));
         let route = models.nav.read(cx).current();
         let screen = Self::build_screen(&models, route, window, cx);
-        let mut subscriptions = vec![cx.subscribe_in(
-            &models.nav,
-            window,
-            |this, _, _: &NavEvent, window, cx| this.route_changed(window, cx),
-        )];
-        subscriptions.push(cx.observe_window_bounds(window, |this, window, cx| this.remember_bounds(window, cx)));
+        let mut subscriptions =
+            vec![
+                cx.subscribe_in(&models.nav, window, |this, _, _: &NavEvent, window, cx| {
+                    this.route_changed(window, cx)
+                }),
+            ];
+        subscriptions.push(
+            cx.observe_window_bounds(window, |this, window, cx| this.remember_bounds(window, cx)),
+        );
         subscriptions.push(cx.observe_window_appearance(window, |this, window, cx| {
             let choice = this.models.prefs.read(cx).read().theme;
             theme::apply(choice, window, cx);
@@ -140,7 +144,9 @@ impl AppShell {
             height: bounds.size.height.into(),
             maximized,
         };
-        self.models.prefs.update(cx, |prefs, cx| prefs.update(cx, |p| p.window = Some(remembered)));
+        self.models.prefs.update(cx, |prefs, cx| {
+            prefs.update(cx, |p| p.window = Some(remembered))
+        });
     }
 
     pub fn fir_list(&self) -> Option<Entity<FirListScreen>> {
@@ -182,17 +188,26 @@ impl AppShell {
         self.print_preview.clone()
     }
 
-    pub fn show_print_preview(&mut self, request: PrintRequest, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn show_print_preview(
+        &mut self,
+        request: PrintRequest,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.print_preview.is_some() {
             return;
         }
         self.palette = None;
         let preview = cx.new(|cx| PrintPreview::new(request, window, cx));
-        cx.subscribe_in(&preview, window, |this, _, _: &PreviewClosed, window, cx| {
-            this.print_preview = None;
-            this.screen.focus(window, cx);
-            cx.notify();
-        })
+        cx.subscribe_in(
+            &preview,
+            window,
+            |this, _, _: &PreviewClosed, window, cx| {
+                this.print_preview = None;
+                this.screen.focus(window, cx);
+                cx.notify();
+            },
+        )
         .detach();
         preview.update(cx, |preview, cx| preview.focus(window, cx));
         self.print_preview = Some(preview);
@@ -205,7 +220,9 @@ impl AppShell {
             return;
         }
         match &self.screen {
-            Screen::Workspace(view) => view.update(cx, |screen, cx| screen.open_print_preview(window, cx)),
+            Screen::Workspace(view) => {
+                view.update(cx, |screen, cx| screen.open_print_preview(window, cx))
+            }
             Screen::Templates(view) => {
                 if let Some(page) = view.read(cx).page().cloned() {
                     page.update(cx, |page, cx| page.open_print_preview(window, cx));
@@ -234,21 +251,36 @@ impl AppShell {
         self.route
     }
 
-    fn build_screen(models: &Models, route: Route, window: &mut Window, cx: &mut Context<Self>) -> Screen {
+    fn build_screen(
+        models: &Models,
+        route: Route,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Screen {
         match route {
-            Route::Firs => Screen::Firs(cx.new(|cx| FirListScreen::new(models.clone(), window, cx))),
-            Route::NewFir => Screen::NewFir(cx.new(|cx| NewFirScreen::new(models.clone(), window, cx))),
-            Route::Fir(id) => Screen::Workspace(cx.new(|cx| WorkspaceScreen::new(models.clone(), id, window, cx))),
-            Route::Settings => Screen::Settings(cx.new(|cx| SettingsScreen::new(models.clone(), window, cx))),
-            Route::Templates | Route::NewTemplate | Route::Template(_) => {
-                Screen::Templates(cx.new(|cx| TemplatesScreen::new(models.clone(), route, window, cx)))
+            Route::Firs => {
+                Screen::Firs(cx.new(|cx| FirListScreen::new(models.clone(), window, cx)))
             }
+            Route::NewFir => {
+                Screen::NewFir(cx.new(|cx| NewFirScreen::new(models.clone(), window, cx)))
+            }
+            Route::Fir(id) => {
+                Screen::Workspace(cx.new(|cx| WorkspaceScreen::new(models.clone(), id, window, cx)))
+            }
+            Route::Settings => {
+                Screen::Settings(cx.new(|cx| SettingsScreen::new(models.clone(), window, cx)))
+            }
+            Route::Templates | Route::NewTemplate | Route::Template(_) => Screen::Templates(
+                cx.new(|cx| TemplatesScreen::new(models.clone(), route, window, cx)),
+            ),
         }
     }
 
     fn activate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let guard = self.screen.guard();
-        self.models.nav.update(cx, |nav, _| nav.set_guard(Some(guard)));
+        self.models
+            .nav
+            .update(cx, |nav, _| nav.set_guard(Some(guard)));
         self.screen.focus(window, cx);
     }
 
@@ -261,7 +293,10 @@ impl AppShell {
         self.print_preview = None;
         let stays_in_templates = matches!(
             (&self.screen, route),
-            (Screen::Templates(_), Route::Templates | Route::NewTemplate | Route::Template(_))
+            (
+                Screen::Templates(_),
+                Route::Templates | Route::NewTemplate | Route::Template(_)
+            )
         );
         if stays_in_templates {
             if let Screen::Templates(view) = &self.screen {
@@ -280,11 +315,15 @@ impl AppShell {
             self.screen.focus(window, cx);
         } else {
             let palette = cx.new(|cx| CommandPalette::new(self.models.clone(), window, cx));
-            cx.subscribe_in(&palette, window, |this, _, _: &crate::ui::palette::Dismissed, window, cx| {
-                this.palette = None;
-                this.screen.focus(window, cx);
-                cx.notify();
-            })
+            cx.subscribe_in(
+                &palette,
+                window,
+                |this, _, _: &crate::ui::palette::Dismissed, window, cx| {
+                    this.palette = None;
+                    this.screen.focus(window, cx);
+                    cx.notify();
+                },
+            )
             .detach();
             palette.update(cx, |palette, cx| palette.focus(window, cx));
             self.palette = Some(palette);
@@ -312,7 +351,9 @@ impl Focusable for AppShell {
 
 pub fn navigate(route: Route, window: &mut Window, cx: &mut App) {
     let nav = Models::get(cx).nav;
-    window.defer(cx, move |window, cx| nav.update(cx, |nav, cx| nav.go(route, window, cx)));
+    window.defer(cx, move |window, cx| {
+        nav.update(cx, |nav, cx| nav.go(route, window, cx))
+    });
 }
 
 pub fn navigate_replace(route: Route, cx: &mut App) {
@@ -322,11 +363,16 @@ pub fn navigate_replace(route: Route, cx: &mut App) {
 
 pub fn toggle_sidebar(_: &mut Window, cx: &mut App) {
     let prefs = Models::get(cx).prefs;
-    prefs.update(cx, |prefs, cx| prefs.update(cx, |p| p.sidebar_open = !p.sidebar_open));
+    prefs.update(cx, |prefs, cx| {
+        prefs.update(cx, |p| p.sidebar_open = !p.sidebar_open)
+    });
 }
 
 pub fn open_palette(window: &mut Window, cx: &mut App) {
-    if let Some(handle) = cx.try_global::<ShellHandle>().map(|handle| handle.0.clone()) {
+    if let Some(handle) = cx
+        .try_global::<ShellHandle>()
+        .map(|handle| handle.0.clone())
+    {
         handle
             .update(cx, |shell, cx| {
                 if !shell.has_palette() {
@@ -338,9 +384,16 @@ pub fn open_palette(window: &mut Window, cx: &mut App) {
 }
 
 pub fn open_print_preview(request: PrintRequest, window: &mut Window, cx: &mut App) {
-    if let Some(handle) = cx.try_global::<ShellHandle>().map(|handle| handle.0.clone()) {
+    if let Some(handle) = cx
+        .try_global::<ShellHandle>()
+        .map(|handle| handle.0.clone())
+    {
         window.defer(cx, move |window, cx| {
-            handle.update(cx, |shell, cx| shell.show_print_preview(request, window, cx)).ok();
+            handle
+                .update(cx, |shell, cx| {
+                    shell.show_print_preview(request, window, cx)
+                })
+                .ok();
         });
     }
 }
@@ -370,21 +423,35 @@ impl Render for AppShell {
             .text_color(palette.foreground)
             .font_family(missal_text::UI_FAMILY)
             .text_size(px(14.))
-            .on_action(cx.listener(|this, _: &ToggleCommandPalette, window, cx| this.toggle_palette(window, cx)))
+            .on_action(cx.listener(|this, _: &ToggleCommandPalette, window, cx| {
+                this.toggle_palette(window, cx)
+            }))
             .on_action(cx.listener(|_, _: &ShowShortcuts, window, cx| show_shortcuts(window, cx)))
             .on_action(cx.listener(|_, _: &ToggleSidebar, window, cx| toggle_sidebar(window, cx)))
             .on_action(cx.listener(|_, _: &GoFirs, window, cx| navigate(Route::Firs, window, cx)))
-            .on_action(cx.listener(|_, _: &GoTemplates, window, cx| navigate(Route::Templates, window, cx)))
-            .on_action(cx.listener(|_, _: &GoSettings, window, cx| navigate(Route::Settings, window, cx)))
+            .on_action(
+                cx.listener(|_, _: &GoTemplates, window, cx| {
+                    navigate(Route::Templates, window, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|_, _: &GoSettings, window, cx| navigate(Route::Settings, window, cx)),
+            )
             .on_action(cx.listener(|_, _: &NewFir, window, cx| navigate(Route::NewFir, window, cx)))
-            .on_action(cx.listener(|_, _: &NewTemplate, window, cx| navigate(Route::NewTemplate, window, cx)))
+            .on_action(cx.listener(|_, _: &NewTemplate, window, cx| {
+                navigate(Route::NewTemplate, window, cx)
+            }))
             .on_action({
                 let nav = nav.clone();
-                cx.listener(move |_, _: &HistoryBack, window, cx| nav.update(cx, |nav, cx| nav.back(window, cx)))
+                cx.listener(move |_, _: &HistoryBack, window, cx| {
+                    nav.update(cx, |nav, cx| nav.back(window, cx))
+                })
             })
             .on_action({
                 let nav = nav.clone();
-                cx.listener(move |_, _: &HistoryForward, window, cx| nav.update(cx, |nav, cx| nav.forward(window, cx)))
+                cx.listener(move |_, _: &HistoryForward, window, cx| {
+                    nav.update(cx, |nav, cx| nav.forward(window, cx))
+                })
             })
             .on_action(cx.listener(|this, _: &BlurFocus, window, cx| {
                 if let Some(preview) = this.print_preview.clone() {
@@ -396,7 +463,9 @@ impl Render for AppShell {
                 }
             }))
             .on_action(cx.listener(|this, _: &Print, window, cx| this.print_action(window, cx)))
-            .on_action(cx.listener(|this, _: &ImportWord, window, cx| this.import_action(window, cx)))
+            .on_action(
+                cx.listener(|this, _: &ImportWord, window, cx| this.import_action(window, cx)),
+            )
             .child(self.titlebar.clone())
             .child(
                 h_flex()
@@ -423,7 +492,15 @@ impl Render for AppShell {
                             ),
                     ),
             )
-            .children(self.palette.clone().map(|palette| palette.into_any_element()))
-            .children(self.print_preview.clone().map(|preview| preview.into_any_element()))
+            .children(
+                self.palette
+                    .clone()
+                    .map(|palette| palette.into_any_element()),
+            )
+            .children(
+                self.print_preview
+                    .clone()
+                    .map(|preview| preview.into_any_element()),
+            )
     }
 }

@@ -1,11 +1,11 @@
+use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{StyledExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
-use gpui_kit::TestSupportExt as _;
 use gpui_kit::{
-    App, Context, Entity, EventEmitter, InteractiveElement, IntoElement,
-    KeyDownEvent, MouseButton, ParentElement, Render, ScrollHandle, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Window, div, px,
+    App, Context, Entity, EventEmitter, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
+    ParentElement, Render, ScrollHandle, SharedString, StatefulInteractiveElement, Styled,
+    Subscription, Window, div, px,
 };
 use missal_core::{FirId, TemplateId};
 use missal_text::{TextInput, TextInputEvent, label};
@@ -61,12 +61,22 @@ const LIMIT: usize = 20;
 
 impl CommandPalette {
     pub fn new(models: Models, window: &mut Window, cx: &mut Context<Self>) -> CommandPalette {
-        let input = text_input(window, cx, Kind::Auto, "Search FIRs, templates and commands…", "");
-        let subscription = cx.subscribe_in(&input, window, |this, _, event: &TextInputEvent, window, cx| match event {
-            TextInputEvent::Change => this.refresh(cx),
-            TextInputEvent::Submit => this.run(this.selected, window, cx),
-            _ => {}
-        });
+        let input = text_input(
+            window,
+            cx,
+            Kind::Auto,
+            "Search FIRs, templates and commands…",
+            "",
+        );
+        let subscription = cx.subscribe_in(
+            &input,
+            window,
+            |this, _, event: &TextInputEvent, window, cx| match event {
+                TextInputEvent::Change => this.refresh(cx),
+                TextInputEvent::Submit => this.run(this.selected, window, cx),
+                _ => {}
+            },
+        );
         let mut palette = CommandPalette {
             models,
             input,
@@ -88,7 +98,10 @@ impl CommandPalette {
     }
 
     pub fn result_titles(&self) -> Vec<String> {
-        self.results.iter().map(|entry| entry.title.to_string()).collect()
+        self.results
+            .iter()
+            .map(|entry| entry.title.to_string())
+            .collect()
     }
 
     fn commands(&self, cx: &App) -> Vec<Entry> {
@@ -122,7 +135,12 @@ impl CommandPalette {
         };
         vec![
             go("FIRs", Route::Firs, "G then H", IconName::Folder),
-            go("Templates", Route::Templates, "G then T", IconName::FileText),
+            go(
+                "Templates",
+                Route::Templates,
+                "G then T",
+                IconName::FileText,
+            ),
             go("Settings", Route::Settings, "G then S", IconName::Settings),
             create("New FIR", Route::NewFir, "N"),
             create("New template", Route::NewTemplate, "Shift+N"),
@@ -258,7 +276,9 @@ impl Render for CommandPalette {
             }
             let lead = match &entry.lead {
                 Lead::Icon(name) => small_icon(*name, palette.muted_foreground).into_any_element(),
-                Lead::Status(status) => status_icon(*status, palette.status(*status), px(14.)).into_any_element(),
+                Lead::Status(status) => {
+                    status_icon(*status, palette.status(*status), px(14.)).into_any_element()
+                }
             };
             rows.push(
                 h_flex()
@@ -322,7 +342,10 @@ impl Render for CommandPalette {
                 }
                 cx.stop_propagation();
             }))
-            .on_mouse_down(MouseButton::Left, cx.listener(|_, _, _, cx| cx.emit(Dismissed)))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|_, _, _, cx| cx.emit(Dismissed)),
+            )
             .child(
                 v_flex()
                     .id("palette-panel")
@@ -369,4 +392,3 @@ impl Render for CommandPalette {
             )
     }
 }
-

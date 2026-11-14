@@ -1,21 +1,21 @@
 use std::collections::HashSet;
 use std::rc::Rc;
 
+use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
+use gpui_kit::component::Disableable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::menu::DropdownMenu as _;
 use gpui_kit::component::menu::{ContextMenuExt as _, PopupMenu, PopupMenuItem};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::{Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
-use gpui_kit::TestSupportExt as _;
-use gpui_kit::component::Disableable as _;
-use gpui_kit::component::menu::DropdownMenu as _;
 
 use gpui_kit::{
-    AnyElement, App, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
-    MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Subscription,
-    WeakEntity, Window, div, px,
+    AnyElement, App, Context, Entity, FocusHandle, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, Render, StatefulInteractiveElement, Styled, Subscription, WeakEntity, Window,
+    div, px,
 };
 use missal_core::{
     DisplayMode, FirDocumentId, FirId, FirValues, Revision, TemplateId, format_date,
@@ -34,8 +34,8 @@ use crate::state::rows::fold_for_search;
 use crate::state::{Models, Route, run_db_in, toast_error, toast_success, toast_warning};
 use crate::theme::{DETAILS_RAIL_WIDTH, Palette};
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
-use crate::ui::print_preview::{PreviewDocument, PrintRequest};
 use crate::ui::input::{Kind, text_input};
+use crate::ui::print_preview::{PreviewDocument, PrintRequest};
 use crate::ui::status::status_icon;
 use crate::ui::{empty_state, icon_button, pane_header, rail_header, small_icon, status_bar};
 
@@ -54,7 +54,8 @@ pub enum DocumentState {
     Failed(String),
 }
 
-type Continuation = Box<dyn FnOnce(&mut WorkspaceScreen, &mut Window, &mut Context<WorkspaceScreen>)>;
+type Continuation =
+    Box<dyn FnOnce(&mut WorkspaceScreen, &mut Window, &mut Context<WorkspaceScreen>)>;
 
 pub struct WorkspaceScreen {
     models: Models,
@@ -79,7 +80,12 @@ pub struct WorkspaceScreen {
 }
 
 impl WorkspaceScreen {
-    pub fn new(models: Models, id: FirId, window: &mut Window, cx: &mut Context<Self>) -> WorkspaceScreen {
+    pub fn new(
+        models: Models,
+        id: FirId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> WorkspaceScreen {
         let editor = EditorFactory::create(cx).build(window, cx);
         let weak = cx.entity().downgrade();
         let editor_subscription = editor.on_event(cx, {
@@ -104,11 +110,15 @@ impl WorkspaceScreen {
                     cx.notify();
                 }
             }),
-            cx.subscribe_in(&models.firs, window, |this, _, _: &FirsEvent, window, cx| {
-                if this.state == WorkspaceState::Ready {
-                    this.refresh_values(window, cx);
-                }
-            }),
+            cx.subscribe_in(
+                &models.firs,
+                window,
+                |this, _, _: &FirsEvent, window, cx| {
+                    if this.state == WorkspaceState::Ready {
+                        this.refresh_values(window, cx);
+                    }
+                },
+            ),
             cx.subscribe(&models.catalog, |this, _, _: &CatalogEvent, cx| {
                 this.push_fields(cx);
                 cx.notify();
@@ -195,17 +205,29 @@ impl WorkspaceScreen {
 
     fn load_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let id = self.id;
-        run_db_in(window, cx, move |store| store.fir_workspace(id), |this, result, window, cx| {
-            match result {
-                Ok(workspace) => this.apply_workspace(workspace, window, cx),
-                Err(missal_core::RepositoryError::NotFound { .. }) => this.state = WorkspaceState::NotFound,
-                Err(error) => this.state = WorkspaceState::Failed(error.message()),
-            }
-            cx.notify();
-        });
+        run_db_in(
+            window,
+            cx,
+            move |store| store.fir_workspace(id),
+            |this, result, window, cx| {
+                match result {
+                    Ok(workspace) => this.apply_workspace(workspace, window, cx),
+                    Err(missal_core::RepositoryError::NotFound { .. }) => {
+                        this.state = WorkspaceState::NotFound
+                    }
+                    Err(error) => this.state = WorkspaceState::Failed(error.message()),
+                }
+                cx.notify();
+            },
+        );
     }
 
-    fn apply_workspace(&mut self, workspace: FirWorkspace, window: &mut Window, cx: &mut Context<Self>) {
+    fn apply_workspace(
+        &mut self,
+        workspace: FirWorkspace,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.values = Some(Rc::new(workspace.values));
         self.documents = workspace.documents;
         self.state = WorkspaceState::Ready;
@@ -218,49 +240,64 @@ impl WorkspaceScreen {
 
     fn refresh_values(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let id = self.id;
-        run_db_in(window, cx, move |store| store.fir_values(id), |this, result, _, cx| {
-            if let Ok(values) = result {
-                this.values = Some(Rc::new(values));
-                this.push_fields(cx);
-                cx.notify();
-            }
-        });
+        run_db_in(
+            window,
+            cx,
+            move |store| store.fir_values(id),
+            |this, result, _, cx| {
+                if let Ok(values) = result {
+                    this.values = Some(Rc::new(values));
+                    this.push_fields(cx);
+                    cx.notify();
+                }
+            },
+        );
     }
 
     fn open_document(&mut self, id: FirDocumentId, window: &mut Window, cx: &mut Context<Self>) {
         self.active = Some(id);
         self.document_state = DocumentState::Loading;
         cx.notify();
-        run_db_in(window, cx, move |store| store.fir_document(id), move |this, result, window, cx| {
-            if this.active != Some(id) {
-                return;
-            }
-            match result {
-                Ok(record) => {
-                    let Some(fields) = this.field_context(cx) else {
-                        return;
-                    };
-                    this.loaded = Some((record.id, record.revision));
-                    this.document_state = DocumentState::Idle;
-                    this.editor.load(
-                        LoadRequest {
-                            key: format!("fir-document:{}:{}", record.id, record.revision),
-                            document: record.document,
-                            fields,
-                            dirty: false,
-                        },
-                        window,
-                        cx,
-                    );
-                    this.editor_dirty = false;
+        run_db_in(
+            window,
+            cx,
+            move |store| store.fir_document(id),
+            move |this, result, window, cx| {
+                if this.active != Some(id) {
+                    return;
                 }
-                Err(error) => this.document_state = DocumentState::Failed(error.message()),
-            }
-            cx.notify();
-        });
+                match result {
+                    Ok(record) => {
+                        let Some(fields) = this.field_context(cx) else {
+                            return;
+                        };
+                        this.loaded = Some((record.id, record.revision));
+                        this.document_state = DocumentState::Idle;
+                        this.editor.load(
+                            LoadRequest {
+                                key: format!("fir-document:{}:{}", record.id, record.revision),
+                                document: record.document,
+                                fields,
+                                dirty: false,
+                            },
+                            window,
+                            cx,
+                        );
+                        this.editor_dirty = false;
+                    }
+                    Err(error) => this.document_state = DocumentState::Failed(error.message()),
+                }
+                cx.notify();
+            },
+        );
     }
 
-    pub fn select_document(&mut self, id: FirDocumentId, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn select_document(
+        &mut self,
+        id: FirDocumentId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.active == Some(id) {
             return;
         }
@@ -289,7 +326,13 @@ impl WorkspaceScreen {
                 }),
                 Choice::new("save", "Save", Tone::Primary, move |window, cx| {
                     save.update(cx, |this, cx| {
-                        this.save_active(window, cx, Some(Box::new(move |this, window, cx| this.open_document(id, window, cx))));
+                        this.save_active(
+                            window,
+                            cx,
+                            Some(Box::new(move |this, window, cx| {
+                                this.open_document(id, window, cx)
+                            })),
+                        );
                     })
                     .ok();
                 }),
@@ -298,7 +341,11 @@ impl WorkspaceScreen {
     }
 
     fn step_document(&mut self, delta: isize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(position) = self.documents.iter().position(|document| Some(document.id) == self.active) else {
+        let Some(position) = self
+            .documents
+            .iter()
+            .position(|document| Some(document.id) == self.active)
+        else {
             return;
         };
         let next = position as isize + delta;
@@ -308,7 +355,12 @@ impl WorkspaceScreen {
         }
     }
 
-    pub fn save_active(&mut self, window: &mut Window, cx: &mut Context<Self>, then: Option<Continuation>) {
+    pub fn save_active(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        then: Option<Continuation>,
+    ) {
         let Some((id, revision)) = self.loaded else {
             return;
         };
@@ -337,7 +389,9 @@ impl WorkspaceScreen {
                         this.loaded = Some((id, ack.revision));
                         this.editor.mark_saved(token, cx);
                         this.editor_dirty = this.editor.is_dirty(cx);
-                        if let Some(summary) = this.documents.iter_mut().find(|document| document.id == id) {
+                        if let Some(summary) =
+                            this.documents.iter_mut().find(|document| document.id == id)
+                        {
                             summary.revision = ack.revision;
                             summary.preview_text = ack.preview_text;
                             summary.field_count = ack.field_count;
@@ -371,7 +425,13 @@ impl WorkspaceScreen {
         cx.notify();
     }
 
-    pub fn move_document(&mut self, id: FirDocumentId, delta: isize, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn move_document(
+        &mut self,
+        id: FirDocumentId,
+        delta: isize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(position) = self.documents.iter().position(|document| document.id == id) else {
             return;
         };
@@ -379,46 +439,69 @@ impl WorkspaceScreen {
         if target < 0 || target as usize >= self.documents.len() {
             return;
         }
-        let mut ids: Vec<FirDocumentId> = self.documents.iter().map(|document| document.id).collect();
+        let mut ids: Vec<FirDocumentId> =
+            self.documents.iter().map(|document| document.id).collect();
         ids.swap(position, target as usize);
         let fir_id = self.id;
-        run_db_in(window, cx, move |store| store.reorder_fir_documents(fir_id, &ids), |this, result, window, cx| {
-            match result {
-                Ok(documents) => this.documents = documents,
-                Err(error) => toast_error(window, cx, error.message()),
-            }
-            cx.notify();
-        });
+        run_db_in(
+            window,
+            cx,
+            move |store| store.reorder_fir_documents(fir_id, &ids),
+            |this, result, window, cx| {
+                match result {
+                    Ok(documents) => this.documents = documents,
+                    Err(error) => toast_error(window, cx, error.message()),
+                }
+                cx.notify();
+            },
+        );
     }
 
-    pub fn remove_document(&mut self, id: FirDocumentId, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn remove_document(
+        &mut self,
+        id: FirDocumentId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.active == Some(id) && self.is_dirty(cx) {
-            toast_warning(window, cx, "Save or discard your changes before removing this document");
+            toast_warning(
+                window,
+                cx,
+                "Save or discard your changes before removing this document",
+            );
             return;
         }
-        run_db_in(window, cx, move |store| store.remove_fir_document(id), move |this, result, window, cx| {
-            match result {
-                Ok(()) => {
-                    let position = this.documents.iter().position(|document| document.id == id);
-                    this.documents.retain(|document| document.id != id);
-                    this.excluded.remove(&id);
-                    if this.active == Some(id) {
-                        let next = position
-                            .and_then(|position| this.documents.get(position.min(this.documents.len().saturating_sub(1))))
-                            .map(|document| document.id);
-                        this.active = None;
-                        this.loaded = None;
-                        match next {
-                            Some(next) => this.open_document(next, window, cx),
-                            None => this.editor_dirty = false,
+        run_db_in(
+            window,
+            cx,
+            move |store| store.remove_fir_document(id),
+            move |this, result, window, cx| {
+                match result {
+                    Ok(()) => {
+                        let position = this.documents.iter().position(|document| document.id == id);
+                        this.documents.retain(|document| document.id != id);
+                        this.excluded.remove(&id);
+                        if this.active == Some(id) {
+                            let next = position
+                                .and_then(|position| {
+                                    this.documents
+                                        .get(position.min(this.documents.len().saturating_sub(1)))
+                                })
+                                .map(|document| document.id);
+                            this.active = None;
+                            this.loaded = None;
+                            match next {
+                                Some(next) => this.open_document(next, window, cx),
+                                None => this.editor_dirty = false,
+                            }
                         }
+                        toast_success(window, cx, "Document removed");
                     }
-                    toast_success(window, cx, "Document removed");
+                    Err(error) => toast_error(window, cx, error.message()),
                 }
-                Err(error) => toast_error(window, cx, error.message()),
-            }
-            cx.notify();
-        });
+                cx.notify();
+            },
+        );
     }
 
     pub fn add_templates(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -427,30 +510,46 @@ impl WorkspaceScreen {
             return;
         }
         let fir_id = self.id;
-        let before: HashSet<FirDocumentId> = self.documents.iter().map(|document| document.id).collect();
+        let before: HashSet<FirDocumentId> =
+            self.documents.iter().map(|document| document.id).collect();
         self.add_open = false;
-        run_db_in(window, cx, move |store| store.add_templates_to_fir(fir_id, &ids), move |this, result, window, cx| {
-            match result {
-                Ok(documents) => {
-                    let added: Vec<FirDocumentId> = documents.iter().map(|d| d.id).filter(|id| !before.contains(id)).collect();
-                    this.documents = documents;
-                    this.add_selected.clear();
-                    this.add_search.update(cx, |input, cx| input.set_text("", cx));
-                    let message = if added.len() == 1 { "Document added".to_owned() } else { format!("{} documents added", added.len()) };
-                    toast_success(window, cx, message);
-                    if let Some(first) = added.first() {
-                        this.select_document(*first, window, cx);
+        run_db_in(
+            window,
+            cx,
+            move |store| store.add_templates_to_fir(fir_id, &ids),
+            move |this, result, window, cx| {
+                match result {
+                    Ok(documents) => {
+                        let added: Vec<FirDocumentId> = documents
+                            .iter()
+                            .map(|d| d.id)
+                            .filter(|id| !before.contains(id))
+                            .collect();
+                        this.documents = documents;
+                        this.add_selected.clear();
+                        this.add_search
+                            .update(cx, |input, cx| input.set_text("", cx));
+                        let message = if added.len() == 1 {
+                            "Document added".to_owned()
+                        } else {
+                            format!("{} documents added", added.len())
+                        };
+                        toast_success(window, cx, message);
+                        if let Some(first) = added.first() {
+                            this.select_document(*first, window, cx);
+                        }
                     }
+                    Err(error) => toast_error(window, cx, error.message()),
                 }
-                Err(error) => toast_error(window, cx, error.message()),
-            }
-            cx.notify();
-        });
+                cx.notify();
+            },
+        );
     }
 
     pub fn open_add_templates(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.add_open = true;
-        self.add_search.update(cx, |input, cx| input.focus(window, cx));
+        self.add_search
+            .update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
     }
 
@@ -511,22 +610,30 @@ impl WorkspaceScreen {
             "This removes the FIR and every document created for it. This can't be undone.",
             "Delete FIR",
             move |window, cx| {
-                weak.update(cx, |this, cx| this.delete_fir(id, window, cx)).ok();
+                weak.update(cx, |this, cx| this.delete_fir(id, window, cx))
+                    .ok();
             },
         );
     }
 
     fn delete_fir(&mut self, id: FirId, window: &mut Window, cx: &mut Context<Self>) {
-        run_db_in(window, cx, move |store| store.remove_fir(id), move |this, result, window, cx| match result {
-            Ok(()) => {
-                this.models.firs.update(cx, |firs, cx| firs.remove(&[id], cx));
-                this.editor_dirty = false;
-                this.editor.discard(window, cx);
-                navigate_replace(Route::Firs, cx);
-                toast_success(window, cx, "FIR deleted");
-            }
-            Err(error) => toast_error(window, cx, error.message()),
-        });
+        run_db_in(
+            window,
+            cx,
+            move |store| store.remove_fir(id),
+            move |this, result, window, cx| match result {
+                Ok(()) => {
+                    this.models
+                        .firs
+                        .update(cx, |firs, cx| firs.remove(&[id], cx));
+                    this.editor_dirty = false;
+                    this.editor.discard(window, cx);
+                    navigate_replace(Route::Firs, cx);
+                    toast_success(window, cx, "FIR deleted");
+                }
+                Err(error) => toast_error(window, cx, error.message()),
+            },
+        );
     }
 
     pub fn open_print_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -546,9 +653,10 @@ impl WorkspaceScreen {
         let Some(values) = self.values.clone() else {
             return;
         };
-        let live = self
-            .active
-            .filter(|id| self.document_state == DocumentState::Idle && self.loaded.is_some_and(|(loaded, _)| loaded == *id));
+        let live = self.active.filter(|id| {
+            self.document_state == DocumentState::Idle
+                && self.loaded.is_some_and(|(loaded, _)| loaded == *id)
+        });
         let documents = included
             .iter()
             .map(|id| {
@@ -573,7 +681,10 @@ impl WorkspaceScreen {
     }
 
     fn included_count(&self) -> usize {
-        self.documents.iter().filter(|document| !self.excluded.contains(&document.id)).count()
+        self.documents
+            .iter()
+            .filter(|document| !self.excluded.contains(&document.id))
+            .count()
     }
 
     fn details(&self, palette: &Palette, values: &FirValues, cx: &mut Context<Self>) -> AnyElement {
@@ -593,7 +704,11 @@ impl WorkspaceScreen {
         };
         let text = |value: &str| label(value.to_owned()).rtl().w_full().into_any_element();
         let dated = |value: &str| {
-            let shown = if value.trim().is_empty() { "—".to_owned() } else { format_date(value) };
+            let shown = if value.trim().is_empty() {
+                "—".to_owned()
+            } else {
+                format_date(value)
+            };
             label(shown).rtl().w_full().into_any_element()
         };
         let list = |items: &[String]| {
@@ -604,12 +719,27 @@ impl WorkspaceScreen {
                         .flex_row_reverse()
                         .items_start()
                         .gap_2()
-                        .child(div().w(px(18.)).flex_shrink_0().text_size(px(12.)).text_color(palette.muted_foreground).text_right().child((index + 1).to_string()))
-                        .child(div().flex_1().min_w_0().child(label(item.clone()).rtl().w_full()))
+                        .child(
+                            div()
+                                .w(px(18.))
+                                .flex_shrink_0()
+                                .text_size(px(12.))
+                                .text_color(palette.muted_foreground)
+                                .text_right()
+                                .child((index + 1).to_string()),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .child(label(item.clone()).rtl().w_full()),
+                        )
                 }))
                 .into_any_element()
         };
-        let optional = |title: &'static str, value: &str| (!value.trim().is_empty()).then(|| field(title, text(value)).into_any_element());
+        let optional = |title: &'static str, value: &str| {
+            (!value.trim().is_empty()).then(|| field(title, text(value)).into_any_element())
+        };
         let mut items: Vec<AnyElement> = vec![
             field(
                 "حالت",
@@ -643,11 +773,20 @@ impl WorkspaceScreen {
         items.extend(optional("سم نمبر 1", &fir.sim_1));
         items.extend(optional("سم نمبر 2", &fir.sim_2));
         let _ = cx;
-        v_flex().gap_3().px_4().pb_3().children(items)
+        v_flex()
+            .gap_3()
+            .px_4()
+            .pb_3()
+            .children(items)
             .into_any_element()
     }
 
-    fn custom_section(&self, palette: &Palette, values: &FirValues, cx: &mut Context<Self>) -> Option<AnyElement> {
+    fn custom_section(
+        &self,
+        palette: &Palette,
+        values: &FirValues,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         let palette = *palette;
         let catalog = self.models.catalog.read(cx);
         let customs: Vec<_> = catalog.custom_fields().collect();
@@ -716,24 +855,50 @@ impl WorkspaceScreen {
             let menu = {
                 let weak = weak.clone();
                 move |menu: PopupMenu| {
-                    let (select, up, down, include, remove) = (weak.clone(), weak.clone(), weak.clone(), weak.clone(), weak.clone());
+                    let (select, up, down, include, remove) = (
+                        weak.clone(),
+                        weak.clone(),
+                        weak.clone(),
+                        weak.clone(),
+                        weak.clone(),
+                    );
                     menu.item(PopupMenuItem::new("Open").on_click(move |_, window, cx| {
-                        select.update(cx, |this, cx| this.select_document(id, window, cx)).ok();
+                        select
+                            .update(cx, |this, cx| this.select_document(id, window, cx))
+                            .ok();
                     }))
-                    .item(PopupMenuItem::new("Include when printing").checked(included).on_click(move |_, _, cx| {
-                        include.update(cx, |this, cx| this.toggle_included(id, cx)).ok();
-                    }))
+                    .item(
+                        PopupMenuItem::new("Include when printing")
+                            .checked(included)
+                            .on_click(move |_, _, cx| {
+                                include
+                                    .update(cx, |this, cx| this.toggle_included(id, cx))
+                                    .ok();
+                            }),
+                    )
                     .item(PopupMenuItem::separator())
-                    .item(PopupMenuItem::new("Move up").disabled(first).on_click(move |_, window, cx| {
-                        up.update(cx, |this, cx| this.move_document(id, -1, window, cx)).ok();
-                    }))
-                    .item(PopupMenuItem::new("Move down").disabled(last).on_click(move |_, window, cx| {
-                        down.update(cx, |this, cx| this.move_document(id, 1, window, cx)).ok();
-                    }))
+                    .item(PopupMenuItem::new("Move up").disabled(first).on_click(
+                        move |_, window, cx| {
+                            up.update(cx, |this, cx| this.move_document(id, -1, window, cx))
+                                .ok();
+                        },
+                    ))
+                    .item(PopupMenuItem::new("Move down").disabled(last).on_click(
+                        move |_, window, cx| {
+                            down.update(cx, |this, cx| this.move_document(id, 1, window, cx))
+                                .ok();
+                        },
+                    ))
                     .item(PopupMenuItem::separator())
-                    .item(PopupMenuItem::new("Remove from FIR").disabled(!can_remove).on_click(move |_, window, cx| {
-                        remove.update(cx, |this, cx| this.remove_document(id, window, cx)).ok();
-                    }))
+                    .item(
+                        PopupMenuItem::new("Remove from FIR")
+                            .disabled(!can_remove)
+                            .on_click(move |_, window, cx| {
+                                remove
+                                    .update(cx, |this, cx| this.remove_document(id, window, cx))
+                                    .ok();
+                            }),
+                    )
                 }
             };
             let dropdown_menu = menu.clone();
@@ -751,7 +916,9 @@ impl WorkspaceScreen {
                 .cursor_pointer()
                 .when(active, |this| this.bg(palette.accent))
                 .hover(move |style| style.bg(palette.accent))
-                .on_click(cx.listener(move |this, _, window, cx| this.select_document(id, window, cx)))
+                .on_click(
+                    cx.listener(move |this, _, window, cx| this.select_document(id, window, cx)),
+                )
                 .children(multiple.then(|| {
                     div()
                         .flex_shrink_0()
@@ -760,7 +927,9 @@ impl WorkspaceScreen {
                             Checkbox::new(("include", index))
                                 .checked(included)
                                 .accessibility_label("Include when printing")
-                                .on_click(cx.listener(move |this, _, _, cx| this.toggle_included(id, cx))),
+                                .on_click(
+                                    cx.listener(move |this, _, _, cx| this.toggle_included(id, cx)),
+                                ),
                         )
                 }))
                 .child(
@@ -790,8 +959,15 @@ impl WorkspaceScreen {
         });
         let rows: Vec<AnyElement> = rows.collect();
         let templates = self.models.templates.read(cx);
-        let attached: HashSet<TemplateId> = self.documents.iter().map(|document| document.template_id).collect();
-        let words: Vec<String> = fold_for_search(&self.add_query).split_whitespace().map(str::to_owned).collect();
+        let attached: HashSet<TemplateId> = self
+            .documents
+            .iter()
+            .map(|document| document.template_id)
+            .collect();
+        let words: Vec<String> = fold_for_search(&self.add_query)
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect();
         let available: Vec<_> = templates
             .items
             .iter()
@@ -803,7 +979,9 @@ impl WorkspaceScreen {
             .collect();
         let no_templates = templates.items.is_empty();
         let add = Popover::new("add-templates")
-            .trigger(icon_button("add-templates-trigger", IconName::Plus).tooltip("Add templates (A)"))
+            .trigger(
+                icon_button("add-templates-trigger", IconName::Plus).tooltip("Add templates (A)"),
+            )
             .anchor(gpui_kit::Anchor::TopRight)
             .open(self.add_open)
             .on_open_change({
@@ -839,8 +1017,12 @@ impl WorkspaceScreen {
                         })
                         .child(div().p_2().child(search.clone()))
                         .child(
-                            v_flex().id("add-template-list").max_h(px(280.)).overflow_y_scroll().p_1().children(
-                                available.iter().map(|(id, name, added)| {
+                            v_flex()
+                                .id("add-template-list")
+                                .max_h(px(280.))
+                                .overflow_y_scroll()
+                                .p_1()
+                                .children(available.iter().map(|(id, name, added)| {
                                     let (id, added) = (*id, *added);
                                     let checked = selected.contains(&id);
                                     let screen = screen.clone();
@@ -854,19 +1036,43 @@ impl WorkspaceScreen {
                                         .items_center()
                                         .rounded(px(6.))
                                         .when(!added, |this| {
-                                            this.cursor_pointer().hover(move |style| style.bg(palette.accent)).on_click(cx.listener(
-                                                move |_, _, _, cx| {
-                                                    screen.update(cx, |this, cx| this.toggle_template(id, cx));
+                                            this.cursor_pointer()
+                                                .hover(move |style| style.bg(palette.accent))
+                                                .on_click(cx.listener(move |_, _, _, cx| {
+                                                    screen.update(cx, |this, cx| {
+                                                        this.toggle_template(id, cx)
+                                                    });
                                                     cx.notify();
-                                                },
-                                            ))
+                                                }))
                                         })
                                         .when(added, |this| this.opacity(0.55))
-                                        .child(small_icon(if checked { IconName::SquareCheck } else { IconName::Square }, if checked { palette.primary } else { palette.muted_foreground }))
-                                        .child(div().flex_1().min_w_0().overflow_hidden().text_size(px(15.)).child(label(name.clone()).rtl().truncate()))
-                                        .children(added.then(|| div().text_size(px(12.)).text_color(palette.muted_foreground).child("Added")))
-                                }),
-                            ),
+                                        .child(small_icon(
+                                            if checked {
+                                                IconName::SquareCheck
+                                            } else {
+                                                IconName::Square
+                                            },
+                                            if checked {
+                                                palette.primary
+                                            } else {
+                                                palette.muted_foreground
+                                            },
+                                        ))
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .overflow_hidden()
+                                                .text_size(px(15.))
+                                                .child(label(name.clone()).rtl().truncate()),
+                                        )
+                                        .children(added.then(|| {
+                                            div()
+                                                .text_size(px(12.))
+                                                .text_color(palette.muted_foreground)
+                                                .child("Added")
+                                        }))
+                                })),
                         )
                         .child(
                             h_flex()
@@ -898,7 +1104,9 @@ impl WorkspaceScreen {
                                         .on_click({
                                             let screen = screen.clone();
                                             move |_, window, cx| {
-                                                screen.update(cx, |this, cx| this.add_templates(window, cx));
+                                                screen.update(cx, |this, cx| {
+                                                    this.add_templates(window, cx)
+                                                });
                                             }
                                         }),
                                 ),
@@ -908,7 +1116,12 @@ impl WorkspaceScreen {
         v_flex()
             .child(
                 rail_header(&palette, "Documents")
-                    .child(div().text_size(px(12.)).text_color(palette.muted_foreground).child(count.to_string()))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(palette.muted_foreground)
+                            .child(count.to_string()),
+                    )
                     .child(add),
             )
             .child(v_flex().gap_0p5().children(rows))
@@ -936,7 +1149,9 @@ impl WorkspaceScreen {
                         .primary()
                         .icon(IconName::Plus)
                         .label("Add templates")
-                        .on_click(cx.listener(|this, _, window, cx| this.open_add_templates(window, cx)))
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.open_add_templates(window, cx)),
+                        )
                         .into_any_element(),
                 ),
             )
@@ -947,12 +1162,25 @@ impl WorkspaceScreen {
                 .size_full()
                 .bg(palette.canvas)
                 .p_6()
-                .child(div().h_full().rounded(px(8.)).bg(palette.muted.opacity(0.6)))
+                .child(
+                    div()
+                        .h_full()
+                        .rounded(px(8.))
+                        .bg(palette.muted.opacity(0.6)),
+                )
                 .into_any_element(),
-            DocumentState::Failed(message) => {
-                empty_state(&palette, IconName::TriangleAlert, "Could not load this document", Some(message.clone().into()), None).into_any_element()
-            }
-            DocumentState::Idle => div().size_full().child(self.editor.view()).into_any_element(),
+            DocumentState::Failed(message) => empty_state(
+                &palette,
+                IconName::TriangleAlert,
+                "Could not load this document",
+                Some(message.clone().into()),
+                None,
+            )
+            .into_any_element(),
+            DocumentState::Idle => div()
+                .size_full()
+                .child(self.editor.view())
+                .into_any_element(),
         }
     }
 }
@@ -962,15 +1190,24 @@ impl Render for WorkspaceScreen {
         let palette = *Palette::get(cx);
         match &self.state {
             WorkspaceState::NotFound => {
-                return empty_state(&palette, IconName::Folder, "FIR not found", Some("This FIR doesn't exist or was deleted.".into()), None)
-                    .into_any_element();
+                return empty_state(
+                    &palette,
+                    IconName::Folder,
+                    "FIR not found",
+                    Some("This FIR doesn't exist or was deleted.".into()),
+                    None,
+                )
+                .into_any_element();
             }
             WorkspaceState::Failed(message) => {
                 return empty_state(
                     &palette,
                     IconName::TriangleAlert,
                     "Could not load this FIR",
-                    Some(format!("Your saved documents are safe. Reload to try again. ({message})").into()),
+                    Some(
+                        format!("Your saved documents are safe. Reload to try again. ({message})")
+                            .into(),
+                    ),
                     Some(
                         Button::new("reload-workspace")
                             .outline()
@@ -988,7 +1225,10 @@ impl Render for WorkspaceScreen {
             _ => {}
         }
         let values = self.values.clone();
-        let offence = values.as_ref().map(|values| values.fir.fir.offence.clone()).unwrap_or_default();
+        let offence = values
+            .as_ref()
+            .map(|values| values.fir.fir.offence.clone())
+            .unwrap_or_default();
         let dirty = self.is_dirty(cx);
         let saving = self.saving;
         let has_active = self.active.is_some() && self.document_state == DocumentState::Idle;
@@ -997,95 +1237,139 @@ impl Render for WorkspaceScreen {
         let printable = included > 0;
         let names_shown = self.mode == DisplayMode::Labels;
         let weak = cx.entity().downgrade();
-        let header = pane_header(&palette)
-            .flex_row_reverse()
-            .pl_2()
-            .pr_4()
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .text_size(px(18.))
-                    .font_medium()
-                    .child(label(offence).rtl().truncate().w_full()),
-            )
-            .child(
-                h_flex()
-                    .items_center()
-                    .gap_1()
-                    .child(
-                        Button::new("workspace-more")
-                            .ghost()
-                            .small()
-                            .icon(IconName::Ellipsis)
-                            .tooltip("More actions")
-                            .dropdown_menu({
-                                let weak = weak.clone();
-                                move |menu, _, _| {
-                                    let (toggle, delete) = (weak.clone(), weak.clone());
-                                    menu.item(PopupMenuItem::new("Show field names").checked(names_shown).on_click(move |_, _, cx| {
-                                        toggle.update(cx, |this, cx| this.toggle_field_names(cx)).ok();
-                                    }))
-                                    .item(PopupMenuItem::separator())
-                                    .item(PopupMenuItem::new("Delete FIR").icon(IconName::Trash).on_click(move |_, window, cx| {
-                                        delete.update(cx, |this, cx| this.request_delete(window, cx)).ok();
-                                    }))
-                                }
-                            }),
-                    )
-                    .children(has_active.then(|| {
-                        Button::new("workspace-save")
-                            .small()
-                            .loading(saving)
-                            .disabled(!dirty || saving)
-                            .when(dirty, |this| this.primary())
-                            .when(!dirty, |this| this.outline())
-                            .label(if saving { "Saving…" } else if dirty { "Save" } else { "Saved" })
-                            .on_click(cx.listener(|this, _, window, cx| this.save_active(window, cx, None)))
-                    }))
-                    .child(
-                        icon_button("custom-values-button", IconName::Braces)
-                            .tooltip("Custom field values")
-                            .on_click(cx.listener(|this, _, window, cx| this.edit_custom_values(window, cx))),
-                    )
-                    .child(
-                        icon_button("workspace-print", IconName::Printer)
-                            .tooltip("Print preview")
-                            .disabled(!printable)
-                            .on_click(cx.listener(|this, _, window, cx| this.open_print_preview(window, cx))),
-                    ),
-            );
-        let rail = v_flex()
-            .id("workspace-rail")
-            .w(px(DETAILS_RAIL_WIDTH))
-            .flex_shrink_0()
-            .h_full()
-            .border_l_1()
-            .border_color(palette.border)
-            .child(
-                v_flex()
-                    .id("workspace-rail-scroll")
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scroll()
-                    .child(self.documents_rail(&palette, cx))
-                    .child(div().h(px(1.)).mx_4().my_1().bg(palette.border))
-                    .child(
-                        rail_header(&palette, "Details").child(
-                            icon_button("edit-details", IconName::Pencil)
-                                .tooltip("Edit details (E)")
-                                .on_click(cx.listener(|this, _, window, cx| this.edit_details(window, cx))),
+        let header =
+            pane_header(&palette)
+                .flex_row_reverse()
+                .pl_2()
+                .pr_4()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .overflow_hidden()
+                        .text_size(px(18.))
+                        .font_medium()
+                        .child(label(offence).rtl().truncate().w_full()),
+                )
+                .child(
+                    h_flex()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            Button::new("workspace-more")
+                                .ghost()
+                                .small()
+                                .icon(IconName::Ellipsis)
+                                .tooltip("More actions")
+                                .dropdown_menu({
+                                    let weak = weak.clone();
+                                    move |menu, _, _| {
+                                        let (toggle, delete) = (weak.clone(), weak.clone());
+                                        menu.item(
+                                            PopupMenuItem::new("Show field names")
+                                                .checked(names_shown)
+                                                .on_click(move |_, _, cx| {
+                                                    toggle
+                                                        .update(cx, |this, cx| {
+                                                            this.toggle_field_names(cx)
+                                                        })
+                                                        .ok();
+                                                }),
+                                        )
+                                        .item(PopupMenuItem::separator())
+                                        .item(
+                                            PopupMenuItem::new("Delete FIR")
+                                                .icon(IconName::Trash)
+                                                .on_click(move |_, window, cx| {
+                                                    delete
+                                                        .update(cx, |this, cx| {
+                                                            this.request_delete(window, cx)
+                                                        })
+                                                        .ok();
+                                                }),
+                                        )
+                                    }
+                                }),
+                        )
+                        .children(has_active.then(|| {
+                            Button::new("workspace-save")
+                                .small()
+                                .loading(saving)
+                                .disabled(!dirty || saving)
+                                .when(dirty, |this| this.primary())
+                                .when(!dirty, |this| this.outline())
+                                .label(if saving {
+                                    "Saving…"
+                                } else if dirty {
+                                    "Save"
+                                } else {
+                                    "Saved"
+                                })
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.save_active(window, cx, None)
+                                }))
+                        }))
+                        .child(
+                            icon_button("custom-values-button", IconName::Braces)
+                                .tooltip("Custom field values")
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.edit_custom_values(window, cx)
+                                })),
+                        )
+                        .child(
+                            icon_button("workspace-print", IconName::Printer)
+                                .tooltip("Print preview")
+                                .disabled(!printable)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.open_print_preview(window, cx)
+                                })),
                         ),
-                    )
-                    .children(values.as_ref().map(|values| self.details(&palette, values, cx)))
-                    .children(values.as_ref().and_then(|values| self.custom_section(&palette, values, cx))),
-            )
-            .children((total > 1).then(|| {
-                status_bar(&palette)
-                    .child(small_icon(IconName::Printer, palette.muted_foreground))
-                    .child(if included == total { "All will print".to_owned() } else { format!("{included} of {total} will print") })
-            }));
+                );
+        let rail =
+            v_flex()
+                .id("workspace-rail")
+                .w(px(DETAILS_RAIL_WIDTH))
+                .flex_shrink_0()
+                .h_full()
+                .border_l_1()
+                .border_color(palette.border)
+                .child(
+                    v_flex()
+                        .id("workspace-rail-scroll")
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .child(self.documents_rail(&palette, cx))
+                        .child(div().h(px(1.)).mx_4().my_1().bg(palette.border))
+                        .child(
+                            rail_header(&palette, "Details").child(
+                                icon_button("edit-details", IconName::Pencil)
+                                    .tooltip("Edit details (E)")
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.edit_details(window, cx)
+                                    })),
+                            ),
+                        )
+                        .children(
+                            values
+                                .as_ref()
+                                .map(|values| self.details(&palette, values, cx)),
+                        )
+                        .children(
+                            values
+                                .as_ref()
+                                .and_then(|values| self.custom_section(&palette, values, cx)),
+                        ),
+                )
+                .children((total > 1).then(|| {
+                    status_bar(&palette)
+                        .child(small_icon(IconName::Printer, palette.muted_foreground))
+                        .child(if included == total {
+                            "All will print".to_owned()
+                        } else {
+                            format!("{included} of {total} will print")
+                        })
+                }));
         let body: AnyElement = if self.state == WorkspaceState::Loading {
             div().flex_1().into_any_element()
         } else {
@@ -1098,9 +1382,17 @@ impl Render for WorkspaceScreen {
             .size_full()
             .on_action(cx.listener(|this, _: &Save, window, cx| this.save_active(window, cx, None)))
             .on_action(cx.listener(|this, _: &EditFir, window, cx| this.edit_details(window, cx)))
-            .on_action(cx.listener(|this, _: &AddTemplates, window, cx| this.open_add_templates(window, cx)))
-            .on_action(cx.listener(|this, _: &NextDocument, window, cx| this.step_document(1, window, cx)))
-            .on_action(cx.listener(|this, _: &PreviousDocument, window, cx| this.step_document(-1, window, cx)))
+            .on_action(
+                cx.listener(|this, _: &AddTemplates, window, cx| {
+                    this.open_add_templates(window, cx)
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &NextDocument, window, cx| this.step_document(1, window, cx)),
+            )
+            .on_action(cx.listener(|this, _: &PreviousDocument, window, cx| {
+                this.step_document(-1, window, cx)
+            }))
             .on_action(cx.listener(|this, _: &ToggleFieldNames, _, cx| this.toggle_field_names(cx)))
             .child(
                 v_flex()

@@ -1,15 +1,17 @@
 use std::rc::Rc;
 
+use gpui_kit::component::WindowExt;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::notification::Notification;
-use gpui_kit::component::WindowExt;
 use gpui_kit::{AnyWindowHandle, App, AppContext, Window};
 
 use super::installer::{self, Ready};
 use crate::state::{Models, toast_error, toast_warning};
 
 pub fn enabled(data_dir_overridden: bool) -> bool {
-    !cfg!(debug_assertions) && !data_dir_overridden && std::env::var_os("MISSAL_NO_UPDATE_CHECK").is_none()
+    !cfg!(debug_assertions)
+        && !data_dir_overridden
+        && std::env::var_os("MISSAL_NO_UPDATE_CHECK").is_none()
 }
 
 pub fn start(window: AnyWindowHandle, cx: &mut App) {
@@ -31,15 +33,17 @@ pub fn start(window: AnyWindowHandle, cx: &mut App) {
 
 fn announce(ready: Rc<Ready>, window: &mut Window, cx: &mut App) {
     let version = ready.version().to_owned();
-    let notification = Notification::info(format!("Version {version} is downloaded. Restart to apply it."))
-        .title("Update ready")
-        .action(move |_, _, _| {
-            let ready = ready.clone();
-            Button::new("update-restart")
-                .primary()
-                .label("Restart now")
-                .on_click(move |_, window, cx| restart(ready.clone(), window, cx))
-        });
+    let notification = Notification::info(format!(
+        "Version {version} is downloaded. Restart to apply it."
+    ))
+    .title("Update ready")
+    .action(move |_, _, _| {
+        let ready = ready.clone();
+        Button::new("update-restart")
+            .primary()
+            .label("Restart now")
+            .on_click(move |_, window, cx| restart(ready.clone(), window, cx))
+    });
     window.push_notification(notification, cx);
 }
 

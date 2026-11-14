@@ -1,7 +1,9 @@
 use std::rc::Rc;
 
 use gpui_kit::{AnyView, App, AppContext, Entity, Global, Subscription, Window};
-use missal_core::{DisplayMode, Document, FieldCatalog, FieldMarkers, FieldPresentation, FirValues};
+use missal_core::{
+    DisplayMode, Document, FieldCatalog, FieldMarkers, FieldPresentation, FirValues,
+};
 use missal_editor::{Editor, EditorFields};
 
 #[derive(Clone)]
@@ -136,13 +138,15 @@ impl DocumentEditor for RichEditor {
 
     fn load(&self, request: LoadRequest, _: &mut Window, cx: &mut App) {
         let fields = editor_fields(request.fields);
-        self.editor
-            .update(cx, |editor, cx| editor.load(request.key, request.document, fields, request.dirty, cx));
+        self.editor.update(cx, |editor, cx| {
+            editor.load(request.key, request.document, fields, request.dirty, cx)
+        });
     }
 
     fn set_fields(&self, fields: FieldContext, cx: &mut App) {
         let fields = editor_fields(fields);
-        self.editor.update(cx, |editor, cx| editor.set_fields(fields, cx));
+        self.editor
+            .update(cx, |editor, cx| editor.set_fields(fields, cx));
     }
 
     fn is_dirty(&self, cx: &App) -> bool {
@@ -155,7 +159,8 @@ impl DocumentEditor for RichEditor {
     }
 
     fn mark_saved(&self, revision: u64, cx: &mut App) {
-        self.editor.update(cx, |editor, cx| editor.mark_saved(revision, cx));
+        self.editor
+            .update(cx, |editor, cx| editor.mark_saved(revision, cx));
     }
 
     fn discard(&self, _: &mut Window, cx: &mut App) {
@@ -172,12 +177,17 @@ impl DocumentEditor for RichEditor {
     }
 
     fn on_event(&self, cx: &mut App, listener: EditorListener) -> Subscription {
-        cx.subscribe(&self.editor, move |_, event: &missal_editor::EditorEvent, cx| {
-            let event = match event {
-                missal_editor::EditorEvent::DirtyChanged(dirty) => EditorEvent::DirtyChanged(*dirty),
-                missal_editor::EditorEvent::SaveRequested => EditorEvent::SaveRequested,
-            };
-            listener(&event, cx)
-        })
+        cx.subscribe(
+            &self.editor,
+            move |_, event: &missal_editor::EditorEvent, cx| {
+                let event = match event {
+                    missal_editor::EditorEvent::DirtyChanged(dirty) => {
+                        EditorEvent::DirtyChanged(*dirty)
+                    }
+                    missal_editor::EditorEvent::SaveRequested => EditorEvent::SaveRequested,
+                };
+                listener(&event, cx)
+            },
+        )
     }
 }

@@ -1,18 +1,18 @@
 use std::rc::Rc;
 
+use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
+use gpui_kit::component::Disableable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::menu::DropdownMenu as _;
 use gpui_kit::component::menu::PopupMenuItem;
 use gpui_kit::component::{Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
-use gpui_kit::TestSupportExt as _;
-use gpui_kit::component::Disableable as _;
-use gpui_kit::component::menu::DropdownMenu as _;
 
 use gpui_kit::{
-    AnyElement, App, AppContext, Context, Entity, FocusHandle, InteractiveElement, IntoElement,
-    ExternalPaths, KeyDownEvent, ParentElement, Render, ScrollStrategy, StatefulInteractiveElement, Styled,
-    Subscription, UniformListScrollHandle, Window, div, px, uniform_list,
+    AnyElement, App, AppContext, Context, Entity, ExternalPaths, FocusHandle, InteractiveElement,
+    IntoElement, KeyDownEvent, ParentElement, Render, ScrollStrategy, StatefulInteractiveElement,
+    Styled, Subscription, UniformListScrollHandle, Window, div, px, uniform_list,
 };
 use missal_core::{DisplayMode, Document, Revision, TemplateId};
 use missal_store::TemplateSummary;
@@ -23,13 +23,15 @@ use crate::editor::{DocumentEditor, EditorEvent, EditorFactory, FieldContext, Lo
 use crate::shortcuts::*;
 use crate::state::rows::fold_for_search;
 use crate::state::templates::TemplatesEvent;
-use crate::state::{Load, Models, Route, ToastKind, run_db_in, toast_detailed, toast_error, toast_success};
+use crate::state::{
+    Load, Models, Route, ToastKind, run_db_in, toast_detailed, toast_error, toast_success,
+};
 use crate::theme::{Palette, RAIL_WIDTH};
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
-use crate::ui::print_preview::{PreviewDocument, PrintRequest};
-use crate::word::{WordImport, is_docx};
 use crate::ui::input::{Kind, text_input};
+use crate::ui::print_preview::{PreviewDocument, PrintRequest};
 use crate::ui::{empty_state, icon_button, pane_header, rail_header};
+use crate::word::{WordImport, is_docx};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum PageState {
@@ -56,7 +58,12 @@ pub struct TemplatePage {
 }
 
 impl TemplatePage {
-    pub fn new(models: Models, id: Option<TemplateId>, window: &mut Window, cx: &mut Context<Self>) -> TemplatePage {
+    pub fn new(
+        models: Models,
+        id: Option<TemplateId>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> TemplatePage {
         let title = text_input(window, cx, Kind::Urdu, "ٹیمپلیٹ کا نام", "");
         let editor = EditorFactory::create(cx).build(window, cx);
         let weak = cx.entity().downgrade();
@@ -99,7 +106,10 @@ impl TemplatePage {
 
     fn field_context(&self, cx: &App) -> FieldContext {
         let catalog = self.models.catalog.read(cx);
-        FieldContext::labels(catalog.field_catalog(), catalog.settings.field_markers.clone())
+        FieldContext::labels(
+            catalog.field_catalog(),
+            catalog.settings.field_markers.clone(),
+        )
     }
 
     fn load(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -116,26 +126,35 @@ impl TemplatePage {
                 self.title.update(cx, |input, cx| input.focus(window, cx));
             }
             Some(id) => {
-                run_db_in(window, cx, move |store| store.template(id), move |this, result, window, cx| {
-                    match result {
-                        Ok(record) => {
-                            this.revision = Some(record.revision);
-                            this.initial_name = record.name.clone();
-                            this.title.update(cx, |input, cx| input.set_text(record.name.clone(), cx));
-                            let request = LoadRequest {
-                                key: format!("template:{}:{}", record.id, record.revision),
-                                document: record.document,
-                                fields: this.field_context(cx),
-                                dirty: false,
-                            };
-                            this.editor.load(request, window, cx);
-                            this.state = PageState::Ready;
+                run_db_in(
+                    window,
+                    cx,
+                    move |store| store.template(id),
+                    move |this, result, window, cx| {
+                        match result {
+                            Ok(record) => {
+                                this.revision = Some(record.revision);
+                                this.initial_name = record.name.clone();
+                                this.title.update(cx, |input, cx| {
+                                    input.set_text(record.name.clone(), cx)
+                                });
+                                let request = LoadRequest {
+                                    key: format!("template:{}:{}", record.id, record.revision),
+                                    document: record.document,
+                                    fields: this.field_context(cx),
+                                    dirty: false,
+                                };
+                                this.editor.load(request, window, cx);
+                                this.state = PageState::Ready;
+                            }
+                            Err(missal_core::RepositoryError::NotFound { .. }) => {
+                                this.state = PageState::NotFound
+                            }
+                            Err(error) => this.state = PageState::Failed(error.message()),
                         }
-                        Err(missal_core::RepositoryError::NotFound { .. }) => this.state = PageState::NotFound,
-                        Err(error) => this.state = PageState::Failed(error.message()),
-                    }
-                    cx.notify();
-                });
+                        cx.notify();
+                    },
+                );
             }
         }
     }
@@ -168,7 +187,11 @@ impl TemplatePage {
             return;
         }
         let name = self.title.read(cx).text().trim().to_owned();
-        let title = if name.is_empty() { "Untitled template".to_owned() } else { name };
+        let title = if name.is_empty() {
+            "Untitled template".to_owned()
+        } else {
+            name
+        };
         let request = PrintRequest {
             export_name: title.clone(),
             title,
@@ -176,7 +199,9 @@ impl TemplatePage {
             catalog: (*self.models.catalog.read(cx).field_catalog()).clone(),
             values: None,
             mode: DisplayMode::Labels,
-            documents: vec![PreviewDocument::Content(Box::new(self.editor.snapshot(cx).document))],
+            documents: vec![PreviewDocument::Content(Box::new(
+                self.editor.snapshot(cx).document,
+            ))],
         };
         open_print_preview(request, window, cx);
     }
@@ -217,7 +242,12 @@ impl TemplatePage {
         .detach();
     }
 
-    pub fn choose_import(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn choose_import(
+        &mut self,
+        path: std::path::PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.importing || self.saving || self.state != PageState::Ready {
             return;
         }
@@ -249,15 +279,26 @@ impl TemplatePage {
             "Importing replaces all text and formatting in this editor. The saved template stays unchanged until you save.",
             vec![
                 Choice::new("cancel", "Cancel", Tone::Neutral, |_, _| {}),
-                Choice::new("import-replace", "Import and replace", Tone::Primary, move |window, cx| {
-                    let path = path.clone();
-                    weak.update(cx, |this, cx| this.run_import(path, window, cx)).ok();
-                }),
+                Choice::new(
+                    "import-replace",
+                    "Import and replace",
+                    Tone::Primary,
+                    move |window, cx| {
+                        let path = path.clone();
+                        weak.update(cx, |this, cx| this.run_import(path, window, cx))
+                            .ok();
+                    },
+                ),
             ],
         );
     }
 
-    fn run_import(&mut self, path: std::path::PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+    fn run_import(
+        &mut self,
+        path: std::path::PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.importing = true;
         cx.notify();
         let catalog = self.models.catalog.read(cx);
@@ -268,12 +309,20 @@ impl TemplatePage {
                 .background_executor()
                 .spawn(async move { crate::word::import_file(path, &fields, &markers) })
                 .await;
-            this.update_in(cx, |this, window, cx| this.finish_import(result, window, cx)).ok();
+            this.update_in(cx, |this, window, cx| {
+                this.finish_import(result, window, cx)
+            })
+            .ok();
         })
         .detach();
     }
 
-    fn finish_import(&mut self, result: Result<WordImport, String>, window: &mut Window, cx: &mut Context<Self>) {
+    fn finish_import(
+        &mut self,
+        result: Result<WordImport, String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.importing = false;
         match result {
             Ok(imported) => {
@@ -304,10 +353,22 @@ impl TemplatePage {
                         "Review the layout and placeholders, then save the template.",
                     );
                 } else {
-                    toast_detailed(window, cx, ToastKind::Warning, "Word document imported", imported.notices.join(" "));
+                    toast_detailed(
+                        window,
+                        cx,
+                        ToastKind::Warning,
+                        "Word document imported",
+                        imported.notices.join(" "),
+                    );
                 }
             }
-            Err(message) => toast_detailed(window, cx, ToastKind::Error, "Could not import Word document", message),
+            Err(message) => toast_detailed(
+                window,
+                cx,
+                ToastKind::Error,
+                "Could not import Word document",
+                message,
+            ),
         }
         cx.notify();
     }
@@ -350,7 +411,9 @@ impl TemplatePage {
                 match result {
                     Ok((Some(summary), _)) => {
                         let new_id = summary.id;
-                        this.models.templates.update(cx, |templates, cx| templates.upsert(summary, cx));
+                        this.models
+                            .templates
+                            .update(cx, |templates, cx| templates.upsert(summary, cx));
                         this.editor.mark_saved(revision_token, cx);
                         this.initial_name = name.clone();
                         toast_success(window, cx, "Template created");
@@ -360,9 +423,13 @@ impl TemplatePage {
                         this.revision = Some(ack.revision);
                         this.initial_name = name.clone();
                         this.editor.mark_saved(revision_token, cx);
-                        let created_at = this
-                            .id
-                            .and_then(|id| this.models.templates.read(cx).get(id).map(|item| item.created_at.clone()));
+                        let created_at = this.id.and_then(|id| {
+                            this.models
+                                .templates
+                                .read(cx)
+                                .get(id)
+                                .map(|item| item.created_at.clone())
+                        });
                         if let (Some(id), Some(created_at)) = (this.id, created_at) {
                             let summary = TemplateSummary {
                                 id,
@@ -373,7 +440,9 @@ impl TemplatePage {
                                 created_at,
                                 updated_at: ack.updated_at,
                             };
-                            this.models.templates.update(cx, |templates, cx| templates.upsert(summary, cx));
+                            this.models
+                                .templates
+                                .update(cx, |templates, cx| templates.upsert(summary, cx));
                         }
                         toast_success(window, cx, "Template updated");
                     }
@@ -403,15 +472,22 @@ impl TemplatePage {
     }
 
     fn delete(&mut self, id: TemplateId, window: &mut Window, cx: &mut Context<Self>) {
-        run_db_in(window, cx, move |store| store.remove_template(id), move |this, result, window, cx| match result {
-            Ok(()) => {
-                this.models.templates.update(cx, |templates, cx| templates.remove(id, cx));
-                this.initial_name = this.title.read(cx).text().to_owned();
-                navigate_replace(Route::Templates, cx);
-                toast_success(window, cx, "Template deleted");
-            }
-            Err(error) => toast_error(window, cx, error.message()),
-        });
+        run_db_in(
+            window,
+            cx,
+            move |store| store.remove_template(id),
+            move |this, result, window, cx| match result {
+                Ok(()) => {
+                    this.models
+                        .templates
+                        .update(cx, |templates, cx| templates.remove(id, cx));
+                    this.initial_name = this.title.read(cx).text().to_owned();
+                    navigate_replace(Route::Templates, cx);
+                    toast_success(window, cx, "Template deleted");
+                }
+                Err(error) => toast_error(window, cx, error.message()),
+            },
+        );
     }
 }
 
@@ -420,11 +496,24 @@ impl Render for TemplatePage {
         let palette = *Palette::get(cx);
         match &self.state {
             PageState::NotFound => {
-                return empty_state(&palette, IconName::FileText, "Template not found", None, None).into_any_element();
+                return empty_state(
+                    &palette,
+                    IconName::FileText,
+                    "Template not found",
+                    None,
+                    None,
+                )
+                .into_any_element();
             }
             PageState::Failed(message) => {
-                return empty_state(&palette, IconName::TriangleAlert, "Could not load this template", Some(message.clone().into()), None)
-                    .into_any_element();
+                return empty_state(
+                    &palette,
+                    IconName::TriangleAlert,
+                    "Could not load this template",
+                    Some(message.clone().into()),
+                    None,
+                )
+                .into_any_element();
             }
             _ => {}
         }
@@ -450,9 +539,16 @@ impl Render for TemplatePage {
                                 let weak = weak.clone();
                                 move |menu, _, _| {
                                     let weak = weak.clone();
-                                    menu.item(PopupMenuItem::new("Delete template").icon(IconName::Trash).on_click(move |_, window, cx| {
-                                        weak.update(cx, |this, cx| this.request_delete(window, cx)).ok();
-                                    }))
+                                    menu.item(
+                                        PopupMenuItem::new("Delete template")
+                                            .icon(IconName::Trash)
+                                            .on_click(move |_, window, cx| {
+                                                weak.update(cx, |this, cx| {
+                                                    this.request_delete(window, cx)
+                                                })
+                                                .ok();
+                                            }),
+                                    )
                                 }
                             })
                     }))
@@ -462,13 +558,21 @@ impl Render for TemplatePage {
                             .small()
                             .loading(self.saving)
                             .disabled(!save_enabled)
-                            .label(if is_new { "Create template" } else if dirty { "Save" } else { "Saved" })
+                            .label(if is_new {
+                                "Create template"
+                            } else if dirty {
+                                "Save"
+                            } else {
+                                "Saved"
+                            })
                             .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
                     )
                     .child(
                         icon_button("template-print", IconName::Printer)
                             .tooltip("Print preview")
-                            .on_click(cx.listener(|this, _, window, cx| this.open_print_preview(window, cx))),
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_print_preview(window, cx)
+                            })),
                     )
                     .child(
                         Button::new("template-import")
@@ -478,7 +582,9 @@ impl Render for TemplatePage {
                             .label("Upload Word file")
                             .loading(importing)
                             .disabled(importing || self.saving)
-                            .on_click(cx.listener(|this, _, window, cx| this.request_import(window, cx))),
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.request_import(window, cx)),
+                            ),
                     ),
             )
             .child(
@@ -487,7 +593,9 @@ impl Render for TemplatePage {
                     .flex_1()
                     .min_h_0()
                     .drag_over::<ExternalPaths>(|style, _, _, cx| style.bg(Palette::get(cx).accent))
-                    .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| this.dropped(paths, window, cx)))
+                    .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
+                        this.dropped(paths, window, cx)
+                    }))
                     .child(self.editor.view()),
             )
             .into_any_element()
@@ -506,7 +614,12 @@ pub struct TemplatesScreen {
 }
 
 impl TemplatesScreen {
-    pub fn new(models: Models, route: Route, window: &mut Window, cx: &mut Context<Self>) -> TemplatesScreen {
+    pub fn new(
+        models: Models,
+        route: Route,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> TemplatesScreen {
         let search = text_input(window, cx, Kind::Auto, "Search templates", "");
         let subscriptions = vec![
             cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
@@ -515,7 +628,9 @@ impl TemplatesScreen {
                     cx.notify();
                 }
             }),
-            cx.subscribe(&models.templates, |_, _, _: &TemplatesEvent, cx| cx.notify()),
+            cx.subscribe(&models.templates, |_, _, _: &TemplatesEvent, cx| {
+                cx.notify()
+            }),
         ];
         let mut screen = TemplatesScreen {
             models,
@@ -533,8 +648,12 @@ impl TemplatesScreen {
 
     fn build_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.page = match self.route {
-            Route::NewTemplate => Some(cx.new(|cx| TemplatePage::new(self.models.clone(), None, window, cx))),
-            Route::Template(id) => Some(cx.new(|cx| TemplatePage::new(self.models.clone(), Some(id), window, cx))),
+            Route::NewTemplate => {
+                Some(cx.new(|cx| TemplatePage::new(self.models.clone(), None, window, cx)))
+            }
+            Route::Template(id) => {
+                Some(cx.new(|cx| TemplatePage::new(self.models.clone(), Some(id), window, cx)))
+            }
             _ => None,
         };
         if let Some(page) = &self.page {
@@ -556,7 +675,9 @@ impl TemplatesScreen {
     }
 
     pub fn is_dirty(&self, cx: &App) -> bool {
-        self.page.as_ref().is_some_and(|page| page.read(cx).is_dirty(cx))
+        self.page
+            .as_ref()
+            .is_some_and(|page| page.read(cx).is_dirty(cx))
     }
 
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
@@ -578,7 +699,10 @@ impl TemplatesScreen {
     }
 
     pub fn visible(&self, cx: &App) -> Vec<TemplateSummary> {
-        let words: Vec<String> = fold_for_search(&self.query).split_whitespace().map(str::to_owned).collect();
+        let words: Vec<String> = fold_for_search(&self.query)
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect();
         self.models
             .templates
             .read(cx)
@@ -605,9 +729,15 @@ impl TemplatesScreen {
         };
         let next = match current {
             None => {
-                if delta >= 0 { 0 } else { visible.len() - 1 }
+                if delta >= 0 {
+                    0
+                } else {
+                    visible.len() - 1
+                }
             }
-            Some(position) => (position as isize + delta).clamp(0, visible.len() as isize - 1) as usize,
+            Some(position) => {
+                (position as isize + delta).clamp(0, visible.len() as isize - 1) as usize
+            }
         };
         if Some(next) != current {
             self.scroll.scroll_to_item(next, ScrollStrategy::Nearest);
@@ -629,11 +759,34 @@ impl TemplatesScreen {
             Load::Loading => v_flex()
                 .gap_2()
                 .p_3()
-                .children((0..5usize).map(|index| div().id(("template-skeleton", index)).h(px(48.)).rounded(px(7.)).bg(palette.muted)))
+                .children((0..5usize).map(|index| {
+                    div()
+                        .id(("template-skeleton", index))
+                        .h(px(48.))
+                        .rounded(px(7.))
+                        .bg(palette.muted)
+                }))
                 .into_any_element(),
-            Load::Failed(message) => empty_state(&palette, IconName::TriangleAlert, "Could not load templates", Some(message.into()), None).into_any_element(),
-            Load::Ready if total == 0 => empty_state(&palette, IconName::FileText, "No templates yet", None, None).into_any_element(),
-            Load::Ready if visible.is_empty() => empty_state(&palette, IconName::Search, "No matching templates", None, None).into_any_element(),
+            Load::Failed(message) => empty_state(
+                &palette,
+                IconName::TriangleAlert,
+                "Could not load templates",
+                Some(message.into()),
+                None,
+            )
+            .into_any_element(),
+            Load::Ready if total == 0 => {
+                empty_state(&palette, IconName::FileText, "No templates yet", None, None)
+                    .into_any_element()
+            }
+            Load::Ready if visible.is_empty() => empty_state(
+                &palette,
+                IconName::Search,
+                "No matching templates",
+                None,
+                None,
+            )
+            .into_any_element(),
             Load::Ready => {
                 let items = Rc::new(visible);
                 uniform_list("template-rail", items.len(), {
@@ -656,7 +809,9 @@ impl TemplatesScreen {
                                         .cursor_pointer()
                                         .when(is_active, |this| this.bg(palette.accent))
                                         .hover(move |style| style.bg(palette.accent))
-                                        .on_click(move |_, window, cx| navigate(Route::Template(id), window, cx))
+                                        .on_click(move |_, window, cx| {
+                                            navigate(Route::Template(id), window, cx)
+                                        })
                                         .child(
                                             div()
                                                 .overflow_hidden()
@@ -670,9 +825,13 @@ impl TemplatesScreen {
                                                 .text_size(px(12.))
                                                 .text_color(palette.muted_foreground)
                                                 .child(
-                                                    label(if item.preview_text.is_empty() { "خالی".to_owned() } else { item.preview_text.clone() })
-                                                        .rtl()
-                                                        .truncate(),
+                                                    label(if item.preview_text.is_empty() {
+                                                        "خالی".to_owned()
+                                                    } else {
+                                                        item.preview_text.clone()
+                                                    })
+                                                    .rtl()
+                                                    .truncate(),
                                                 ),
                                         ),
                                 )
@@ -694,10 +853,13 @@ impl TemplatesScreen {
             .border_l_1()
             .border_color(palette.border)
             .child(
-                rail_header(&palette, "Templates")
-                    .child(icon_button("new-template", IconName::Plus).tooltip("New template").on_click(|_, window, cx| {
-                        navigate(Route::NewTemplate, window, cx);
-                    })),
+                rail_header(&palette, "Templates").child(
+                    icon_button("new-template", IconName::Plus)
+                        .tooltip("New template")
+                        .on_click(|_, window, cx| {
+                            navigate(Route::NewTemplate, window, cx);
+                        }),
+                ),
             )
             .child(
                 div()
@@ -760,7 +922,9 @@ impl Render for TemplatesScreen {
             .track_focus(&self.focus)
             .size_full()
             .on_action(cx.listener(|this, _: &NextTemplate, window, cx| this.step(1, window, cx)))
-            .on_action(cx.listener(|this, _: &PreviousTemplate, window, cx| this.step(-1, window, cx)))
+            .on_action(
+                cx.listener(|this, _: &PreviousTemplate, window, cx| this.step(-1, window, cx)),
+            )
             .on_action(cx.listener(|this, _: &FocusSearch, window, cx| {
                 this.search.update(cx, |input, cx| {
                     input.focus(window, cx);

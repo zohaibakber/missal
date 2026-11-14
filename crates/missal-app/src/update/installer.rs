@@ -4,8 +4,8 @@ use std::sync::mpsc::Sender;
 
 use velopack::sources::{HttpSource, UpdateSource};
 use velopack::{
-    Error, HttpHeader, HttpOptions, UpdateCheck, UpdateManager, UpdateOptions, VelopackApp, VelopackAsset,
-    VelopackAssetFeed,
+    Error, HttpHeader, HttpOptions, UpdateCheck, UpdateManager, UpdateOptions, VelopackApp,
+    VelopackAsset, VelopackAssetFeed,
 };
 
 use super::release::{self, REPOSITORY};
@@ -46,7 +46,10 @@ impl GithubReleases {
     }
 
     fn chosen_base(&self) -> Option<String> {
-        self.chosen.lock().unwrap_or_else(|error| error.into_inner()).clone()
+        self.chosen
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone()
     }
 }
 
@@ -63,11 +66,17 @@ impl UpdateSource for GithubReleases {
         )?;
         let releases = release::parse_releases(&json).map_err(Error::Other)?;
         let Some(newest) = release::newest_update(&releases, &app.version, channel) else {
-            *self.chosen.lock().unwrap_or_else(|error| error.into_inner()) = None;
+            *self
+                .chosen
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = None;
             return Ok(VelopackAssetFeed { Assets: Vec::new() });
         };
         let base = release::download_base(self.repository, &newest.tag);
-        *self.chosen.lock().unwrap_or_else(|error| error.into_inner()) = Some(base.clone());
+        *self
+            .chosen
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(base.clone());
         HttpSource::new(base).get_release_feed(channel, app, staged_user_id)
     }
 
@@ -113,7 +122,10 @@ pub fn fetch() -> Result<Option<Ready>, String> {
     if let Some(asset) = manager.get_update_pending_restart() {
         return Ok(Some(Ready { manager, asset }));
     }
-    match manager.check_for_updates().map_err(|error| error.to_string())? {
+    match manager
+        .check_for_updates()
+        .map_err(|error| error.to_string())?
+    {
         UpdateCheck::UpdateAvailable(info) => {
             manager
                 .download_updates(&info, None)

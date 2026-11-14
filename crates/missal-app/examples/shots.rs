@@ -16,7 +16,8 @@ use missal_app::state::{Models, Route};
 use missal_core::{FirId, TemplateId};
 use missal_store::Store;
 
-const DEFAULT_OUT: &str = "/tmp/claude-0/-home-user-missal/da28de75-7983-5932-bdf9-e2e3d5312f4e/scratchpad/app-shots";
+const DEFAULT_OUT: &str =
+    "/tmp/claude-0/-home-user-missal/da28de75-7983-5932-bdf9-e2e3d5312f4e/scratchpad/app-shots";
 
 struct Harness {
     cx: HeadlessAppContext,
@@ -29,7 +30,9 @@ impl Harness {
     fn settle(&mut self) {
         for _ in 0..3 {
             self.cx.run_until_parked();
-            self.cx.update_window(self.handle, |_, window, _| window.refresh()).ok();
+            self.cx
+                .update_window(self.handle, |_, window, _| window.refresh())
+                .ok();
         }
         self.cx.run_until_parked();
     }
@@ -39,11 +42,22 @@ impl Harness {
         let image = self.cx.capture_screenshot(self.handle).expect("screenshot");
         let path = self.out.join(format!("{name}-{}.png", self.suffix));
         image.save(&path).expect("save");
-        println!("{name}-{}: {}x{}", self.suffix, image.width(), image.height());
+        println!(
+            "{name}-{}: {}x{}",
+            self.suffix,
+            image.width(),
+            image.height()
+        );
     }
 
-    fn with_window<R>(&mut self, f: impl FnOnce(&mut gpui_kit::Window, &mut gpui_kit::App) -> R) -> R {
-        let result = self.cx.update_window(self.handle, |_, window, cx| f(window, cx)).expect("window");
+    fn with_window<R>(
+        &mut self,
+        f: impl FnOnce(&mut gpui_kit::Window, &mut gpui_kit::App) -> R,
+    ) -> R {
+        let result = self
+            .cx
+            .update_window(self.handle, |_, window, cx| f(window, cx))
+            .expect("window");
         self.settle();
         result
     }
@@ -77,10 +91,21 @@ fn build(dark: bool, out: &Path, width: f32, height: f32) -> (Harness, tempfile:
     let database = directory.path().join("missal.sqlite");
     seed_firs(&database, 90).expect("seed");
     let mut store = Store::open(&database).expect("open");
-    let customs: Vec<_> = store.placeholders().expect("placeholders").into_iter().filter(|p| p.source == missal_core::PlaceholderSource::Custom).collect();
+    let customs: Vec<_> = store
+        .placeholders()
+        .expect("placeholders")
+        .into_iter()
+        .filter(|p| p.source == missal_core::PlaceholderSource::Custom)
+        .collect();
     let fir = FirId::new(3).expect("id");
     store
-        .set_placeholder_values(fir, &[(customs[0].id, "نیشنل بینک آف پاکستان".to_owned()), (customs[3].id, "123456".to_owned())])
+        .set_placeholder_values(
+            fir,
+            &[
+                (customs[0].id, "نیشنل بینک آف پاکستان".to_owned()),
+                (customs[3].id, "123456".to_owned()),
+            ],
+        )
         .expect("values");
     let text_system = Arc::new(gpui_wgpu::CosmicTextSystem::new("sans-serif"));
     let mut cx = HeadlessAppContext::with_platform(
@@ -89,7 +114,11 @@ fn build(dark: bool, out: &Path, width: f32, height: f32) -> (Harness, tempfile:
         gpui_kit::platform::current_headless_renderer,
     );
     let preferences = Preferences {
-        theme: if dark { ThemeChoice::Dark } else { ThemeChoice::Light },
+        theme: if dark {
+            ThemeChoice::Dark
+        } else {
+            ThemeChoice::Light
+        },
         ..Preferences::default()
     };
     let (handle, models) = cx.update(|cx| {
@@ -106,7 +135,12 @@ fn build(dark: bool, out: &Path, width: f32, height: f32) -> (Harness, tempfile:
     });
     let suffix = if dark { "dark" } else { "light" };
     let _ = models;
-    let mut harness = Harness { cx, handle, out: out.to_owned(), suffix };
+    let mut harness = Harness {
+        cx,
+        handle,
+        out: out.to_owned(),
+        suffix,
+    };
     harness.settle();
     (harness, directory)
 }
@@ -117,13 +151,17 @@ fn run(dark: bool, out: &Path) {
 
     h.with_window(|window, cx| {
         let nav_models = Models::get(cx);
-        nav_models.prefs.update(cx, |prefs, cx| prefs.update(cx, |p| p.sidebar_open = false));
+        nav_models
+            .prefs
+            .update(cx, |prefs, cx| prefs.update(cx, |p| p.sidebar_open = false));
         let _ = window;
     });
     h.shot("02-sidebar-collapsed");
     h.with_window(|_, cx| {
         let models = Models::get(cx);
-        models.prefs.update(cx, |prefs, cx| prefs.update(cx, |p| p.sidebar_open = true));
+        models
+            .prefs
+            .update(cx, |prefs, cx| prefs.update(cx, |p| p.sidebar_open = true));
     });
 
     h.click("select-all");
@@ -237,7 +275,9 @@ impl Harness {
             self.settle();
             let ready = self.cx.update(|cx| {
                 let shell = missal_app::app::ShellHandle::get(cx);
-                shell.and_then(|shell| shell.read(cx).print_preview()).is_some_and(|preview| preview.read(cx).is_ready())
+                shell
+                    .and_then(|shell| shell.read(cx).print_preview())
+                    .is_some_and(|preview| preview.read(cx).is_ready())
             });
             if ready {
                 break;
@@ -255,7 +295,9 @@ impl Harness {
                 catalog: (*catalog).clone(),
                 values: None,
                 mode: missal_core::DisplayMode::Labels,
-                documents: vec![missal_app::ui::print_preview::PreviewDocument::Stored(missal_core::FirDocumentId::new(999_999).expect("id"))],
+                documents: vec![missal_app::ui::print_preview::PreviewDocument::Stored(
+                    missal_core::FirDocumentId::new(999_999).expect("id"),
+                )],
             };
             missal_app::app::open_print_preview(request, window, cx);
         });
@@ -264,7 +306,13 @@ impl Harness {
     fn models_template_id(&mut self) -> TemplateId {
         self.cx.update(|cx| {
             let models = Models::get(cx);
-            models.templates.read(cx).items.first().map(|item| item.id).expect("a template")
+            models
+                .templates
+                .read(cx)
+                .items
+                .first()
+                .map(|item| item.id)
+                .expect("a template")
         })
     }
 }
@@ -277,7 +325,10 @@ fn main() {
         .map(|index| PathBuf::from(&args[index + 1]))
         .unwrap_or_else(|| PathBuf::from(DEFAULT_OUT));
     std::fs::create_dir_all(&out).expect("output directory");
-    let only = args.iter().position(|argument| argument == "--theme").map(|index| args[index + 1].clone());
+    let only = args
+        .iter()
+        .position(|argument| argument == "--theme")
+        .map(|index| args[index + 1].clone());
     for dark in [false, true] {
         if only.as_deref().is_some_and(|only| (only == "dark") != dark) {
             continue;

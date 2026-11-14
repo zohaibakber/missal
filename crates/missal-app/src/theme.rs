@@ -175,7 +175,9 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     colors.input = palette.input;
     colors.ring = palette.ring;
     colors.caret = palette.foreground;
-    colors.selection = palette.primary.opacity(if palette.dark { 0.4 } else { 0.28 });
+    colors.selection = palette
+        .primary
+        .opacity(if palette.dark { 0.4 } else { 0.28 });
     colors.muted = palette.muted;
     colors.muted_foreground = palette.muted_foreground;
     colors.accent = palette.accent;
@@ -272,15 +274,28 @@ pub fn resolve_dark(choice: ThemeChoice, appearance: WindowAppearance) -> bool {
 }
 
 pub fn install(dark: bool, cx: &mut App) {
-    let palette = if dark { Palette::dark() } else { Palette::light() };
-    Theme::change(if dark { ThemeMode::Dark } else { ThemeMode::Light }, None, cx);
+    let palette = if dark {
+        Palette::dark()
+    } else {
+        Palette::light()
+    };
+    Theme::change(
+        if dark {
+            ThemeMode::Dark
+        } else {
+            ThemeMode::Light
+        },
+        None,
+        cx,
+    );
     Theme::update(cx, |theme| apply_palette(theme, &palette));
     cx.set_global(palette);
 }
 
 pub fn apply(choice: ThemeChoice, window: &Window, cx: &mut App) {
     let dark = resolve_dark(choice, window.appearance());
-    if !cx.has_global::<Palette>() || Palette::get(cx).dark != dark || cx.theme().is_dark() != dark {
+    if !cx.has_global::<Palette>() || Palette::get(cx).dark != dark || cx.theme().is_dark() != dark
+    {
         install(dark, cx);
     }
 }
@@ -291,7 +306,11 @@ mod tests {
 
     fn rgb(color: Hsla) -> [u8; 3] {
         let rgba: Rgba = color.to_rgb();
-        [(rgba.r * 255.0).round() as u8, (rgba.g * 255.0).round() as u8, (rgba.b * 255.0).round() as u8]
+        [
+            (rgba.r * 255.0).round() as u8,
+            (rgba.g * 255.0).round() as u8,
+            (rgba.b * 255.0).round() as u8,
+        ]
     }
 
     #[test]
@@ -299,7 +318,10 @@ mod tests {
         assert_eq!(rgb(oklch(1.0, 0.0, 0.0, 1.0)), [255, 255, 255]);
         assert_eq!(rgb(oklch(0.0, 0.0, 0.0, 1.0)), [0, 0, 0]);
         let primary = rgb(oklch(0.52, 0.19, 272.0, 1.0));
-        assert!(primary[2] > primary[0] && primary[2] > primary[1], "{primary:?}");
+        assert!(
+            primary[2] > primary[0] && primary[2] > primary[1],
+            "{primary:?}"
+        );
         let mid = rgb(oklch(0.5, 0.0, 0.0, 1.0));
         assert!((mid[0] as i32 - 99).abs() <= 2, "{mid:?}");
     }

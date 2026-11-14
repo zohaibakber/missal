@@ -16,8 +16,8 @@ use gpui_kit::{
     canvas, div, point, px,
 };
 use missal_core::{DisplayMode, Document, FieldCatalog, FirDocumentId, FirValues};
-use missal_page::pdf::{PdfOptions, write_packet};
 use missal_page::paint::{PagePaint, paint_page};
+use missal_page::pdf::{PdfOptions, write_packet};
 use missal_page::{Packet, Page};
 use missal_text::{TextInput, TextInputEvent, label};
 
@@ -61,7 +61,9 @@ impl Global for PrintHandler {}
 
 impl PrintHandler {
     pub fn system() -> PrintHandler {
-        PrintHandler(Rc::new(|path, cx| printing::hand_off(path, &printing::current_route(), cx)))
+        PrintHandler(Rc::new(|path, cx| {
+            printing::hand_off(path, &printing::current_route(), cx)
+        }))
     }
 }
 
@@ -117,14 +119,17 @@ impl PrintPreview {
             |this, input, event: &TextInputEvent, window, cx| match event {
                 TextInputEvent::Change => {
                     let text = input.read(cx).text().to_owned();
-                    let digits: String = text.chars().filter(char::is_ascii_digit).take(5).collect();
+                    let digits: String =
+                        text.chars().filter(char::is_ascii_digit).take(5).collect();
                     if digits != text {
                         input.update(cx, |input, cx| input.set_text(digits, cx));
                     }
                 }
                 TextInputEvent::Submit => {
                     let target = input.read(cx).text().parse::<usize>().ok();
-                    if let Some(target) = target.filter(|target| (1..=this.page_count()).contains(target)) {
+                    if let Some(target) =
+                        target.filter(|target| (1..=this.page_count()).contains(target))
+                    {
                         this.go_to_page(target, cx);
                     }
                     this.page_editing = false;
@@ -204,7 +209,11 @@ impl PrintPreview {
 
     pub fn scroll_fraction(&self) -> f32 {
         let (_, total) = self.layout(self.scale());
-        if total > 0.0 { self.scroll_top() / total } else { 0.0 }
+        if total > 0.0 {
+            self.scroll_top() / total
+        } else {
+            0.0
+        }
     }
 
     pub fn busy(&self) -> Option<Busy> {
@@ -219,13 +228,30 @@ impl PrintPreview {
         match &self.state {
             State::Ready(ready) => {
                 let documents = ready.documents;
-                parts.push(format!("{documents} {}", if documents == 1 { "document" } else { "documents" }));
+                parts.push(format!(
+                    "{documents} {}",
+                    if documents == 1 {
+                        "document"
+                    } else {
+                        "documents"
+                    }
+                ));
                 let pages = ready.pages.len();
-                parts.push(format!("{pages} {}", if pages == 1 { "page" } else { "pages" }));
+                parts.push(format!(
+                    "{pages} {}",
+                    if pages == 1 { "page" } else { "pages" }
+                ));
             }
             _ => {
                 let documents = self.request.documents.len();
-                parts.push(format!("{documents} {}", if documents == 1 { "document" } else { "documents" }));
+                parts.push(format!(
+                    "{documents} {}",
+                    if documents == 1 {
+                        "document"
+                    } else {
+                        "documents"
+                    }
+                ));
             }
         }
         parts.join(" · ")
@@ -246,7 +272,8 @@ impl PrintPreview {
                 PreviewDocument::Content(_) => None,
             })
             .collect();
-        let fetch = (!stored.is_empty()).then(|| db(cx).run(move |store| store.fir_documents_by_id(&stored)));
+        let fetch = (!stored.is_empty())
+            .then(|| db(cx).run(move |store| store.fir_documents_by_id(&stored)));
         cx.spawn_in(window, async move |this, cx| {
             let fetched = match fetch {
                 Some(reply) => match reply.await {
@@ -264,7 +291,9 @@ impl PrintPreview {
                         .iter()
                         .filter_map(|document| match document {
                             PreviewDocument::Content(document) => Some((**document).clone()),
-                            PreviewDocument::Stored(_) => stored.next().map(|record| record.document),
+                            PreviewDocument::Stored(_) => {
+                                stored.next().map(|record| record.document)
+                            }
                         })
                         .collect();
                     let count = documents.len();
@@ -274,7 +303,10 @@ impl PrintPreview {
                         mode: request.mode,
                         documents,
                     };
-                    let laid = cx.background_executor().spawn(async move { job.lay_out() }).await;
+                    let laid = cx
+                        .background_executor()
+                        .spawn(async move { job.lay_out() })
+                        .await;
                     Ok((laid, count))
                 }
             };
@@ -307,7 +339,11 @@ impl PrintPreview {
 
     fn widest(&self) -> f32 {
         match &self.state {
-            State::Ready(ready) => ready.pages.iter().map(|page| page.size.width).fold(1.0, f32::max),
+            State::Ready(ready) => ready
+                .pages
+                .iter()
+                .map(|page| page.size.width)
+                .fold(1.0, f32::max),
             _ => 1.0,
         }
     }
@@ -410,7 +446,11 @@ impl PrintPreview {
 
     pub fn set_zoom(&mut self, zoom: Zoom, cx: &mut Context<Self>) {
         let (_, before) = self.layout(self.scale());
-        let fraction = if before > 0.0 { self.scroll_top() / before } else { 0.0 };
+        let fraction = if before > 0.0 {
+            self.scroll_top() / before
+        } else {
+            0.0
+        };
         self.zoom = zoom;
         let (_, after) = self.layout(self.scale());
         self.set_scroll_top(fraction * after);
@@ -422,7 +462,11 @@ impl PrintPreview {
         let next = if direction > 0 {
             ZOOM_STEPS.iter().copied().find(|step| *step > percent)
         } else {
-            ZOOM_STEPS.iter().rev().copied().find(|step| *step < percent)
+            ZOOM_STEPS
+                .iter()
+                .rev()
+                .copied()
+                .find(|step| *step < percent)
         };
         if let Some(next) = next {
             self.set_zoom(Zoom::Percent(next), cx);
@@ -454,7 +498,11 @@ impl PrintPreview {
                 Ok(Err(error)) => {
                     this.update_in(cx, |this, window, cx| {
                         this.busy = None;
-                        toast_error(window, cx, format!("Could not open the save dialog ({error})"));
+                        toast_error(
+                            window,
+                            cx,
+                            format!("Could not open the save dialog ({error})"),
+                        );
                         cx.notify();
                     })
                     .ok();
@@ -476,7 +524,10 @@ impl PrintPreview {
                     let path = path.clone();
                     let title = title.clone();
                     async move {
-                        let options = PdfOptions { title: Some(title), compress: true };
+                        let options = PdfOptions {
+                            title: Some(title),
+                            compress: true,
+                        };
                         let (bytes, _) = write_packet(&packet, &options);
                         std::fs::write(&path, bytes)
                     }
@@ -486,10 +537,15 @@ impl PrintPreview {
                 this.busy = None;
                 match written {
                     Ok(()) => {
-                        let shown = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+                        let shown = path
+                            .file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                            .unwrap_or_default();
                         toast_success(window, cx, format!("PDF saved as {shown}"));
                     }
-                    Err(error) => toast_error(window, cx, format!("Could not save the PDF ({error})")),
+                    Err(error) => {
+                        toast_error(window, cx, format!("Could not save the PDF ({error})"))
+                    }
                 }
                 cx.notify();
             })
@@ -515,9 +571,17 @@ impl PrintPreview {
                 .spawn({
                     let title = title.clone();
                     async move {
-                        let options = PdfOptions { title: Some(title.clone()), compress: true };
+                        let options = PdfOptions {
+                            title: Some(title.clone()),
+                            compress: true,
+                        };
                         let (bytes, _) = write_packet(&packet, &options);
-                        printing::spool(&printing::spool_directory(), &title, &bytes, SystemTime::now())
+                        printing::spool(
+                            &printing::spool_directory(),
+                            &title,
+                            &bytes,
+                            SystemTime::now(),
+                        )
                     }
                 })
                 .await;
@@ -538,7 +602,11 @@ impl PrintPreview {
                         }
                         this.close(cx);
                     }
-                    Err(error) => toast_error(window, cx, format!("Unable to prepare the print job ({error})")),
+                    Err(error) => toast_error(
+                        window,
+                        cx,
+                        format!("Unable to prepare the print job ({error})"),
+                    ),
                 }
                 cx.notify();
             })
@@ -552,7 +620,10 @@ impl PrintPreview {
         let busy = self.busy;
         let description = self.description();
         let title_parts: Vec<&str> = description.splitn(2, " · ").collect();
-        let (lead, rest) = (title_parts[0].to_owned(), title_parts.get(1).map(|rest| format!(" · {rest}")));
+        let (lead, rest) = (
+            title_parts[0].to_owned(),
+            title_parts.get(1).map(|rest| format!(" · {rest}")),
+        );
         h_flex()
             .flex_shrink_0()
             .h(px(48.))
@@ -569,7 +640,13 @@ impl PrintPreview {
                     .items_baseline()
                     .gap_2()
                     .overflow_hidden()
-                    .child(div().flex_shrink_0().text_size(px(15.)).font_semibold().child("Print preview"))
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .text_size(px(15.))
+                            .font_semibold()
+                            .child("Print preview"),
+                    )
                     .child(
                         h_flex()
                             .min_w_0()
@@ -599,7 +676,9 @@ impl PrintPreview {
                             .label("Export PDF")
                             .loading(busy == Some(Busy::Exporting))
                             .disabled(!ready || busy.is_some())
-                            .on_click(cx.listener(|this, _, window, cx| this.export_pdf(window, cx))),
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.export_pdf(window, cx)),
+                            ),
                     )
                     .child(
                         Button::new("preview-print")
@@ -633,8 +712,16 @@ impl PrintPreview {
                 .items_center()
                 .justify_center()
                 .gap_3()
-                .child(small_icon(IconName::TriangleAlert, palette.muted_foreground))
-                .child(div().text_size(px(14.)).font_medium().child("Couldn't prepare the preview"))
+                .child(small_icon(
+                    IconName::TriangleAlert,
+                    palette.muted_foreground,
+                ))
+                .child(
+                    div()
+                        .text_size(px(14.))
+                        .font_medium()
+                        .child("Couldn't prepare the preview"),
+                )
                 .child(
                     div()
                         .max_w(px(420.))
@@ -671,7 +758,13 @@ impl PrintPreview {
                                 |_, _, _| (),
                                 move |bounds, _, window, cx| {
                                     if window.content_mask().bounds.intersects(&bounds) {
-                                        paint_page(&page, bounds.origin, &PagePaint::print(scale), window, cx);
+                                        paint_page(
+                                            &page,
+                                            bounds.origin,
+                                            &PagePaint::print(scale),
+                                            window,
+                                            cx,
+                                        );
                                     }
                                 },
                             )
@@ -736,8 +829,20 @@ impl PrintPreview {
                     .gap_1p5()
                     .px_1()
                     .child("Page")
-                    .child(div().id("preview-page-input").w(px(52.)).child(self.page_input.clone()))
-                    .child(format!("of {}", if count == 0 { "—".to_owned() } else { count.to_string() })),
+                    .child(
+                        div()
+                            .id("preview-page-input")
+                            .w(px(52.))
+                            .child(self.page_input.clone()),
+                    )
+                    .child(format!(
+                        "of {}",
+                        if count == 0 {
+                            "—".to_owned()
+                        } else {
+                            count.to_string()
+                        }
+                    )),
             )
             .child(
                 icon_button("preview-next", IconName::ChevronRight)
@@ -761,13 +866,20 @@ impl PrintPreview {
                     .disabled(!ready)
                     .dropdown_menu(move |menu, _, _| {
                         let mut menu = menu;
-                        let options = std::iter::once((Zoom::Fit, "Fit width".to_owned()))
-                            .chain(ZOOM_STEPS.iter().map(|step| (Zoom::Percent(*step), format!("{step}%"))));
+                        let options = std::iter::once((Zoom::Fit, "Fit width".to_owned())).chain(
+                            ZOOM_STEPS
+                                .iter()
+                                .map(|step| (Zoom::Percent(*step), format!("{step}%"))),
+                        );
                         for (option, text) in options {
                             let weak = weak.clone();
-                            menu = menu.item(PopupMenuItem::new(text).checked(option == zoom).on_click(move |_, _, cx| {
-                                weak.update(cx, |this, cx| this.set_zoom(option, cx)).ok();
-                            }));
+                            menu = menu.item(
+                                PopupMenuItem::new(text).checked(option == zoom).on_click(
+                                    move |_, _, cx| {
+                                        weak.update(cx, |this, cx| this.set_zoom(option, cx)).ok();
+                                    },
+                                ),
+                            );
                         }
                         menu
                     }),
@@ -835,7 +947,10 @@ impl Render for PrintPreview {
             .justify_center()
             .p_6()
             .bg(gpui_kit::black().opacity(0.5))
-            .on_mouse_down(MouseButton::Left, cx.listener(|this, _, _, cx| this.close(cx)))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| this.close(cx)),
+            )
             .on_action(cx.listener(|this, _: &PreviewNextPage, _, cx| this.step_page(1, cx)))
             .on_action(cx.listener(|this, _: &PreviewPreviousPage, _, cx| this.step_page(-1, cx)))
             .on_action(cx.listener(|this, _: &PreviewZoomIn, _, cx| this.step_zoom(1, cx)))

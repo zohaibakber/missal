@@ -9,9 +9,9 @@ use std::cell::RefCell;
 use std::future::Future;
 use std::rc::Rc;
 
-use gpui_kit::{App, AppContext, Context, Entity, Global, Task, Window};
-use gpui_kit::component::notification::Notification;
 use gpui_kit::component::WindowExt;
+use gpui_kit::component::notification::Notification;
+use gpui_kit::{App, AppContext, Context, Entity, Global, Task, Window};
 use missal_core::RepositoryError;
 use missal_store::Store;
 
@@ -50,14 +50,21 @@ pub struct Models {
 impl Global for Models {}
 
 impl Models {
-    pub fn install(db: Db, paths: Option<&Paths>, preferences: Preferences, cx: &mut App) -> Models {
+    pub fn install(
+        db: Db,
+        paths: Option<&Paths>,
+        preferences: Preferences,
+        cx: &mut App,
+    ) -> Models {
         cx.set_global(db);
         let models = Models {
             firs: cx.new(Firs::new),
             templates: cx.new(Templates::new),
             catalog: cx.new(Catalog::new),
             nav: cx.new(|_| Navigator::new(Route::Firs)),
-            prefs: cx.new(|_| PrefsModel::new(preferences, paths.map(|paths| paths.preferences.clone()))),
+            prefs: cx.new(|_| {
+                PrefsModel::new(preferences, paths.map(|paths| paths.preferences.clone()))
+            }),
         };
         cx.set_global(models.clone());
         models
@@ -97,7 +104,8 @@ where
     let reply = db(cx).run(job);
     cx.spawn_in(window, async move |this, cx| {
         let result = reply.await;
-        this.update_in(cx, |this, window, cx| done(this, result, window, cx)).ok();
+        this.update_in(cx, |this, window, cx| done(this, result, window, cx))
+            .ok();
     })
     .detach();
 }
@@ -174,7 +182,11 @@ pub fn toast_detailed(
     push_toast(window, cx, kind, Some(title.into()), message.into());
 }
 
-pub fn toast_success(window: &mut Window, cx: &mut App, message: impl Into<gpui_kit::SharedString>) {
+pub fn toast_success(
+    window: &mut Window,
+    cx: &mut App,
+    message: impl Into<gpui_kit::SharedString>,
+) {
     push_toast(window, cx, ToastKind::Success, None, message.into());
 }
 
@@ -182,7 +194,11 @@ pub fn toast_error(window: &mut Window, cx: &mut App, message: impl Into<gpui_ki
     push_toast(window, cx, ToastKind::Error, None, message.into());
 }
 
-pub fn toast_warning(window: &mut Window, cx: &mut App, message: impl Into<gpui_kit::SharedString>) {
+pub fn toast_warning(
+    window: &mut Window,
+    cx: &mut App,
+    message: impl Into<gpui_kit::SharedString>,
+) {
     push_toast(window, cx, ToastKind::Warning, None, message.into());
 }
 

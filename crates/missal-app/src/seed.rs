@@ -76,8 +76,8 @@ fn sample_fir(index: usize, random: &mut Random) -> Fir {
     let accused_count = 1 + random.below(3);
     let witness_count = random.below(3);
     let name = |random: &mut Random| NAMES[random.below(NAMES.len())].to_owned();
-    let arrested = matches!(status, FirStatus::ChallanSubmitted | FirStatus::Closed)
-        || random.below(4) == 0;
+    let arrested =
+        matches!(status, FirStatus::ChallanSubmitted | FirStatus::Closed) || random.below(4) == 0;
     Fir {
         fir_no: format!("{number}/{year}"),
         complainant: name(random),
@@ -126,11 +126,18 @@ pub fn seed_firs(database: &Path, count: usize) -> Result<usize, RepositoryError
     let mut random = Random(0x9E37_79B9_7F4A_7C15);
     let first = count.min(6);
     let templates = store.templates()?;
-    let template_ids: Vec<TemplateId> = templates.iter().take(4).map(|template| template.id).collect();
+    let template_ids: Vec<TemplateId> = templates
+        .iter()
+        .take(4)
+        .map(|template| template.id)
+        .collect();
     for index in 0..first {
         let record = store.create_fir(&sample_fir(index, &mut random))?;
         if index < 3 {
-            store.add_templates_to_fir(record.id, &template_ids[..template_ids.len().min(1 + index)])?;
+            store.add_templates_to_fir(
+                record.id,
+                &template_ids[..template_ids.len().min(1 + index)],
+            )?;
         }
     }
     let mut connection = store.into_connection();
@@ -188,6 +195,11 @@ mod tests {
         assert!(firs.iter().any(|fir| fir.status == FirStatus::Closed));
         let first = store.fir(firs[firs.len() - 1].id).unwrap();
         assert!(first.fir.validated().is_ok());
-        assert!(!store.fir_documents(firs[firs.len() - 1].id).unwrap().is_empty());
+        assert!(
+            !store
+                .fir_documents(firs[firs.len() - 1].id)
+                .unwrap()
+                .is_empty()
+        );
     }
 }

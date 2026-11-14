@@ -30,18 +30,37 @@ pub fn text_area(
     rows: usize,
 ) -> Entity<TextInput> {
     cx.new(|cx| {
-        configure(TextInput::new(window, cx).multiline(rows, rows + 4), Kind::Urdu, placeholder, text)
+        configure(
+            TextInput::new(window, cx).multiline(rows, rows + 4),
+            Kind::Urdu,
+            placeholder,
+            text,
+        )
     })
 }
 
 fn configure(input: TextInput, kind: Kind, placeholder: &str, text: &str) -> TextInput {
     let input = match kind {
-        Kind::Urdu => input.direction(Direction::Rtl).align(Align::Start).text_size(URDU_SIZE),
-        Kind::Numeric => input.direction(Direction::Ltr).align(Align::Right).text_size(LATIN_SIZE),
-        Kind::Latin => input.direction(Direction::Ltr).align(Align::Start).text_size(LATIN_SIZE),
-        Kind::Auto => input.direction(Direction::Auto).align(Align::Start).text_size(URDU_SIZE),
+        Kind::Urdu => input
+            .direction(Direction::Rtl)
+            .align(Align::Start)
+            .text_size(URDU_SIZE),
+        Kind::Numeric => input
+            .direction(Direction::Ltr)
+            .align(Align::Right)
+            .text_size(LATIN_SIZE),
+        Kind::Latin => input
+            .direction(Direction::Ltr)
+            .align(Align::Start)
+            .text_size(LATIN_SIZE),
+        Kind::Auto => input
+            .direction(Direction::Auto)
+            .align(Align::Start)
+            .text_size(URDU_SIZE),
     };
-    input.placeholder(placeholder.to_owned()).default_text(text.to_owned())
+    input
+        .placeholder(placeholder.to_owned())
+        .default_text(text.to_owned())
 }
 
 pub fn set_text<T: 'static>(input: &Entity<TextInput>, text: &str, cx: &mut Context<T>) {

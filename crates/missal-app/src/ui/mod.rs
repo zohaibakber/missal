@@ -11,9 +11,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable, StyledExt, h_flex, v_flex};
-use gpui_kit::{
-    AnyElement, Div, Hsla, IntoElement, ParentElement, SharedString, Styled, div, px,
-};
+use gpui_kit::{AnyElement, Div, Hsla, IntoElement, ParentElement, SharedString, Styled, div, px};
 use missal_text::label;
 
 use crate::platform::primary_modifier_label;
@@ -38,7 +36,10 @@ pub fn tooltip_with_keys(
 ) -> impl Fn(&mut gpui_kit::Window, &mut gpui_kit::App) -> gpui_kit::AnyView + 'static {
     move |window, cx| {
         let text = match keys {
-            Some(keys) => format!("{text}  ({})", keys.replace("Mod", primary_modifier_label())),
+            Some(keys) => format!(
+                "{text}  ({})",
+                keys.replace("Mod", primary_modifier_label())
+            ),
             None => text.to_owned(),
         };
         Tooltip::new(text).build(window, cx)
@@ -103,7 +104,11 @@ pub fn save_status(palette: &Palette, dirty: bool) -> impl IntoElement {
         .gap_1p5()
         .px_2()
         .text_size(px(12.))
-        .text_color(if dirty { palette.foreground } else { palette.muted_foreground })
+        .text_color(if dirty {
+            palette.foreground
+        } else {
+            palette.muted_foreground
+        })
         .child(dirty_dot(palette, dirty))
         .child(if dirty { "Unsaved" } else { "Saved" })
 }
@@ -171,22 +176,31 @@ pub fn key_cap(palette: &Palette, text: impl Into<SharedString>) -> Div {
 }
 
 pub fn key_hint(palette: &Palette, keys: &str) -> Div {
-    h_flex().items_center().gap_1().children(
-        key_caps(keys).into_iter().enumerate().flat_map(|(step, caps)| {
-            let mut items: Vec<AnyElement> = Vec::new();
-            if step > 0 {
-                items.push(
-                    div()
-                        .text_size(px(11.))
-                        .text_color(palette.muted_foreground)
-                        .child("then")
-                        .into_any_element(),
-                );
-            }
-            items.extend(caps.into_iter().map(|cap| key_cap(palette, cap).into_any_element()));
-            items
-        }),
-    )
+    h_flex()
+        .items_center()
+        .gap_1()
+        .children(
+            key_caps(keys)
+                .into_iter()
+                .enumerate()
+                .flat_map(|(step, caps)| {
+                    let mut items: Vec<AnyElement> = Vec::new();
+                    if step > 0 {
+                        items.push(
+                            div()
+                                .text_size(px(11.))
+                                .text_color(palette.muted_foreground)
+                                .child("then")
+                                .into_any_element(),
+                        );
+                    }
+                    items.extend(
+                        caps.into_iter()
+                            .map(|cap| key_cap(palette, cap).into_any_element()),
+                    );
+                    items
+                }),
+        )
 }
 
 pub fn skeleton_bar(palette: &Palette, width: f32, height: f32) -> Div {

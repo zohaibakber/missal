@@ -28,7 +28,8 @@ pub fn download_base(repository: &str, tag: &str) -> String {
 }
 
 pub fn parse_releases(json: &str) -> Result<Vec<Release>, String> {
-    let value: Value = serde_json::from_str(json).map_err(|error| format!("invalid release list: {error}"))?;
+    let value: Value =
+        serde_json::from_str(json).map_err(|error| format!("invalid release list: {error}"))?;
     let items = value.as_array().ok_or("release list is not an array")?;
     let mut releases = Vec::new();
     for item in items {
@@ -62,12 +63,21 @@ pub fn parse_releases(json: &str) -> Result<Vec<Release>, String> {
     Ok(releases)
 }
 
-pub fn newest_update<'a>(releases: &'a [Release], current: &Version, channel: &str) -> Option<&'a Release> {
+pub fn newest_update<'a>(
+    releases: &'a [Release],
+    current: &Version,
+    channel: &str,
+) -> Option<&'a Release> {
     let feed = feed_name(channel);
     releases
         .iter()
         .filter(|release| release.version > *current)
-        .filter(|release| release.assets.iter().any(|asset| asset.eq_ignore_ascii_case(&feed)))
+        .filter(|release| {
+            release
+                .assets
+                .iter()
+                .any(|asset| asset.eq_ignore_ascii_case(&feed))
+        })
         .max_by(|a, b| a.version.cmp(&b.version))
 }
 
@@ -95,7 +105,10 @@ mod tests {
     #[test]
     fn drafts_prereleases_and_foreign_tags_are_dropped() {
         let releases = parse_releases(LIST).unwrap();
-        let tags: Vec<_> = releases.iter().map(|release| release.tag.as_str()).collect();
+        let tags: Vec<_> = releases
+            .iter()
+            .map(|release| release.tag.as_str())
+            .collect();
         assert_eq!(tags, ["native-v0.2.0", "native-v0.10.0", "native-v0.1.0"]);
     }
 
@@ -129,7 +142,10 @@ mod tests {
             download_base(REPOSITORY, "native-v0.2.0"),
             "https://github.com/zohaibakber/missal/releases/download/native-v0.2.0"
         );
-        assert!(releases_url(REPOSITORY).starts_with("https://api.github.com/repos/zohaibakber/missal/releases"));
+        assert!(
+            releases_url(REPOSITORY)
+                .starts_with("https://api.github.com/repos/zohaibakber/missal/releases")
+        );
         assert_eq!(feed_name("win"), "releases.win.json");
     }
 }

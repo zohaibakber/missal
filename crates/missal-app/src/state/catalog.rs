@@ -1,9 +1,7 @@
 use std::rc::Rc;
 
 use gpui_kit::{Context, EventEmitter};
-use missal_core::{
-    AppSettings, FieldCatalog, GlobalPlaceholder, Placeholder, PlaceholderSource,
-};
+use missal_core::{AppSettings, FieldCatalog, GlobalPlaceholder, Placeholder, PlaceholderSource};
 
 use super::{Load, run_db};
 
@@ -37,7 +35,13 @@ impl Catalog {
     pub fn reload(&mut self, cx: &mut Context<Self>) {
         run_db(
             cx,
-            |store| Ok((store.settings()?, store.placeholders()?, store.global_placeholders()?)),
+            |store| {
+                Ok((
+                    store.settings()?,
+                    store.placeholders()?,
+                    store.global_placeholders()?,
+                ))
+            },
             |this, result, cx| {
                 match result {
                     Ok((settings, placeholders, globals)) => {

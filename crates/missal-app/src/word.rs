@@ -19,12 +19,18 @@ pub fn file_stem(path: &Path) -> Option<String> {
         .filter(|stem| !stem.is_empty())
 }
 
-pub fn import_file(path: PathBuf, catalog: &FieldCatalog, markers: &FieldMarkers) -> Result<WordImport, String> {
+pub fn import_file(
+    path: PathBuf,
+    catalog: &FieldCatalog,
+    markers: &FieldMarkers,
+) -> Result<WordImport, String> {
     if !is_docx(&path) {
         return Err("Choose a Word document with the .docx extension.".to_owned());
     }
-    let bytes = std::fs::read(&path).map_err(|error| format!("The file could not be read ({error})."))?;
-    let imported = missal_docx::import(&bytes, catalog, markers).map_err(|error| error.to_string())?;
+    let bytes =
+        std::fs::read(&path).map_err(|error| format!("The file could not be read ({error})."))?;
+    let imported =
+        missal_docx::import(&bytes, catalog, markers).map_err(|error| error.to_string())?;
     let name = imported
         .suggested_name
         .map(|name| name.trim().to_owned())
@@ -32,7 +38,11 @@ pub fn import_file(path: PathBuf, catalog: &FieldCatalog, markers: &FieldMarkers
         .or_else(|| file_stem(&path));
     Ok(WordImport {
         document: imported.document,
-        notices: imported.notices.into_iter().map(|notice| notice.message()).collect(),
+        notices: imported
+            .notices
+            .into_iter()
+            .map(|notice| notice.message())
+            .collect(),
         name,
     })
 }
@@ -51,12 +61,19 @@ mod tests {
 
     #[test]
     fn the_file_name_without_extension_names_the_template() {
-        assert_eq!(file_stem(Path::new("/x/ضمانت درخواست.docx")).as_deref(), Some("ضمانت درخواست"));
+        assert_eq!(
+            file_stem(Path::new("/x/ضمانت درخواست.docx")).as_deref(),
+            Some("ضمانت درخواست")
+        );
     }
 
     #[test]
     fn a_non_docx_choice_is_rejected_before_reading() {
-        let result = import_file(PathBuf::from("/nonexistent/file.txt"), &FieldCatalog::default(), &FieldMarkers::default());
+        let result = import_file(
+            PathBuf::from("/nonexistent/file.txt"),
+            &FieldCatalog::default(),
+            &FieldMarkers::default(),
+        );
         assert!(result.is_err_and(|message| message.contains(".docx")));
     }
 }

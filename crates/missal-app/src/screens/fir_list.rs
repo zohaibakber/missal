@@ -1,14 +1,14 @@
 use std::collections::HashSet;
 
+use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::checkbox::Checkbox;
+use gpui_kit::component::menu::DropdownMenu as _;
 use gpui_kit::component::menu::{ContextMenuExt as _, PopupMenuItem};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::{Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
-use gpui_kit::TestSupportExt as _;
-use gpui_kit::component::menu::DropdownMenu as _;
 
 use gpui_kit::{
     AnyElement, App, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
@@ -111,7 +111,8 @@ impl FirListScreen {
     }
 
     pub fn scroll_to_row(&mut self, index: usize, cx: &mut Context<Self>) {
-        self.scroll.scroll_to_item_strict(index, ScrollStrategy::Top);
+        self.scroll
+            .scroll_to_item_strict(index, ScrollStrategy::Top);
         cx.notify();
     }
 
@@ -150,10 +151,19 @@ impl FirListScreen {
         }
         self.stale = false;
         let firs = self.models.firs.read(cx);
-        let shown = self.index.update(&firs.rows, firs.version(), &self.query, &self.statuses, self.sort);
+        let shown = self.index.update(
+            &firs.rows,
+            firs.version(),
+            &self.query,
+            &self.statuses,
+            self.sort,
+        );
         self.visible.clear();
         self.visible.extend_from_slice(shown);
-        if self.focused.is_some_and(|index| index >= self.visible.len()) {
+        if self
+            .focused
+            .is_some_and(|index| index >= self.visible.len())
+        {
             self.focused = None;
         }
     }
@@ -175,9 +185,15 @@ impl FirListScreen {
 
     pub fn toggle_sort(&mut self, column: Column, cx: &mut Context<Self>) {
         self.sort = if self.sort.column == column {
-            Sort { column, descending: !self.sort.descending }
+            Sort {
+                column,
+                descending: !self.sort.descending,
+            }
         } else {
-            Sort { column, descending: false }
+            Sort {
+                column,
+                descending: false,
+            }
         };
         self.stale = true;
         self.save_table_prefs(cx);
@@ -189,7 +205,11 @@ impl FirListScreen {
     }
 
     pub fn toggle_status(&mut self, status: FirStatus, cx: &mut Context<Self>) {
-        match self.statuses.iter().position(|existing| *existing == status) {
+        match self
+            .statuses
+            .iter()
+            .position(|existing| *existing == status)
+        {
             Some(position) => {
                 self.statuses.remove(position);
             }
@@ -228,7 +248,12 @@ impl FirListScreen {
 
     fn row_at(&self, index: usize, cx: &App) -> Option<FirRow> {
         let position = *self.visible.get(index)?;
-        self.models.firs.read(cx).rows.get(position as usize).cloned()
+        self.models
+            .firs
+            .read(cx)
+            .rows
+            .get(position as usize)
+            .cloned()
     }
 
     pub fn toggle_selected(&mut self, id: FirId, cx: &mut Context<Self>) {
@@ -247,7 +272,10 @@ impl FirListScreen {
     pub fn toggle_all(&mut self, cx: &mut Context<Self>) {
         let ids: Vec<FirId> = {
             let rows = &self.models.firs.read(cx).rows;
-            self.visible.iter().map(|&index| rows[index as usize].id).collect()
+            self.visible
+                .iter()
+                .map(|&index| rows[index as usize].id)
+                .collect()
         };
         if !ids.is_empty() && ids.iter().all(|id| self.selected.contains(id)) {
             self.selected.clear();
@@ -269,7 +297,11 @@ impl FirListScreen {
         let last = self.visible.len() - 1;
         let next = match self.focused {
             None => {
-                if delta >= 0 { 0 } else { last }
+                if delta >= 0 {
+                    0
+                } else {
+                    last
+                }
             }
             Some(current) => (current as isize + delta).clamp(0, last as isize) as usize,
         };
@@ -302,7 +334,15 @@ impl FirListScreen {
             .focused
             .and_then(|index| self.row_at(index, cx))
             .map(|row| row.id)
-            .or_else(|| (self.selected.len() == 1).then(|| *self.selected.iter().next().unwrap_or_else(|| unreachable!())));
+            .or_else(|| {
+                (self.selected.len() == 1).then(|| {
+                    *self
+                        .selected
+                        .iter()
+                        .next()
+                        .unwrap_or_else(|| unreachable!())
+                })
+            });
         if let Some(id) = target {
             self.edit_fir(id, window, cx);
         }
@@ -329,9 +369,15 @@ impl FirListScreen {
             "Every document written for these FIRs is deleted too. This can't be undone."
         };
         let screen = cx.entity().downgrade();
-        let label = if ids.len() == 1 { "Delete FIR" } else { "Delete FIRs" };
+        let label = if ids.len() == 1 {
+            "Delete FIR"
+        } else {
+            "Delete FIRs"
+        };
         confirm_delete(window, cx, title, description, label, move |window, cx| {
-            screen.update(cx, |this, cx| this.delete(ids.clone(), window, cx)).ok();
+            screen
+                .update(cx, |this, cx| this.delete(ids.clone(), window, cx))
+                .ok();
         });
     }
 
@@ -344,10 +390,16 @@ impl FirListScreen {
             move |this, result, window, cx| match result {
                 Ok(()) => {
                     let count = ids.len();
-                    this.models.firs.update(cx, |firs, cx| firs.remove(&ids, cx));
+                    this.models
+                        .firs
+                        .update(cx, |firs, cx| firs.remove(&ids, cx));
                     this.selected.clear();
                     this.focused = None;
-                    let message = if count == 1 { "FIR deleted".to_owned() } else { format!("{count} FIRs deleted") };
+                    let message = if count == 1 {
+                        "FIR deleted".to_owned()
+                    } else {
+                        format!("{count} FIRs deleted")
+                    };
                     toast_success(window, cx, message);
                     this.focus(window, cx);
                 }
@@ -395,7 +447,10 @@ impl FirListScreen {
                                 this.set_search("", cx);
                             }
                             cx.stop_propagation();
-                        } else if (key == "down" || key == "enter") && plain && !this.visible.is_empty() {
+                        } else if (key == "down" || key == "enter")
+                            && plain
+                            && !this.visible.is_empty()
+                        {
                             this.focus(window, cx);
                             this.move_focus(1, cx);
                             cx.stop_propagation();
@@ -439,9 +494,14 @@ impl FirListScreen {
                                         div().text_size(px(14.)).child(label(column.title()).rtl())
                                     })
                                     .checked(!hidden.contains(&column))
-                                    .on_click(move |_, _, cx| {
-                                        weak.update(cx, |this, cx| this.toggle_column(column, cx)).ok();
-                                    }),
+                                    .on_click(
+                                        move |_, _, cx| {
+                                            weak.update(cx, |this, cx| {
+                                                this.toggle_column(column, cx)
+                                            })
+                                            .ok();
+                                        },
+                                    ),
                                 )
                             })
                         }
@@ -458,7 +518,12 @@ impl FirListScreen {
             .into_any_element()
     }
 
-    fn status_filter(&self, palette: &Palette, selected: Vec<FirStatus>, screen: Entity<Self>) -> impl IntoElement {
+    fn status_filter(
+        &self,
+        palette: &Palette,
+        selected: Vec<FirStatus>,
+        screen: Entity<Self>,
+    ) -> impl IntoElement {
         let palette = *palette;
         let active = !selected.is_empty();
         let trigger = Button::new("status-filter")
@@ -501,7 +566,9 @@ impl FirListScreen {
                                 screen.update(cx, |this, cx| this.toggle_status(status, cx));
                                 cx.notify();
                             }))
-                            .child(div().w(px(16.)).children(checked.then(|| small_icon(IconName::Check, palette.foreground))))
+                            .child(div().w(px(16.)).children(
+                                checked.then(|| small_icon(IconName::Check, palette.foreground)),
+                            ))
                             .child(status_icon(status, palette.status(status), px(14.)))
                             .child(div().text_size(px(14.)).child(label(status.label()).rtl()))
                     }))
@@ -532,7 +599,9 @@ impl FirListScreen {
     fn header_row(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let all_selected = !self.visible.is_empty() && {
             let rows = &self.models.firs.read(cx).rows;
-            self.visible.iter().all(|&index| self.selected.contains(&rows[index as usize].id))
+            self.visible
+                .iter()
+                .all(|&index| self.selected.contains(&rows[index as usize].id))
         };
         let any_selected = !self.selected.is_empty();
         h_flex()
@@ -559,43 +628,68 @@ impl FirListScreen {
                             .on_click(cx.listener(|this, _, _, cx| this.toggle_all(cx))),
                     ),
             )
-            .children(Column::ALL.iter().filter(|column| !self.hidden.contains(column)).map(|column| {
-                let column = *column;
-                let sorted = self.sort.column == column;
-                let icon = if !sorted {
-                    IconName::ArrowUpDown
-                } else if self.sort.descending {
-                    IconName::ArrowDown
-                } else {
-                    IconName::ArrowUp
-                };
-                let cell = h_flex()
-                    .id(("sort", column as usize))
-                    .test_support()
-                    .flex_row_reverse()
-                    .h_full()
-                    .px_2()
-                    .gap_1p5()
-                    .items_center()
-                    .cursor_pointer()
-                    .when(sorted, |this| this.text_color(palette.foreground))
-                    .hover({
-                        let foreground = palette.foreground;
-                        move |style| style.text_color(foreground)
-                    })
-                    .on_click(cx.listener(move |this, _, _, cx| this.toggle_sort(column, cx)))
-                    .child(div().text_size(px(13.)).font_medium().child(label(column.title()).rtl()))
-                    .child(small_icon(icon, if sorted { palette.foreground } else { palette.muted_foreground.opacity(0.7) }));
-                match column_width(column) {
-                    Some(width) => cell.w(px(width)).flex_shrink_0(),
-                    None => cell.flex_1().min_w_0(),
-                }
-            }))
+            .children(
+                Column::ALL
+                    .iter()
+                    .filter(|column| !self.hidden.contains(column))
+                    .map(|column| {
+                        let column = *column;
+                        let sorted = self.sort.column == column;
+                        let icon = if !sorted {
+                            IconName::ArrowUpDown
+                        } else if self.sort.descending {
+                            IconName::ArrowDown
+                        } else {
+                            IconName::ArrowUp
+                        };
+                        let cell = h_flex()
+                            .id(("sort", column as usize))
+                            .test_support()
+                            .flex_row_reverse()
+                            .h_full()
+                            .px_2()
+                            .gap_1p5()
+                            .items_center()
+                            .cursor_pointer()
+                            .when(sorted, |this| this.text_color(palette.foreground))
+                            .hover({
+                                let foreground = palette.foreground;
+                                move |style| style.text_color(foreground)
+                            })
+                            .on_click(
+                                cx.listener(move |this, _, _, cx| this.toggle_sort(column, cx)),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .font_medium()
+                                    .child(label(column.title()).rtl()),
+                            )
+                            .child(small_icon(
+                                icon,
+                                if sorted {
+                                    palette.foreground
+                                } else {
+                                    palette.muted_foreground.opacity(0.7)
+                                },
+                            ));
+                        match column_width(column) {
+                            Some(width) => cell.w(px(width)).flex_shrink_0(),
+                            None => cell.flex_1().min_w_0(),
+                        }
+                    }),
+            )
             .child(div().w(px(ACTIONS_WIDTH)).flex_shrink_0())
             .into_any_element()
     }
 
-    fn render_row(&self, index: usize, palette: &Palette, any_selected: bool, cx: &mut Context<Self>) -> Option<AnyElement> {
+    fn render_row(
+        &self,
+        index: usize,
+        palette: &Palette,
+        any_selected: bool,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         let row = self.row_at(index, cx)?;
         let id = row.id;
         let selected = self.selected.contains(&id);
@@ -614,7 +708,11 @@ impl FirListScreen {
             .border_color(palette.border)
             .cursor_pointer()
             .when(selected, |this| this.bg(palette.muted))
-            .when(focused, |this| this.bg(palette.accent).border_l_2().border_color(palette.primary))
+            .when(focused, |this| {
+                this.bg(palette.accent)
+                    .border_l_2()
+                    .border_color(palette.primary)
+            })
             .hover(move |style| style.bg(palette.accent.opacity(0.7)))
             .on_click(cx.listener(move |this, _, window, cx| this.open_row(index, window, cx)))
             .child(
@@ -626,51 +724,72 @@ impl FirListScreen {
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         div()
-                            .when(!any_selected && !selected && !focused, |this| this.invisible())
+                            .when(!any_selected && !selected && !focused, |this| {
+                                this.invisible()
+                            })
                             .group_hover("fir-row", |style| style.visible())
                             .child(
                                 Checkbox::new(("row-select", index))
                                     .checked(selected)
                                     .accessibility_label("Select FIR")
-                                    .on_click(cx.listener(move |this, _, _, cx| this.toggle_selected(id, cx))),
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.toggle_selected(id, cx)
+                                    })),
                             ),
                     ),
             )
-            .children(Column::ALL.iter().filter(|column| !self.hidden.contains(column)).map(|column| {
-                let cell = div().h_full().px_2().flex().items_center().overflow_hidden();
-                let cell = match column_width(*column) {
-                    Some(width) => cell.w(px(width)).flex_shrink_0(),
-                    None => cell.flex_1().min_w_0(),
-                };
-                match column {
-                    Column::FirNo => cell
-                        .text_size(px(14.))
-                        .font_medium()
-                        .child(label(row.no.clone()).rtl().truncate()),
-                    Column::Offence => cell
-                        .text_size(px(17.))
-                        .child(label(row.offence.clone()).rtl().truncate()),
-                    Column::Status => cell
-                        .gap_2()
-                        .flex_row_reverse()
-                        .justify_start()
-                        .text_size(px(16.))
-                        .child(status_icon(row.status, palette.status(row.status), px(14.)))
-                        .child(label(row.status.label()).rtl()),
-                    Column::Date => cell
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child(label(row.date.clone()).rtl()),
-                    Column::IncidentDate => cell
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child(label(row.incident.clone()).rtl()),
-                    Column::ArrestDate => cell
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child(label(if row.arrest.is_empty() { SharedString::from("—") } else { row.arrest.clone() }).rtl()),
-                }
-            }))
+            .children(
+                Column::ALL
+                    .iter()
+                    .filter(|column| !self.hidden.contains(column))
+                    .map(|column| {
+                        let cell = div()
+                            .h_full()
+                            .px_2()
+                            .flex()
+                            .items_center()
+                            .overflow_hidden();
+                        let cell = match column_width(*column) {
+                            Some(width) => cell.w(px(width)).flex_shrink_0(),
+                            None => cell.flex_1().min_w_0(),
+                        };
+                        match column {
+                            Column::FirNo => cell
+                                .text_size(px(14.))
+                                .font_medium()
+                                .child(label(row.no.clone()).rtl().truncate()),
+                            Column::Offence => cell
+                                .text_size(px(17.))
+                                .child(label(row.offence.clone()).rtl().truncate()),
+                            Column::Status => cell
+                                .gap_2()
+                                .flex_row_reverse()
+                                .justify_start()
+                                .text_size(px(16.))
+                                .child(status_icon(row.status, palette.status(row.status), px(14.)))
+                                .child(label(row.status.label()).rtl()),
+                            Column::Date => cell
+                                .text_size(px(13.))
+                                .text_color(palette.muted_foreground)
+                                .child(label(row.date.clone()).rtl()),
+                            Column::IncidentDate => cell
+                                .text_size(px(13.))
+                                .text_color(palette.muted_foreground)
+                                .child(label(row.incident.clone()).rtl()),
+                            Column::ArrestDate => cell
+                                .text_size(px(13.))
+                                .text_color(palette.muted_foreground)
+                                .child(
+                                    label(if row.arrest.is_empty() {
+                                        SharedString::from("—")
+                                    } else {
+                                        row.arrest.clone()
+                                    })
+                                    .rtl(),
+                                ),
+                        }
+                    }),
+            )
             .child(
                 div()
                     .w(px(ACTIONS_WIDTH))
@@ -679,16 +798,19 @@ impl FirListScreen {
                     .justify_center()
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
-                        div().invisible().group_hover("fir-row", |style| style.visible()).child(
-                            Button::new(("row-actions", index))
-                                .ghost()
-                                .small()
-                                .icon(IconName::Ellipsis)
-                                .dropdown_menu({
-                                    let weak = weak.clone();
-                                    move |menu, _, _| row_menu(menu, weak.clone(), id)
-                                }),
-                        ),
+                        div()
+                            .invisible()
+                            .group_hover("fir-row", |style| style.visible())
+                            .child(
+                                Button::new(("row-actions", index))
+                                    .ghost()
+                                    .small()
+                                    .icon(IconName::Ellipsis)
+                                    .dropdown_menu({
+                                        let weak = weak.clone();
+                                        move |menu, _, _| row_menu(menu, weak.clone(), id)
+                                    }),
+                            ),
                     ),
             );
         Some(
@@ -785,7 +907,9 @@ impl FirListScreen {
                                 let palette = *Palette::get(cx);
                                 let any_selected = !this.selected.is_empty();
                                 range
-                                    .filter_map(|index| this.render_row(index, &palette, any_selected, cx))
+                                    .filter_map(|index| {
+                                        this.render_row(index, &palette, any_selected, cx)
+                                    })
                                     .collect::<Vec<_>>()
                             }),
                         )
@@ -818,8 +942,14 @@ impl FirListScreen {
                             .danger()
                             .xsmall()
                             .icon(IconName::Trash)
-                            .label(if selected == 1 { "Delete FIR".to_owned() } else { format!("Delete {selected} FIRs") })
-                            .on_click(cx.listener(|this, _, window, cx| this.delete_selected(window, cx))),
+                            .label(if selected == 1 {
+                                "Delete FIR".to_owned()
+                            } else {
+                                format!("Delete {selected} FIRs")
+                            })
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.delete_selected(window, cx)),
+                            ),
                     )
                     .into_any_element(),
             );
@@ -851,7 +981,8 @@ fn row_menu(
         PopupMenuItem::new("Edit details")
             .icon(IconName::Pencil)
             .on_click(move |_, window, cx| {
-                edit.update(cx, |this, cx| this.edit_fir(id, window, cx)).ok();
+                edit.update(cx, |this, cx| this.edit_fir(id, window, cx))
+                    .ok();
             }),
     )
     .item(PopupMenuItem::separator())
@@ -859,7 +990,9 @@ fn row_menu(
         PopupMenuItem::new("Delete")
             .icon(IconName::Trash)
             .on_click(move |_, window, cx| {
-                delete.update(cx, |this, cx| this.request_delete(vec![id], window, cx)).ok();
+                delete
+                    .update(cx, |this, cx| this.request_delete(vec![id], window, cx))
+                    .ok();
             }),
     )
 }
@@ -894,7 +1027,9 @@ impl Render for FirListScreen {
                 }
             }))
             .on_action(cx.listener(|this, _: &EditFir, window, cx| this.edit_focused(window, cx)))
-            .on_action(cx.listener(|this, _: &FocusSearch, window, cx| this.focus_search(window, cx)))
+            .on_action(
+                cx.listener(|this, _: &FocusSearch, window, cx| this.focus_search(window, cx)),
+            )
             .child(self.header(window, cx))
             .child(div().flex_1().min_h_0().child(body))
             .children(footer)

@@ -46,7 +46,15 @@ fn boot(cx: &mut TestAppContext, count: usize) -> Fixture {
         let (handle, shell) = open_shell(&models, options, cx).unwrap();
         (handle, shell, models)
     });
-    let fixture = Fixture { handle, shell, models, database, toasts, printed, _directory: directory };
+    let fixture = Fixture {
+        handle,
+        shell,
+        models,
+        database,
+        toasts,
+        printed,
+        _directory: directory,
+    };
     fixture.settle(cx);
     fixture
 }
@@ -55,13 +63,16 @@ impl Fixture {
     fn settle(&self, cx: &mut TestAppContext) {
         for _ in 0..4 {
             cx.run_until_parked();
-            cx.update_window(self.handle, |_, window, _| window.refresh()).ok();
+            cx.update_window(self.handle, |_, window, _| window.refresh())
+                .ok();
         }
         cx.run_until_parked();
     }
 
     fn with<R>(&self, cx: &mut TestAppContext, f: impl FnOnce(&mut Window, &mut App) -> R) -> R {
-        let result = cx.update_window(self.handle, |_, window, cx| f(window, cx)).unwrap();
+        let result = cx
+            .update_window(self.handle, |_, window, cx| f(window, cx))
+            .unwrap();
         self.settle(cx);
         result
     }
@@ -91,7 +102,10 @@ impl Fixture {
             }
             self.settle(cx);
         }
-        assert!(cx.update(|cx| preview.read(cx).is_ready()), "the packet is laid out");
+        assert!(
+            cx.update(|cx| preview.read(cx).is_ready()),
+            "the packet is laid out"
+        );
         preview
     }
 
@@ -100,7 +114,10 @@ impl Fixture {
     }
 }
 
-fn fir_workspace(fixture: &Fixture, cx: &mut TestAppContext) -> Entity<missal_app::screens::workspace::WorkspaceScreen> {
+fn fir_workspace(
+    fixture: &Fixture,
+    cx: &mut TestAppContext,
+) -> Entity<missal_app::screens::workspace::WorkspaceScreen> {
     fixture.go(cx, Route::Fir(FirId::new(3).unwrap()));
     cx.update(|cx| fixture.shell.read(cx).workspace().unwrap())
 }
@@ -114,7 +131,9 @@ fn count_pdf_pages(bytes: &[u8]) -> usize {
 }
 
 fn template_docx(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../templates").join(name)
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../templates")
+        .join(name)
 }
 
 const BAIL_DOCX: &str = "آمد روبکار عبوری ضمانت.docx";
@@ -127,12 +146,19 @@ fn print_preview_lays_out_the_included_documents_and_navigates(cx: &mut TestAppC
     let preview = fixture.open_preview(cx);
     let (documents, pages, description) = cx.update(|cx| {
         let preview = preview.read(cx);
-        (preview.document_count(), preview.page_count(), preview.description())
+        (
+            preview.document_count(),
+            preview.page_count(),
+            preview.description(),
+        )
     });
     assert_eq!(documents, 3);
     assert!(pages >= 3, "{pages} pages for three documents");
     assert!(description.starts_with("FIR "), "{description}");
-    assert!(description.ends_with(&format!("3 documents · {pages} pages")), "{description}");
+    assert!(
+        description.ends_with(&format!("3 documents · {pages} pages")),
+        "{description}"
+    );
     assert_eq!(cx.update(|cx| preview.read(cx).current_page()), 1);
 
     fixture.press(cx, "pagedown");
@@ -144,7 +170,9 @@ fn print_preview_lays_out_the_included_documents_and_navigates(cx: &mut TestAppC
     fixture.press(cx, "pageup");
     fixture.press(cx, "pageup");
     assert_eq!(cx.update(|cx| preview.read(cx).current_page()), 1);
-    fixture.with(cx, |_, cx| preview.update(cx, |preview, cx| preview.go_to_page(pages + 10, cx)));
+    fixture.with(cx, |_, cx| {
+        preview.update(cx, |preview, cx| preview.go_to_page(pages + 10, cx))
+    });
     assert_eq!(cx.update(|cx| preview.read(cx).current_page()), pages);
 
     fixture.press(cx, "escape");
@@ -166,21 +194,32 @@ fn print_preview_uses_the_live_editor_content_of_the_active_document(cx: &mut Te
         let documents = &preview.request().documents;
         assert_eq!(documents.len(), 3);
         let ids: Vec<_> = cx.update_global_free(&workspace);
-        let live: Vec<_> = documents.iter().filter_map(|document| match document {
-            PreviewDocument::Content(document) => Some(document.projections().plain_text.contains("zzlive")),
-            PreviewDocument::Stored(_) => None,
-        }).collect();
+        let live: Vec<_> = documents
+            .iter()
+            .filter_map(|document| match document {
+                PreviewDocument::Content(document) => {
+                    Some(document.projections().plain_text.contains("zzlive"))
+                }
+                PreviewDocument::Stored(_) => None,
+            })
+            .collect();
         assert_eq!(live, [true]);
         assert_eq!(ids, vec![active]);
     });
 }
 
 trait ActiveIds {
-    fn update_global_free(&self, workspace: &Entity<missal_app::screens::workspace::WorkspaceScreen>) -> Vec<missal_core::FirDocumentId>;
+    fn update_global_free(
+        &self,
+        workspace: &Entity<missal_app::screens::workspace::WorkspaceScreen>,
+    ) -> Vec<missal_core::FirDocumentId>;
 }
 
 impl ActiveIds for App {
-    fn update_global_free(&self, workspace: &Entity<missal_app::screens::workspace::WorkspaceScreen>) -> Vec<missal_core::FirDocumentId> {
+    fn update_global_free(
+        &self,
+        workspace: &Entity<missal_app::screens::workspace::WorkspaceScreen>,
+    ) -> Vec<missal_core::FirDocumentId> {
         workspace.read(self).active().into_iter().collect()
     }
 }
@@ -189,15 +228,30 @@ impl ActiveIds for App {
 fn print_preview_respects_the_include_when_printing_choice(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
     let workspace = fir_workspace(&fixture, cx);
-    let ids: Vec<_> = cx.update(|cx| workspace.read(cx).documents().iter().map(|d| d.id).collect());
-    fixture.with(cx, |_, cx| workspace.update(cx, |ws, cx| ws.toggle_included(ids[1], cx)));
+    let ids: Vec<_> = cx.update(|cx| {
+        workspace
+            .read(cx)
+            .documents()
+            .iter()
+            .map(|d| d.id)
+            .collect()
+    });
+    fixture.with(cx, |_, cx| {
+        workspace.update(cx, |ws, cx| ws.toggle_included(ids[1], cx))
+    });
     let preview = fixture.open_preview(cx);
     assert_eq!(cx.update(|cx| preview.read(cx).document_count()), 2);
     let stored: Vec<_> = cx.update(|cx| {
-        preview.read(cx).request().documents.iter().filter_map(|document| match document {
-            PreviewDocument::Stored(id) => Some(*id),
-            PreviewDocument::Content(_) => None,
-        }).collect()
+        preview
+            .read(cx)
+            .request()
+            .documents
+            .iter()
+            .filter_map(|document| match document {
+                PreviewDocument::Stored(id) => Some(*id),
+                PreviewDocument::Content(_) => None,
+            })
+            .collect()
     });
     assert_eq!(stored, [ids[2]]);
 }
@@ -210,11 +264,16 @@ fn print_preview_zoom_steps_fit_and_preserves_the_scroll_position(cx: &mut TestA
     assert_eq!(cx.update(|cx| preview.read(cx).zoom()), Zoom::Fit);
     let fit = cx.update(|cx| preview.read(cx).zoom_percent());
     assert!((25..=100).contains(&fit));
-    fixture.with(cx, |_, cx| preview.update(cx, |preview, cx| preview.go_to_page(3, cx)));
+    fixture.with(cx, |_, cx| {
+        preview.update(cx, |preview, cx| preview.go_to_page(3, cx))
+    });
     let before = cx.update(|cx| preview.read(cx).scroll_fraction());
     fixture.press(cx, "secondary-=");
     let zoom = cx.update(|cx| preview.read(cx).zoom());
-    assert!(matches!(zoom, Zoom::Percent(percent) if percent > fit), "{zoom:?} from {fit}");
+    assert!(
+        matches!(zoom, Zoom::Percent(percent) if percent > fit),
+        "{zoom:?} from {fit}"
+    );
     let after = cx.update(|cx| preview.read(cx).scroll_fraction());
     assert!((before - after).abs() < 0.03, "{before} vs {after}");
     fixture.press(cx, "secondary--");
@@ -226,7 +285,10 @@ fn print_preview_zoom_steps_fit_and_preserves_the_scroll_position(cx: &mut TestA
     fixture.press(cx, "secondary-0");
     assert_eq!(cx.update(|cx| preview.read(cx).zoom()), Zoom::Fit);
     fixture.click(cx, "preview-zoom-in");
-    assert!(matches!(cx.update(|cx| preview.read(cx).zoom()), Zoom::Percent(_)));
+    assert!(matches!(
+        cx.update(|cx| preview.read(cx).zoom()),
+        Zoom::Percent(_)
+    ));
     fixture.click(cx, "preview-zoom-out");
     for _ in 0..8 {
         fixture.click(cx, "preview-zoom-out");
@@ -242,9 +304,18 @@ fn print_preview_zoom_steps_fit_and_preserves_the_scroll_position(cx: &mut TestA
 fn nothing_selected_to_print_warns_instead_of_opening(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
     let workspace = fir_workspace(&fixture, cx);
-    let ids: Vec<_> = cx.update(|cx| workspace.read(cx).documents().iter().map(|d| d.id).collect());
+    let ids: Vec<_> = cx.update(|cx| {
+        workspace
+            .read(cx)
+            .documents()
+            .iter()
+            .map(|d| d.id)
+            .collect()
+    });
     for id in ids {
-        fixture.with(cx, |_, cx| workspace.update(cx, |ws, cx| ws.toggle_included(id, cx)));
+        fixture.with(cx, |_, cx| {
+            workspace.update(cx, |ws, cx| ws.toggle_included(id, cx))
+        });
     }
     fixture.press(cx, "secondary-p");
     assert!(fixture.preview(cx).is_none());
@@ -270,7 +341,13 @@ fn export_pdf_writes_a_valid_pdf_with_every_page(cx: &mut TestAppContext) {
     assert!(bytes.starts_with(b"%PDF-"));
     assert!(bytes.trim_ascii_end().ends_with(b"%%EOF"));
     assert_eq!(count_pdf_pages(&bytes), pages);
-    assert!(fixture.toasts().iter().any(|toast| toast.kind == ToastKind::Success && toast.message.contains("FIR export.pdf")));
+    assert!(
+        fixture
+            .toasts()
+            .iter()
+            .any(|toast| toast.kind == ToastKind::Success
+                && toast.message.contains("FIR export.pdf"))
+    );
     assert!(fixture.preview(cx).is_some());
     assert_eq!(cx.update(|cx| preview.read(cx).busy()), None);
 }
@@ -300,14 +377,28 @@ fn print_hands_a_spooled_pdf_to_the_system_and_closes_the_preview(cx: &mut TestA
     assert!(bytes.starts_with(b"%PDF-"));
     assert_eq!(count_pdf_pages(&bytes), pages);
     assert!(fixture.preview(cx).is_none());
-    assert!(fixture.toasts().iter().any(|toast| toast.kind == ToastKind::Success));
+    assert!(
+        fixture
+            .toasts()
+            .iter()
+            .any(|toast| toast.kind == ToastKind::Success)
+    );
     std::fs::remove_file(&printed[0]).ok();
 }
 
 #[gpui_kit::test]
 fn a_template_previews_with_placeholder_names(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
-    let template = cx.update(|cx| fixture.models.templates.read(cx).items.first().map(|item| item.id).unwrap());
+    let template = cx.update(|cx| {
+        fixture
+            .models
+            .templates
+            .read(cx)
+            .items
+            .first()
+            .map(|item| item.id)
+            .unwrap()
+    });
     fixture.go(cx, Route::Template(template));
     let preview = fixture.open_preview(cx);
     cx.update(|cx| {
@@ -315,16 +406,34 @@ fn a_template_previews_with_placeholder_names(cx: &mut TestAppContext) {
         assert_eq!(preview.document_count(), 1);
         assert!(preview.page_count() >= 1);
         assert!(preview.request().values.is_none());
-        assert!(preview.description().contains("Placeholders show their names"));
+        assert!(
+            preview
+                .description()
+                .contains("Placeholders show their names")
+        );
     });
 }
 
 #[gpui_kit::test]
 fn word_import_fills_a_new_template_through_the_file_picker(cx: &mut TestAppContext) {
     let fixture = boot(cx, 0);
-    let existing = Store::open(&fixture.database).unwrap().templates().unwrap().len();
+    let existing = Store::open(&fixture.database)
+        .unwrap()
+        .templates()
+        .unwrap()
+        .len();
     fixture.go(cx, Route::NewTemplate);
-    let page = cx.update(|cx| fixture.shell.read(cx).templates().unwrap().read(cx).page().cloned().unwrap());
+    let page = cx.update(|cx| {
+        fixture
+            .shell
+            .read(cx)
+            .templates()
+            .unwrap()
+            .read(cx)
+            .page()
+            .cloned()
+            .unwrap()
+    });
     assert!(!cx.update(|cx| page.read(cx).is_dirty(cx)));
     fixture.press(cx, "secondary-o");
     assert!(cx.did_prompt_for_paths());
@@ -357,17 +466,46 @@ fn word_import_fills_a_new_template_through_the_file_picker(cx: &mut TestAppCont
     fixture.click(cx, "template-save");
     let saved = Store::open(&fixture.database).unwrap().templates().unwrap();
     assert_eq!(saved.len(), existing + 1);
-    let created = saved.iter().find(|template| template.name == name).expect("the imported template is saved");
+    let created = saved
+        .iter()
+        .find(|template| template.name == name)
+        .expect("the imported template is saved");
     assert!(created.preview_text.len() > 3);
 }
 
 #[gpui_kit::test]
 fn word_import_into_an_existing_template_asks_before_replacing(cx: &mut TestAppContext) {
     let fixture = boot(cx, 0);
-    let template = cx.update(|cx| fixture.models.templates.read(cx).items.first().map(|item| item.id).unwrap());
+    let template = cx.update(|cx| {
+        fixture
+            .models
+            .templates
+            .read(cx)
+            .items
+            .first()
+            .map(|item| item.id)
+            .unwrap()
+    });
     fixture.go(cx, Route::Template(template));
-    let page = cx.update(|cx| fixture.shell.read(cx).templates().unwrap().read(cx).page().cloned().unwrap());
-    let before = cx.update(|cx| page.read(cx).editor().snapshot(cx).document.projections().plain_text);
+    let page = cx.update(|cx| {
+        fixture
+            .shell
+            .read(cx)
+            .templates()
+            .unwrap()
+            .read(cx)
+            .page()
+            .cloned()
+            .unwrap()
+    });
+    let before = cx.update(|cx| {
+        page.read(cx)
+            .editor()
+            .snapshot(cx)
+            .document
+            .projections()
+            .plain_text
+    });
     let name_before = cx.update(|cx| page.read(cx).title_input().read(cx).text().to_owned());
     let docx = template_docx(BAIL_DOCX);
 
@@ -377,7 +515,16 @@ fn word_import_into_an_existing_template_asks_before_replacing(cx: &mut TestAppC
     fixture.settle(cx);
     assert!(fixture.with(cx, |window, cx| window.has_active_dialog(cx)));
     fixture.click(cx, "cancel");
-    assert_eq!(cx.update(|cx| page.read(cx).editor().snapshot(cx).document.projections().plain_text), before);
+    assert_eq!(
+        cx.update(|cx| page
+            .read(cx)
+            .editor()
+            .snapshot(cx)
+            .document
+            .projections()
+            .plain_text),
+        before
+    );
 
     fixture.press(cx, "secondary-o");
     let chosen = docx.clone();
@@ -395,7 +542,10 @@ fn word_import_into_an_existing_template_asks_before_replacing(cx: &mut TestAppC
     assert_ne!(after, before);
     assert!(dirty);
     assert_eq!(name, name_before);
-    let stored = Store::open(&fixture.database).unwrap().template(template).unwrap();
+    let stored = Store::open(&fixture.database)
+        .unwrap()
+        .template(template)
+        .unwrap();
     assert_eq!(stored.document.projections().plain_text, before);
 }
 
@@ -403,7 +553,17 @@ fn word_import_into_an_existing_template_asks_before_replacing(cx: &mut TestAppC
 fn word_import_rejects_files_that_are_not_docx(cx: &mut TestAppContext) {
     let fixture = boot(cx, 0);
     fixture.go(cx, Route::NewTemplate);
-    let page = cx.update(|cx| fixture.shell.read(cx).templates().unwrap().read(cx).page().cloned().unwrap());
+    let page = cx.update(|cx| {
+        fixture
+            .shell
+            .read(cx)
+            .templates()
+            .unwrap()
+            .read(cx)
+            .page()
+            .cloned()
+            .unwrap()
+    });
     fixture.press(cx, "secondary-o");
     cx.simulate_path_prompt_response(|_| Some(vec![PathBuf::from("/tmp/notes.txt")]));
     fixture.settle(cx);
@@ -411,7 +571,10 @@ fn word_import_rejects_files_that_are_not_docx(cx: &mut TestAppContext) {
     let toasts = fixture.toasts();
     assert_eq!(toasts.len(), 1);
     assert_eq!(toasts[0].kind, ToastKind::Error);
-    assert_eq!(toasts[0].title.as_deref(), Some("Could not import Word document"));
+    assert_eq!(
+        toasts[0].title.as_deref(),
+        Some("Could not import Word document")
+    );
 }
 
 #[gpui_kit::test]
@@ -426,7 +589,10 @@ fn word_import_reports_a_corrupt_file(cx: &mut TestAppContext) {
     let toasts = fixture.toasts();
     assert_eq!(toasts.len(), 1);
     assert_eq!(toasts[0].kind, ToastKind::Error);
-    assert_eq!(toasts[0].title.as_deref(), Some("Could not import Word document"));
+    assert_eq!(
+        toasts[0].title.as_deref(),
+        Some("Could not import Word document")
+    );
     assert!(!toasts[0].message.is_empty());
 }
 

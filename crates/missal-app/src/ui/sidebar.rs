@@ -1,9 +1,9 @@
+use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
+use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::Button;
 use gpui_kit::component::{StyledExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
-use gpui_kit::TestSupportExt as _;
-use gpui_kit::component::Sizable as _;
 
 use gpui_kit::{
     AnyElement, Context, ElementId, InteractiveElement, IntoElement, ParentElement, Render,
@@ -49,7 +49,11 @@ fn nav_item(
     hint: Option<&'static str>,
 ) -> Stateful<gpui_kit::Div> {
     let accent = palette.sidebar_accent;
-    let foreground = if active { palette.foreground } else { palette.sidebar_foreground };
+    let foreground = if active {
+        palette.foreground
+    } else {
+        palette.sidebar_foreground
+    };
     let base = h_flex()
         .id(id)
         .h(px(32.))
@@ -94,9 +98,16 @@ impl Render for SidebarView {
             .collect();
         let loading = !firs.load.is_ready();
         let template_count = self.models.templates.read(cx).items.len();
-        let width = if collapsed { SIDEBAR_ICON_WIDTH } else { SIDEBAR_WIDTH };
+        let width = if collapsed {
+            SIDEBAR_ICON_WIDTH
+        } else {
+            SIDEBAR_WIDTH
+        };
         let fir_active = matches!(route, Route::Firs | Route::Fir(_));
-        let templates_active = matches!(route, Route::Templates | Route::NewTemplate | Route::Template(_));
+        let templates_active = matches!(
+            route,
+            Route::Templates | Route::NewTemplate | Route::Template(_)
+        );
         let current_fir = match route {
             Route::Fir(id) => Some(id),
             _ => None,
@@ -136,20 +147,43 @@ impl Render for SidebarView {
             .pb_2()
             .gap_1()
             .when(collapsed, |this| this.items_center())
-            .child(div().py_2().when(collapsed, |this| this.flex().justify_center()).child(new_fir))
+            .child(
+                div()
+                    .py_2()
+                    .when(collapsed, |this| this.flex().justify_center())
+                    .child(new_fir),
+            )
             .child(
                 v_flex()
                     .gap_0p5()
                     .when(collapsed, |this| this.items_center())
                     .child(
-                        nav_item(&palette, "sidebar-firs", IconName::Folder, "FIRs", fir_active, collapsed, Some(fir_count), None)
-                            .on_click(|_, window, cx| navigate(Route::Firs, window, cx))
-                            .test_support(),
+                        nav_item(
+                            &palette,
+                            "sidebar-firs",
+                            IconName::Folder,
+                            "FIRs",
+                            fir_active,
+                            collapsed,
+                            Some(fir_count),
+                            None,
+                        )
+                        .on_click(|_, window, cx| navigate(Route::Firs, window, cx))
+                        .test_support(),
                     )
                     .child(
-                        nav_item(&palette, "sidebar-templates", IconName::FileText, "Templates", templates_active, collapsed, Some(template_count), None)
-                            .on_click(|_, window, cx| navigate(Route::Templates, window, cx))
-                            .test_support(),
+                        nav_item(
+                            &palette,
+                            "sidebar-templates",
+                            IconName::FileText,
+                            "Templates",
+                            templates_active,
+                            collapsed,
+                            Some(template_count),
+                            None,
+                        )
+                        .on_click(|_, window, cx| navigate(Route::Templates, window, cx))
+                        .test_support(),
                     ),
             )
             .when(!collapsed && (fir_count > 0 || loading), |this| {
@@ -163,58 +197,62 @@ impl Render for SidebarView {
                         .text_color(palette.muted_foreground)
                         .child("Recent"),
                 )
-                .child(v_flex().gap_0p5().children(if loading && recent.is_empty() {
-                    (0..3usize)
-                        .map(|index| {
-                            div()
-                                .id(("recent-skeleton", index))
-                                .h(px(32.))
-                                .mx_2()
-                                .my(px(2.))
-                                .rounded(px(5.))
-                                .bg(palette.muted)
-                                .into_any_element()
-                        })
-                        .collect::<Vec<_>>()
-                } else {
-                    recent
-                        .into_iter()
-                        .map(|(id, no, offence, status)| {
-                            let active = current_fir == Some(id);
-                            let accent = palette.sidebar_accent;
-                            h_flex()
-                                .id(("recent", id.get() as usize))
-                                .test_support()
-                                .h(px(36.))
-                                .px_2()
-                                .gap_2()
-                                .items_center()
-                                .rounded(px(7.))
-                                .cursor_pointer()
-                                .when(active, |this| this.bg(accent))
-                                .hover(move |style| style.bg(accent))
-                                .on_click(move |_, window, cx| navigate(Route::Fir(id), window, cx))
-                                .child(status_icon(status, palette.status(status), px(14.)))
-                                .child(
-                                    div()
-                                        .flex_shrink_0()
-                                        .text_size(px(13.))
-                                        .text_color(palette.foreground)
-                                        .child(label(no).ltr()),
-                                )
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .overflow_hidden()
-                                        .text_size(px(13.))
-                                        .text_color(palette.muted_foreground)
-                                        .child(label(offence).rtl().truncate()),
-                                )
-                                .into_any_element()
-                        })
-                        .collect::<Vec<_>>()
-                }))
+                .child(v_flex().gap_0p5().children(
+                    if loading && recent.is_empty() {
+                        (0..3usize)
+                            .map(|index| {
+                                div()
+                                    .id(("recent-skeleton", index))
+                                    .h(px(32.))
+                                    .mx_2()
+                                    .my(px(2.))
+                                    .rounded(px(5.))
+                                    .bg(palette.muted)
+                                    .into_any_element()
+                            })
+                            .collect::<Vec<_>>()
+                    } else {
+                        recent
+                            .into_iter()
+                            .map(|(id, no, offence, status)| {
+                                let active = current_fir == Some(id);
+                                let accent = palette.sidebar_accent;
+                                h_flex()
+                                    .id(("recent", id.get() as usize))
+                                    .test_support()
+                                    .h(px(36.))
+                                    .px_2()
+                                    .gap_2()
+                                    .items_center()
+                                    .rounded(px(7.))
+                                    .cursor_pointer()
+                                    .when(active, |this| this.bg(accent))
+                                    .hover(move |style| style.bg(accent))
+                                    .on_click(move |_, window, cx| {
+                                        navigate(Route::Fir(id), window, cx)
+                                    })
+                                    .child(status_icon(status, palette.status(status), px(14.)))
+                                    .child(
+                                        div()
+                                            .flex_shrink_0()
+                                            .text_size(px(13.))
+                                            .text_color(palette.foreground)
+                                            .child(label(no).ltr()),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .overflow_hidden()
+                                            .text_size(px(13.))
+                                            .text_color(palette.muted_foreground)
+                                            .child(label(offence).rtl().truncate()),
+                                    )
+                                    .into_any_element()
+                            })
+                            .collect::<Vec<_>>()
+                    },
+                ))
             })
             .child(div().flex_1())
             .child(
@@ -222,16 +260,33 @@ impl Render for SidebarView {
                     .gap_0p5()
                     .when(collapsed, |this| this.items_center())
                     .child(
-                        nav_item(&palette, "sidebar-shortcuts", IconName::Keyboard, "Shortcuts", false, collapsed, None, Some("?"))
-                            .on_click(|_, window, cx| show_shortcuts(window, cx))
-                            .test_support(),
+                        nav_item(
+                            &palette,
+                            "sidebar-shortcuts",
+                            IconName::Keyboard,
+                            "Shortcuts",
+                            false,
+                            collapsed,
+                            None,
+                            Some("?"),
+                        )
+                        .on_click(|_, window, cx| show_shortcuts(window, cx))
+                        .test_support(),
                     )
                     .child(
-                        nav_item(&palette, "sidebar-settings", IconName::Settings, "Settings", route == Route::Settings, collapsed, None, None)
-                            .on_click(|_, window, cx| navigate(Route::Settings, window, cx))
-                            .test_support(),
+                        nav_item(
+                            &palette,
+                            "sidebar-settings",
+                            IconName::Settings,
+                            "Settings",
+                            route == Route::Settings,
+                            collapsed,
+                            None,
+                            None,
+                        )
+                        .on_click(|_, window, cx| navigate(Route::Settings, window, cx))
+                        .test_support(),
                     ),
             )
     }
 }
-

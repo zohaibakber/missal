@@ -33,7 +33,13 @@ fn boot(cx: &mut TestAppContext, count: usize) -> Fixture {
         let (handle, shell) = open_shell(&models, options, cx).unwrap();
         (handle, shell, models)
     });
-    let fixture = Fixture { handle, shell, models, database, _directory: directory };
+    let fixture = Fixture {
+        handle,
+        shell,
+        models,
+        database,
+        _directory: directory,
+    };
     fixture.settle(cx);
     fixture
 }
@@ -42,13 +48,16 @@ impl Fixture {
     fn settle(&self, cx: &mut TestAppContext) {
         for _ in 0..4 {
             cx.run_until_parked();
-            cx.update_window(self.handle, |_, window, _| window.refresh()).ok();
+            cx.update_window(self.handle, |_, window, _| window.refresh())
+                .ok();
         }
         cx.run_until_parked();
     }
 
     fn with<R>(&self, cx: &mut TestAppContext, f: impl FnOnce(&mut Window, &mut App) -> R) -> R {
-        let result = cx.update_window(self.handle, |_, window, cx| f(window, cx)).unwrap();
+        let result = cx
+            .update_window(self.handle, |_, window, cx| f(window, cx))
+            .unwrap();
         self.settle(cx);
         result
     }
@@ -83,7 +92,9 @@ impl Fixture {
 }
 
 fn focus_input(fixture: &Fixture, cx: &mut TestAppContext, input: &Entity<missal_text::TextInput>) {
-    fixture.with(cx, |window, cx| input.update(cx, |input, cx| input.focus(window, cx)));
+    fixture.with(cx, |window, cx| {
+        input.update(cx, |input, cx| input.focus(window, cx))
+    });
 }
 
 #[gpui_kit::test]
@@ -91,7 +102,16 @@ fn create_an_fir_and_see_it_in_the_list(cx: &mut TestAppContext) {
     let fixture = boot(cx, 3);
     assert_eq!(fixture.rows(cx), 3);
     fixture.go(cx, Route::NewFir);
-    let form = cx.update(|cx| fixture.shell.read(cx).new_fir().unwrap().read(cx).form().clone());
+    let form = cx.update(|cx| {
+        fixture
+            .shell
+            .read(cx)
+            .new_fir()
+            .unwrap()
+            .read(cx)
+            .form()
+            .clone()
+    });
     let (fir_no, offence, dates, accused) = cx.update(|cx| {
         let form = form.read(cx);
         (
@@ -120,7 +140,15 @@ fn create_an_fir_and_see_it_in_the_list(cx: &mut TestAppContext) {
     assert_eq!(created[0].date, "05-03-2026");
     assert!(matches!(fixture.route(cx), Route::Fir(_)));
     fixture.go(cx, Route::Firs);
-    let numbers = cx.update(|cx| fixture.shell.read(cx).fir_list().unwrap().read(cx).visible_numbers(cx));
+    let numbers = cx.update(|cx| {
+        fixture
+            .shell
+            .read(cx)
+            .fir_list()
+            .unwrap()
+            .read(cx)
+            .visible_numbers(cx)
+    });
     assert!(numbers.contains(&"777/2026".to_owned()));
 }
 
@@ -131,19 +159,34 @@ fn validation_blocks_an_empty_fir(cx: &mut TestAppContext) {
     fixture.click(cx, "create-fir");
     assert_eq!(fixture.route(cx), Route::NewFir);
     let errors = cx.update(|cx| {
-        let form = fixture.shell.read(cx).new_fir().unwrap().read(cx).form().clone();
+        let form = fixture
+            .shell
+            .read(cx)
+            .new_fir()
+            .unwrap()
+            .read(cx)
+            .form()
+            .clone();
         form.read(cx).errors()
     });
-    assert_eq!(errors, ["accused", "date", "fir_no", "incident_date", "offence"]);
+    assert_eq!(
+        errors,
+        ["accused", "date", "fir_no", "incident_date", "offence"]
+    );
     assert!(fixture.db_firs().is_empty());
 }
 
 #[gpui_kit::test]
 fn edit_an_fir_through_the_form(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
-    let record = Store::open(&fixture.database).unwrap().fir(FirId::new(2).unwrap()).unwrap();
+    let record = Store::open(&fixture.database)
+        .unwrap()
+        .fir(FirId::new(2).unwrap())
+        .unwrap();
     fixture.go(cx, Route::Firs);
-    fixture.with(cx, |window, cx| missal_app::screens::edit_sheet::open_edit_sheet(record, window, cx));
+    fixture.with(cx, |window, cx| {
+        missal_app::screens::edit_sheet::open_edit_sheet(record, window, cx)
+    });
     let offence = fixture.with(cx, |window, cx| {
         assert!(window.has_active_sheet(cx));
         window.focused_input(cx).is_none()
@@ -164,12 +207,30 @@ fn edit_an_fir_through_the_form(cx: &mut TestAppContext) {
 fn search_filter_and_sort_the_list(cx: &mut TestAppContext) {
     let fixture = boot(cx, 60);
     let list = cx.update(|cx| fixture.shell.read(cx).fir_list().unwrap());
-    let closed = cx.update(|cx| fixture.models.firs.read(cx).rows.iter().filter(|row| row.status == FirStatus::Closed).count());
+    let closed = cx.update(|cx| {
+        fixture
+            .models
+            .firs
+            .read(cx)
+            .rows
+            .iter()
+            .filter(|row| row.status == FirStatus::Closed)
+            .count()
+    });
     assert!(closed > 0);
-    fixture.with(cx, |_, cx| list.update(cx, |list, cx| list.set_search("بند", cx)));
+    fixture.with(cx, |_, cx| {
+        list.update(cx, |list, cx| list.set_search("بند", cx))
+    });
     cx.run_until_parked();
-    fixture.with(cx, |_, cx| list.update(cx, |list, cx| list.toggle_sort(Column::FirNo, cx)));
-    let (visible, numbers) = cx.update(|cx| (list.read(cx).visible_count(), list.read(cx).visible_numbers(cx)));
+    fixture.with(cx, |_, cx| {
+        list.update(cx, |list, cx| list.toggle_sort(Column::FirNo, cx))
+    });
+    let (visible, numbers) = cx.update(|cx| {
+        (
+            list.read(cx).visible_count(),
+            list.read(cx).visible_numbers(cx),
+        )
+    });
     assert_eq!(visible, closed);
     let keys: Vec<(i64, i64)> = numbers
         .iter()
@@ -178,10 +239,26 @@ fn search_filter_and_sort_the_list(cx: &mut TestAppContext) {
             (y.parse().unwrap(), n.parse().unwrap())
         })
         .collect();
-    assert!(keys.windows(2).all(|pair| pair[0] <= pair[1]), "year then number ascending: {numbers:?}");
-    fixture.with(cx, |_, cx| list.update(cx, |list, cx| list.set_search("", cx)));
-    fixture.with(cx, |_, cx| list.update(cx, |list, cx| list.toggle_status(FirStatus::Open, cx)));
-    let open = cx.update(|cx| fixture.models.firs.read(cx).rows.iter().filter(|row| row.status == FirStatus::Open).count());
+    assert!(
+        keys.windows(2).all(|pair| pair[0] <= pair[1]),
+        "year then number ascending: {numbers:?}"
+    );
+    fixture.with(cx, |_, cx| {
+        list.update(cx, |list, cx| list.set_search("", cx))
+    });
+    fixture.with(cx, |_, cx| {
+        list.update(cx, |list, cx| list.toggle_status(FirStatus::Open, cx))
+    });
+    let open = cx.update(|cx| {
+        fixture
+            .models
+            .firs
+            .read(cx)
+            .rows
+            .iter()
+            .filter(|row| row.status == FirStatus::Open)
+            .count()
+    });
     assert_eq!(cx.update(|cx| list.read(cx).visible_count()), open);
 }
 
@@ -208,7 +285,9 @@ fn settings_save_persists_markers(cx: &mut TestAppContext) {
     fixture.go(cx, Route::Settings);
     let settings = cx.update(|cx| fixture.shell.read(cx).settings().unwrap());
     let (open, _) = cx.update(|cx| settings.read(cx).marker_inputs());
-    fixture.with(cx, |_, cx| open.update(cx, |input, cx| input.set_text("<<", cx)));
+    fixture.with(cx, |_, cx| {
+        open.update(cx, |input, cx| input.set_text("<<", cx))
+    });
     assert!(cx.update(|cx| settings.read(cx).markers_dirty(cx)));
     focus_input(&fixture, cx, &open);
     fixture.press(cx, "secondary-s");
@@ -234,7 +313,18 @@ fn history_back_and_forward(cx: &mut TestAppContext) {
 fn unsaved_changes_guard_the_navigator(cx: &mut TestAppContext) {
     let fixture = boot(cx, 1);
     fixture.go(cx, Route::NewFir);
-    let fir_no = cx.update(|cx| fixture.shell.read(cx).new_fir().unwrap().read(cx).form().read(cx).fir_no_input().clone());
+    let fir_no = cx.update(|cx| {
+        fixture
+            .shell
+            .read(cx)
+            .new_fir()
+            .unwrap()
+            .read(cx)
+            .form()
+            .read(cx)
+            .fir_no_input()
+            .clone()
+    });
     focus_input(&fixture, cx, &fir_no);
     fixture.type_text(cx, "1");
     fixture.go(cx, Route::Settings);
@@ -280,7 +370,9 @@ fn chords_navigate_when_not_typing(cx: &mut TestAppContext) {
 fn command_palette_opens_filters_and_navigates(cx: &mut TestAppContext) {
     let fixture = boot(cx, 5);
     fixture.press(cx, "secondary-k");
-    let palette = cx.update(|cx| fixture.shell.read(cx).palette_entity()).expect("palette");
+    let palette = cx
+        .update(|cx| fixture.shell.read(cx).palette_entity())
+        .expect("palette");
     let titles = cx.update(|cx| palette.read(cx).result_titles());
     assert!(titles.iter().any(|title| title == "New FIR"));
     fixture.type_text(cx, "settings");
@@ -288,7 +380,10 @@ fn command_palette_opens_filters_and_navigates(cx: &mut TestAppContext) {
     assert_eq!(titles, ["Settings"]);
     fixture.press(cx, "enter");
     assert_eq!(fixture.route(cx), Route::Settings);
-    assert!(cx.update(|cx| fixture.shell.read(cx).palette_entity()).is_none());
+    assert!(
+        cx.update(|cx| fixture.shell.read(cx).palette_entity())
+            .is_none()
+    );
 }
 
 #[gpui_kit::test]
@@ -300,7 +395,11 @@ fn workspace_edit_save_and_discard_flow(cx: &mut TestAppContext) {
     let editor = cx.update(|cx| workspace.read(cx).editor().clone());
     assert!(!cx.update(|cx| editor.is_dirty(cx)));
     let id = cx.update(|cx| workspace.read(cx).active().unwrap());
-    let before = Store::open(&fixture.database).unwrap().fir_document(id).unwrap().revision;
+    let before = Store::open(&fixture.database)
+        .unwrap()
+        .fir_document(id)
+        .unwrap()
+        .revision;
     fixture.with(cx, |window, cx| editor.focus(window, cx));
     fixture.type_text(cx, "zzsaved");
     assert!(cx.update(|cx| editor.is_dirty(cx)));
@@ -309,7 +408,10 @@ fn workspace_edit_save_and_discard_flow(cx: &mut TestAppContext) {
     fixture.click(cx, "keep");
     fixture.press(cx, "secondary-s");
     assert!(!cx.update(|cx| editor.is_dirty(cx)));
-    let after = Store::open(&fixture.database).unwrap().fir_document(id).unwrap();
+    let after = Store::open(&fixture.database)
+        .unwrap()
+        .fir_document(id)
+        .unwrap();
     assert_eq!(after.revision.get(), before.get() + 1);
     assert!(after.document.projections().plain_text.contains("zzsaved"));
     fixture.with(cx, |window, cx| editor.focus(window, cx));
@@ -318,8 +420,17 @@ fn workspace_edit_save_and_discard_flow(cx: &mut TestAppContext) {
     fixture.go(cx, Route::Settings);
     fixture.click(cx, "discard");
     assert_eq!(fixture.route(cx), Route::Settings);
-    let stored = Store::open(&fixture.database).unwrap().fir_document(id).unwrap();
-    assert!(!stored.document.projections().plain_text.contains("zzdiscarded"));
+    let stored = Store::open(&fixture.database)
+        .unwrap()
+        .fir_document(id)
+        .unwrap();
+    assert!(
+        !stored
+            .document
+            .projections()
+            .plain_text
+            .contains("zzdiscarded")
+    );
 }
 
 #[gpui_kit::test]
@@ -328,19 +439,48 @@ fn workspace_documents_reorder_toggle_and_remove(cx: &mut TestAppContext) {
     let fir = FirId::new(3).unwrap();
     fixture.go(cx, Route::Fir(fir));
     let workspace = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
-    let ids: Vec<_> = cx.update(|cx| workspace.read(cx).documents().iter().map(|d| d.id).collect());
-    fixture.with(cx, |window, cx| workspace.update(cx, |ws, cx| ws.move_document(ids[0], 1, window, cx)));
-    let reordered: Vec<_> = cx.update(|cx| workspace.read(cx).documents().iter().map(|d| d.id).collect());
+    let ids: Vec<_> = cx.update(|cx| {
+        workspace
+            .read(cx)
+            .documents()
+            .iter()
+            .map(|d| d.id)
+            .collect()
+    });
+    fixture.with(cx, |window, cx| {
+        workspace.update(cx, |ws, cx| ws.move_document(ids[0], 1, window, cx))
+    });
+    let reordered: Vec<_> = cx.update(|cx| {
+        workspace
+            .read(cx)
+            .documents()
+            .iter()
+            .map(|d| d.id)
+            .collect()
+    });
     assert_eq!(reordered, [ids[1], ids[0], ids[2]]);
-    fixture.with(cx, |_, cx| workspace.update(cx, |ws, cx| ws.toggle_included(ids[2], cx)));
+    fixture.with(cx, |_, cx| {
+        workspace.update(cx, |ws, cx| ws.toggle_included(ids[2], cx))
+    });
     assert_eq!(cx.update(|cx| workspace.read(cx).excluded_count()), 1);
-    fixture.with(cx, |window, cx| workspace.update(cx, |ws, cx| ws.remove_document(ids[2], window, cx)));
+    fixture.with(cx, |window, cx| {
+        workspace.update(cx, |ws, cx| ws.remove_document(ids[2], window, cx))
+    });
     assert_eq!(cx.update(|cx| workspace.read(cx).documents().len()), 2);
-    assert_eq!(Store::open(&fixture.database).unwrap().fir_documents(fir).unwrap().len(), 2);
-    fixture.with(cx, |window, cx| workspace.update(cx, |ws, cx| {
-        ws.toggle_template(missal_core::TemplateId::new(1).unwrap(), cx);
-        ws.add_templates(window, cx);
-    }));
+    assert_eq!(
+        Store::open(&fixture.database)
+            .unwrap()
+            .fir_documents(fir)
+            .unwrap()
+            .len(),
+        2
+    );
+    fixture.with(cx, |window, cx| {
+        workspace.update(cx, |ws, cx| {
+            ws.toggle_template(missal_core::TemplateId::new(1).unwrap(), cx);
+            ws.add_templates(window, cx);
+        })
+    });
     assert!(cx.update(|cx| workspace.read(cx).documents().len()) >= 2);
 }
 
@@ -350,10 +490,19 @@ fn custom_field_values_are_saved_per_fir(cx: &mut TestAppContext) {
     let fir = FirId::new(3).unwrap();
     fixture.go(cx, Route::Fir(fir));
     let workspace = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
-    fixture.with(cx, |window, cx| workspace.update(cx, |ws, cx| ws.edit_custom_values(window, cx)));
+    fixture.with(cx, |window, cx| {
+        workspace.update(cx, |ws, cx| ws.edit_custom_values(window, cx))
+    });
     assert!(fixture.with(cx, |window, cx| window.has_active_sheet(cx)));
-    let customs = Store::open(&fixture.database).unwrap().placeholders().unwrap();
-    let custom = customs.iter().find(|p| p.source == missal_core::PlaceholderSource::Custom).unwrap().id;
+    let customs = Store::open(&fixture.database)
+        .unwrap()
+        .placeholders()
+        .unwrap();
+    let custom = customs
+        .iter()
+        .find(|p| p.source == missal_core::PlaceholderSource::Custom)
+        .unwrap()
+        .id;
     let mut store = Store::open(&fixture.database).unwrap();
     store.set_placeholder_value(fir, custom, "قدر").unwrap();
     assert_eq!(store.placeholder_values(fir).unwrap()[0].value, "قدر");
@@ -366,9 +515,15 @@ fn field_names_toggle_changes_presentation(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
     fixture.go(cx, Route::Fir(FirId::new(3).unwrap()));
     let workspace = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
-    assert_eq!(cx.update(|cx| workspace.read(cx).mode()), missal_core::DisplayMode::Values);
+    assert_eq!(
+        cx.update(|cx| workspace.read(cx).mode()),
+        missal_core::DisplayMode::Values
+    );
     fixture.press(cx, "secondary-shift-l");
-    assert_eq!(cx.update(|cx| workspace.read(cx).mode()), missal_core::DisplayMode::Labels);
+    assert_eq!(
+        cx.update(|cx| workspace.read(cx).mode()),
+        missal_core::DisplayMode::Labels
+    );
 }
 
 #[gpui_kit::test]

@@ -92,38 +92,166 @@ pub struct Shortcut {
 }
 
 pub const SHORTCUTS: &[Shortcut] = &[
-    Shortcut { keys: "Mod+K", label: "Open command menu", group: Group::General },
-    Shortcut { keys: "?", label: "Show keyboard shortcuts", group: Group::General },
-    Shortcut { keys: "Mod+B", label: "Toggle sidebar", group: Group::General },
-    Shortcut { keys: "/", label: "Search this page", group: Group::General },
-    Shortcut { keys: "Mod+S", label: "Save", group: Group::General },
-    Shortcut { keys: "Escape", label: "Leave the field", group: Group::General },
-    Shortcut { keys: "Mod+Enter", label: "Confirm a selection", group: Group::General },
-    Shortcut { keys: "G then H", label: "Go to FIRs", group: Group::Navigation },
-    Shortcut { keys: "G then T", label: "Go to templates", group: Group::Navigation },
-    Shortcut { keys: "G then S", label: "Go to settings", group: Group::Navigation },
-    Shortcut { keys: "Alt+Left", label: "Back", group: Group::Navigation },
-    Shortcut { keys: "Alt+Right", label: "Forward", group: Group::Navigation },
-    Shortcut { keys: "N", label: "New FIR", group: Group::Firs },
-    Shortcut { keys: "J", label: "Next row", group: Group::Firs },
-    Shortcut { keys: "K", label: "Previous row", group: Group::Firs },
-    Shortcut { keys: "X", label: "Select row", group: Group::Firs },
-    Shortcut { keys: "Enter", label: "Open FIR", group: Group::Firs },
-    Shortcut { keys: "E", label: "Edit FIR details", group: Group::Firs },
-    Shortcut { keys: "Mod+P", label: "Print preview", group: Group::Documents },
-    Shortcut { keys: "Alt+Down", label: "Next document", group: Group::Documents },
-    Shortcut { keys: "Alt+Up", label: "Previous document", group: Group::Documents },
-    Shortcut { keys: "A", label: "Add templates to FIR", group: Group::Documents },
-    Shortcut { keys: "Mod+Shift+L", label: "Show field names", group: Group::Documents },
-    Shortcut { keys: "PageDown", label: "Next page in print preview", group: Group::Documents },
-    Shortcut { keys: "PageUp", label: "Previous page in print preview", group: Group::Documents },
-    Shortcut { keys: "Mod+=", label: "Zoom in print preview", group: Group::Documents },
-    Shortcut { keys: "Mod+-", label: "Zoom out print preview", group: Group::Documents },
-    Shortcut { keys: "Mod+0", label: "Fit width in print preview", group: Group::Documents },
-    Shortcut { keys: "Shift+N", label: "New template", group: Group::Templates },
-    Shortcut { keys: "Mod+O", label: "Upload Word", group: Group::Templates },
-    Shortcut { keys: "Alt+Down", label: "Next template", group: Group::Templates },
-    Shortcut { keys: "Alt+Up", label: "Previous template", group: Group::Templates },
+    Shortcut {
+        keys: "Mod+K",
+        label: "Open command menu",
+        group: Group::General,
+    },
+    Shortcut {
+        keys: "?",
+        label: "Show keyboard shortcuts",
+        group: Group::General,
+    },
+    Shortcut {
+        keys: "Mod+B",
+        label: "Toggle sidebar",
+        group: Group::General,
+    },
+    Shortcut {
+        keys: "/",
+        label: "Search this page",
+        group: Group::General,
+    },
+    Shortcut {
+        keys: "Mod+S",
+        label: "Save",
+        group: Group::General,
+    },
+    Shortcut {
+        keys: "Escape",
+        label: "Leave the field",
+        group: Group::General,
+    },
+    Shortcut {
+        keys: "Mod+Enter",
+        label: "Confirm a selection",
+        group: Group::General,
+    },
+    Shortcut {
+        keys: "G then H",
+        label: "Go to FIRs",
+        group: Group::Navigation,
+    },
+    Shortcut {
+        keys: "G then T",
+        label: "Go to templates",
+        group: Group::Navigation,
+    },
+    Shortcut {
+        keys: "G then S",
+        label: "Go to settings",
+        group: Group::Navigation,
+    },
+    Shortcut {
+        keys: "Alt+Left",
+        label: "Back",
+        group: Group::Navigation,
+    },
+    Shortcut {
+        keys: "Alt+Right",
+        label: "Forward",
+        group: Group::Navigation,
+    },
+    Shortcut {
+        keys: "N",
+        label: "New FIR",
+        group: Group::Firs,
+    },
+    Shortcut {
+        keys: "J",
+        label: "Next row",
+        group: Group::Firs,
+    },
+    Shortcut {
+        keys: "K",
+        label: "Previous row",
+        group: Group::Firs,
+    },
+    Shortcut {
+        keys: "X",
+        label: "Select row",
+        group: Group::Firs,
+    },
+    Shortcut {
+        keys: "Enter",
+        label: "Open FIR",
+        group: Group::Firs,
+    },
+    Shortcut {
+        keys: "E",
+        label: "Edit FIR details",
+        group: Group::Firs,
+    },
+    Shortcut {
+        keys: "Mod+P",
+        label: "Print preview",
+        group: Group::Documents,
+    },
+    Shortcut {
+        keys: "Alt+Down",
+        label: "Next document",
+        group: Group::Documents,
+    },
+    Shortcut {
+        keys: "Alt+Up",
+        label: "Previous document",
+        group: Group::Documents,
+    },
+    Shortcut {
+        keys: "A",
+        label: "Add templates to FIR",
+        group: Group::Documents,
+    },
+    Shortcut {
+        keys: "Mod+Shift+L",
+        label: "Show field names",
+        group: Group::Documents,
+    },
+    Shortcut {
+        keys: "PageDown",
+        label: "Next page in print preview",
+        group: Group::Documents,
+    },
+    Shortcut {
+        keys: "PageUp",
+        label: "Previous page in print preview",
+        group: Group::Documents,
+    },
+    Shortcut {
+        keys: "Mod+=",
+        label: "Zoom in print preview",
+        group: Group::Documents,
+    },
+    Shortcut {
+        keys: "Mod+-",
+        label: "Zoom out print preview",
+        group: Group::Documents,
+    },
+    Shortcut {
+        keys: "Mod+0",
+        label: "Fit width in print preview",
+        group: Group::Documents,
+    },
+    Shortcut {
+        keys: "Shift+N",
+        label: "New template",
+        group: Group::Templates,
+    },
+    Shortcut {
+        keys: "Mod+O",
+        label: "Upload Word",
+        group: Group::Templates,
+    },
+    Shortcut {
+        keys: "Alt+Down",
+        label: "Next template",
+        group: Group::Templates,
+    },
+    Shortcut {
+        keys: "Alt+Up",
+        label: "Previous template",
+        group: Group::Templates,
+    },
 ];
 
 pub fn key_caps(keys: &str) -> Vec<Vec<String>> {

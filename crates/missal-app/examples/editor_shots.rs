@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use gpui_kit::component::WindowExt;
 use gpui_kit::test::TestWindowExt;
-use gpui_kit::{AnyWindowHandle, Bounds, Entity, HeadlessAppContext, WindowBounds, WindowOptions, point, px, size};
+use gpui_kit::{
+    AnyWindowHandle, Bounds, Entity, HeadlessAppContext, WindowBounds, WindowOptions, point, px,
+    size,
+};
 use missal_app::app::{AppShell, navigate};
 use missal_app::db::Db;
 use missal_app::launch::{init_app, open_shell};
@@ -18,7 +21,8 @@ use missal_editor::{Editor, Selection};
 use missal_page::BlockPath;
 use missal_store::Store;
 
-const DEFAULT_OUT: &str = "/tmp/claude-0/-home-user-missal/da28de75-7983-5932-bdf9-e2e3d5312f4e/scratchpad/editor-shots";
+const DEFAULT_OUT: &str =
+    "/tmp/claude-0/-home-user-missal/da28de75-7983-5932-bdf9-e2e3d5312f4e/scratchpad/editor-shots";
 
 struct Harness {
     cx: HeadlessAppContext,
@@ -32,7 +36,9 @@ impl Harness {
     fn settle(&mut self) {
         for _ in 0..3 {
             self.cx.run_until_parked();
-            self.cx.update_window(self.handle, |_, window, _| window.refresh()).ok();
+            self.cx
+                .update_window(self.handle, |_, window, _| window.refresh())
+                .ok();
         }
         self.cx.run_until_parked();
     }
@@ -46,7 +52,10 @@ impl Harness {
     }
 
     fn with<R>(&mut self, f: impl FnOnce(&mut gpui_kit::Window, &mut gpui_kit::App) -> R) -> R {
-        let result = self.cx.update_window(self.handle, |_, window, cx| f(window, cx)).expect("window");
+        let result = self
+            .cx
+            .update_window(self.handle, |_, window, cx| f(window, cx))
+            .expect("window");
         self.settle();
         result
     }
@@ -61,14 +70,30 @@ impl Harness {
     fn template_editor(&mut self) -> Entity<Editor> {
         let shell = self.shell.clone();
         self.cx.update(|cx| {
-            let page = shell.read(cx).templates().unwrap().read(cx).page().cloned().unwrap();
+            let page = shell
+                .read(cx)
+                .templates()
+                .unwrap()
+                .read(cx)
+                .page()
+                .cloned()
+                .unwrap();
             page.read(cx).editor().editor_entity().unwrap()
         })
     }
 
     fn workspace_editor(&mut self) -> Entity<Editor> {
         let shell = self.shell.clone();
-        self.cx.update(|cx| shell.read(cx).workspace().unwrap().read(cx).editor().editor_entity().unwrap())
+        self.cx.update(|cx| {
+            shell
+                .read(cx)
+                .workspace()
+                .unwrap()
+                .read(cx)
+                .editor()
+                .editor_entity()
+                .unwrap()
+        })
     }
 
     fn select(&mut self, editor: &Entity<Editor>, selection: Selection) {
@@ -102,7 +127,12 @@ fn run(dark: bool, out: &Path) {
         .templates()
         .expect("templates")
         .into_iter()
-        .max_by_key(|t| store.template(t.id).map(|r| r.document.encode().len()).unwrap_or(0))
+        .max_by_key(|t| {
+            store
+                .template(t.id)
+                .map(|r| r.document.encode().len())
+                .unwrap_or(0)
+        })
         .map(|t| t.id)
         .unwrap_or(TemplateId::new(1).unwrap());
     let text_system = Arc::new(gpui_wgpu::CosmicTextSystem::new("sans-serif"));
@@ -112,7 +142,11 @@ fn run(dark: bool, out: &Path) {
         gpui_kit::platform::current_headless_renderer,
     );
     let preferences = Preferences {
-        theme: if dark { ThemeChoice::Dark } else { ThemeChoice::Light },
+        theme: if dark {
+            ThemeChoice::Dark
+        } else {
+            ThemeChoice::Light
+        },
         ..Preferences::default()
     };
     let (handle, shell) = cx.update(|cx| {
@@ -129,7 +163,13 @@ fn run(dark: bool, out: &Path) {
         (handle, shell)
     });
     let suffix = if dark { "dark" } else { "light" };
-    let mut h = Harness { cx, handle, shell, out: out.to_owned(), suffix };
+    let mut h = Harness {
+        cx,
+        handle,
+        shell,
+        out: out.to_owned(),
+        suffix,
+    };
     h.settle();
 
     h.go(Route::Template(largest));
@@ -141,12 +181,15 @@ fn run(dark: bool, out: &Path) {
         h.shot("02-template-fields-labels");
     }
 
-    let start = h.cx.update(|cx| tree::first_text(editor.read(cx).document()).unwrap());
+    let start =
+        h.cx.update(|cx| tree::first_text(editor.read(cx).document()).unwrap());
     h.select(&editor, Selection::caret(pos(start.clone(), 0)));
     let mixed = "دفعہ 380 PPC اور 411 کے تحت مقدمہ درج ہوا ";
     {
         let editor = editor.clone();
-        h.with(move |window, cx| editor.update(cx, |e, cx| e.insert_text_command(mixed, window, cx)));
+        h.with(move |window, cx| {
+            editor.update(cx, |e, cx| e.insert_text_command(mixed, window, cx))
+        });
     }
     let a = pos(start.clone(), "دفعہ 3".len());
     let b = pos(start.clone(), "دفعہ 380 PPC اور 4".len());
@@ -155,10 +198,13 @@ fn run(dark: bool, out: &Path) {
 
     let cell = h.cx.update(|cx| {
         let e = editor.read(cx);
-        tree::all_text_paths(e.document()).into_iter().find(|p| tree::cell_of(e.document(), p).is_some())
+        tree::all_text_paths(e.document())
+            .into_iter()
+            .find(|p| tree::cell_of(e.document(), p).is_some())
     });
     if let Some(cell) = cell {
-        let offset = h.cx.update(|cx| editor.read(cx).core().block_len(&cell).unwrap_or(0));
+        let offset =
+            h.cx.update(|cx| editor.read(cx).core().block_len(&cell).unwrap_or(0));
         h.select(&editor, Selection::caret(pos(cell, offset)));
         h.shot("04-caret-in-table-cell");
     }

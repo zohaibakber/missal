@@ -25,12 +25,18 @@ fn stats(name: &str, mut samples: Vec<Duration>) {
 }
 
 fn main() {
-    let count: usize = std::env::args().nth(1).and_then(|value| value.parse().ok()).unwrap_or(50_000);
+    let count: usize = std::env::args()
+        .nth(1)
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(50_000);
     let directory = tempfile::tempdir().unwrap();
     let database = directory.path().join("missal.sqlite");
     let started = Instant::now();
     seed_firs(&database, count).unwrap();
-    println!("seeding {count} FIRs: {:.2}s", started.elapsed().as_secs_f64());
+    println!(
+        "seeding {count} FIRs: {:.2}s",
+        started.elapsed().as_secs_f64()
+    );
     drop(Store::open(&database).unwrap());
 
     let text_system = Arc::new(gpui_wgpu::CosmicTextSystem::new("sans-serif"));
@@ -42,7 +48,12 @@ fn main() {
     cx.allow_parking();
     let launch = Instant::now();
     let (handle, models, shell) = cx.update(|cx| {
-        let models = init_app(cx, Db::spawn(database.clone()), None, Preferences::default());
+        let models = init_app(
+            cx,
+            Db::spawn(database.clone()),
+            None,
+            Preferences::default(),
+        );
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: point(px(0.), px(0.)),
@@ -71,7 +82,10 @@ fn main() {
     draw(&mut cx);
     cx.run_until_parked();
     draw(&mut cx);
-    println!("launch to first frame with the list visible (CPU frame, no GPU submit): {:.0}ms", launch.elapsed().as_secs_f64() * 1e3);
+    println!(
+        "launch to first frame with the list visible (CPU frame, no GPU submit): {:.0}ms",
+        launch.elapsed().as_secs_f64() * 1e3
+    );
     let rows = cx.update(|cx| models.firs.read(cx).rows.len());
     println!("rows loaded: {rows}");
     let list = cx.update(|cx| shell.read(cx).fir_list().unwrap());
@@ -86,7 +100,11 @@ fn main() {
 
     let mut scroll = Vec::new();
     for step in 0..300usize {
-        cx.update(|cx| list.update(cx, |list, cx| list.scroll_to_row(step * 37 % rows.saturating_sub(40), cx)));
+        cx.update(|cx| {
+            list.update(cx, |list, cx| {
+                list.scroll_to_row(step * 37 % rows.saturating_sub(40), cx)
+            })
+        });
         let t = Instant::now();
         cx.run_until_parked();
         draw(&mut cx);
@@ -105,13 +123,19 @@ fn main() {
     stats("sort change + frame", sort);
 
     let search = cx.update(|cx| list.read(cx).search_input(cx));
-    cx.update_window(handle, |_, window, cx| search.update(cx, |input, cx| input.focus(window, cx))).unwrap();
+    cx.update_window(handle, |_, window, cx| {
+        search.update(cx, |input, cx| input.focus(window, cx))
+    })
+    .unwrap();
     let mut typing = Vec::new();
     let mut typing_input = Vec::new();
     let mut typing_draw = Vec::new();
     for character in "چوری 379".chars() {
         let t = Instant::now();
-        cx.update_window(handle, |_, window, cx| window.input(&character.to_string(), cx)).unwrap();
+        cx.update_window(handle, |_, window, cx| {
+            window.input(&character.to_string(), cx)
+        })
+        .unwrap();
         cx.run_until_parked();
         typing_input.push(t.elapsed());
         let d = Instant::now();
@@ -122,7 +146,10 @@ fn main() {
     stats("  of which input dispatch", typing_input);
     stats("  of which draw", typing_draw);
     stats("search keystroke (filter 50k + frame)", typing);
-    println!("matches after typing: {}", cx.update(|cx| list.read(cx).visible_count()));
+    println!(
+        "matches after typing: {}",
+        cx.update(|cx| list.read(cx).visible_count())
+    );
 
     let (rows_snapshot, version) = cx.update(|cx| {
         let firs = models.firs.read(cx);
@@ -132,13 +159,19 @@ fn main() {
     let mut index = ListIndex::default();
     let first = Instant::now();
     index.update(&rows_snapshot, version, "", &[], sort);
-    println!("index: first sort of {} rows: {:.2}ms", rows_snapshot.len(), first.elapsed().as_secs_f64() * 1e3);
+    println!(
+        "index: first sort of {} rows: {:.2}ms",
+        rows_snapshot.len(),
+        first.elapsed().as_secs_f64() * 1e3
+    );
     let mut query = String::new();
     let mut filter = Vec::new();
     for character in "چوری 379".chars() {
         query.push(character);
         let t = Instant::now();
-        let shown = index.update(&rows_snapshot, version, &query, &[], sort).len();
+        let shown = index
+            .update(&rows_snapshot, version, &query, &[], sort)
+            .len();
         filter.push(t.elapsed());
         let _ = shown;
     }

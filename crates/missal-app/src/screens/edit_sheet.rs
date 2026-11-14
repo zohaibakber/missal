@@ -1,10 +1,10 @@
+use gpui_kit::component::Disableable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Sizable, StyledExt, WindowExt, h_flex};
-use gpui_kit::component::Disableable as _;
 
 use gpui_kit::{
-    App, AppContext, Context, Entity, IntoElement, ParentElement, Render,
-    Styled, Subscription, Window, div, px,
+    App, AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription,
+    Window, div, px,
 };
 use missal_core::FirRecord;
 
@@ -48,7 +48,11 @@ impl Render for EditFooter {
                     .text_size(px(12.))
                     .text_color(palette.muted_foreground)
                     .child(dirty_dot(&palette, dirty))
-                    .child(if dirty { "Unsaved changes" } else { "No changes" }),
+                    .child(if dirty {
+                        "Unsaved changes"
+                    } else {
+                        "No changes"
+                    }),
             )
             .child(div().flex_1())
             .child(
@@ -66,7 +70,9 @@ impl Render for EditFooter {
                     .loading(saving)
                     .disabled(!dirty && !saving)
                     .label("Save changes")
-                    .on_click(move |_, window, cx| save.update(cx, |form, cx| form.submit(window, cx))),
+                    .on_click(move |_, window, cx| {
+                        save.update(cx, |form, cx| form.submit(window, cx))
+                    }),
             )
     }
 }
@@ -93,8 +99,19 @@ pub fn open_edit_sheet(record: FirRecord, window: &mut Window, cx: &mut App) {
         let palette = *Palette::get(cx);
         sheet
             .size(px(640.))
-            .title(div().text_size(px(15.)).font_semibold().child(missal_text::label(title.clone())))
-            .child(div().px_4().pb_4().text_color(palette.foreground).child(form.clone()))
+            .title(
+                div()
+                    .text_size(px(15.))
+                    .font_semibold()
+                    .child(missal_text::label(title.clone())),
+            )
+            .child(
+                div()
+                    .px_4()
+                    .pb_4()
+                    .text_color(palette.foreground)
+                    .child(form.clone()),
+            )
             .footer(footer.clone())
     });
 }

@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
 use gpui_kit::assets::IconName;
+use gpui_kit::component::Disableable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Sizable, StyledExt, WindowExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
-use gpui_kit::component::Disableable as _;
 
 use gpui_kit::{
     App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
@@ -47,12 +47,15 @@ impl CustomValues {
         cx: &mut Context<Self>,
     ) -> CustomValues {
         let search = text_input(window, cx, Kind::Auto, "Search custom fields", "");
-        let mut subscriptions = vec![cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
-            if *event == TextInputEvent::Change {
-                this.query = input.read(cx).text().to_owned();
-                cx.notify();
-            }
-        })];
+        let mut subscriptions =
+            vec![
+                cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
+                    if *event == TextInputEvent::Change {
+                        this.query = input.read(cx).text().to_owned();
+                        cx.notify();
+                    }
+                }),
+            ];
         let rows = fields
             .into_iter()
             .map(|placeholder| {
@@ -67,7 +70,11 @@ impl CustomValues {
                         cx.notify();
                     }
                 }));
-                ValueRow { placeholder, input, initial }
+                ValueRow {
+                    placeholder,
+                    input,
+                    initial,
+                }
             })
             .collect();
         CustomValues {
@@ -82,11 +89,16 @@ impl CustomValues {
     }
 
     pub fn inputs(&self) -> Vec<(PlaceholderId, Entity<TextInput>)> {
-        self.rows.iter().map(|row| (row.placeholder.id, row.input.clone())).collect()
+        self.rows
+            .iter()
+            .map(|row| (row.placeholder.id, row.input.clone()))
+            .collect()
     }
 
     pub fn is_dirty(&self, cx: &App) -> bool {
-        self.rows.iter().any(|row| row.input.read(cx).text() != row.initial)
+        self.rows
+            .iter()
+            .any(|row| row.input.read(cx).text() != row.initial)
     }
 
     pub fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -153,7 +165,10 @@ impl CustomValues {
 impl Render for CustomValues {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
-        let words: Vec<String> = fold_for_search(&self.query).split_whitespace().map(str::to_owned).collect();
+        let words: Vec<String> = fold_for_search(&self.query)
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect();
         let rows: Vec<_> = self
             .rows
             .iter()
@@ -238,7 +253,11 @@ impl Render for CustomValuesFooter {
                     .text_size(px(12.))
                     .text_color(palette.muted_foreground)
                     .child(dirty_dot(&palette, dirty))
-                    .child(if dirty { "Unsaved changes" } else { "No changes" }),
+                    .child(if dirty {
+                        "Unsaved changes"
+                    } else {
+                        "No changes"
+                    }),
             )
             .child(div().flex_1())
             .child(
@@ -248,7 +267,9 @@ impl Render for CustomValuesFooter {
                     .loading(saving)
                     .disabled(!dirty)
                     .label("Save values")
-                    .on_click(move |_, window, cx| values.update(cx, |values, cx| values.save(window, cx))),
+                    .on_click(move |_, window, cx| {
+                        values.update(cx, |values, cx| values.save(window, cx))
+                    }),
             )
     }
 }
@@ -261,7 +282,12 @@ pub fn open_custom_values(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let fields: Vec<Placeholder> = Models::get(cx).catalog.read(cx).custom_fields().cloned().collect();
+    let fields: Vec<Placeholder> = Models::get(cx)
+        .catalog
+        .read(cx)
+        .custom_fields()
+        .cloned()
+        .collect();
     let values = cx.new(|cx| CustomValues::new(fir_id, fields, &existing, on_saved, window, cx));
     let footer = {
         let values = values.clone();
@@ -273,7 +299,12 @@ pub fn open_custom_values(
     window.open_sheet(cx, move |sheet, _, _| {
         sheet
             .size(px(520.))
-            .title(div().text_size(px(15.)).font_semibold().child(missal_text::label(format!("Custom values · FIR {fir_no}"))))
+            .title(
+                div()
+                    .text_size(px(15.))
+                    .font_semibold()
+                    .child(missal_text::label(format!("Custom values · FIR {fir_no}"))),
+            )
             .child(values.clone())
             .footer(footer.clone())
     });

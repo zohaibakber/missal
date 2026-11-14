@@ -7,7 +7,7 @@
 - Windows: `Missal-win-Setup.exe` is a one-click, per-user installer (no elevation, installs to `%LOCALAPPDATA%\Missal`), the closest match to the electron-builder NSIS one-click per-user installer. Uninstall removes only that folder, so `%APPDATA%\Missal` (the database shared with the Electron app) is never touched. The updater, delta packages and an update API come in the same box.
 - Linux: the same tool produces an AppImage that can update itself.
 - Rejected: cargo-packager (builds NSIS/AppImage/deb, but its updater is a separate component with signature keys to manage and no delta support), cargo-wix and Inno Setup (installers only, no updater, so a second system would be needed for updates).
-- Cost: `vpk` is a .NET tool, so CI needs the .NET SDK (preinstalled on GitHub runners). The runtime has no .NET dependency.
+- Cost: `vpk` is a .NET tool (and AppImage packing needs `mksquashfs` from `squashfs-tools`), so CI needs the .NET SDK (preinstalled on GitHub runners). The runtime has no .NET dependency.
 
 **Updates** (`crates/missal-app/src/update/`): in release builds, once at startup, a background thread asks the GitHub API for the releases of `zohaibakber/missal`, keeps only published, non-prerelease releases tagged `native-vX.Y.Z` (Electron `v*` releases in the same repository are ignored), picks the highest version above the running one that has the channel feed (`releases.win.json` or `releases.linux.json`), and hands that release to Velopack. Velopack downloads the package and verifies its SHA-256 (and SHA-1) from the feed before it is kept. The UI is never blocked. When the package is ready a toast says "Update ready" with a Restart now button. Restart is refused while the navigator reports unsaved changes. If the user ignores the toast, the downloaded update is applied at the next launch, before any work is open.
 
@@ -31,7 +31,7 @@ Release steps:
 3. Wait for the workflow, test the artefacts from the draft on Windows with the checklist in `docs/windows-checklist.md`.
 4. Publish the draft and fix the latest flag as above.
 
-Release assets per platform: `Missal-win-Setup.exe`, `Missal-win-Portable.zip`, `Missal-<version>-win-full.nupkg`, `releases.win.json`, `assets.win.json`, `RELEASES-win`, and the Linux equivalents plus `Missal-linux.AppImage` and `missal_<version>_amd64.deb`. The updater needs the `.nupkg` and `releases.*.json` files, so upload everything.
+Release assets per platform: `Missal-win-Setup.exe`, `Missal-win-Portable.zip`, `Missal-<version>-win-full.nupkg`, `releases.win.json`, `assets.win.json`, `RELEASES-win`, and the Linux equivalents plus `Missal.AppImage` and `missal_<version>_amd64.deb`. The updater needs the `.nupkg` and `releases.*.json` files, so upload everything.
 
 Delta packages are not produced: CI packs each tag from scratch. To enable them, download the previous native release into the output directory with `vpk download github` before packing (and mind that it must pick a `native-v*` release).
 
@@ -56,9 +56,9 @@ Licence obligations when shipping it: SumatraPDF is GPLv3. It is a separate exec
 
 ## Linux
 
-- `packaging/linux/pack.sh X.Y.Z` stages the binary and runs `vpk [linux] pack`, producing `Missal-linux.AppImage` plus update packages.
+- `packaging/linux/pack.sh X.Y.Z` stages the binary and runs `vpk [linux] pack`, producing `Missal.AppImage` plus update packages.
 - `packaging/linux/build-deb.sh BINARY X.Y.Z OUTDIR` builds a `.deb` with the desktop file (`packaging/linux/missal.desktop`) and icon. A deb does not self-update.
-- The window `app_id` is `com.zohaibakber.missal`, matching the desktop file's `StartupWMClass`.
+- The window `app_id` is `Missal`, matching `StartupWMClass` in the desktop files that vpk and `build-deb.sh` write, so the taskbar groups and shows the icon correctly.
 - Runtime requirement: a working Vulkan driver and ICD. Intel and AMD: `mesa-vulkan-drivers`. NVIDIA: the vendor driver. With no GPU: `mesa-vulkan-drivers` provides the software renderer (lavapipe), which works but is slow. Also needs `libxkbcommon`, `libxkbcommon-x11`, `libwayland-client`, `libfontconfig`, `libfreetype` and X11 or Wayland session libraries, which any desktop install has. AppImages do not bundle GPU drivers.
 
 ## Code signing and other owner tasks

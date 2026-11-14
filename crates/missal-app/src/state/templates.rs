@@ -26,16 +26,20 @@ impl Templates {
     }
 
     pub fn reload(&mut self, cx: &mut Context<Self>) {
-        run_db(cx, |store| store.templates(), |this, result, cx| {
-            match result {
-                Ok(items) => {
-                    this.items = items;
-                    this.load = Load::Ready;
+        run_db(
+            cx,
+            |store| store.templates(),
+            |this, result, cx| {
+                match result {
+                    Ok(items) => {
+                        this.items = items;
+                        this.load = Load::Ready;
+                    }
+                    Err(error) => this.load = Load::Failed(error.message()),
                 }
-                Err(error) => this.load = Load::Failed(error.message()),
-            }
-            this.changed(cx);
-        });
+                this.changed(cx);
+            },
+        );
     }
 
     fn changed(&mut self, cx: &mut Context<Self>) {

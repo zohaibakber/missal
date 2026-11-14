@@ -30,7 +30,9 @@ impl Handoff {
     pub fn message(self) -> &'static str {
         match self {
             Handoff::PrintDialog => "The print dialog is open in your PDF viewer",
-            Handoff::DefaultViewer => "Opened in your PDF viewer. Press Ctrl+P there to choose a printer and print",
+            Handoff::DefaultViewer => {
+                "Opened in your PDF viewer. Press Ctrl+P there to choose a printer and print"
+            }
         }
     }
 }
@@ -90,7 +92,11 @@ pub fn choose_route(environment: &Environment<'_>) -> Route {
 }
 
 pub fn current_route() -> Route {
-    let variable = |name: &str| std::env::var_os(name).filter(|value| !value.is_empty()).map(PathBuf::from);
+    let variable = |name: &str| {
+        std::env::var_os(name)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+    };
     let exists = |path: &Path| path.is_file();
     let search_path = std::env::var_os("PATH")
         .map(|paths| std::env::split_paths(&paths).collect())
@@ -118,8 +124,14 @@ pub fn file_name_for(title: &str) -> String {
         name.push(replacement);
     }
     let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
-    let name = name.trim_matches(|c: char| c == '.' || c == ' ' || c == '-').to_owned();
-    let name = if name.is_empty() { "Missal".to_owned() } else { name };
+    let name = name
+        .trim_matches(|c: char| c == '.' || c == ' ' || c == '-')
+        .to_owned();
+    let name = if name.is_empty() {
+        "Missal".to_owned()
+    } else {
+        name
+    };
     format!("{name}.pdf")
 }
 
@@ -202,7 +214,10 @@ mod tests {
     fn file_names_drop_characters_windows_rejects() {
         assert_eq!(file_name_for("FIR 12/2019"), "FIR 12-2019.pdf");
         assert_eq!(file_name_for("  a:b*c?  "), "a-b-c.pdf");
-        assert_eq!(file_name_for("ایف آئی آر ۱۲/۲۰۱۹"), "ایف آئی آر ۱۲-۲۰۱۹.pdf");
+        assert_eq!(
+            file_name_for("ایف آئی آر ۱۲/۲۰۱۹"),
+            "ایف آئی آر ۱۲-۲۰۱۹.pdf"
+        );
         assert_eq!(file_name_for(""), "Missal.pdf");
         assert_eq!(file_name_for("..."), "Missal.pdf");
     }
@@ -239,8 +254,14 @@ mod tests {
     #[test]
     fn without_a_known_viewer_the_default_viewer_is_used() {
         let none = |_: &Path| false;
-        assert_eq!(choose_route(&environment(true, &|_| None, &none)), Route::DefaultViewer);
-        assert_eq!(choose_route(&environment(false, &|_| None, &none)), Route::DefaultViewer);
+        assert_eq!(
+            choose_route(&environment(true, &|_| None, &none)),
+            Route::DefaultViewer
+        );
+        assert_eq!(
+            choose_route(&environment(false, &|_| None, &none)),
+            Route::DefaultViewer
+        );
     }
 
     #[test]
@@ -264,6 +285,11 @@ mod tests {
         let path = spool(directory.path(), "FIR 1/2026", b"%PDF-1.7", later).unwrap();
         assert!(!stale.exists());
         assert_eq!(std::fs::read(&path).unwrap(), b"%PDF-1.7");
-        assert!(path.file_name().unwrap().to_string_lossy().starts_with("FIR 1-2026 "));
+        assert!(
+            path.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("FIR 1-2026 ")
+        );
     }
 }

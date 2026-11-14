@@ -1,4 +1,7 @@
-#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -15,16 +18,28 @@ struct Args {
 }
 
 fn parse_args() -> Result<Args, String> {
-    let mut args = Args { data_dir: None, seed: None };
+    let mut args = Args {
+        data_dir: None,
+        seed: None,
+    };
     let mut iterator = std::env::args().skip(1);
     while let Some(argument) = iterator.next() {
         match argument.as_str() {
             "--data-dir" => {
-                args.data_dir = Some(iterator.next().ok_or("--data-dir needs a directory")?.into());
+                args.data_dir = Some(
+                    iterator
+                        .next()
+                        .ok_or("--data-dir needs a directory")?
+                        .into(),
+                );
             }
             "--seed" => {
                 let count = iterator.next().ok_or("--seed needs a count")?;
-                args.seed = Some(count.parse().map_err(|_| format!("{count} is not a number"))?);
+                args.seed = Some(
+                    count
+                        .parse()
+                        .map_err(|_| format!("{count} is not a number"))?,
+                );
             }
             other => return Err(format!("unknown argument {other}")),
         }
@@ -49,12 +64,17 @@ fn main() -> ExitCode {
     };
     let paths = Paths::resolve(args.data_dir.as_deref());
     if let Err(error) = paths.ensure_directory() {
-        eprintln!("missal: could not create {}: {error}", paths.directory.display());
+        eprintln!(
+            "missal: could not create {}: {error}",
+            paths.directory.display()
+        );
         return ExitCode::FAILURE;
     }
     if let Some(count) = args.seed {
         if paths.is_default {
-            eprintln!("missal: refusing to seed the real data directory; pass --data-dir with a scratch directory");
+            eprintln!(
+                "missal: refusing to seed the real data directory; pass --data-dir with a scratch directory"
+            );
             return ExitCode::from(2);
         }
         return match seed_firs(&paths.database, count) {

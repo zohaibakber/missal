@@ -1,10 +1,10 @@
+use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
+use gpui_kit::component::Disableable as _;
+use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{StyledExt, TitleBar, h_flex};
 use gpui_kit::prelude::*;
-use gpui_kit::TestSupportExt as _;
-use gpui_kit::component::Sizable as _;
-use gpui_kit::component::Disableable as _;
 
 use gpui_kit::{
     AnyElement, Context, InteractiveElement, IntoElement, ParentElement, Render, SharedString,
@@ -60,14 +60,15 @@ impl TitleBarView {
             }
             Route::Settings => vec![leaf("Settings".into())],
             Route::Templates => vec![leaf("Templates".into())],
-            Route::NewTemplate => vec![section("Templates", Route::Templates), leaf("New template".into())],
+            Route::NewTemplate => vec![
+                section("Templates", Route::Templates),
+                leaf("New template".into()),
+            ],
             Route::Template(id) => {
-                let name = self
-                    .models
-                    .templates
-                    .read(cx)
-                    .get(id)
-                    .map_or_else(|| SharedString::from("Template"), |item| item.name.clone().into());
+                let name = self.models.templates.read(cx).get(id).map_or_else(
+                    || SharedString::from("Template"),
+                    |item| item.name.clone().into(),
+                );
                 vec![section("Templates", Route::Templates), leaf(name)]
             }
         }
@@ -138,8 +139,11 @@ impl Render for TitleBarView {
                                 let mut items: Vec<AnyElement> = Vec::new();
                                 if index > 0 {
                                     items.push(
-                                        small_icon(IconName::ChevronRight, palette.muted_foreground)
-                                            .into_any_element(),
+                                        small_icon(
+                                            IconName::ChevronRight,
+                                            palette.muted_foreground,
+                                        )
+                                        .into_any_element(),
                                     );
                                 }
                                 let text = div()
@@ -147,7 +151,11 @@ impl Render for TitleBarView {
                                     .max_w(px(260.))
                                     .py_1()
                                     .overflow_hidden()
-                                    .text_color(if last { palette.foreground } else { palette.muted_foreground })
+                                    .text_color(if last {
+                                        palette.foreground
+                                    } else {
+                                        palette.muted_foreground
+                                    })
                                     .when(last, |this| this.font_medium())
                                     .child(label(crumb.text).truncate());
                                 items.push(match crumb.route {
@@ -183,7 +191,13 @@ impl Render for TitleBarView {
                         .tooltip(tooltip_with_keys("Command menu", Some("Mod+K")))
                         .on_click(|_, window, cx| open_palette(window, cx))
                         .child(small_icon(IconName::Search, palette.muted_foreground))
-                        .child(div().flex_1().min_w_0().truncate().child("Search FIRs, templates and commands"))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .truncate()
+                                .child("Search FIRs, templates and commands"),
+                        )
                         .child(key_hint(&palette, "Mod+K")),
                 ),
             )

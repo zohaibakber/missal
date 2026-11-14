@@ -40,7 +40,9 @@ impl PrefsModel {
         cx.notify();
         if self.path.is_some() {
             self.save_task = Some(cx.spawn(async move |this, cx| {
-                cx.background_executor().timer(Duration::from_millis(350)).await;
+                cx.background_executor()
+                    .timer(Duration::from_millis(350))
+                    .await;
                 this.update(cx, |this, _| this.flush()).ok();
             }));
         }

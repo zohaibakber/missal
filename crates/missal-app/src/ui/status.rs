@@ -42,9 +42,18 @@ pub fn status_icon(status: FirStatus, color: Hsla, size: Pixels) -> impl IntoEle
             if solid {
                 let unit = diameter / 14.0;
                 let mut check = PathBuilder::stroke(px(1.4));
-                check.move_to(point(bounds.origin.x + px(4.0 * unit), bounds.origin.y + px(7.2 * unit)));
-                check.line_to(point(bounds.origin.x + px(6.2 * unit), bounds.origin.y + px(9.2 * unit)));
-                check.line_to(point(bounds.origin.x + px(10.0 * unit), bounds.origin.y + px(4.8 * unit)));
+                check.move_to(point(
+                    bounds.origin.x + px(4.0 * unit),
+                    bounds.origin.y + px(7.2 * unit),
+                ));
+                check.line_to(point(
+                    bounds.origin.x + px(6.2 * unit),
+                    bounds.origin.y + px(9.2 * unit),
+                ));
+                check.line_to(point(
+                    bounds.origin.x + px(10.0 * unit),
+                    bounds.origin.y + px(4.8 * unit),
+                ));
                 if let Ok(path) = check.build() {
                     window.paint_path(path, gpui_kit::white());
                 }

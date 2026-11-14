@@ -188,9 +188,9 @@ mod tests {
         let count = block_on(db.run(|store| store.firs().map(|firs| firs.len())));
         assert_eq!(count, Ok(0));
         assert_eq!(db.pending(), 0);
-        let failed = block_on(db.run(|_| -> StoreResult<()> {
-            Err(RepositoryError::storage("test", "boom"))
-        }));
+        let failed = block_on(
+            db.run(|_| -> StoreResult<()> { Err(RepositoryError::storage("test", "boom")) }),
+        );
         assert_eq!(failed.unwrap_err().message(), "boom");
     }
 

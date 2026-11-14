@@ -1,8 +1,8 @@
+use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Sizable, StyledExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
-use gpui_kit::TestSupportExt as _;
 use gpui_kit::{
     AnyElement, App, Context, Entity, FocusHandle, InteractiveElement, IntoElement, ParentElement,
     Render, StatefulInteractiveElement, Styled, Subscription, Window, div, px,
@@ -60,8 +60,12 @@ impl SettingsScreen {
                 }
                 cx.notify();
             }),
-            cx.subscribe(&marker_open, |this, input, event: &TextInputEvent, cx| this.marker_changed(&input, event, cx)),
-            cx.subscribe(&marker_close, |this, input, event: &TextInputEvent, cx| this.marker_changed(&input, event, cx)),
+            cx.subscribe(&marker_open, |this, input, event: &TextInputEvent, cx| {
+                this.marker_changed(&input, event, cx)
+            }),
+            cx.subscribe(&marker_close, |this, input, event: &TextInputEvent, cx| {
+                this.marker_changed(&input, event, cx)
+            }),
         ];
         SettingsScreen {
             models,
@@ -83,7 +87,12 @@ impl SettingsScreen {
         window.focus(&self.focus, cx);
     }
 
-    fn marker_changed(&mut self, input: &Entity<TextInput>, event: &TextInputEvent, cx: &mut Context<Self>) {
+    fn marker_changed(
+        &mut self,
+        input: &Entity<TextInput>,
+        event: &TextInputEvent,
+        cx: &mut Context<Self>,
+    ) {
         if *event != TextInputEvent::Change {
             return;
         }
@@ -114,13 +123,17 @@ impl SettingsScreen {
         let markers = catalog.settings.field_markers.clone();
         let globals: Vec<GlobalPlaceholder> = catalog.globals.clone();
         let customs: Vec<Placeholder> = catalog.custom_fields().cloned().collect();
-        self.marker_open.update(cx, |input, cx| input.set_text(markers.open(), cx));
-        self.marker_close.update(cx, |input, cx| input.set_text(markers.close(), cx));
+        self.marker_open
+            .update(cx, |input, cx| input.set_text(markers.open(), cx));
+        self.marker_close
+            .update(cx, |input, cx| input.set_text(markers.close(), cx));
         self.marker_initial = (markers.open().to_owned(), markers.close().to_owned());
         self.row_subscriptions.clear();
         self.globals = globals
             .into_iter()
-            .map(|global| self.global_row(Some(global.id), &global.label, &global.value, window, cx))
+            .map(|global| {
+                self.global_row(Some(global.id), &global.label, &global.value, window, cx)
+            })
             .collect();
         self.customs = customs
             .into_iter()
@@ -128,7 +141,14 @@ impl SettingsScreen {
             .collect();
     }
 
-    fn global_row(&mut self, id: Option<PlaceholderId>, name: &str, value: &str, window: &mut Window, cx: &mut Context<Self>) -> GlobalRow {
+    fn global_row(
+        &mut self,
+        id: Option<PlaceholderId>,
+        name: &str,
+        value: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> GlobalRow {
         let name_input = text_input(window, cx, Kind::Urdu, "نام", name);
         let value_input = text_input(window, cx, Kind::Urdu, "قدر", value);
         self.watch(&name_input, cx);
@@ -141,7 +161,13 @@ impl SettingsScreen {
         }
     }
 
-    fn custom_row(&mut self, id: Option<PlaceholderId>, name: &str, window: &mut Window, cx: &mut Context<Self>) -> CustomRow {
+    fn custom_row(
+        &mut self,
+        id: Option<PlaceholderId>,
+        name: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> CustomRow {
         let input = text_input(window, cx, Kind::Urdu, "نام", name);
         self.watch(&input, cx);
         CustomRow {
@@ -162,7 +188,10 @@ impl SettingsScreen {
     pub fn globals_dirty(&self, cx: &App) -> bool {
         self.globals.iter().any(|row| {
             row.id.is_none()
-                || (row.name.read(cx).text().to_owned(), row.value.read(cx).text().to_owned()) != row.initial
+                || (
+                    row.name.read(cx).text().to_owned(),
+                    row.value.read(cx).text().to_owned(),
+                ) != row.initial
         })
     }
 
@@ -177,7 +206,10 @@ impl SettingsScreen {
     }
 
     pub fn global_inputs(&self) -> Vec<(Entity<TextInput>, Entity<TextInput>)> {
-        self.globals.iter().map(|row| (row.name.clone(), row.value.clone())).collect()
+        self.globals
+            .iter()
+            .map(|row| (row.name.clone(), row.value.clone()))
+            .collect()
     }
 
     pub fn marker_inputs(&self) -> (Entity<TextInput>, Entity<TextInput>) {
@@ -210,7 +242,9 @@ impl SettingsScreen {
         let existing_customs_dirty = self.customs_dirty(cx);
         self.globals = globals
             .into_iter()
-            .map(|global| self.global_row(Some(global.id), &global.label, &global.value, window, cx))
+            .map(|global| {
+                self.global_row(Some(global.id), &global.label, &global.value, window, cx)
+            })
             .collect();
         let _ = (customs, existing_customs_dirty);
         self.rebuild_customs(window, cx);
@@ -218,7 +252,13 @@ impl SettingsScreen {
     }
 
     fn rebuild_customs(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let customs: Vec<Placeholder> = self.models.catalog.read(cx).custom_fields().cloned().collect();
+        let customs: Vec<Placeholder> = self
+            .models
+            .catalog
+            .read(cx)
+            .custom_fields()
+            .cloned()
+            .collect();
         self.customs = customs
             .into_iter()
             .map(|field| self.custom_row(Some(field.id), &field.label, window, cx))
@@ -242,8 +282,13 @@ impl SettingsScreen {
                 this.saving[0] = false;
                 match result {
                     Ok(settings) => {
-                        this.marker_initial = (settings.field_markers.open().to_owned(), settings.field_markers.close().to_owned());
-                        this.models.catalog.update(cx, |catalog, cx| catalog.set_settings(settings, cx));
+                        this.marker_initial = (
+                            settings.field_markers.open().to_owned(),
+                            settings.field_markers.close().to_owned(),
+                        );
+                        this.models
+                            .catalog
+                            .update(cx, |catalog, cx| catalog.set_settings(settings, cx));
                         toast_success(window, cx, "Placeholder markers saved");
                     }
                     Err(error) => toast_error(window, cx, error.message()),
@@ -264,7 +309,11 @@ impl SettingsScreen {
             }
             match row.id {
                 Some(id) if (name.clone(), value.clone()) != row.initial => {
-                    drafts.push(GlobalPlaceholderDraft::Existing { id, label: name, value });
+                    drafts.push(GlobalPlaceholderDraft::Existing {
+                        id,
+                        label: name,
+                        value,
+                    });
                 }
                 None => drafts.push(GlobalPlaceholderDraft::New { label: name, value }),
                 Some(_) => {}
@@ -277,15 +326,19 @@ impl SettingsScreen {
             cx,
             move |store| {
                 store.save_global_placeholders(&drafts)?;
-                Ok((store.settings()?, store.placeholders()?, store.global_placeholders()?))
+                Ok((
+                    store.settings()?,
+                    store.placeholders()?,
+                    store.global_placeholders()?,
+                ))
             },
             |this, result, window, cx| {
                 this.saving[1] = false;
                 match result {
                     Ok((settings, placeholders, globals)) => {
-                        this.models
-                            .catalog
-                            .update(cx, |catalog, cx| catalog.replace_all(settings, placeholders, globals, cx));
+                        this.models.catalog.update(cx, |catalog, cx| {
+                            catalog.replace_all(settings, placeholders, globals, cx)
+                        });
                         this.row_subscriptions.clear();
                         this.reset_globals(window, cx);
                         toast_success(window, cx, "Global values saved");
@@ -306,7 +359,9 @@ impl SettingsScreen {
                 return;
             }
             match row.id {
-                Some(id) if name != row.initial => drafts.push(CustomFieldDraft::Rename { id, label: name }),
+                Some(id) if name != row.initial => {
+                    drafts.push(CustomFieldDraft::Rename { id, label: name })
+                }
                 None => drafts.push(CustomFieldDraft::New { label: name }),
                 Some(_) => {}
             }
@@ -318,15 +373,19 @@ impl SettingsScreen {
             cx,
             move |store| {
                 store.save_custom_fields(&drafts)?;
-                Ok((store.settings()?, store.placeholders()?, store.global_placeholders()?))
+                Ok((
+                    store.settings()?,
+                    store.placeholders()?,
+                    store.global_placeholders()?,
+                ))
             },
             |this, result, window, cx| {
                 this.saving[2] = false;
                 match result {
                     Ok((settings, placeholders, globals)) => {
-                        this.models
-                            .catalog
-                            .update(cx, |catalog, cx| catalog.replace_all(settings, placeholders, globals, cx));
+                        this.models.catalog.update(cx, |catalog, cx| {
+                            catalog.replace_all(settings, placeholders, globals, cx)
+                        });
                         this.row_subscriptions.clear();
                         this.reset_globals(window, cx);
                         toast_success(window, cx, "Placeholders saved");
@@ -350,7 +409,13 @@ impl SettingsScreen {
         }
     }
 
-    fn section(&self, palette: &Palette, title: &'static str, description: &'static str, body: impl IntoElement) -> impl IntoElement {
+    fn section(
+        &self,
+        palette: &Palette,
+        title: &'static str,
+        description: &'static str,
+        body: impl IntoElement,
+    ) -> impl IntoElement {
         h_flex()
             .items_start()
             .gap_8()
@@ -363,12 +428,22 @@ impl SettingsScreen {
                     .flex_shrink_0()
                     .gap_1()
                     .child(div().text_size(px(14.)).font_semibold().child(title))
-                    .child(div().text_size(px(13.)).text_color(palette.muted_foreground).child(description)),
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .text_color(palette.muted_foreground)
+                            .child(description),
+                    ),
             )
             .child(v_flex().flex_1().min_w_0().gap_3().child(body))
     }
 
-    fn theme_card(&self, palette: &Palette, choice: ThemeChoice, current: ThemeChoice) -> impl IntoElement {
+    fn theme_card(
+        &self,
+        palette: &Palette,
+        choice: ThemeChoice,
+        current: ThemeChoice,
+    ) -> impl IntoElement {
         let palette = *palette;
         let selected = choice == current;
         let ink = |l: f32| oklch(l, 0.0, 0.0, 1.0);
@@ -377,7 +452,13 @@ impl SettingsScreen {
                 .size_full()
                 .bg(bg)
                 .child(div().h(px(10.)).bg(bar))
-                .child(v_flex().p(px(7.)).gap(px(5.)).child(div().h(px(5.)).w(px(46.)).rounded(px(2.)).bg(line)).child(div().h(px(5.)).w(px(30.)).rounded(px(2.)).bg(line)))
+                .child(
+                    v_flex()
+                        .p(px(7.))
+                        .gap(px(5.))
+                        .child(div().h(px(5.)).w(px(46.)).rounded(px(2.)).bg(line))
+                        .child(div().h(px(5.)).w(px(30.)).rounded(px(2.)).bg(line)),
+                )
         };
         let light = || preview(ink(0.98), ink(0.922), ink(0.87));
         let dark = || preview(ink(0.205), ink(0.269), ink(0.439));
@@ -386,8 +467,20 @@ impl SettingsScreen {
             ThemeChoice::Dark => dark().into_any_element(),
             ThemeChoice::System => h_flex()
                 .size_full()
-                .child(div().w(px(44.)).h_full().overflow_hidden().child(div().w(px(88.)).h_full().child(light())))
-                .child(div().w(px(44.)).h_full().overflow_hidden().child(div().w(px(88.)).h_full().ml(px(-44.)).child(dark())))
+                .child(
+                    div()
+                        .w(px(44.))
+                        .h_full()
+                        .overflow_hidden()
+                        .child(div().w(px(88.)).h_full().child(light())),
+                )
+                .child(
+                    div()
+                        .w(px(44.))
+                        .h_full()
+                        .overflow_hidden()
+                        .child(div().w(px(88.)).h_full().ml(px(-44.)).child(dark())),
+                )
                 .into_any_element(),
         };
         v_flex()
@@ -404,20 +497,37 @@ impl SettingsScreen {
                     .rounded(px(8.))
                     .overflow_hidden()
                     .border_2()
-                    .border_color(if selected { palette.primary } else { palette.border })
+                    .border_color(if selected {
+                        palette.primary
+                    } else {
+                        palette.border
+                    })
                     .child(face),
             )
             .child(
                 div()
                     .text_size(px(13.))
                     .when(selected, |this| this.font_medium())
-                    .text_color(if selected { palette.foreground } else { palette.muted_foreground })
+                    .text_color(if selected {
+                        palette.foreground
+                    } else {
+                        palette.muted_foreground
+                    })
                     .child(choice.title()),
             )
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn section_actions(&self, palette: &Palette, dirty: bool, saving: bool, id: &'static str, save: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static, reset: Option<fn(&mut Self, &mut Window, &mut Context<Self>)>, cx: &mut Context<Self>) -> Option<AnyElement> {
+    fn section_actions(
+        &self,
+        palette: &Palette,
+        dirty: bool,
+        saving: bool,
+        id: &'static str,
+        save: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
+        reset: Option<fn(&mut Self, &mut Window, &mut Context<Self>)>,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
         (dirty || saving).then(|| {
             h_flex()
                 .items_center()
@@ -452,7 +562,11 @@ impl Render for SettingsScreen {
             self.sync(window, cx);
         }
         let theme = self.models.prefs.read(cx).read().theme;
-        let (markers_dirty, globals_dirty, customs_dirty) = (self.markers_dirty(cx), self.globals_dirty(cx), self.customs_dirty(cx));
+        let (markers_dirty, globals_dirty, customs_dirty) = (
+            self.markers_dirty(cx),
+            self.globals_dirty(cx),
+            self.customs_dirty(cx),
+        );
         let marker_text = (
             self.marker_open.read(cx).text().to_owned(),
             self.marker_close.read(cx).text().to_owned(),
@@ -464,7 +578,9 @@ impl Render for SettingsScreen {
             &palette,
             "Theme",
             "Choose how Missal looks. System follows your operating system.",
-            h_flex().gap_4().children(ThemeChoice::ALL.map(|choice| self.theme_card(&palette, choice, theme))),
+            h_flex()
+                .gap_4()
+                .children(ThemeChoice::ALL.map(|choice| self.theme_card(&palette, choice, theme))),
         );
 
         let marker_section = self.section(
@@ -500,24 +616,56 @@ impl Render for SettingsScreen {
                         ),
                 )
                 .children(self.marker_error.then(|| {
-                    div().text_size(px(12.)).text_color(palette.destructive).child("Use 1–3 symbols, no letters or numbers.")
+                    div()
+                        .text_size(px(12.))
+                        .text_color(palette.destructive)
+                        .child("Use 1–3 symbols, no letters or numbers.")
                 }))
-                .children(self.section_actions(&palette, markers_dirty, self.saving[0], "markers", |this, window, cx| this.save_markers(window, cx), None, cx)),
+                .children(self.section_actions(
+                    &palette,
+                    markers_dirty,
+                    self.saving[0],
+                    "markers",
+                    |this, window, cx| this.save_markers(window, cx),
+                    None,
+                    cx,
+                )),
         );
 
         let globals_body: AnyElement = match &load {
             Load::Loading => v_flex()
                 .gap_2()
-                .children((0..4usize).map(|index| div().id(("global-skeleton", index)).h(px(36.)).rounded(px(7.)).bg(palette.muted)))
+                .children((0..4usize).map(|index| {
+                    div()
+                        .id(("global-skeleton", index))
+                        .h(px(36.))
+                        .rounded(px(7.))
+                        .bg(palette.muted)
+                }))
                 .into_any_element(),
             Load::Failed(message) => v_flex()
                 .gap_2()
-                .child(div().text_size(px(13.)).child("Could not load global values"))
-                .child(div().text_size(px(12.)).text_color(palette.muted_foreground).child(message.clone()))
-                .child(Button::new("retry-settings").outline().small().label("Try again").on_click({
-                    let catalog = self.models.catalog.clone();
-                    move |_, _, cx| catalog.update(cx, |catalog, cx| catalog.reload(cx))
-                }))
+                .child(
+                    div()
+                        .text_size(px(13.))
+                        .child("Could not load global values"),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(palette.muted_foreground)
+                        .child(message.clone()),
+                )
+                .child(
+                    Button::new("retry-settings")
+                        .outline()
+                        .small()
+                        .label("Try again")
+                        .on_click({
+                            let catalog = self.models.catalog.clone();
+                            move |_, _, cx| catalog.update(cx, |catalog, cx| catalog.reload(cx))
+                        }),
+                )
                 .into_any_element(),
             Load::Ready => v_flex()
                 .gap_2()
@@ -536,7 +684,9 @@ impl Render for SettingsScreen {
                                 .icon(IconName::X)
                                 .tooltip("Remove")
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    if index < this.globals.len() && this.globals[index].id.is_none() {
+                                    if index < this.globals.len()
+                                        && this.globals[index].id.is_none()
+                                    {
                                         this.globals.remove(index);
                                         cx.notify();
                                     }
@@ -550,7 +700,9 @@ impl Render for SettingsScreen {
                             .small()
                             .icon(IconName::Plus)
                             .label("Add value")
-                            .on_click(cx.listener(|this, _, window, cx| this.add_global(window, cx))),
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.add_global(window, cx)),
+                            ),
                     ),
                 )
                 .children(self.section_actions(
@@ -564,7 +716,12 @@ impl Render for SettingsScreen {
                 ))
                 .into_any_element(),
         };
-        let globals_section = self.section(&palette, "Global values", "Shared values such as the police station name, filled into every FIR's documents.", globals_body);
+        let globals_section = self.section(
+            &palette,
+            "Global values",
+            "Shared values such as the police station name, filled into every FIR's documents.",
+            globals_body,
+        );
 
         let fields_body = v_flex()
             .gap_4()
@@ -629,7 +786,12 @@ impl Render for SettingsScreen {
                 Some(|this, window, cx| this.reset_globals(window, cx)),
                 cx,
             ));
-        let fields_section = self.section(&palette, "FIR fields", "The built-in field names and your custom fields.", fields_body);
+        let fields_section = self.section(
+            &palette,
+            "FIR fields",
+            "The built-in field names and your custom fields.",
+            fields_body,
+        );
 
         let dirty = markers_dirty || globals_dirty || customs_dirty;
         let _ = &self.subscriptions;

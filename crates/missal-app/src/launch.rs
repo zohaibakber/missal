@@ -1,6 +1,7 @@
 use gpui_kit::component::TitleBar;
 use gpui_kit::{
-    AnyWindowHandle, App, AppContext, Bounds, Entity, Size, WindowBounds, WindowOptions, point, px, size,
+    AnyWindowHandle, App, AppContext, Bounds, Entity, Size, WindowBounds, WindowOptions, point, px,
+    size,
 };
 use missal_text::TextSystem;
 
@@ -20,7 +21,10 @@ pub fn init_app(cx: &mut App, db: Db, paths: Option<&Paths>, preferences: Prefer
     }
     shortcuts::bind_keys(cx);
     crate::editor::install(cx);
-    theme::install(theme::resolve_dark(preferences.theme, cx.window_appearance()), cx);
+    theme::install(
+        theme::resolve_dark(preferences.theme, cx.window_appearance()),
+        cx,
+    );
     Models::install(db, paths, preferences, cx)
 }
 
@@ -31,9 +35,17 @@ pub fn window_options(preferences: &Preferences, cx: &App) -> WindowOptions {
                 origin: point(px(window.x), px(window.y)),
                 size: size(px(window.width), px(window.height)),
             };
-            if window.maximized { WindowBounds::Maximized(bounds) } else { WindowBounds::Windowed(bounds) }
+            if window.maximized {
+                WindowBounds::Maximized(bounds)
+            } else {
+                WindowBounds::Windowed(bounds)
+            }
         }
-        None => WindowBounds::Windowed(Bounds::centered(None, size(px(DEFAULT_WINDOW.0), px(DEFAULT_WINDOW.1)), cx)),
+        None => WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(DEFAULT_WINDOW.0), px(DEFAULT_WINDOW.1)),
+            cx,
+        )),
     };
     WindowOptions {
         window_bounds: Some(bounds),

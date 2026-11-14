@@ -7,4 +7,4 @@ Exec=missal
 Icon=com.zohaibakber.missal
 Terminal=false
 Categories=Office;
-StartupWMClass=com.zohaibakber.missal
+StartupWMClass=Missal
