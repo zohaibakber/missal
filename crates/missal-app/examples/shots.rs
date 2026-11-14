@@ -339,7 +339,7 @@ impl Harness {
                 title: "FIR 3/2026".to_owned(),
                 note: None,
                 export_name: "FIR 3-2026".to_owned(),
-                catalog: (*catalog).clone(),
+                catalog,
                 values: None,
                 mode: missal_core::DisplayMode::Labels,
                 documents: vec![missal_app::ui::print_preview::PreviewDocument::Stored(
