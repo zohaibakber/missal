@@ -16,13 +16,22 @@ pub struct Templates {
 impl EventEmitter<TemplatesEvent> for Templates {}
 
 impl Templates {
-    pub fn new(cx: &mut Context<Self>) -> Templates {
-        let mut templates = Templates {
+    pub fn empty() -> Templates {
+        Templates {
             items: Vec::new(),
             load: Load::Loading,
-        };
-        templates.reload(cx);
-        templates
+        }
+    }
+
+    pub fn loaded(&mut self, result: Result<Vec<TemplateSummary>, String>, cx: &mut Context<Self>) {
+        match result {
+            Ok(items) => {
+                self.items = items;
+                self.load = Load::Ready;
+            }
+            Err(message) => self.load = Load::Failed(message),
+        }
+        self.changed(cx);
     }
 
     pub fn reload(&mut self, cx: &mut Context<Self>) {

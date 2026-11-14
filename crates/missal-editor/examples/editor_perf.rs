@@ -82,7 +82,7 @@ fn main() {
     });
     draw(&mut cx, handle);
     let fields = EditorFields::labels(
-        std::rc::Rc::new(FieldCatalog::default()),
+        std::sync::Arc::new(FieldCatalog::default()),
         FieldMarkers::default(),
     );
     let started = Instant::now();

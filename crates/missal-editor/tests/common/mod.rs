@@ -1,7 +1,5 @@
 #![allow(dead_code)]
 
-use std::rc::Rc;
-
 use missal_core::document::{
     Block, Document, ElementProps, Field, Inline, PageLayout, Paragraph, Style, Table, TableCell,
     TableRow, Text, TextFormat,
@@ -14,8 +12,8 @@ use missal_editor::model::selection::pos;
 use missal_editor::{EditorCore, Selection};
 use missal_page::{BlockPath, Position};
 
-pub fn catalog() -> Rc<FieldCatalog> {
-    Rc::new(FieldCatalog::new(vec![
+pub fn catalog() -> std::sync::Arc<FieldCatalog> {
+    std::sync::Arc::new(FieldCatalog::new(vec![
         Placeholder {
             id: PlaceholderId::new(1).unwrap(),
             label: "تھانہ".into(),

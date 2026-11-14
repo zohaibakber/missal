@@ -11,9 +11,9 @@ use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     Anchor, AnyElement, App, AppContext, Bounds, Context, Entity, EventEmitter, FocusHandle,
-    Focusable, FontFeatures, FontWeight, Global, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, Pixels, Render, ScrollHandle, SharedString, Size, StatefulInteractiveElement,
-    Styled, Subscription, TestSupportExt as _, Window, canvas, div, point, px,
+    Focusable, FontWeight, Global, InteractiveElement, IntoElement, MouseButton, ParentElement,
+    Pixels, Render, ScrollHandle, SharedString, Size, StatefulInteractiveElement, Styled,
+    Subscription, TestSupportExt as _, Window, canvas, div, point, px,
 };
 use missal_core::{DisplayMode, Document, FieldCatalog, FirDocumentId, FirId, FirValues};
 use missal_page::Page;
@@ -34,7 +34,7 @@ use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::toast::ToastSpec;
 use crate::ui::{
     UrRole, button, checkbox, empty_state, icon_button, isolate_urdu, primary_sm, section_label,
-    sized_icon, skeleton_bar, ur_inline, ur_label, vertical_rule,
+    sized_icon, skeleton_bar, tabular, ur_inline, ur_label, vertical_rule,
 };
 use missal_core::digit_value;
 
@@ -51,7 +51,7 @@ const LAYING_OUT_DELAY: Duration = Duration::from_millis(150);
 
 #[derive(Clone)]
 pub enum PreviewDocument {
-    Content(Box<Document>),
+    Content(Arc<Document>),
     Stored(FirDocumentId),
 }
 
@@ -60,8 +60,8 @@ pub struct PrintRequest {
     pub title: String,
     pub note: Option<String>,
     pub export_name: String,
-    pub catalog: FieldCatalog,
-    pub values: Option<FirValues>,
+    pub catalog: Arc<FieldCatalog>,
+    pub values: Option<Arc<FirValues>>,
     pub mode: DisplayMode,
     pub documents: Vec<PreviewDocument>,
 }
@@ -72,14 +72,6 @@ pub type HandOff = Rc<dyn Fn(&Path, &mut App) -> Handoff>;
 pub struct PrintHandler(pub HandOff);
 
 impl Global for PrintHandler {}
-
-impl PrintHandler {
-    pub fn system() -> PrintHandler {
-        PrintHandler(Rc::new(|path, cx| {
-            printing::hand_off(path, &printing::current_route(), cx)
-        }))
-    }
-}
 
 #[derive(Default)]
 pub struct PrintChoices(HashMap<FirId, HashSet<FirDocumentId>>);
@@ -152,8 +144,8 @@ struct Plan {
     title: String,
     note: Option<String>,
     export_name: String,
-    catalog: FieldCatalog,
-    values: Option<FirValues>,
+    catalog: Arc<FieldCatalog>,
+    values: Option<Arc<FirValues>>,
     mode: DisplayMode,
     docs: Vec<DocEntry>,
 }
@@ -279,7 +271,7 @@ impl PrintPreview {
                 title: String::new(),
                 note: None,
                 export_name: String::new(),
-                catalog: FieldCatalog::default(),
+                catalog: Arc::new(FieldCatalog::default()),
                 values: None,
                 mode: DisplayMode::Labels,
                 documents: Vec::new(),
@@ -470,7 +462,7 @@ impl PrintPreview {
             .ok();
         })
         .detach();
-        let catalog = (*Models::get(cx).catalog.read(cx).field_catalog()).clone();
+        let catalog = Models::get(cx).catalog.read(cx).field_catalog();
         let source = self.source.take();
         let fetch: PlanFetch = match (self.plan.take(), source) {
             (Some(plan), _) => PlanFetch::Ready(Box::new(plan)),
@@ -536,11 +528,9 @@ impl PrintPreview {
                     let mut missing = false;
                     for doc in &plan.docs {
                         match &doc.source {
-                            PreviewDocument::Content(document) => {
-                                documents.push((**document).clone())
-                            }
+                            PreviewDocument::Content(document) => documents.push(document.clone()),
                             PreviewDocument::Stored(id) => match by_id.remove(id) {
-                                Some(document) => documents.push(document),
+                                Some(document) => documents.push(Arc::new(document)),
                                 None => missing = true,
                             },
                         }
@@ -991,6 +981,8 @@ impl PrintPreview {
             return;
         };
         let title = self.request.export_name.clone();
+        let handler = cx.try_global::<PrintHandler>().cloned();
+        let custom = handler.is_some();
         self.busy = Some(Busy::Printing);
         cx.notify();
         cx.spawn_in(window, async move |this, cx| {
@@ -1004,24 +996,30 @@ impl PrintPreview {
                             compress: true,
                         };
                         let (bytes, _) = write_pages(&pages, &options);
-                        printing::spool(
+                        let path = printing::spool(
                             &printing::spool_directory(),
                             &title,
                             &bytes,
                             SystemTime::now(),
-                        )
+                        )?;
+                        let launched = if custom {
+                            None
+                        } else {
+                            printing::launch_viewer(&path)
+                        };
+                        Ok::<_, std::io::Error>((path, launched))
                     }
                 })
                 .await;
             this.update_in(cx, |this, window, cx| {
                 this.busy = None;
                 match spooled {
-                    Ok(path) => {
-                        let handler = cx
-                            .try_global::<PrintHandler>()
-                            .cloned()
-                            .unwrap_or_else(PrintHandler::system);
-                        let handoff = (handler.0)(&path, cx);
+                    Ok((path, launched)) => {
+                        let handoff = match (&handler, launched) {
+                            (Some(handler), _) => (handler.0)(&path, cx),
+                            (None, Some(handoff)) => handoff,
+                            (None, None) => printing::open_default(&path, cx),
+                        };
                         match handoff {
                             Handoff::PrintDialog => toast_success(window, cx, handoff.message()),
                             Handoff::DefaultViewer => {
@@ -1532,10 +1530,6 @@ impl PrintPreview {
     }
 }
 
-fn tabular() -> FontFeatures {
-    FontFeatures(Arc::new(vec![("tnum".into(), 1)]))
-}
-
 type PendingPlan = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Plan, String>>>>;
 
 enum PlanFetch {
@@ -1543,7 +1537,7 @@ enum PlanFetch {
     Pending(PendingPlan),
 }
 
-fn fetch_plan(source: PrintSource, catalog: FieldCatalog, cx: &App) -> PlanFetch {
+fn fetch_plan(source: PrintSource, catalog: Arc<FieldCatalog>, cx: &App) -> PlanFetch {
     match source {
         PrintSource::Request { request, live, .. } => {
             let fir = request.values.as_ref().map(|values| values.fir.id);
@@ -1655,7 +1649,7 @@ fn fetch_plan(source: PrintSource, catalog: FieldCatalog, cx: &App) -> PlanFetch
                     title,
                     note: None,
                     catalog,
-                    values: Some(workspace.values),
+                    values: Some(Arc::new(workspace.values)),
                     mode: DisplayMode::Values,
                     docs,
                 })
@@ -1671,7 +1665,7 @@ fn fetch_plan(source: PrintSource, catalog: FieldCatalog, cx: &App) -> PlanFetch
     }
 }
 
-fn template_plan(name: String, document: Document, catalog: FieldCatalog) -> Plan {
+fn template_plan(name: String, document: Document, catalog: Arc<FieldCatalog>) -> Plan {
     Plan {
         fir: None,
         title: name.clone(),
@@ -1683,7 +1677,7 @@ fn template_plan(name: String, document: Document, catalog: FieldCatalog) -> Pla
         docs: vec![DocEntry {
             id: None,
             title: name.into(),
-            source: PreviewDocument::Content(Box::new(document)),
+            source: PreviewDocument::Content(Arc::new(document)),
             included: true,
         }],
     }

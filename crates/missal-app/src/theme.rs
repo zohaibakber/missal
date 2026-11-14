@@ -432,6 +432,7 @@ pub fn install(dark: bool, cx: &mut App) {
     );
     Theme::update(cx, |theme| apply_palette(theme, &palette));
     cx.set_global(palette);
+    cx.refresh_windows();
 }
 
 pub fn apply(choice: ThemeChoice, window: &Window, cx: &mut App) {

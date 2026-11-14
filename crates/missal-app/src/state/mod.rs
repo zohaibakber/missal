@@ -50,10 +50,33 @@ impl Models {
         cx: &mut App,
     ) -> Models {
         cx.set_global(db);
+        let templates = cx.new(|_| Templates::empty());
+        let catalog = cx.new(|_| Catalog::empty());
+        let reply = self::db(cx).run(|store| {
+            Ok((
+                store.settings()?,
+                store.placeholders()?,
+                store.global_placeholders()?,
+                store.templates()?,
+            ))
+        });
+        let (loaded_templates, loaded_catalog) = (templates.clone(), catalog.clone());
+        cx.spawn(async move |cx| {
+            let result = reply.await.map_err(|error| error.message());
+            let (catalog_result, templates_result) = match result {
+                Ok((settings, placeholders, globals, items)) => {
+                    (Ok((settings, placeholders, globals)), Ok(items))
+                }
+                Err(message) => (Err(message.clone()), Err(message)),
+            };
+            loaded_catalog.update(cx, |catalog, cx| catalog.loaded(catalog_result, cx));
+            loaded_templates.update(cx, |templates, cx| templates.loaded(templates_result, cx));
+        })
+        .detach();
         let models = Models {
             firs: cx.new(Firs::new),
-            templates: cx.new(Templates::new),
-            catalog: cx.new(Catalog::new),
+            templates,
+            catalog,
             nav: cx.new(|_| Navigator::new(Route::Firs)),
             prefs: cx.new(|_| {
                 PrefsModel::new(preferences, paths.map(|paths| paths.preferences.clone()))

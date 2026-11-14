@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::TestSupportExt as _;
@@ -12,7 +12,8 @@ use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyElement, App, AppContext, Context, Entity, FocusHandle, FontWeight, InteractiveElement,
     IntoElement, KeyDownEvent, MouseButton, ParentElement, Render, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Task, WeakEntity, Window, div, px,
+    StatefulInteractiveElement, StyleRefinement, Styled, Subscription, Task, WeakEntity, Window,
+    div, px,
 };
 use missal_core::{DisplayMode, FirDocumentId, FirId, FirValues, Revision, TemplateId};
 use missal_editor::{Editor, EditorEvent, EditorFields};
@@ -141,7 +142,7 @@ pub struct WorkspaceScreen {
     focus: FocusHandle,
     rail_focus: FocusHandle,
     state: WorkspaceState,
-    values: Option<Rc<FirValues>>,
+    values: Option<Arc<FirValues>>,
     documents: Vec<FirDocumentSummary>,
     active: Option<FirDocumentId>,
     loaded: Option<(FirDocumentId, Revision)>,
@@ -170,7 +171,7 @@ impl WorkspaceScreen {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> WorkspaceScreen {
-        let editor = cx.new(|cx| Editor::new(window, cx));
+        let editor = editor::shared(window, cx);
         editor.update(cx, |editor, cx| editor.set_mode_toggle(true, cx));
         let editor_subscription =
             cx.subscribe(&editor, |this, _, event: &EditorEvent, cx| match event {
@@ -184,13 +185,13 @@ impl WorkspaceScreen {
                         this.toggle_field_names(cx);
                     }
                 }
+                EditorEvent::Edited => this.schedule_references(cx),
                 EditorEvent::SaveRequested => {}
             });
         let add_search = field_input(window, cx, Kind::SearchRtl, "تلاش", "");
         let panel = cx.new(|cx| FieldsPanel::new(models.clone(), id, window, cx));
         let subscriptions = vec![
             editor_subscription,
-            cx.observe(&editor, |this, _, cx| this.schedule_references(cx)),
             cx.subscribe(&add_search, |this, input, event: &TextInputEvent, cx| {
                 if *event == TextInputEvent::Change {
                     this.add_query = input.read(cx).text().to_owned();
@@ -201,8 +202,8 @@ impl WorkspaceScreen {
             cx.subscribe_in(
                 &models.firs,
                 window,
-                |this, _, _: &FirsEvent, window, cx| {
-                    if this.state == WorkspaceState::Ready {
+                |this, _, event: &FirsEvent, window, cx| {
+                    if this.state == WorkspaceState::Ready && event.touches(this.id) {
                         this.refresh_values(window, cx);
                     }
                 },
@@ -212,9 +213,9 @@ impl WorkspaceScreen {
                 if let Some(values) = this.values.as_ref()
                     && values.shared_values != shared
                 {
-                    let mut updated = (**values).clone();
-                    updated.shared_values = shared;
-                    this.set_values(Rc::new(updated), cx);
+                    let mut updated = Arc::clone(values);
+                    Arc::make_mut(&mut updated).shared_values = shared;
+                    this.set_values(updated, cx);
                 } else {
                     this.push_fields(cx);
                 }
@@ -285,7 +286,6 @@ impl WorkspaceScreen {
     pub fn focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         window.focus(&self.focus, cx);
         if self.state == WorkspaceState::Ready {
-            self.reload_order(window, cx);
             if crate::ui::print_preview::take_fill_request(self.id, cx) {
                 self.show_fields(window, cx);
             }
@@ -293,7 +293,7 @@ impl WorkspaceScreen {
         }
     }
 
-    fn reload_order(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn reload_order(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let fir = self.id;
         run_db_in(
             window,
@@ -347,7 +347,7 @@ impl WorkspaceScreen {
         self.mode
     }
 
-    pub fn values(&self) -> Option<&Rc<FirValues>> {
+    pub fn values(&self) -> Option<&Arc<FirValues>> {
         self.values.as_ref()
     }
 
@@ -401,7 +401,7 @@ impl WorkspaceScreen {
         }
     }
 
-    fn set_values(&mut self, values: Rc<FirValues>, cx: &mut Context<Self>) {
+    fn set_values(&mut self, values: Arc<FirValues>, cx: &mut Context<Self>) {
         self.values = Some(values.clone());
         self.panel
             .update(cx, |panel, cx| panel.set_values(Some(values), cx));
@@ -461,7 +461,7 @@ impl WorkspaceScreen {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let values = Rc::new(workspace.values);
+        let values = Arc::new(workspace.values);
         self.values = Some(values.clone());
         self.panel
             .update(cx, |panel, cx| panel.set_values(Some(values), cx));
@@ -487,7 +487,7 @@ impl WorkspaceScreen {
             move |store| store.fir_values(id),
             |this, result, _, cx| {
                 if let Ok(values) = result {
-                    this.set_values(Rc::new(values), cx);
+                    this.set_values(Arc::new(values), cx);
                 }
             },
         );
@@ -873,7 +873,7 @@ impl WorkspaceScreen {
             .iter()
             .map(|id| {
                 if Some(*id) == live {
-                    PreviewDocument::Content(Box::new(self.editor.read(cx).snapshot().0))
+                    PreviewDocument::Content(Arc::new(self.editor.read(cx).snapshot().0))
                 } else {
                     PreviewDocument::Stored(*id)
                 }
@@ -884,8 +884,8 @@ impl WorkspaceScreen {
             export_name: title.clone(),
             title,
             note: None,
-            catalog: (*self.models.catalog.read(cx).field_catalog()).clone(),
-            values: Some((*values).clone()),
+            catalog: self.models.catalog.read(cx).field_catalog(),
+            values: Some(values),
             mode: DisplayMode::Values,
             documents,
         };
@@ -1640,7 +1640,16 @@ impl Render for WorkspaceScreen {
                     .bg(palette.sunken)
                     .child(canvas),
             )
-            .when(panel_open, |this| this.child(self.panel.clone()))
+            .when(panel_open, |this| {
+                this.child(
+                    self.panel.clone().cached(
+                        StyleRefinement::default()
+                            .w(px(crate::theme::DETAILS_RAIL_WIDTH))
+                            .h_full()
+                            .flex_none(),
+                    ),
+                )
+            })
             .into_any_element()
     }
 }
@@ -1652,20 +1661,24 @@ impl crate::ui::titlebar::HeaderSource for WorkspaceScreen {
         cx: &mut Context<Self>,
     ) -> crate::ui::titlebar::HeaderContent {
         let palette = *Palette::get(cx);
-        let row = self.models.firs.read(cx).get(self.id).cloned();
-        let fir = self.values.as_ref().map(|values| values.fir.fir.clone());
-        let number = fir
-            .as_ref()
-            .map(|fir| fir.fir_no.clone())
-            .or_else(|| row.as_ref().map(|row| row.no.to_string()));
-        let status = fir
-            .as_ref()
-            .map(|fir| fir.status)
-            .or_else(|| row.as_ref().map(|row| row.status));
-        let offence = fir
-            .as_ref()
-            .map(|fir| fir.offence.clone())
-            .or_else(|| row.as_ref().map(|row| row.offence.to_string()));
+        let (number, status, offence) = match self.values.as_ref() {
+            Some(values) => {
+                let fir = &values.fir.fir;
+                (
+                    Some(fir.fir_no.clone()),
+                    Some(fir.status),
+                    Some(fir.offence.clone()),
+                )
+            }
+            None => match self.models.firs.read(cx).get(self.id) {
+                Some(row) => (
+                    Some(row.no.to_string()),
+                    Some(row.status),
+                    Some(row.offence.to_string()),
+                ),
+                None => (None, None, None),
+            },
+        };
         let title = h_flex()
             .items_center()
             .gap(px(10.))

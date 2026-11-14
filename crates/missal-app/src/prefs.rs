@@ -166,6 +166,12 @@ fn number(value: &Value, key: &str) -> Option<f32> {
         .map(|number| number as f32)
 }
 
+pub fn write_text(path: &Path, text: &str) -> std::io::Result<()> {
+    let temporary = path.with_extension("json.tmp");
+    std::fs::write(&temporary, text)?;
+    std::fs::rename(&temporary, path)
+}
+
 impl Preferences {
     pub fn from_json(value: &Value) -> Preferences {
         let mut preferences = Preferences::default();
@@ -285,12 +291,13 @@ impl Preferences {
             .unwrap_or_default()
     }
 
+    pub fn serialize(&self) -> std::io::Result<String> {
+        serde_json::to_string_pretty(&self.to_json())
+            .map_err(|error| std::io::Error::other(error.to_string()))
+    }
+
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
-        let text = serde_json::to_string_pretty(&self.to_json())
-            .map_err(|error| std::io::Error::other(error.to_string()))?;
-        let temporary = path.with_extension("json.tmp");
-        std::fs::write(&temporary, text)?;
-        std::fs::rename(&temporary, path)
+        write_text(path, &self.serialize()?)
     }
 }
 

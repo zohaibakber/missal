@@ -121,10 +121,20 @@ fn caption_font(cx: &mut App) -> Option<&'static str> {
     if let Some(font) = cx.try_global::<CaptionFont>() {
         return font.0;
     }
-    let names = cx.text_system().all_font_names();
+    let system = cx.text_system();
+    let resolve = |family: &'static str| {
+        system.resolve_font(&gpui_kit::Font {
+            family: family.into(),
+            features: gpui_kit::FontFeatures::default(),
+            fallbacks: None,
+            weight: gpui_kit::FontWeight::default(),
+            style: gpui_kit::FontStyle::default(),
+        })
+    };
+    let missing = resolve("Missal Caption Font Probe");
     let found = ["Segoe Fluent Icons", "Segoe MDL2 Assets"]
         .into_iter()
-        .find(|family| names.iter().any(|name| name == family));
+        .find(|family| resolve(family) != missing);
     cx.set_global(CaptionFont(found));
     found
 }

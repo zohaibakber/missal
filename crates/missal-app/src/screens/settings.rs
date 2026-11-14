@@ -544,7 +544,7 @@ impl SettingsScreen {
             .map(|field| field.label.to_lowercase())
             .chain(
                 catalog
-                    .placeholders
+                    .placeholders()
                     .iter()
                     .filter(|field| !matches!(field.source, missal_core::PlaceholderSource::Custom))
                     .map(|field| field.label.to_lowercase()),

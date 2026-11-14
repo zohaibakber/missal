@@ -1,6 +1,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};
 
 use gpui_kit::App;
@@ -171,22 +172,26 @@ fn remove_stale(directory: &Path, now: SystemTime) {
     }
 }
 
-pub fn hand_off(path: &Path, route: &Route, cx: &mut App) -> Handoff {
-    if let Route::ViewerPrintDialog(viewer) = route {
-        let launched = Command::new(&viewer.program)
-            .args(&viewer.arguments)
-            .arg(path)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn();
-        if let Ok(mut child) = launched {
-            std::thread::spawn(move || {
-                child.wait().ok();
-            });
-            return Handoff::PrintDialog;
-        }
-    }
+pub fn launch_viewer(path: &Path) -> Option<Handoff> {
+    static ROUTE: OnceLock<Route> = OnceLock::new();
+    let Route::ViewerPrintDialog(viewer) = ROUTE.get_or_init(current_route) else {
+        return None;
+    };
+    let mut child = Command::new(&viewer.program)
+        .args(&viewer.arguments)
+        .arg(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    std::thread::spawn(move || {
+        child.wait().ok();
+    });
+    Some(Handoff::PrintDialog)
+}
+
+pub fn open_default(path: &Path, cx: &mut App) -> Handoff {
     cx.open_with_system(path);
     Handoff::DefaultViewer
 }

@@ -19,6 +19,7 @@ impl Global for CheatsheetOpen {}
 
 pub struct Cheatsheet {
     filter: Entity<TextInput>,
+    haystacks: Vec<String>,
     _subscription: Subscription,
 }
 
@@ -30,8 +31,20 @@ impl Cheatsheet {
                 cx.notify();
             }
         });
+        let haystacks = SHORTCUTS
+            .iter()
+            .map(|shortcut| {
+                fold_for_search(&format!(
+                    "{} {} {}",
+                    shortcut.label,
+                    shortcut.keys,
+                    shortcut.group.title()
+                ))
+            })
+            .collect();
         Cheatsheet {
             filter,
+            haystacks,
             _subscription: subscription,
         }
     }
@@ -45,15 +58,9 @@ impl Cheatsheet {
         let words: Vec<&str> = query.split_whitespace().collect();
         SHORTCUTS
             .iter()
-            .filter(|shortcut| {
-                let haystack = fold_for_search(&format!(
-                    "{} {} {}",
-                    shortcut.label,
-                    shortcut.keys,
-                    shortcut.group.title()
-                ));
-                words.iter().all(|word| haystack.contains(word))
-            })
+            .zip(&self.haystacks)
+            .filter(|(_, haystack)| words.iter().all(|word| haystack.contains(word)))
+            .map(|(shortcut, _)| shortcut)
             .collect()
     }
 }

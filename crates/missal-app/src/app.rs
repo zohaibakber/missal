@@ -4,7 +4,8 @@ use std::rc::Rc;
 use gpui_kit::component::v_flex;
 use gpui_kit::{
     AnyView, App, AppContext, Context, Entity, FocusHandle, Focusable, Global, InteractiveElement,
-    IntoElement, ParentElement, Render, Styled, Subscription, WeakEntity, Window, div, px,
+    IntoElement, ParentElement, Render, StyleRefinement, Styled, Subscription, WeakEntity, Window,
+    div, px,
 };
 
 use crate::screens::fir_form::NewFirScreen;
@@ -201,10 +202,9 @@ impl AppShell {
             height: bounds.size.height.into(),
             maximized,
         };
-        self.models.prefs.update(cx, |prefs, cx| {
-            prefs.update(cx, |p| p.window = Some(remembered))
-        });
-        cx.notify();
+        self.models
+            .prefs
+            .update(cx, |prefs, cx| prefs.set_window(remembered, cx));
     }
 
     pub fn fir_list(&self) -> Option<Entity<FirListScreen>> {
@@ -355,7 +355,14 @@ impl AppShell {
             self.screen_subscription = self.screen.observe(cx);
             self.print_subscription = None;
             self.activate(window, cx);
+            self.restored(window, cx);
             cx.notify();
+        }
+    }
+
+    fn restored(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Screen::Workspace(view) = &self.screen {
+            view.update(cx, |screen, cx| screen.reload_order(window, cx));
         }
     }
 
@@ -498,6 +505,7 @@ impl AppShell {
             self.route = route;
             self.record_recent(route, cx);
             self.activate(window, cx);
+            self.restored(window, cx);
             cx.notify();
             return;
         }
@@ -765,7 +773,11 @@ impl Render for AppShell {
                     .min_h_0()
                     .w_full()
                     .bg(palette.surface)
-                    .child(self.screen.view()),
+                    .child(
+                        self.screen
+                            .view()
+                            .cached(StyleRefinement::default().size_full()),
+                    ),
             )
             .children(self.nav_menu.clone().map(|menu| menu.into_any_element()))
             .children(

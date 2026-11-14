@@ -1,6 +1,6 @@
 use std::cell::Cell;
 use std::ops::Range;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Instant;
 
 use missal_core::document::{Align, Block, Document, Inline, ListType, TextFormat};
@@ -42,7 +42,7 @@ pub struct EditorCore {
     pending: Option<TextFormat>,
     marked: Option<Marked>,
     pending_token: Option<BlockPath>,
-    catalog: Rc<FieldCatalog>,
+    catalog: Arc<FieldCatalog>,
     markers: FieldMarkers,
     state: u64,
     next_state: u64,
@@ -56,7 +56,11 @@ fn caret_of(doc: &Document) -> Selection {
 }
 
 impl EditorCore {
-    pub fn new(document: Document, catalog: Rc<FieldCatalog>, markers: FieldMarkers) -> EditorCore {
+    pub fn new(
+        document: Document,
+        catalog: Arc<FieldCatalog>,
+        markers: FieldMarkers,
+    ) -> EditorCore {
         let mut core = EditorCore {
             doc: Document::empty(),
             selection: Selection::caret(pos(BlockPath::top(0), 0)),
@@ -113,7 +117,7 @@ impl EditorCore {
         self.marked.as_ref()
     }
 
-    pub fn catalog(&self) -> &Rc<FieldCatalog> {
+    pub fn catalog(&self) -> &Arc<FieldCatalog> {
         &self.catalog
     }
 
@@ -121,7 +125,7 @@ impl EditorCore {
         &self.markers
     }
 
-    pub fn set_fields(&mut self, catalog: Rc<FieldCatalog>, markers: FieldMarkers) {
+    pub fn set_fields(&mut self, catalog: Arc<FieldCatalog>, markers: FieldMarkers) {
         self.catalog = catalog;
         self.markers = markers;
     }

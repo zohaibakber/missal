@@ -4,7 +4,7 @@ mod theme;
 mod toolbar;
 
 use std::ops::Range;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::{
@@ -41,14 +41,14 @@ pub const MAX_ZOOM: f32 = 3.0;
 
 #[derive(Clone)]
 pub struct EditorFields {
-    pub catalog: Rc<FieldCatalog>,
-    pub values: Option<Rc<FirValues>>,
+    pub catalog: Arc<FieldCatalog>,
+    pub values: Option<Arc<FirValues>>,
     pub mode: DisplayMode,
     pub markers: FieldMarkers,
 }
 
 impl EditorFields {
-    pub fn labels(catalog: Rc<FieldCatalog>, markers: FieldMarkers) -> EditorFields {
+    pub fn labels(catalog: Arc<FieldCatalog>, markers: FieldMarkers) -> EditorFields {
         EditorFields {
             catalog,
             values: None,
@@ -58,8 +58,8 @@ impl EditorFields {
     }
 
     pub fn for_fir(
-        catalog: Rc<FieldCatalog>,
-        values: Rc<FirValues>,
+        catalog: Arc<FieldCatalog>,
+        values: Arc<FirValues>,
         mode: DisplayMode,
         markers: FieldMarkers,
     ) -> EditorFields {
@@ -81,13 +81,14 @@ impl EditorFields {
 
 impl Default for EditorFields {
     fn default() -> EditorFields {
-        EditorFields::labels(Rc::new(FieldCatalog::default()), FieldMarkers::default())
+        EditorFields::labels(Arc::new(FieldCatalog::default()), FieldMarkers::default())
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EditorEvent {
     DirtyChanged(bool),
+    Edited,
     SaveRequested,
     ModeRequested(DisplayMode),
 }
@@ -308,6 +309,17 @@ impl Editor {
         cx.notify();
     }
 
+    pub fn reset(&mut self, cx: &mut Context<Self>) {
+        self.read_only = false;
+        self.mode_toggle = false;
+        self.autoscroll_task = None;
+        self.menu_selection = None;
+        self.field_query.clear();
+        self.field_search
+            .update(cx, |input, cx| input.set_text("", cx));
+        self.load(Document::empty(), EditorFields::default(), false, cx);
+    }
+
     fn relayout_all(&mut self) {
         let presentation = self.fields.presentation();
         self.packet = self
@@ -447,6 +459,7 @@ impl Editor {
         self.core.discard();
         self.relayout_all();
         self.refresh_dirty(cx);
+        cx.emit(EditorEvent::Edited);
         cx.notify();
     }
 
@@ -485,6 +498,7 @@ impl Editor {
                 &edit,
             );
             self.refresh_dirty(cx);
+            cx.emit(EditorEvent::Edited);
         }
         self.moved(cx);
     }

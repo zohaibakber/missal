@@ -12,6 +12,7 @@ pub mod toast;
 pub mod window_controls;
 
 use std::rc::Rc;
+use std::sync::{Arc, LazyLock};
 
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
@@ -19,9 +20,9 @@ use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::{Colorize, Icon, Sizable, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, AnyView, App, ClickEvent, Context, Div, ElementId, FocusHandle, FontWeight, Hsla,
-    InteractiveElement, IntoElement, ParentElement, Render, RenderOnce, SharedString, Stateful,
-    StatefulInteractiveElement, Styled, Window, div, px,
+    AnyElement, AnyView, App, ClickEvent, Context, Div, ElementId, FocusHandle, FontFeatures,
+    FontWeight, Hsla, InteractiveElement, IntoElement, ParentElement, Render, RenderOnce,
+    SharedString, Stateful, StatefulInteractiveElement, Styled, Window, div, px,
 };
 use missal_text::{Align, Label, LineHeight, label};
 
@@ -33,6 +34,12 @@ use crate::theme::{
 };
 
 pub type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
+pub fn tabular() -> FontFeatures {
+    static FEATURES: LazyLock<FontFeatures> =
+        LazyLock::new(|| FontFeatures(Arc::new(vec![("tnum".into(), 1)])));
+    FEATURES.clone()
+}
 
 pub fn icon(name: IconName) -> Icon {
     Icon::new(name)

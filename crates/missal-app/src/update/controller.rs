@@ -1,5 +1,6 @@
 use std::rc::Rc;
-use std::time::Instant;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 use gpui_kit::{AnyWindowHandle, App, AppContext, Context, Entity, EventEmitter, Global, Window};
 
@@ -7,10 +8,12 @@ use super::installer::{self, Ready};
 use crate::state::{Models, ToastKind, show_toast, toast_error, toast_warning};
 use crate::ui::toast::ToastSpec;
 
+const START_DELAY: Duration = Duration::from_secs(60);
+
 pub fn enabled(data_dir_overridden: bool) -> bool {
-    !cfg!(debug_assertions)
-        && !data_dir_overridden
-        && std::env::var_os("MISSAL_NO_UPDATE_CHECK").is_none()
+    static OPTED_OUT: OnceLock<bool> = OnceLock::new();
+    let opted_out = *OPTED_OUT.get_or_init(|| std::env::var_os("MISSAL_NO_UPDATE_CHECK").is_some());
+    !cfg!(debug_assertions) && !data_dir_overridden && !opted_out
 }
 
 #[derive(Clone)]
@@ -55,7 +58,11 @@ pub fn status(cx: &mut App) -> Entity<UpdateStatus> {
 }
 
 pub fn start(window: AnyWindowHandle, cx: &mut App) {
-    run(window, false, cx);
+    cx.spawn(async move |cx| {
+        cx.background_executor().timer(START_DELAY).await;
+        cx.update(|cx| run(window, false, cx));
+    })
+    .detach();
 }
 
 pub fn check_now(window: &mut Window, cx: &mut App) {

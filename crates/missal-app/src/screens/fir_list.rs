@@ -1,7 +1,6 @@
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::rc::Rc;
-use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::TestSupportExt as _;
@@ -9,10 +8,10 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    Anchor, AnyElement, App, Bounds, Context, Entity, FocusHandle, Focusable, FontFeatures,
-    FontWeight, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement,
-    Pixels, Point, Render, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled,
-    Subscription, UniformListScrollHandle, Window, canvas, div, point, px, uniform_list,
+    Anchor, AnyElement, App, Bounds, Context, Entity, FocusHandle, Focusable, FontWeight,
+    InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, Pixels, Point,
+    Render, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled, Subscription,
+    UniformListScrollHandle, Window, canvas, div, point, px, uniform_list,
 };
 use missal_core::{FirId, FirStatus};
 use missal_text::input::{Enter, MoveDown};
@@ -22,7 +21,7 @@ use crate::app::navigate;
 use crate::prefs::{Column, Sort};
 use crate::shortcuts::*;
 use crate::state::firs::FirsEvent;
-use crate::state::rows::ListIndex;
+
 use crate::state::{Load, Models, PrintTarget, Route, run_db_in, toast_error, toast_success};
 use crate::theme::{FILTER_ITEM, ICON_XS, PAGE_GUTTER, Palette, RADIUS, TABLE_HEAD, TABLE_ROW};
 use crate::ui::dialogs::{Choice, Tone, open_choice};
@@ -32,7 +31,7 @@ use crate::ui::status::status_dot;
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::{
     ButtonKind, UrRole, button, checkbox, danger_outline, empty_state, icon_button, isolate_urdu,
-    sized_icon, skeleton_bar, ur_label,
+    sized_icon, skeleton_bar, tabular, ur_label,
 };
 
 const SELECT_WIDTH: f32 = 36.0;
@@ -70,16 +69,18 @@ fn sized<E: Styled>(element: E, column: Column) -> E {
     }
 }
 
-fn tabular() -> FontFeatures {
-    FontFeatures(Arc::new(vec![("tnum".into(), 1)]))
-}
-
 const STATUS_ITEMS: [FirStatus; 4] = [
     FirStatus::Open,
     FirStatus::UnderInvestigation,
     FirStatus::ChallanSubmitted,
     FirStatus::Closed,
 ];
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MenuKind {
+    Columns,
+    Row,
+}
 
 #[derive(Clone)]
 struct RowView {
@@ -103,7 +104,7 @@ pub struct FirListScreen {
     statuses: Vec<FirStatus>,
     hidden: Vec<Column>,
     visible: Vec<u32>,
-    index: ListIndex,
+    menu_kind: Option<MenuKind>,
     stale: bool,
     selected: HashSet<FirId>,
     focused: Option<usize>,
@@ -154,7 +155,7 @@ impl FirListScreen {
             statuses,
             hidden: prefs.hidden,
             visible: Vec::new(),
-            index: ListIndex::default(),
+            menu_kind: None,
             stale: true,
             selected: HashSet::new(),
             focused: None,
@@ -201,8 +202,14 @@ impl FirListScreen {
     pub fn status_count(&mut self, status: Option<FirStatus>, cx: &App) -> usize {
         self.ensure_derived(cx);
         match status {
-            Some(status) => self.index.status_count(status),
-            None => self.index.matched_count(),
+            Some(status) => self
+                .models
+                .firs
+                .read(cx)
+                .index
+                .borrow()
+                .status_count(status),
+            None => self.models.firs.read(cx).index.borrow().matched_count(),
         }
     }
 
@@ -236,7 +243,8 @@ impl FirListScreen {
             return;
         }
         self.stale = false;
-        let shown = self.index.update(
+        let mut index = firs.index.borrow_mut();
+        let shown = index.update(
             &firs.rows,
             firs.version(),
             &self.query,
@@ -245,6 +253,7 @@ impl FirListScreen {
         );
         self.visible.clear();
         self.visible.extend_from_slice(shown);
+        drop(index);
         if self
             .focused
             .is_some_and(|index| index >= self.visible.len())
@@ -561,15 +570,23 @@ impl FirListScreen {
         false
     }
 
-    fn open_menu(&mut self, menu: Entity<PopupList>, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_menu(
+        &mut self,
+        kind: MenuKind,
+        menu: Entity<PopupList>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         cx.subscribe_in(&menu, window, |this, _, _: &Dismissed, window, cx| {
             if this.menu.take().is_some() {
+                this.menu_kind = None;
                 this.focus(window, cx);
                 cx.notify();
             }
         })
         .detach();
         self.menu = Some(menu);
+        self.menu_kind = Some(kind);
         cx.notify();
     }
 
@@ -608,7 +625,7 @@ impl FirListScreen {
             window,
             cx,
         );
-        self.open_menu(menu, window, cx);
+        self.open_menu(MenuKind::Columns, menu, window, cx);
     }
 
     pub fn open_row_menu(
@@ -671,7 +688,7 @@ impl FirListScreen {
             window,
             cx,
         );
-        self.open_menu(menu, window, cx);
+        self.open_menu(MenuKind::Row, menu, window, cx);
     }
 
     fn open_focused_row_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -693,11 +710,16 @@ impl FirListScreen {
     fn toolbar(&mut self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let palette = *palette;
         let filter = self.status_filter();
-        let all_count = self.index.matched_count();
-        let counts: Vec<usize> = STATUS_ITEMS
-            .iter()
-            .map(|status| self.index.status_count(*status))
-            .collect();
+        let (all_count, counts): (usize, Vec<usize>) = {
+            let index = self.models.firs.read(cx).index.borrow();
+            (
+                index.matched_count(),
+                STATUS_ITEMS
+                    .iter()
+                    .map(|status| index.status_count(*status))
+                    .collect(),
+            )
+        };
         let item = |id: SharedString, on: bool, count: usize, content: Option<FirStatus>| {
             let hover = palette.hover;
             h_flex()
@@ -764,10 +786,7 @@ impl FirListScreen {
             );
         }
         let columns_bounds = self.columns_bounds.clone();
-        let menu_open = self
-            .menu
-            .as_ref()
-            .is_some_and(|menu| menu.read(cx).labels().len() == Column::ALL.len() - 1);
+        let menu_open = self.menu_kind == Some(MenuKind::Columns);
         h_flex()
             .id("fir-toolbar")
             .flex_none()

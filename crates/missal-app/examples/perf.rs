@@ -151,6 +151,61 @@ fn main() {
         cx.update(|cx| list.read(cx).visible_count())
     );
 
+    let fir = cx.update(|cx| models.firs.read(cx).rows[0].id);
+    let open_workspace = |cx: &mut HeadlessAppContext| {
+        cx.update_window(handle, |_, window, cx| {
+            models.nav.update(cx, |nav, cx| {
+                nav.go(missal_app::state::Route::Fir(fir), window, cx)
+            })
+        })
+        .unwrap();
+        for _ in 0..40 {
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    };
+    let go_list = |cx: &mut HeadlessAppContext| {
+        cx.update_window(handle, |_, window, cx| {
+            models.nav.update(cx, |nav, cx| {
+                nav.go(missal_app::state::Route::Firs, window, cx)
+            })
+        })
+        .unwrap();
+        for _ in 0..40 {
+            cx.run_until_parked();
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    };
+    let mut visits = Vec::new();
+    let mut list_visits = Vec::new();
+    for _ in 0..5 {
+        let t = Instant::now();
+        open_workspace(&mut cx);
+        draw(&mut cx);
+        visits.push(t.elapsed());
+        let t = Instant::now();
+        go_list(&mut cx);
+        draw(&mut cx);
+        list_visits.push(t.elapsed());
+    }
+    stats("open FIR workspace + frame (includes 80ms settle)", visits);
+    stats("back to list + frame (includes 80ms settle)", list_visits);
+    open_workspace(&mut cx);
+    draw(&mut cx);
+    let workspace = cx.update(|cx| shell.read(cx).workspace().unwrap());
+    let editor = cx.update(|cx| workspace.read(cx).editor().clone());
+    let mut blink = Vec::new();
+    for _ in 0..60 {
+        cx.update(|cx| editor.update(cx, |_, cx| cx.notify()));
+        let t = Instant::now();
+        cx.run_until_parked();
+        draw(&mut cx);
+        blink.push(t.elapsed());
+    }
+    stats("caret blink notify + frame in workspace", blink);
+    go_list(&mut cx);
+    draw(&mut cx);
+
     let (rows_snapshot, version) = cx.update(|cx| {
         let firs = models.firs.read(cx);
         (firs.rows.clone(), firs.version())

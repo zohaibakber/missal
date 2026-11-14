@@ -124,9 +124,10 @@ fn empty_items(fixture: &Fixture, cx: &mut TestAppContext) -> Vec<FieldItem> {
         let panel = workspace.read(cx).panel().clone();
         panel
             .read(cx)
-            .items(cx)
-            .into_iter()
-            .filter(FieldItem::is_empty)
+            .items()
+            .iter()
+            .filter(|item| item.is_empty())
+            .cloned()
             .collect()
     })
 }

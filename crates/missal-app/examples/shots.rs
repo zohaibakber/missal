@@ -19,9 +19,6 @@ use missal_app::ui::window_controls::{ControlsStyle, ForceControls};
 use missal_core::{FirId, TemplateId};
 use missal_store::Store;
 
-const DEFAULT_OUT: &str =
-    "/tmp/claude-0/-home-user-missal/da28de75-7983-5932-bdf9-e2e3d5312f4e/scratchpad/wp0";
-
 struct Harness {
     cx: HeadlessAppContext,
     handle: AnyWindowHandle,
@@ -232,7 +229,7 @@ fn run(dark: bool, out: &Path, only_wp0: bool) {
     h.click("select-all");
     h.shot("03-selection");
     h.click("select-all");
-    h.click("status-filter");
+    h.click("status-Open");
     h.shot("04-status-filter");
     h.press("escape");
     h.click("columns");
@@ -373,7 +370,7 @@ fn main() {
         .iter()
         .position(|argument| argument == "--out")
         .map(|index| PathBuf::from(&args[index + 1]))
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_OUT));
+        .unwrap_or_else(|| std::env::temp_dir().join("missal-shots"));
     std::fs::create_dir_all(&out).expect("output directory");
     let only = args
         .iter()

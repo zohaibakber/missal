@@ -82,7 +82,7 @@ impl TemplatePage {
         cx: &mut Context<Self>,
     ) -> TemplatePage {
         let title = field_input(window, cx, Kind::Urdu, "Template name", "");
-        let editor = cx.new(|cx| Editor::new(window, cx));
+        let editor = crate::editor::shared(window, cx);
         let editor_subscription = cx.subscribe(&editor, |this, _, event: &EditorEvent, cx| {
             if let EditorEvent::DirtyChanged(dirty) = event {
                 this.editor_dirty = *dirty;
@@ -205,10 +205,10 @@ impl TemplatePage {
             export_name: title.clone(),
             title,
             note: Some("Placeholders show their names".to_owned()),
-            catalog: (*self.models.catalog.read(cx).field_catalog()).clone(),
+            catalog: self.models.catalog.read(cx).field_catalog(),
             values: None,
             mode: DisplayMode::Labels,
-            documents: vec![PreviewDocument::Content(Box::new(
+            documents: vec![PreviewDocument::Content(std::sync::Arc::new(
                 self.editor.read(cx).snapshot().0,
             ))],
         };
@@ -270,7 +270,7 @@ impl TemplatePage {
             );
             return;
         }
-        let projections = self.editor.read(cx).snapshot().0.projections();
+        let projections = self.editor.read(cx).document().projections();
         let has_content = self.id.is_some()
             || self.editor_dirty
             || self.editor.read(cx).is_dirty()
@@ -311,7 +311,7 @@ impl TemplatePage {
         self.importing = true;
         cx.notify();
         let catalog = self.models.catalog.read(cx);
-        let fields = (*catalog.field_catalog()).clone();
+        let fields = catalog.field_catalog();
         let markers = catalog.settings.field_markers.clone();
         cx.spawn_in(window, async move |this, cx| {
             let result = cx

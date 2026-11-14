@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
@@ -160,7 +160,7 @@ pub fn take_pending_fields(fir: FirId, cx: &mut App) -> bool {
 }
 
 pub enum FieldsPanelEvent {
-    ValuesChanged(Rc<FirValues>),
+    ValuesChanged(Arc<FirValues>),
     Reveal(FieldReference, bool),
     EditDetails,
 }
@@ -168,8 +168,9 @@ pub enum FieldsPanelEvent {
 pub struct FieldsPanel {
     models: Models,
     fir_id: FirId,
-    values: Option<Rc<FirValues>>,
+    values: Option<Arc<FirValues>>,
     references: Vec<FieldReference>,
+    items: Vec<FieldItem>,
     has_document: bool,
     tab: FieldsTab,
     inputs: HashMap<FieldReference, Entity<TextInput>>,
@@ -191,20 +192,24 @@ impl FieldsPanel {
         cx: &mut Context<Self>,
     ) -> FieldsPanel {
         let filter = field_input(window, cx, Kind::SearchRtl, "تلاش", "");
-        let subscriptions =
-            vec![
-                cx.subscribe(&filter, |this, input, event: &TextInputEvent, cx| {
-                    if *event == TextInputEvent::Change {
-                        this.query = input.read(cx).text().to_owned();
-                        cx.notify();
-                    }
-                }),
-            ];
+        let subscriptions = vec![
+            cx.subscribe(&filter, |this, input, event: &TextInputEvent, cx| {
+                if *event == TextInputEvent::Change {
+                    this.query = input.read(cx).text().to_owned();
+                    cx.notify();
+                }
+            }),
+            cx.observe(&models.catalog, |this, _, cx| {
+                this.refresh_items(cx);
+                cx.notify();
+            }),
+        ];
         FieldsPanel {
             models,
             fir_id,
             values: None,
             references: Vec::new(),
+            items: Vec::new(),
             has_document: false,
             tab: FieldsTab::Fields,
             inputs: HashMap::new(),
@@ -231,9 +236,20 @@ impl FieldsPanel {
         cx.notify();
     }
 
-    pub fn set_values(&mut self, values: Option<Rc<FirValues>>, cx: &mut Context<Self>) {
+    pub fn set_values(&mut self, values: Option<Arc<FirValues>>, cx: &mut Context<Self>) {
         self.values = values;
+        self.refresh_items(cx);
         cx.notify();
+    }
+
+    fn refresh_items(&mut self, cx: &App) {
+        self.items = match self.values.as_ref() {
+            Some(values) => {
+                let catalog = self.models.catalog.read(cx).field_catalog();
+                field_items(&self.references, &catalog, values)
+            }
+            None => Vec::new(),
+        };
     }
 
     pub fn set_references(
@@ -245,6 +261,7 @@ impl FieldsPanel {
         if self.references != references || self.has_document != has_document {
             self.references = references;
             self.has_document = has_document;
+            self.refresh_items(cx);
             cx.notify();
         }
     }
@@ -253,16 +270,12 @@ impl FieldsPanel {
         &self.references
     }
 
-    pub fn items(&self, cx: &App) -> Vec<FieldItem> {
-        let Some(values) = self.values.as_ref() else {
-            return Vec::new();
-        };
-        let catalog = self.models.catalog.read(cx).field_catalog();
-        field_items(&self.references, &catalog, values)
+    pub fn items(&self) -> &[FieldItem] {
+        &self.items
     }
 
-    pub fn empty_count(&self, cx: &App) -> usize {
-        self.items(cx).iter().filter(|item| item.is_empty()).count()
+    pub fn empty_count(&self) -> usize {
+        self.items.iter().filter(|item| item.is_empty()).count()
     }
 
     pub fn input_for(&self, reference: &FieldReference) -> Option<Entity<TextInput>> {
@@ -280,9 +293,10 @@ impl FieldsPanel {
     pub fn focus_first_empty(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         self.tab = FieldsTab::Fields;
         let first = self
-            .items(cx)
-            .into_iter()
-            .find(|item| item.is_empty() && !matches!(item.scope, Scope::Fir(_)));
+            .items
+            .iter()
+            .find(|item| item.is_empty() && !matches!(item.scope, Scope::Fir(_)))
+            .cloned();
         cx.notify();
         let Some(item) = first else {
             return false;
@@ -362,18 +376,9 @@ impl FieldsPanel {
                     },
                     |this, result, window, cx| match result {
                         Ok(settings) => {
-                            let shared = settings.shared_values.clone();
                             this.models
                                 .catalog
                                 .update(cx, |catalog, cx| catalog.set_settings(settings, cx));
-                            if let Some(values) = this.values.as_ref() {
-                                let mut updated = (**values).clone();
-                                updated.shared_values = shared;
-                                let updated = Rc::new(updated);
-                                this.values = Some(updated.clone());
-                                cx.emit(FieldsPanelEvent::ValuesChanged(updated));
-                            }
-                            cx.notify();
                         }
                         Err(error) => toast_error(window, cx, error.message()),
                     },
@@ -387,10 +392,10 @@ impl FieldsPanel {
                     |this, result, window, cx| match result {
                         Ok(overrides) => {
                             if let Some(values) = this.values.as_ref() {
-                                let mut updated = (**values).clone();
-                                updated.overrides = overrides;
-                                let updated = Rc::new(updated);
+                                let mut updated = Arc::clone(values);
+                                Arc::make_mut(&mut updated).overrides = overrides;
                                 this.values = Some(updated.clone());
+                                this.refresh_items(cx);
                                 cx.emit(FieldsPanelEvent::ValuesChanged(updated));
                             }
                             cx.notify();
@@ -525,7 +530,6 @@ impl FieldsPanel {
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let palette = *palette;
-        let items = self.items(cx);
         let mut out: Vec<AnyElement> = Vec::new();
         if !self.has_document {
             out.push(
@@ -540,7 +544,7 @@ impl FieldsPanel {
             return out;
         }
         let (empty, filled): (Vec<FieldItem>, Vec<FieldItem>) =
-            items.into_iter().partition(FieldItem::is_empty);
+            self.items.iter().cloned().partition(FieldItem::is_empty);
         if empty.is_empty() {
             out.push(
                 v_flex()
@@ -944,7 +948,7 @@ impl Render for FieldsPanel {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
         let empty = if self.has_document {
-            self.empty_count(cx)
+            self.empty_count()
         } else {
             0
         };

@@ -1,7 +1,22 @@
-use gpui_kit::{App, Entity, Window};
+use gpui_kit::{App, AppContext, Entity, Global, Window};
 use missal_editor::{Editor, EditorTheme};
 
 use crate::theme::Palette;
+
+struct SharedEditor(Entity<Editor>);
+
+impl Global for SharedEditor {}
+
+pub fn shared(window: &mut Window, cx: &mut App) -> Entity<Editor> {
+    if let Some(shared) = cx.try_global::<SharedEditor>() {
+        let editor = shared.0.clone();
+        editor.update(cx, |editor, cx| editor.reset(cx));
+        return editor;
+    }
+    let editor = cx.new(|cx| Editor::new(window, cx));
+    cx.set_global(SharedEditor(editor.clone()));
+    editor
+}
 
 pub fn focus(editor: &Entity<Editor>, window: &mut Window, cx: &mut App) {
     let handle = editor.read(cx).focus_handle_ref().clone();

@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use gpui_kit::{Context, EventEmitter};
 use missal_core::{AppSettings, FieldCatalog, GlobalPlaceholder, Placeholder, PlaceholderSource};
@@ -11,25 +11,33 @@ pub enum CatalogEvent {
 
 pub struct Catalog {
     pub settings: AppSettings,
-    pub placeholders: Vec<Placeholder>,
     pub globals: Vec<GlobalPlaceholder>,
     pub load: Load,
-    field_catalog: Rc<FieldCatalog>,
+    field_catalog: Arc<FieldCatalog>,
 }
 
 impl EventEmitter<CatalogEvent> for Catalog {}
 
 impl Catalog {
-    pub fn new(cx: &mut Context<Self>) -> Catalog {
-        let mut catalog = Catalog {
+    pub fn empty() -> Catalog {
+        Catalog {
             settings: AppSettings::default(),
-            placeholders: Vec::new(),
             globals: Vec::new(),
             load: Load::Loading,
-            field_catalog: Rc::new(FieldCatalog::default()),
-        };
-        catalog.reload(cx);
-        catalog
+            field_catalog: Arc::new(FieldCatalog::default()),
+        }
+    }
+
+    pub fn loaded(
+        &mut self,
+        result: Result<(AppSettings, Vec<Placeholder>, Vec<GlobalPlaceholder>), String>,
+        cx: &mut Context<Self>,
+    ) {
+        match result {
+            Ok((settings, placeholders, globals)) => self.apply(settings, placeholders, globals),
+            Err(message) => self.load = Load::Failed(message),
+        }
+        self.changed(cx);
     }
 
     pub fn reload(&mut self, cx: &mut Context<Self>) {
@@ -60,9 +68,8 @@ impl Catalog {
         placeholders: Vec<Placeholder>,
         globals: Vec<GlobalPlaceholder>,
     ) {
-        self.field_catalog = Rc::new(FieldCatalog::new(placeholders.clone()));
+        self.field_catalog = Arc::new(FieldCatalog::new(placeholders));
         self.settings = settings;
-        self.placeholders = placeholders;
         self.globals = globals;
         self.load = Load::Ready;
     }
@@ -88,12 +95,17 @@ impl Catalog {
         cx.notify();
     }
 
-    pub fn field_catalog(&self) -> Rc<FieldCatalog> {
+    pub fn field_catalog(&self) -> Arc<FieldCatalog> {
         self.field_catalog.clone()
     }
 
+    pub fn placeholders(&self) -> &[Placeholder] {
+        self.field_catalog.placeholders()
+    }
+
     pub fn custom_fields(&self) -> impl Iterator<Item = &Placeholder> {
-        self.placeholders
+        self.field_catalog
+            .placeholders()
             .iter()
             .filter(|placeholder| placeholder.source == PlaceholderSource::Custom)
     }

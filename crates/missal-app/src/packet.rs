@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use missal_core::{
     DisplayMode, Document, FieldCatalog, FieldPresentation, FieldReference, FirValues,
@@ -6,10 +7,10 @@ use missal_core::{
 use missal_page::{DocSource, Page, PageEngine};
 
 pub struct PacketJob {
-    pub catalog: FieldCatalog,
-    pub values: Option<FirValues>,
+    pub catalog: Arc<FieldCatalog>,
+    pub values: Option<Arc<FirValues>>,
     pub mode: DisplayMode,
-    pub documents: Vec<Document>,
+    pub documents: Vec<Arc<Document>>,
 }
 
 pub struct LaidOut {
@@ -27,7 +28,7 @@ impl PacketJob {
         let sources: Vec<DocSource<'_>> = self
             .documents
             .iter()
-            .map(|document| DocSource::new(document, &presentation))
+            .map(|document| DocSource::new(document.as_ref(), &presentation))
             .collect();
         let packet = PageEngine::new().layout(&sources);
         let pages = packet.pages().cloned().collect();

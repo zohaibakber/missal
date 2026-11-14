@@ -86,10 +86,10 @@ pub fn open_shell(
     options: WindowOptions,
     cx: &mut App,
 ) -> gpui_kit::Result<(AnyWindowHandle, Entity<AppShell>)> {
-    let preferences = models.prefs.read(cx).read().clone();
+    let theme_choice = models.prefs.read(cx).read().theme;
     let models = models.clone();
     gpui_kit::open_window(options, cx, move |window, cx| {
-        theme::apply(preferences.theme, window, cx);
+        theme::apply(theme_choice, window, cx);
         let shell = cx.new(|cx| AppShell::new(models, window, cx));
         cx.set_global(ShellHandle(shell.downgrade()));
         shell
