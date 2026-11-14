@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use missal_core::document::{
-    Align, Block, Child, Direction, ElementProps, Field, Image, Inline, Leaf, Link, List, ListItem,
+    Align, Block, Direction, ElementProps, Field, Image, Inline, Leaf, Link, List, ListItem,
     ListItemChild, ListTag, ListType, PageLayout, Paragraph, Style, Table, TableCell, TableRow,
     Text, TextFormat,
 };
@@ -492,7 +492,10 @@ impl<'p, 'b> Converter<'p, 'b> {
         mark: &Rc<RunStyle>,
     ) -> Paragraph {
         let first_text = children.iter().find_map(|inline| match inline {
-            Inline::Text(text) => Some((text.style.clone(), text.format)),
+            Inline::Text(text) => Some((
+                text.style.clone(),
+                (text.format.0 != 0).then_some(text.format),
+            )),
             _ => None,
         });
         let (text_style, text_format) = match first_text {
@@ -1257,7 +1260,7 @@ impl<'p, 'b> Converter<'p, 'b> {
                     }
                     css.push("padding", "0px");
                     let imported_style = self.intern(css.finish());
-                    cells.push(Child::Node(TableCell {
+                    cells.push(TableCell {
                         props: ElementProps {
                             direction,
                             imported_style,
@@ -1266,7 +1269,7 @@ impl<'p, 'b> Converter<'p, 'b> {
                         col_span: (cell.span > 1).then_some(cell.span as u32),
                         blocks: cell.blocks,
                         ..TableCell::default()
-                    }));
+                    });
                     continue;
                 }
                 let mut cell_borders = style.tcpr.borders;
@@ -1349,7 +1352,7 @@ impl<'p, 'b> Converter<'p, 'b> {
                     css.push("background-color", &shading.css());
                 }
                 let imported_style = self.intern(css.finish());
-                cells.push(Child::Node(TableCell {
+                cells.push(TableCell {
                     props: ElementProps {
                         direction,
                         imported_style,
@@ -1361,14 +1364,14 @@ impl<'p, 'b> Converter<'p, 'b> {
                     vertical_align: v_align.filter(|align| *align != "top").map(str::to_owned),
                     blocks: cell.blocks,
                     ..TableCell::default()
-                }));
+                });
             }
             let mut row_css = Css::default();
             if let Some((height, _)) = row.props.height {
                 row_css.push("height", &pt(height / 20.0));
             }
             let imported_style = self.intern(row_css.finish());
-            table_rows.push(Child::Node(TableRow {
+            table_rows.push(TableRow {
                 props: ElementProps {
                     direction,
                     imported_style,
@@ -1376,7 +1379,7 @@ impl<'p, 'b> Converter<'p, 'b> {
                 },
                 cells,
                 ..TableRow::default()
-            }));
+            });
         }
         let mut css = Css::default();
         if let Some(Some(width)) = props.width {
@@ -1540,14 +1543,14 @@ impl<'p, 'b> Converter<'p, 'b> {
         fn close(stack: &mut Vec<(u8, List)>) {
             if let Some((_, list)) = stack.pop() {
                 if let Some((_, parent)) = stack.last_mut() {
-                    parent.items.push(Child::Node(ListItem {
+                    parent.items.push(ListItem {
                         props: ElementProps {
                             direction: list.props.direction,
                             ..ElementProps::default()
                         },
                         children: vec![ListItemChild::List(list)],
                         ..ListItem::default()
-                    }));
+                    });
                 } else {
                     stack.push((0, list));
                 }
@@ -1564,7 +1567,7 @@ impl<'p, 'b> Converter<'p, 'b> {
             let imported_style = self.intern(self.paragraph_css(&entry.layout));
             let props = entry.paragraph.props;
             if let Some((_, list)) = stack.last_mut() {
-                list.items.push(Child::Node(ListItem {
+                list.items.push(ListItem {
                     props: ElementProps {
                         imported_style,
                         ..props
@@ -1577,7 +1580,7 @@ impl<'p, 'b> Converter<'p, 'b> {
                         .map(ListItemChild::Inline)
                         .collect(),
                     ..ListItem::default()
-                }));
+                });
             }
         }
         while stack.len() > 1 {
@@ -1614,7 +1617,6 @@ fn push_text(current: &mut Vec<Inline>, text: &str, style: Option<Style>, format
     if text.is_empty() {
         return;
     }
-    let format = (format.0 != 0).then_some(format);
     if let Some(Inline::Text(previous)) = current.last_mut()
         && previous.style == style
         && previous.format == format

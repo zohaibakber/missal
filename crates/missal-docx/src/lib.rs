@@ -267,7 +267,7 @@ fn inline_content(inline: &Inline) -> bool {
             .any(|c| !c.is_whitespace() && c != '\u{2003}'),
         Inline::Field(_) | Inline::Image(_) => true,
         Inline::Link(link) => link.children.iter().any(inline_content),
-        Inline::LineBreak(_) | Inline::Other(_) => false,
+        Inline::LineBreak(_) => false,
     }
 }
 

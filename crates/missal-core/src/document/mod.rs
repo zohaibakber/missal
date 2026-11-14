@@ -1,21 +1,13 @@
 mod codec;
-mod envelope;
 mod project;
 
 use std::fmt;
 use std::sync::Arc;
 
-use serde_json::{Map, Value};
-
 use crate::field::FieldReference;
 
-pub use envelope::{
-    DOCUMENT_FORMAT, DOCUMENT_FORMAT_VERSION, DocumentError, Envelope, PageLayout, expand_styles,
-    normalize_styles,
-};
-pub use project::{Projections, project_state};
-
-pub type Extra = Map<String, Value>;
+pub use codec::DocumentError;
+pub use project::Projections;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Style(Arc<str>);
@@ -23,6 +15,10 @@ pub struct Style(Arc<str>);
 impl Style {
     pub fn new(css: &str) -> Style {
         Style(Arc::from(css))
+    }
+
+    pub fn non_empty(css: &str) -> Option<Style> {
+        (!css.trim().is_empty()).then(|| Style::new(css))
     }
 
     pub fn as_str(&self) -> &str {
@@ -105,13 +101,6 @@ pub enum Align {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TextMode {
-    Normal,
-    Token,
-    Segmented,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HeadingLevel {
     H1,
     H2,
@@ -142,7 +131,6 @@ pub struct ElementProps {
     pub text_format: Option<TextFormat>,
     pub text_style: Option<Style>,
     pub imported_style: Option<Style>,
-    pub extra: Extra,
 }
 
 impl ElementProps {
@@ -154,52 +142,17 @@ impl ElementProps {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct RawNode(pub Value);
-
-impl RawNode {
-    pub fn node_type(&self) -> Option<&str> {
-        self.0.get("type").and_then(Value::as_str)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Child<T> {
-    Node(T),
-    Other(RawNode),
-}
-
-impl<T> Child<T> {
-    pub fn node(&self) -> Option<&T> {
-        match self {
-            Child::Node(node) => Some(node),
-            Child::Other(_) => None,
-        }
-    }
-
-    pub fn node_mut(&mut self) -> Option<&mut T> {
-        match self {
-            Child::Node(node) => Some(node),
-            Child::Other(_) => None,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Leaf {
     pub imported_style: Option<Style>,
-    pub extra: Extra,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Text {
     pub text: String,
-    pub format: Option<TextFormat>,
+    pub format: TextFormat,
     pub style: Option<Style>,
-    pub detail: Option<u32>,
-    pub mode: Option<TextMode>,
     pub imported_style: Option<Style>,
-    pub extra: Extra,
 }
 
 impl Text {
@@ -211,7 +164,7 @@ impl Text {
     }
 
     pub fn format(&self) -> TextFormat {
-        self.format.unwrap_or_default()
+        self.format
     }
 
     pub fn css(&self) -> Option<&Style> {
@@ -223,8 +176,6 @@ impl Text {
 pub struct Field {
     pub reference: FieldReference,
     pub imported_style: Option<Style>,
-    pub extra: Extra,
-    pub(crate) reference_missing: bool,
 }
 
 impl Field {
@@ -232,38 +183,8 @@ impl Field {
         Field {
             reference,
             imported_style: None,
-            extra: Extra::new(),
-            reference_missing: false,
         }
     }
-
-    pub fn stored_reference(&self) -> Option<FieldReference> {
-        match self.extra.get("reference") {
-            Some(raw) if self.raw_reference_applies(raw) => FieldReference::from_json(raw),
-            None if self.reference_is_missing() => None,
-            _ => Some(self.reference.clone()),
-        }
-    }
-
-    pub(crate) fn reference_is_missing(&self) -> bool {
-        self.reference_missing && self.reference == FieldReference::Unresolved(String::new())
-    }
-
-    pub(crate) fn raw_reference_applies(&self, raw: &Value) -> bool {
-        match FieldReference::from_json(raw) {
-            Some(decoded) => decoded == self.reference,
-            None => self.reference == FieldReference::Unresolved(String::new()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Image {
-    pub src: Option<String>,
-    pub width: Option<f64>,
-    pub height: Option<f64>,
-    pub imported_style: Option<Style>,
-    pub extra: Extra,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -282,8 +203,6 @@ pub enum Inline {
     LineBreak(Leaf),
     Field(Field),
     Link(Link),
-    Image(Image),
-    Other(RawNode),
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -320,7 +239,7 @@ pub struct List {
     pub list_type: Option<ListType>,
     pub start: Option<i64>,
     pub tag: Option<ListTag>,
-    pub items: Vec<Child<ListItem>>,
+    pub items: Vec<ListItem>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -344,14 +263,14 @@ pub struct Table {
     pub row_striping: Option<bool>,
     pub frozen_column_count: Option<u32>,
     pub frozen_row_count: Option<u32>,
-    pub rows: Vec<Child<TableRow>>,
+    pub rows: Vec<TableRow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct TableRow {
     pub props: ElementProps,
     pub height: Option<f64>,
-    pub cells: Vec<Child<TableCell>>,
+    pub cells: Vec<TableCell>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -389,8 +308,44 @@ pub enum Block {
     Table(Table),
     PageBreak(Leaf),
     HorizontalRule(Leaf),
-    Image(Image),
-    Other(RawNode),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PageLayout {
+    pub width_mm: f64,
+    pub height_mm: f64,
+    pub margin_top_mm: f64,
+    pub margin_right_mm: f64,
+    pub margin_bottom_mm: f64,
+    pub margin_left_mm: f64,
+}
+
+impl PageLayout {
+    pub fn new(width_mm: f64, height_mm: f64, margins_mm: [f64; 4]) -> Option<PageLayout> {
+        let [top, right, bottom, left] = margins_mm;
+        let valid = width_mm > 0.0 && height_mm > 0.0 && margins_mm.iter().all(|m| *m >= 0.0);
+        valid.then_some(PageLayout {
+            width_mm,
+            height_mm,
+            margin_top_mm: top,
+            margin_right_mm: right,
+            margin_bottom_mm: bottom,
+            margin_left_mm: left,
+        })
+    }
+
+    pub fn a4() -> PageLayout {
+        PageLayout::new(210.0, 297.0, [18.0; 4]).expect("A4 is a valid layout")
+    }
+
+    pub(crate) fn margins(&self) -> [f64; 4] {
+        [
+            self.margin_top_mm,
+            self.margin_right_mm,
+            self.margin_bottom_mm,
+            self.margin_left_mm,
+        ]
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -398,38 +353,11 @@ pub struct Document {
     pub root: ElementProps,
     pub blocks: Vec<Block>,
     pub page_layout: Option<PageLayout>,
-    pub(crate) state_extra: Extra,
-    pub(crate) envelope_extra: Extra,
 }
 
 impl Document {
     pub fn empty() -> Document {
-        let state = serde_json::json!({
-            "root": {
-                "children": [{
-                    "children": [],
-                    "direction": "rtl",
-                    "format": "",
-                    "indent": 0,
-                    "textFormat": 0,
-                    "textStyle": "",
-                    "type": "paragraph",
-                    "version": 1
-                }],
-                "direction": "rtl",
-                "format": "",
-                "indent": 0,
-                "type": "root",
-                "version": 1
-            }
-        });
-        Document::from_envelope(&Envelope {
-            styles: Vec::new(),
-            state,
-            page_layout: None,
-            extra: Extra::new(),
-        })
-        .expect("the empty document is valid")
+        Document::new(vec![Block::Paragraph(Paragraph::new(Vec::new()))])
     }
 
     pub fn new(blocks: Vec<Block>) -> Document {
@@ -437,24 +365,14 @@ impl Document {
             root: ElementProps::rtl(),
             blocks,
             page_layout: None,
-            state_extra: Extra::new(),
-            envelope_extra: Extra::new(),
         }
     }
 
-    pub fn decode(json: &str) -> Result<Document, DocumentError> {
-        Document::from_envelope(&Envelope::parse(json)?)
+    pub fn decode(bytes: &[u8]) -> Result<Document, DocumentError> {
+        codec::decode(bytes)
     }
 
-    pub fn encode(&self) -> String {
-        self.to_envelope().to_json()
-    }
-
-    pub fn from_envelope(envelope: &Envelope) -> Result<Document, DocumentError> {
-        codec::decode(envelope)
-    }
-
-    pub fn to_envelope(&self) -> Envelope {
+    pub fn encode(&self) -> Vec<u8> {
         codec::encode(self)
     }
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use missal_core::document::{Child, Table, TableCell, TableRow};
+use missal_core::document::{Table, TableCell, TableRow};
 use missal_text::Rgba;
 
 use crate::css::{self, Length};
@@ -109,7 +109,7 @@ fn build_grid(rows: &[&TableRow]) -> Grid {
         }
         let mut col = 0;
         for (c, cell) in row.cells.iter().enumerate() {
-            let Child::Node(cell) = cell else { continue };
+            let cell = cell;
             while occupied[r].get(col).copied().unwrap_or(false) {
                 col += 1;
             }
@@ -253,7 +253,7 @@ pub(crate) fn measure_table(
     } else {
         margins.left
     };
-    let rows: Vec<&TableRow> = table.rows.iter().filter_map(Child::node).collect();
+    let rows: Vec<&TableRow> = table.rows.iter().collect();
     let grid = build_grid(&rows);
     let ncols = grid.ncols.max(1);
     let nrows = rows.len();
@@ -273,7 +273,6 @@ pub(crate) fn measure_table(
         .map(|row| {
             row.cells
                 .iter()
-                .filter_map(Child::node)
                 .map(|c| absolute_width(c.props.imported_style.as_ref()).unwrap_or(0.0))
                 .sum()
         })
@@ -290,9 +289,7 @@ pub(crate) fn measure_table(
             .placements
             .iter()
             .map(|&(r, _, _, _, sr, sc)| {
-                let cell = rows[sr as usize].cells[sc as usize]
-                    .node()
-                    .expect("placed cells are typed");
+                let cell = &rows[sr as usize].cells[sc as usize];
                 cell_style(&row_styles[r], cell, row_totals[r])
             })
             .collect(),
@@ -473,9 +470,7 @@ pub(crate) fn measure_table(
         let x0 = cols[p0];
         let x1 = cols[p1];
         let content_width = (x1 - x0 - border_half.horizontal() - padding.horizontal()).max(0.0);
-        let cell = rows[sr as usize].cells[sc as usize]
-            .node()
-            .expect("placed cells are typed");
+        let cell = &rows[sr as usize].cells[sc as usize];
         let reused = reuse.and_then(|(prev, _)| {
             let prev_cell = prev.cells.get(index)?;
             (dirty_cell != Some((sr, sc))
@@ -530,7 +525,6 @@ pub(crate) fn measure_table(
         rows[r]
             .cells
             .iter()
-            .filter_map(Child::node)
             .all(|c| c.header_state.unwrap_or(0) & 1 != 0)
             && !rows[r].cells.is_empty()
     };

@@ -27,7 +27,7 @@ name = "gallery"
 required-features = ["headless"]
 
 [[example]]
-name = "bench"
+name = "text_bench"
 required-features = ["headless"]
 
 [lints]

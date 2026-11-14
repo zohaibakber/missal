@@ -34,7 +34,7 @@ pub enum FieldsTab {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Scope {
-    Global(String),
+    Global(PlaceholderId),
     Custom(PlaceholderId),
     Fir(FirField),
 }
@@ -59,7 +59,7 @@ pub struct FieldItem {
 
 impl FieldItem {
     pub fn is_empty(&self) -> bool {
-        missal_core::text::js_trim(&self.value).is_empty()
+        self.value.trim().is_empty()
     }
 }
 
@@ -79,7 +79,7 @@ pub fn field_items(
             FieldReference::Fir(field) => Scope::Fir(*field),
             FieldReference::Catalog(id) => match catalog.placeholder(*id) {
                 Some(placeholder) => match &placeholder.source {
-                    PlaceholderSource::SharedSetting { setting } => Scope::Global(setting.clone()),
+                    PlaceholderSource::Shared => Scope::Global(*id),
                     PlaceholderSource::Custom => Scope::Custom(*id),
                 },
                 None => continue,
@@ -346,30 +346,29 @@ impl FieldsPanel {
         let Some((scope, current)) = self.current_value(&reference, cx) else {
             return;
         };
-        let text = missal_core::text::js_trim(&text).to_owned();
+        let text = text.trim().to_owned();
         if text == current {
             return;
         }
         let fir_id = self.fir_id;
         match scope {
-            Scope::Global(setting) => {
+            Scope::Global(id) => {
                 run_db_in(
                     window,
                     cx,
                     move |store| {
-                        let mut shared = store.settings()?.shared_placeholders;
-                        shared.insert(setting, text);
-                        store.save_shared_placeholders(&shared)
+                        store.set_shared_value(id, &text)?;
+                        store.settings()
                     },
                     |this, result, window, cx| match result {
                         Ok(settings) => {
-                            let shared = settings.shared_placeholders.clone();
+                            let shared = settings.shared_values.clone();
                             this.models
                                 .catalog
                                 .update(cx, |catalog, cx| catalog.set_settings(settings, cx));
                             if let Some(values) = this.values.as_ref() {
                                 let mut updated = (**values).clone();
-                                updated.shared_settings = shared;
+                                updated.shared_values = shared;
                                 let updated = Rc::new(updated);
                                 this.values = Some(updated.clone());
                                 cx.emit(FieldsPanelEvent::ValuesChanged(updated));
@@ -384,14 +383,7 @@ impl FieldsPanel {
                 run_db_in(
                     window,
                     cx,
-                    move |store| {
-                        if text.is_empty() {
-                            store.remove_placeholder_value(fir_id, id)?;
-                        } else {
-                            store.set_placeholder_values(fir_id, &[(id, text)])?;
-                        }
-                        store.placeholder_values(fir_id)
-                    },
+                    move |store| store.set_placeholder_values(fir_id, &[(id, text)]),
                     |this, result, window, cx| match result {
                         Ok(overrides) => {
                             if let Some(values) = this.values.as_ref() {
@@ -723,8 +715,7 @@ impl FieldsPanel {
             row += 1;
         };
         let text = |value: &str| -> Option<AnyElement> {
-            (!missal_core::text::js_trim(value).is_empty())
-                .then(|| Self::value_cell(&palette, value))
+            (!value.trim().is_empty()).then(|| Self::value_cell(&palette, value))
         };
         let dash = || {
             div()

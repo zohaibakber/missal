@@ -213,12 +213,12 @@ impl WorkspaceScreen {
                 },
             ),
             cx.subscribe(&models.catalog, |this, catalog, _: &CatalogEvent, cx| {
-                let shared = catalog.read(cx).settings.shared_placeholders.clone();
+                let shared = catalog.read(cx).settings.shared_values.clone();
                 if let Some(values) = this.values.as_ref()
-                    && values.shared_settings != shared
+                    && values.shared_values != shared
                 {
                     let mut updated = (**values).clone();
-                    updated.shared_settings = shared;
+                    updated.shared_values = shared;
                     this.set_values(Rc::new(updated), cx);
                 } else {
                     this.push_fields(cx);

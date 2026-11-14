@@ -1283,7 +1283,7 @@ impl Editor {
             );
             match placeholder.source {
                 missal_core::PlaceholderSource::Custom => custom.push(entry),
-                missal_core::PlaceholderSource::SharedSetting { .. } => global.push(entry),
+                missal_core::PlaceholderSource::Shared => global.push(entry),
             }
         }
         [("FIR", fir), ("Global", global), ("Custom", custom)]

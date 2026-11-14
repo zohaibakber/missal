@@ -1,8 +1,7 @@
 use std::cmp::Ordering;
 
 use gpui_kit::SharedString;
-use missal_core::text::js_trim;
-use missal_core::{FirId, FirRecord, FirStatus, FirSummary, parse_date};
+use missal_core::{FirId, FirRecord, FirStatus, FirSummary, digit_value, parse_date};
 
 use crate::prefs::{Column, Sort};
 
@@ -24,15 +23,6 @@ pub struct FirRow {
     fir_key: Option<(u64, u64)>,
     date_keys: [i32; 3],
     haystack: Box<str>,
-}
-
-pub fn digit_value(c: char) -> Option<u32> {
-    match c {
-        '0'..='9' => c.to_digit(10),
-        '\u{0660}'..='\u{0669}' => Some(c as u32 - 0x0660),
-        '\u{06F0}'..='\u{06F9}' => Some(c as u32 - 0x06F0),
-        _ => None,
-    }
 }
 
 pub fn fold_for_search(text: &str) -> String {
@@ -124,11 +114,8 @@ pub fn natural_key(text: &str) -> String {
 
 fn date_parts(value: &str) -> (String, i32) {
     match parse_date(value) {
-        Some(date) => (
-            date.to_string(),
-            (date.year() as i32) * 10_000 + i32::from(date.month()) * 100 + i32::from(date.day()),
-        ),
-        None => (js_trim(value).to_owned(), MISSING_DATE),
+        Some(date) => (date.to_string(), date.sort_key()),
+        None => (value.trim().to_owned(), MISSING_DATE),
     }
 }
 

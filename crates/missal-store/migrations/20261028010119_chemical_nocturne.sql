@@ -1,1 +1,0 @@
-ALTER TABLE `app_settings` ADD `bundled_templates_version` integer DEFAULT 0 NOT NULL;

@@ -12,7 +12,6 @@ missal-core.workspace = true
 missal-page.workspace = true
 missal-text.workspace = true
 gpui-kit.workspace = true
-serde_json.workspace = true
 unicode-segmentation.workspace = true
 gpui-pre-wgpu = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
@@ -20,7 +19,7 @@ image = { workspace = true, optional = true }
 [dev-dependencies]
 gpui-kit = { workspace = true, features = ["test-support"] }
 missal-text = { workspace = true, features = ["test-support"] }
-flate2.workspace = true
+missal-store.workspace = true
 
 [features]
 headless = ["gpui-kit/test-support", "missal-page/headless", "dep:gpui-pre-wgpu", "dep:image"]

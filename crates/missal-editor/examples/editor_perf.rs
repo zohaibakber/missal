@@ -1,4 +1,3 @@
-use std::io::Read;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -6,30 +5,17 @@ use gpui_kit::{
     AnyWindowHandle, AppContext, Bounds, Entity, HeadlessAppContext, WindowBounds, WindowOptions,
     point, px, size,
 };
-use missal_core::document::{Envelope, TextFormat};
+use missal_core::document::TextFormat;
 use missal_core::{Document, FieldCatalog, FieldMarkers};
 use missal_editor::model::selection::{document_end, document_start, pos};
 use missal_editor::model::tree;
 use missal_editor::{Editor, EditorFields, Selection};
 
 fn largest() -> (String, Document) {
-    let bytes = include_bytes!("../../../templates/bundle.json.gz");
-    let mut raw = String::new();
-    flate2::read::GzDecoder::new(&bytes[..])
-        .read_to_string(&mut raw)
-        .unwrap();
-    let serde_json::Value::Array(items) = serde_json::from_str(&raw).unwrap() else {
-        panic!()
-    };
-    items
+    missal_store::TemplateBundle::embedded()
+        .templates()
+        .unwrap()
         .into_iter()
-        .map(|item| {
-            let envelope = Envelope::from_value(item["document"].clone()).unwrap();
-            (
-                item["name"].as_str().unwrap().to_owned(),
-                Document::from_envelope(&envelope).unwrap(),
-            )
-        })
         .max_by_key(|(_, d)| d.encode().len())
         .unwrap()
 }

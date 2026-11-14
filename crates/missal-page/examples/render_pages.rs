@@ -1,17 +1,10 @@
-use std::io::Read;
 use std::sync::Arc;
 
-use flate2::read::GzDecoder;
 use gpui_kit::{
     AppContext, Context, IntoElement, ParentElement, Render, Styled, Window, canvas, div, px, size,
 };
-use missal_core::Document;
-use missal_core::document::Envelope;
 use missal_page::paint::{PagePaint, paint_page};
 use missal_page::{DocSource, Page, PageEngine, TokenFields};
-use serde_json::Value;
-
-const BUNDLE: &[u8] = include_bytes!("../../../templates/bundle.json.gz");
 
 struct PageView {
     page: Page,
@@ -46,17 +39,12 @@ fn main() {
         .unwrap_or_else(|| vec![0]);
     let zoom: f32 = opt("--zoom").map(|z| z.parse().unwrap()).unwrap_or(1.0);
     let editor = args.iter().any(|a| a == "--editor");
-    let mut text = String::new();
-    GzDecoder::new(BUNDLE).read_to_string(&mut text).unwrap();
-    let Value::Array(items) = serde_json::from_str(&text).unwrap() else {
-        panic!()
-    };
-    let item = items
-        .iter()
-        .find(|i| i["name"].as_str().unwrap().starts_with(name.as_str()))
+    let (_, document) = missal_store::TemplateBundle::embedded()
+        .templates()
+        .unwrap()
+        .into_iter()
+        .find(|(template, _)| template.starts_with(name.as_str()))
         .expect("template");
-    let document =
-        Document::from_envelope(&Envelope::from_value(item["document"].clone()).unwrap()).unwrap();
     let mut engine = PageEngine::new();
     let packet = engine.layout(&[DocSource::new(&document, &TokenFields)]);
     let text_system = Arc::new(gpui_wgpu::CosmicTextSystem::new("sans-serif"));

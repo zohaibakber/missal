@@ -13,7 +13,9 @@ use gpui_kit::{
     ScrollHandle, StatefulInteractiveElement, Styled, Subscription, Window, anchored, deferred,
     div, px,
 };
-use missal_core::{CalendarDate, Fir, FirId, FirRecord, FirStatus, format_date, parse_date};
+use missal_core::{
+    CalendarDate, Fir, FirId, FirRecord, FirStatus, fold_digits, format_date, parse_date,
+};
 use missal_text::{Direction, LineHeight, TextInput, TextInputEvent};
 
 use crate::app::navigate_replace;
@@ -79,29 +81,6 @@ pub enum FirFormEvent {
 }
 
 const DATE_KEYS: [&str; 3] = ["date", "incident_date", "arrest_date"];
-
-pub fn fold_digits(text: &str) -> String {
-    text.chars()
-        .map(|c| match c {
-            '\u{06F0}'..='\u{06F9}' => char::from(b'0' + (c as u32 - 0x06F0) as u8),
-            '\u{0660}'..='\u{0669}' => char::from(b'0' + (c as u32 - 0x0660) as u8),
-            other => other,
-        })
-        .collect()
-}
-
-pub fn normalize_date(text: &str) -> String {
-    let folded: String = fold_digits(text)
-        .chars()
-        .map(|c| if c == '/' { '-' } else { c })
-        .collect();
-    let formatted = format_date(&folded);
-    if parse_date(&folded).is_some() {
-        formatted
-    } else {
-        missal_core::text::js_trim(text).to_owned()
-    }
-}
 
 pub struct FirForm {
     models: Models,
@@ -287,7 +266,7 @@ impl FirForm {
             if *event == TextInputEvent::Blur {
                 let text = input.read(cx).text().to_owned();
                 let normal = if date {
-                    normalize_date(&text)
+                    format_date(&text)
                 } else {
                     fold_digits(&text)
                 };
@@ -327,11 +306,9 @@ impl FirForm {
                     let CalendarEvent::Selected(Date::Single(Some(date))) = event else {
                         return;
                     };
-                    if let Some(date) = CalendarDate::new(
-                        i64::from(date.year()),
-                        date.month() as u8,
-                        date.day() as u8,
-                    ) {
+                    if let Some(date) =
+                        CalendarDate::new(date.year(), date.month() as u8, date.day() as u8)
+                    {
                         let text = date.to_string();
                         this.dates[index].update(cx, |input, cx| input.set_text(text, cx));
                     }
@@ -527,8 +504,8 @@ impl FirForm {
 
     fn validate(fir: &Fir) -> HashMap<&'static str, &'static str> {
         let mut errors = HashMap::new();
-        let blank = |text: &str| missal_core::text::js_trim(text).is_empty();
-        let bad_date = |text: &str| !blank(text) && parse_date(&normalize_date(text)).is_none();
+        let blank = |text: &str| text.trim().is_empty();
+        let bad_date = |text: &str| !blank(text) && parse_date(text).is_none();
         if blank(&fir.fir_no) {
             errors.insert("fir_no", "Enter the FIR number, for example 412/2026.");
         }
@@ -596,10 +573,10 @@ impl FirForm {
             return;
         }
         let mut fir = self.values(cx);
-        fir.fir_no = fold_digits(missal_core::text::js_trim(&fir.fir_no));
-        fir.date = normalize_date(&fir.date);
-        fir.incident_date = normalize_date(&fir.incident_date);
-        fir.arrest_date = normalize_date(&fir.arrest_date);
+        fir.fir_no = fold_digits(fir.fir_no.trim());
+        fir.date = format_date(&fir.date);
+        fir.incident_date = format_date(&fir.incident_date);
+        fir.arrest_date = format_date(&fir.arrest_date);
         for value in [
             &mut fir.imei_1,
             &mut fir.imei_2,
@@ -659,13 +636,8 @@ impl FirForm {
     }
 
     fn open_calendar(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let text = normalize_date(self.dates[index].read(cx).text());
-        let date = parse_date(&text).and_then(|date| {
-            NaiveDate::from_ymd_opt(
-                date.year() as i32,
-                u32::from(date.month()),
-                u32::from(date.day()),
-            )
+        let date = parse_date(self.dates[index].read(cx).text()).and_then(|date| {
+            NaiveDate::from_ymd_opt(date.year(), u32::from(date.month()), u32::from(date.day()))
         });
         self.calendars[index].update(cx, |state, cx| {
             state.set_date(Date::Single(date), window, cx)
@@ -1065,7 +1037,7 @@ impl FirForm {
 }
 
 fn is_blank(input: &Entity<TextInput>, cx: &App) -> bool {
-    missal_core::text::js_trim(input.read(cx).text()).is_empty()
+    input.read(cx).text().trim().is_empty()
 }
 
 #[derive(IntoElement)]

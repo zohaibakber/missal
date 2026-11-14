@@ -13,12 +13,12 @@ pub enum Entity {
 impl Entity {
     pub const fn as_str(self) -> &'static str {
         match self {
-            Entity::Placeholder => "placeholder",
-            Entity::Template => "template",
-            Entity::Fir => "fir",
-            Entity::FirDocument => "firDocument",
-            Entity::FirPlaceholderValue => "firPlaceholderValue",
-            Entity::Settings => "settings",
+            Entity::Placeholder => "Field",
+            Entity::Template => "Template",
+            Entity::Fir => "FIR",
+            Entity::FirDocument => "Document",
+            Entity::FirPlaceholderValue => "Field value",
+            Entity::Settings => "Settings",
         }
     }
 }
@@ -156,10 +156,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn messages_match_the_desktop_app() {
+    fn messages_read_as_sentences() {
         assert_eq!(
             RepositoryError::not_found(Entity::FirDocument, 3).message(),
-            "firDocument not found"
+            "Document not found"
         );
         assert_eq!(
             RepositoryError::conflict(Entity::Template, "revision", 2).message(),
@@ -177,7 +177,7 @@ mod tests {
                 count: 2
             }
             .message(),
-            "template is in use and cannot be deleted"
+            "Template is in use and cannot be deleted"
         );
         assert_eq!(
             RepositoryError::storage("fir.list", STORAGE_FAILED).message(),

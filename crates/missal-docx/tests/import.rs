@@ -1,7 +1,7 @@
 use std::io::{Cursor, Write};
 
 use missal_core::document::{
-    Align, Block, Child, Direction, Inline, ListItemChild, ListType, Paragraph, Table,
+    Align, Block, Direction, Inline, ListItemChild, ListType, Paragraph, Table,
 };
 use missal_core::field::FirField;
 use missal_core::{
@@ -74,9 +74,9 @@ fn paragraphs(blocks: &[Block]) -> Vec<&Paragraph> {
             Block::Paragraph(paragraph) => found.push(paragraph),
             Block::Table(table) => {
                 for row in &table.rows {
-                    let Child::Node(row) = row else { continue };
+                    let row = row;
                     for cell in &row.cells {
-                        let Child::Node(cell) = cell else { continue };
+                        let cell = cell;
                         found.extend(paragraphs(&cell.blocks));
                     }
                 }
@@ -466,7 +466,7 @@ fn numbered_paragraphs_become_lists_that_continue_across_interruptions() {
     };
     assert_eq!(first.list_type, Some(ListType::Number));
     assert_eq!(first.start, Some(1));
-    let items: Vec<_> = first.items.iter().filter_map(Child::node).collect();
+    let items: Vec<_> = first.items.iter().collect();
     assert_eq!(items.len(), 3);
     assert_eq!(items[0].value, Some(1));
     let ListItemChild::List(nested) = &items[1].children[0] else {
@@ -493,14 +493,8 @@ fn tables_keep_grid_widths_spans_merges_borders_and_shading() {
     ));
     let table = tables(&imported.document.blocks)[0];
     assert_eq!(table.col_widths, Some(vec![100.0, 200.0, 100.0]));
-    let rows: Vec<_> = table.rows.iter().filter_map(Child::node).collect();
-    let cells = |row: usize| {
-        rows[row]
-            .cells
-            .iter()
-            .filter_map(Child::node)
-            .collect::<Vec<_>>()
-    };
+    let rows: Vec<_> = table.rows.iter().collect();
+    let cells = |row: usize| rows[row].cells.iter().collect::<Vec<_>>();
     assert_eq!(cells(0).len(), 2);
     assert_eq!(cells(0)[0].col_span, Some(2));
     assert_eq!(

@@ -1,12 +1,11 @@
 use std::ops::Range;
 
 use missal_core::document::{
-    Align, Block, Child, Document, ElementProps, Extra, Field, Inline, Leaf as LeafNode, ListItem,
-    Paragraph, Text, TextFormat,
+    Align, Block, Document, ElementProps, Field, Inline, Leaf as LeafNode, ListItem, Paragraph,
+    Text, TextFormat,
 };
 use missal_core::{FieldCatalog, FieldMarkers, FieldReference};
 use missal_page::{Affinity, BlockPath, Position};
-use serde_json::Value;
 
 use super::boundary;
 use super::inline::{self, len, split_off};
@@ -17,21 +16,11 @@ use super::tree::{
     leaves_of_block, props, props_mut, split_block_path,
 };
 
-pub fn version_extra() -> Extra {
-    let mut extra = Extra::new();
-    extra.insert("version".into(), Value::from(1));
-    extra
-}
-
 pub fn empty_paragraph(like: Option<&ElementProps>) -> Block {
     let props = match like {
         Some(props) => props.clone(),
         None => ElementProps {
             direction: Some(missal_core::document::Direction::Rtl),
-            indent: Some(0),
-            text_format: Some(TextFormat(0)),
-            text_style: Some(missal_core::document::Style::new("")),
-            extra: version_extra(),
             ..ElementProps::default()
         },
     };
@@ -53,10 +42,7 @@ pub fn template(doc: &Document, at: &Position, pending: Option<TextFormat>) -> T
             inline::new_text("", format, style)
         });
     match pending {
-        Some(format) => Text {
-            format: Some(format),
-            ..found
-        },
+        Some(format) => Text { format, ..found },
         None => found,
     }
 }
@@ -75,10 +61,7 @@ pub fn insert_inlines(doc: &mut Document, at: &Position, new: Vec<Inline>) -> Po
 }
 
 pub fn line_break(doc: &mut Document, at: &Position) -> Position {
-    let node = Inline::LineBreak(LeafNode {
-        imported_style: None,
-        extra: version_extra(),
-    });
+    let node = Inline::LineBreak(LeafNode::default());
     insert_inlines(doc, at, vec![node])
 }
 
@@ -109,9 +92,9 @@ fn collect_marks(
                 }
                 return;
             }
-            for (r, row) in tree::typed_rows(table).enumerate() {
+            for (r, row) in table.rows.iter().enumerate() {
                 for (c, cell) in row.cells.iter().enumerate() {
-                    let Child::Node(cell) = cell else { continue };
+                    let cell = cell;
                     let prefix = path.child(r as u32).child(c as u32);
                     for (b, inner) in cell.blocks.iter().enumerate() {
                         collect_marks(inner, prefix.child(b as u32), s, e, marks);
@@ -257,14 +240,9 @@ fn incremented(path: &BlockPath) -> BlockPath {
     BlockPath(steps)
 }
 
-fn with_text_defaults(mut props: ElementProps, template: &Text) -> ElementProps {
-    props.text_format = Some(template.format());
-    props.text_style = Some(
-        template
-            .style
-            .clone()
-            .unwrap_or_else(|| missal_core::document::Style::new("")),
-    );
+pub fn with_text_defaults(mut props: ElementProps, template: &Text) -> ElementProps {
+    props.text_format = Some(template.format);
+    props.text_style = template.style.clone();
     props
 }
 
@@ -604,7 +582,6 @@ pub fn effective_align(doc: &Document, path: &BlockPath) -> Align {
 pub fn field_inline(reference: FieldReference, style_from: Option<&Text>) -> Inline {
     let mut field = Field::new(reference);
     field.imported_style = style_from.and_then(inline::css_for_field);
-    field.extra = version_extra();
     Inline::Field(field)
 }
 
@@ -626,13 +603,6 @@ impl Converted {
     }
 }
 
-fn convertible(text: &Text) -> bool {
-    !matches!(
-        text.mode,
-        Some(missal_core::document::TextMode::Token | missal_core::document::TextMode::Segmented)
-    )
-}
-
 fn convert_list(
     inlines: Vec<Inline>,
     base: usize,
@@ -646,7 +616,7 @@ fn convert_list(
     for item in inlines {
         let l = inline::inline_len(&item);
         match item {
-            Inline::Text(mut text) if convertible(&text) && text.text.contains(markers.open()) => {
+            Inline::Text(mut text) if text.text.contains(markers.open()) => {
                 let mut origin = acc;
                 let mut from = 0;
                 while let Some(found) = catalog.find_token(&text.text, markers, from) {
@@ -712,7 +682,7 @@ pub fn has_token(
     for item in found {
         let l = inline::inline_len(item);
         match item {
-            Inline::Text(text) if convertible(text) && text.text.contains(markers.open()) => {
+            Inline::Text(text) if text.text.contains(markers.open()) => {
                 let mut from = 0;
                 while let Some(m) = catalog.find_token(&text.text, markers, from) {
                     let start = acc + m.range.start;

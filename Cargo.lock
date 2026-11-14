@@ -4340,8 +4340,6 @@ dependencies = [
 name = "missal-core"
 version = "0.1.0"
 dependencies = [
- "flate2",
- "serde_json",
  "unicode-general-category",
 ]
 
@@ -4351,6 +4349,7 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "missal-core",
+ "missal-store",
  "roxmltree 0.21.2",
  "serde_json",
  "zip",
@@ -4360,14 +4359,13 @@ dependencies = [
 name = "missal-editor"
 version = "0.1.0"
 dependencies = [
- "flate2",
  "gpui-kit",
  "gpui-pre-wgpu",
  "image",
  "missal-core",
  "missal-page",
+ "missal-store",
  "missal-text",
- "serde_json",
  "unicode-segmentation",
 ]
 
@@ -4380,9 +4378,9 @@ dependencies = [
  "gpui-pre-wgpu",
  "image",
  "missal-core",
+ "missal-store",
  "missal-text",
  "pdf-writer",
- "serde_json",
  "subsetter",
  "swash",
 ]
@@ -4394,10 +4392,7 @@ dependencies = [
  "flate2",
  "missal-core",
  "rusqlite",
- "serde_json",
- "sha2 0.11.1",
  "tempfile",
- "uuid",
 ]
 
 [[package]]

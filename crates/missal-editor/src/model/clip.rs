@@ -1,14 +1,11 @@
-use missal_core::document::{Block, Child, Document, Inline, List, ListItemChild, Paragraph, Text};
+use missal_core::document::{Block, Document, Inline, List, ListItemChild, Paragraph, Text};
 use missal_core::{FieldDisplayText, FieldReference};
 use missal_page::{BlockPath, Position};
-use serde_json::{Value, json};
 
 use super::edit::{self, insert_inlines, split};
 use super::inline::{self, len};
 use super::selection::{block_len, pos};
-use super::tree::{
-    self, HostKind, anatomy, container, container_mut, host_kind, inlines, typed_rows,
-};
+use super::tree::{self, HostKind, anatomy, container, container_mut, host_kind, inlines};
 
 pub const FRAGMENT_TAG: &str = "missal-fragment";
 
@@ -25,28 +22,20 @@ impl Fragment {
 
     pub fn encode(&self) -> String {
         let document = Document::new(self.blocks.clone());
-        json!({
-            "kind": FRAGMENT_TAG,
-            "version": 1,
-            "inline": self.inline,
-            "document": serde_json::from_str::<Value>(&document.encode()).unwrap_or(Value::Null),
-        })
-        .to_string()
+        format!(
+            "{FRAGMENT_TAG}:{}:{}",
+            u8::from(self.inline),
+            missal_core::text::encode_base64(&document.encode())
+        )
     }
 
     pub fn decode(raw: &str) -> Option<Fragment> {
-        let value: Value = serde_json::from_str(raw).ok()?;
-        if value.get("kind")?.as_str()? != FRAGMENT_TAG {
-            return None;
-        }
-        let inline = value
-            .get("inline")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let document = Document::decode(&value.get("document")?.to_string()).ok()?;
+        let rest = raw.strip_prefix(FRAGMENT_TAG)?.strip_prefix(':')?;
+        let (inline, data) = rest.split_once(':')?;
+        let document = Document::decode(&missal_core::text::decode_base64(data)?).ok()?;
         Some(Fragment {
             blocks: document.blocks,
-            inline,
+            inline: inline == "1",
         })
     }
 }
@@ -148,7 +137,7 @@ fn inline_text(
             Inline::LineBreak(_) => out.push('\n'),
             Inline::Field(field) => out.push_str(&display(&field.reference).text),
             Inline::Link(link) => inline_text(&link.children, display, out),
-            Inline::Image(_) | Inline::Other(_) => {}
+            Inline::Image(_) => {}
         }
     }
 }
@@ -176,9 +165,9 @@ fn block_text(
         }
         Block::List(list) => list_text(list, display, lines),
         Block::Table(table) => {
-            for row in typed_rows(table) {
+            for row in table.rows.iter() {
                 let mut cells = Vec::new();
-                for cell in row.cells.iter().filter_map(Child::node) {
+                for cell in row.cells.iter() {
                     let mut inner = Vec::new();
                     for block in &cell.blocks {
                         block_text(block, display, &mut inner);
@@ -197,7 +186,7 @@ fn list_text(
     display: &dyn Fn(&FieldReference) -> FieldDisplayText,
     lines: &mut Vec<String>,
 ) {
-    for item in list.items.iter().filter_map(Child::node) {
+    for item in list.items.iter() {
         let mut line = String::new();
         let mut has_inline = false;
         for child in &item.children {
@@ -370,10 +359,7 @@ fn flatten_to_paragraphs(blocks: Vec<Block>, out: &mut Vec<Vec<Inline>>) {
                 out.push(inline_children(block).unwrap_or_default())
             }
             Block::List(list) => {
-                for item in list.items.into_iter().filter_map(|c| match c {
-                    Child::Node(item) => Some(item),
-                    Child::Other(_) => None,
-                }) {
+                for item in list.items {
                     let mut line = Vec::new();
                     let mut nested = Vec::new();
                     for child in item.children {
@@ -387,14 +373,8 @@ fn flatten_to_paragraphs(blocks: Vec<Block>, out: &mut Vec<Vec<Inline>>) {
                 }
             }
             Block::Table(table) => {
-                for row in table.rows.into_iter().filter_map(|r| match r {
-                    Child::Node(row) => Some(row),
-                    Child::Other(_) => None,
-                }) {
-                    for cell in row.cells.into_iter().filter_map(|c| match c {
-                        Child::Node(cell) => Some(cell),
-                        Child::Other(_) => None,
-                    }) {
+                for row in table.rows {
+                    for cell in row.cells {
                         flatten_to_paragraphs(cell.blocks, out);
                     }
                 }

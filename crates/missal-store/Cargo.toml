@@ -9,13 +9,11 @@ publish.workspace = true
 
 [dependencies]
 missal-core.workspace = true
-serde_json.workspace = true
 rusqlite.workspace = true
 flate2.workspace = true
-uuid.workspace = true
 
 [dev-dependencies]
-sha2.workspace = true
+rusqlite.workspace = true
 tempfile.workspace = true
 
 [lints]

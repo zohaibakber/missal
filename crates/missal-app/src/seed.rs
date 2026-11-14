@@ -2,7 +2,6 @@ use std::path::Path;
 
 use missal_core::{CalendarDate, Fir, FirStatus, RepositoryError, TemplateId};
 use missal_store::Store;
-use rusqlite::params;
 
 const OFFENCES: [&str; 12] = [
     "چوری ۳۷۹ ت پ",
@@ -57,14 +56,14 @@ impl Random {
     }
 }
 
-fn date(random: &mut Random, year: i64) -> CalendarDate {
+fn date(random: &mut Random, year: i32) -> CalendarDate {
     let month = 1 + random.below(12) as u8;
     let day = 1 + random.below(28) as u8;
     CalendarDate::new(year, month, day).expect("a valid calendar date")
 }
 
 fn sample_fir(index: usize, random: &mut Random) -> Fir {
-    let year = 2019 + (index % 8) as i64;
+    let year = 2019 + (index % 8) as i32;
     let number = 1 + (index / 8) % 3000;
     let incident = date(random, year);
     let status = match random.below(10) {
@@ -140,43 +139,10 @@ pub fn seed_firs(database: &Path, count: usize) -> Result<usize, RepositoryError
             )?;
         }
     }
-    let mut connection = store.into_connection();
-    let failed = |_| RepositoryError::storage("seed", "Storage operation failed");
-    let transaction = connection.transaction().map_err(failed)?;
-    {
-        let mut statement = transaction
-            .prepare(
-                "INSERT INTO fir_records (fir_no, complainant, date, offence, accused, witness, zimni, incident_date, arrest_date, investigation_officer, writer, recovery, body, imei_1, imei_2, sim_1, sim_2, status) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
-            )
-            .map_err(failed)?;
-        for index in first..count {
-            let fir = sample_fir(index, &mut random);
-            let list = |items: &[String]| serde_json::to_string(items).unwrap_or_default();
-            statement
-                .execute(params![
-                    fir.fir_no,
-                    fir.complainant,
-                    fir.date,
-                    fir.offence,
-                    list(&fir.accused),
-                    list(&fir.witness),
-                    list(&fir.zimni),
-                    fir.incident_date,
-                    fir.arrest_date,
-                    fir.investigation_officer,
-                    fir.writer,
-                    fir.recovery,
-                    fir.body,
-                    fir.imei_1,
-                    fir.imei_2,
-                    fir.sim_1,
-                    fir.sim_2,
-                    fir.status.as_str(),
-                ])
-                .map_err(failed)?;
-        }
-    }
-    transaction.commit().map_err(failed)?;
+    let rest: Vec<Fir> = (first..count)
+        .map(|index| sample_fir(index, &mut random))
+        .collect();
+    store.create_firs(&rest)?;
     Ok(count)
 }
 

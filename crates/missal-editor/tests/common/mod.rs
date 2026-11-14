@@ -1,11 +1,10 @@
 #![allow(dead_code)]
 
-use std::io::Read;
 use std::rc::Rc;
 
 use missal_core::document::{
-    Block, Child, Document, ElementProps, Envelope, Field, Inline, PageLayout, Paragraph, Style,
-    Table, TableCell, TableRow, Text, TextFormat,
+    Block, Document, ElementProps, Field, Inline, PageLayout, Paragraph, Style, Table, TableCell,
+    TableRow, Text, TextFormat,
 };
 use missal_core::{
     FieldCatalog, FieldMarkers, FieldReference, FirField, FirProperty, Placeholder, PlaceholderId,
@@ -20,9 +19,7 @@ pub fn catalog() -> Rc<FieldCatalog> {
         Placeholder {
             id: PlaceholderId::new(1).unwrap(),
             label: "تھانہ".into(),
-            source: PlaceholderSource::SharedSetting {
-                setting: "station".into(),
-            },
+            source: PlaceholderSource::Shared,
         },
         Placeholder {
             id: PlaceholderId::new(2).unwrap(),
@@ -53,8 +50,8 @@ pub fn text(s: &str) -> Inline {
 pub fn styled(s: &str, css: &str, format: u32) -> Inline {
     Inline::Text(Text {
         text: s.into(),
-        format: Some(TextFormat(format)),
-        style: Some(Style::new(css)),
+        format: TextFormat(format),
+        style: Style::non_empty(css),
         ..Text::default()
     })
 }
@@ -75,25 +72,23 @@ pub fn p(s: &str) -> Block {
     }
 }
 
-pub fn cell(blocks: Vec<Block>) -> Child<TableCell> {
-    Child::Node(TableCell {
+pub fn cell(blocks: Vec<Block>) -> TableCell {
+    TableCell {
         props: ElementProps::rtl(),
         blocks,
         ..TableCell::default()
-    })
+    }
 }
 
-pub fn table(rows: Vec<Vec<Child<TableCell>>>) -> Block {
+pub fn table(rows: Vec<Vec<TableCell>>) -> Block {
     Block::Table(Table {
         props: ElementProps::rtl(),
         rows: rows
             .into_iter()
-            .map(|cells| {
-                Child::Node(TableRow {
-                    props: ElementProps::rtl(),
-                    cells,
-                    ..TableRow::default()
-                })
+            .map(|cells| TableRow {
+                props: ElementProps::rtl(),
+                cells,
+                ..TableRow::default()
             })
             .collect(),
         ..Table::default()
@@ -155,28 +150,9 @@ pub fn head(core: &EditorCore) -> (Vec<u32>, usize) {
 }
 
 pub fn bundle() -> Vec<(String, Document)> {
-    let bytes = std::fs::read(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../templates/bundle.json.gz"
-    ))
-    .unwrap();
-    let mut raw = String::new();
-    flate2::read::GzDecoder::new(bytes.as_slice())
-        .read_to_string(&mut raw)
-        .unwrap();
-    let serde_json::Value::Array(items) = serde_json::from_str(&raw).unwrap() else {
-        panic!("bundle is an array")
-    };
-    items
-        .into_iter()
-        .map(|item| {
-            let envelope = Envelope::from_value(item["document"].clone()).unwrap();
-            (
-                item["name"].as_str().unwrap().to_owned(),
-                Document::from_envelope(&envelope).unwrap(),
-            )
-        })
-        .collect()
+    missal_store::TemplateBundle::embedded()
+        .templates()
+        .unwrap()
 }
 
 pub fn largest_template() -> (String, Document) {

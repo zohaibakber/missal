@@ -2,7 +2,7 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use crate::geom::Rect;
-use crate::measure::{Flow, FlowItem, ImageBox, Node, collapse};
+use crate::measure::{Flow, FlowItem, Node, collapse};
 use crate::position::BlockPath;
 use crate::style::{BreakValue, VerticalAlign};
 use crate::table::TableBox;
@@ -96,15 +96,7 @@ pub(crate) struct TablePiece {
 pub(crate) enum Piece {
     Text(TextPiece),
     Table(TablePiece),
-    Rule {
-        path: BlockPath,
-        rect: Rect,
-    },
-    Image {
-        path: BlockPath,
-        rect: Rect,
-        image: Arc<ImageBox>,
-    },
+    Rule { path: BlockPath, rect: Rect },
 }
 
 impl Piece {
@@ -112,7 +104,7 @@ impl Piece {
         match self {
             Piece::Text(t) => &mut t.path,
             Piece::Table(t) => &mut t.path,
-            Piece::Rule { path, .. } | Piece::Image { path, .. } => path,
+            Piece::Rule { path, .. } => path,
         }
     }
 }
@@ -367,11 +359,6 @@ pub(crate) fn fragment_flow(
                     Node::Rule { width, height } => out.push(Piece::Rule {
                         path: compose(prefix, &item.path),
                         rect: Rect::new(region.x + item.x, item_top, *width, *height),
-                    }),
-                    Node::Image(image) => out.push(Piece::Image {
-                        path: compose(prefix, &item.path),
-                        rect: image.rect.translate(region.x + item.x, item_top),
-                        image: image.clone(),
                     }),
                     _ => {}
                 }

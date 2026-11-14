@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use missal_core::document::{Block, Child, Document, ListItemChild, PageLayout};
+use missal_core::document::{Block, Document, ListItemChild, PageLayout};
 use missal_core::{FieldDisplayText, FieldReference};
 use missal_text::TextEngine;
 
@@ -181,8 +181,8 @@ fn block_field_refs(block: &Block, out: &mut Vec<FieldReference>) {
         Block::Quote(q) => collect_field_refs(&q.children, out),
         Block::List(list) => list_field_refs(list, out),
         Block::Table(table) => {
-            for row in table.rows.iter().filter_map(Child::node) {
-                for cell in row.cells.iter().filter_map(Child::node) {
+            for row in table.rows.iter() {
+                for cell in row.cells.iter() {
                     for block in &cell.blocks {
                         block_field_refs(block, out);
                     }
@@ -194,7 +194,7 @@ fn block_field_refs(block: &Block, out: &mut Vec<FieldReference>) {
 }
 
 fn list_field_refs(list: &missal_core::document::List, out: &mut Vec<FieldReference>) {
-    for item in list.items.iter().filter_map(Child::node) {
+    for item in list.items.iter() {
         for child in &item.children {
             match child {
                 ListItemChild::Inline(inline) => {

@@ -1,9 +1,6 @@
 mod common;
 
-use std::collections::BTreeMap;
-use std::io::Write;
-
-use common::{Scratch, count, fir};
+use common::{Scratch, fir};
 use missal_core::document::{Block, Field, Inline, Paragraph, Text};
 use missal_core::{
     CustomFieldDraft, DisplayMode, Document, Entity, FieldMarkers, FieldPresentation,
@@ -13,13 +10,7 @@ use missal_core::{
 use missal_store::{Store, TemplateBundle};
 
 fn empty_bundle() -> TemplateBundle {
-    let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
-    gz.write_all(b"[]").unwrap();
-    TemplateBundle::new(
-        r#"{"version":1,"global":[],"custom":[]}"#,
-        gz.finish().unwrap(),
-    )
-    .unwrap()
+    TemplateBundle::decode(&TemplateBundle::encode(1, &[], &[], &[])).unwrap()
 }
 
 fn store(scratch: &Scratch) -> Store {
@@ -174,10 +165,10 @@ fn templates_in_use_cannot_be_deleted_and_firs_cascade() {
             count: 2
         }
     );
-    assert_eq!(error.message(), "template is in use and cannot be deleted");
+    assert_eq!(error.message(), "Template is in use and cannot be deleted");
     let placeholder = store.create_placeholder("بینک").unwrap();
     store
-        .set_placeholder_value(first.id, placeholder.id, "HBL")
+        .set_placeholder_values(first.id, &[(placeholder.id, "HBL".into())])
         .unwrap();
     store.remove_fir(first.id).unwrap();
     assert_eq!(store.fir_documents(first.id).unwrap().len(), 0);
@@ -392,12 +383,9 @@ fn placeholders_global_values_and_custom_fields() {
     assert_eq!(globals.len(), 2);
     assert_eq!(globals[0].value, "صدر");
     let settings = store.settings().unwrap();
-    assert_eq!(settings.shared_placeholders.len(), 2);
-    assert!(
-        settings
-            .shared_placeholders
-            .keys()
-            .all(|key| key.starts_with("global_") && !key.contains('-'))
+    assert_eq!(
+        settings.shared_values.into_iter().collect::<Vec<_>>(),
+        [(globals[0].id, "صدر".to_owned())]
     );
     let renamed = store
         .save_global_placeholders(&[GlobalPlaceholderDraft::Existing {
@@ -488,23 +476,24 @@ fn placeholder_values_and_value_context() {
         }])
         .unwrap()[0]
         .clone();
-    let value = store
-        .set_placeholder_value(fir_record.id, bank.id, "HBL")
-        .unwrap();
-    assert_eq!(value.value, "HBL");
-    let updated = store
-        .set_placeholder_value(fir_record.id, bank.id, "MCB")
-        .unwrap();
-    assert_eq!(updated.value, "MCB");
-    assert_eq!(store.placeholder_values(fir_record.id).unwrap().len(), 1);
+    let value = |store: &mut Store, fir_id, id, text: &str| {
+        store.set_placeholder_values(fir_id, &[(id, text.to_owned())])
+    };
+    assert_eq!(
+        value(&mut store, fir_record.id, bank.id, "HBL").unwrap()[0].value,
+        "HBL"
+    );
+    let updated = value(&mut store, fir_record.id, bank.id, " MCB ").unwrap();
+    assert_eq!(updated.len(), 1);
+    assert_eq!(updated[0].value, "MCB");
     let missing_fir = FirId::new(40).unwrap();
     let missing_placeholder = PlaceholderId::new(40).unwrap();
     assert_eq!(
-        store.set_placeholder_value(missing_fir, bank.id, "x"),
+        value(&mut store, missing_fir, bank.id, "x"),
         Err(not_found(Entity::Fir, missing_fir))
     );
     assert_eq!(
-        store.set_placeholder_value(fir_record.id, missing_placeholder, "x"),
+        value(&mut store, fir_record.id, missing_placeholder, "x"),
         Err(not_found(Entity::Placeholder, missing_placeholder))
     );
     assert_eq!(
@@ -539,15 +528,19 @@ fn placeholder_values_and_value_context() {
         store.fir_values(missing_fir),
         Err(not_found(Entity::Fir, missing_fir))
     );
-    store
-        .remove_placeholder_value(fir_record.id, bank.id)
-        .unwrap();
+    store.set_shared_value(station.id, "سٹی").unwrap();
+    assert!(matches!(
+        store.set_shared_value(bank.id, "x"),
+        Err(RepositoryError::Storage { .. })
+    ));
     assert_eq!(
-        store.remove_placeholder_value(fir_record.id, bank.id),
-        Err(not_found(
-            Entity::FirPlaceholderValue,
-            format!("{}:{}", fir_record.id, bank.id)
-        ))
+        store.fir_values(fir_record.id).unwrap().shared_values[&station.id],
+        "سٹی"
+    );
+    assert!(
+        value(&mut store, fir_record.id, bank.id, "")
+            .unwrap()
+            .is_empty()
     );
 }
 
@@ -562,16 +555,60 @@ fn settings_round_trip() {
         store.save_field_markers(&markers).unwrap().field_markers,
         markers
     );
-    let shared = BTreeMap::from([("global_x".to_owned(), "y".to_owned())]);
-    let saved = store.save_shared_placeholders(&shared).unwrap();
-    assert_eq!(saved.shared_placeholders, shared);
-    assert_eq!(saved.field_markers, markers);
-    let connection = store.into_connection();
-    let stored: String = connection
-        .query_row("SELECT field_markers FROM app_settings", [], |row| {
-            row.get(0)
-        })
+    drop(store);
+    let reopened = Store::open_with(scratch.path("test.sqlite"), &empty_bundle()).unwrap();
+    assert_eq!(reopened.settings().unwrap().field_markers, markers);
+}
+
+#[test]
+fn bundled_templates_install_once_with_bound_fields() {
+    let scratch = Scratch::new();
+    let path = scratch.path("bundle.db");
+    let store = Store::open(&path).unwrap();
+    let templates = store.templates().unwrap();
+    assert_eq!(templates.len(), 36);
+    let mut unresolved = Vec::new();
+    let mut catalog_fields = 0;
+    for summary in &templates {
+        for reference in store
+            .template(summary.id)
+            .unwrap()
+            .document
+            .field_references()
+        {
+            match reference {
+                FieldReference::Unresolved(label) => unresolved.push(label),
+                FieldReference::Catalog(_) => catalog_fields += 1,
+                FieldReference::Fir(_) => {}
+            }
+        }
+    }
+    assert!(unresolved.is_empty(), "{unresolved:?}");
+    assert!(catalog_fields > 0);
+    assert_eq!(store.global_placeholders().unwrap().len(), 5);
+    drop(store);
+    let reopened = Store::open(&path).unwrap();
+    assert_eq!(reopened.templates().unwrap().len(), 36);
+}
+
+#[test]
+fn foreign_and_newer_databases_are_refused() {
+    let scratch = Scratch::new();
+    let foreign = scratch.path("foreign.db");
+    rusqlite::Connection::open(&foreign)
+        .unwrap()
+        .execute_batch("CREATE TABLE fir_records (id INTEGER PRIMARY KEY)")
         .unwrap();
-    assert_eq!(stored, r#"{"open":"{{","close":"}}"}"#);
-    assert_eq!(count(&connection, "SELECT count(*) FROM app_settings"), 1);
+    assert!(Store::open_with(&foreign, &empty_bundle()).is_err());
+    let newer = scratch.path("newer.db");
+    drop(store_at(&newer));
+    rusqlite::Connection::open(&newer)
+        .unwrap()
+        .execute_batch("PRAGMA user_version = 99")
+        .unwrap();
+    assert!(Store::open_with(&newer, &empty_bundle()).is_err());
+}
+
+fn store_at(path: &std::path::Path) -> Store {
+    Store::open_with(path, &empty_bundle()).unwrap()
 }

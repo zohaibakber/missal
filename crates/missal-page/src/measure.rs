@@ -2,14 +2,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use missal_core::document::{
-    Block, Child, ElementProps, HeadingLevel, Image, Inline, List, ListItemChild, ListTag, ListType,
+    Block, ElementProps, HeadingLevel, Inline, List, ListItemChild, ListTag, ListType,
 };
 use missal_text::{Rgba, TextEngine};
 
 use crate::FieldSource;
 use crate::css::Length;
-use crate::geom::Rect;
-use crate::image::ImageData;
 use crate::position::BlockPath;
 use crate::style::{
     self, BorderSide, BoxProps, BreakValue, Computed, Declarations, TextProps, doc_align, doc_dir,
@@ -18,18 +16,10 @@ use crate::table::{self, TableBox};
 use crate::text::{self, MarkerKind, TextBlockInput, TextBox};
 
 #[derive(Clone, Debug)]
-pub struct ImageBox {
-    pub image: Option<Arc<ImageData>>,
-    pub rect: Rect,
-    pub height: f32,
-}
-
-#[derive(Clone, Debug)]
 pub(crate) enum Node {
     Text(Arc<TextBox>),
     Table(Arc<TableBox>),
     Rule { width: f32, height: f32 },
-    Image(Arc<ImageBox>),
     PageBreak,
 }
 
@@ -39,7 +29,6 @@ impl Node {
             Node::Text(t) => t.height(),
             Node::Table(t) => t.height,
             Node::Rule { height, .. } => *height,
-            Node::Image(i) => i.height,
             Node::PageBreak => 0.0,
         }
     }
@@ -359,18 +348,6 @@ pub(crate) fn measure_block(
                 margin,
             ))
         }
-        Block::Image(image) => {
-            let measured = measure_image(image, parent, available);
-            let margin = parent.size;
-            out.push(FlowItem::simple(
-                Node::Image(Arc::new(measured)),
-                path,
-                0.0,
-                margin,
-                margin,
-            ));
-        }
-        Block::Other(_) => {}
     }
 }
 
@@ -420,7 +397,7 @@ fn measure_list(
         || (list.tag.is_none() && list.list_type == Some(ListType::Number));
     let mut counter = list.start.unwrap_or(1);
     for (index, child) in list.items.iter().enumerate() {
-        let Child::Node(item) = child else { continue };
+        let item = child;
         let item_path = path.child(index as u32);
         let inlines: Vec<Inline> = item
             .children
@@ -469,48 +446,5 @@ fn measure_list(
                 );
             }
         }
-    }
-}
-
-fn measure_image(image: &Image, parent: &TextProps, available: f32) -> ImageBox {
-    let data = image.src.as_deref().and_then(ImageData::from_data_uri);
-    let (nw, nh) = data
-        .as_ref()
-        .map(|d| (d.width as f32, d.height as f32))
-        .unwrap_or((0.0, 0.0));
-    let content_width = (available - 80.0).max(0.0);
-    let mut width = image.width.map(|w| w as f32).unwrap_or(nw);
-    let ratio = if nw > 0.0 {
-        nh / nw
-    } else {
-        image
-            .height
-            .zip(image.width)
-            .map(|(h, w)| (h / w.max(1.0)) as f32)
-            .unwrap_or(0.0)
-    };
-    if width > content_width {
-        width = content_width;
-    }
-    let height = if ratio > 0.0 {
-        width * ratio
-    } else {
-        image.height.map(|h| h as f32).unwrap_or(nh)
-    };
-    let (ascent, descent) = parent.ascent_descent();
-    let line = parent.line_height_px();
-    let above = ascent + (line - ascent - descent) / 2.0;
-    let below = line - above;
-    let line_above = above.max(height);
-    let box_height = line_above + below;
-    let x = if parent.direction.is_rtl() {
-        40.0 + content_width - width
-    } else {
-        40.0
-    };
-    ImageBox {
-        image: data,
-        rect: Rect::new(x, line_above - height, width, height),
-        height: box_height,
     }
 }

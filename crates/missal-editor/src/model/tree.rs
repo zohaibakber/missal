@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use missal_core::document::{
-    Block, Child, Document, ElementProps, Inline, List, ListItem, ListItemChild, Table, TableCell,
+    Block, Document, ElementProps, Inline, List, ListItem, ListItemChild, Table, TableCell,
 };
 use missal_page::BlockPath;
 
@@ -34,27 +34,12 @@ pub struct Anatomy {
     pub tail: Vec<u32>,
 }
 
-pub fn typed_rows(table: &Table) -> impl Iterator<Item = &missal_core::document::TableRow> {
-    table.rows.iter().filter_map(Child::node)
-}
-
 pub fn cell(table: &Table, r: u32, c: u32) -> Option<&TableCell> {
-    typed_rows(table)
-        .nth(r as usize)?
-        .cells
-        .get(c as usize)?
-        .node()
+    table.rows.get(r as usize)?.cells.get(c as usize)
 }
 
 pub fn cell_mut(table: &mut Table, r: u32, c: u32) -> Option<&mut TableCell> {
-    table
-        .rows
-        .iter_mut()
-        .filter_map(Child::node_mut)
-        .nth(r as usize)?
-        .cells
-        .get_mut(c as usize)?
-        .node_mut()
+    table.rows.get_mut(r as usize)?.cells.get_mut(c as usize)
 }
 
 pub fn container<'a>(doc: &'a Document, prefix: &[u32]) -> Option<&'a Vec<Block>> {
@@ -148,7 +133,7 @@ pub fn cell_chain(doc: &Document, path: &BlockPath) -> Vec<Vec<u32>> {
 }
 
 pub fn item<'a>(list: &'a List, tail: &[u32]) -> Option<&'a ListItem> {
-    let found = list.items.get(*tail.first()? as usize)?.node()?;
+    let found = list.items.get(*tail.first()? as usize)?;
     if tail.len() == 1 {
         return Some(found);
     }
@@ -159,7 +144,7 @@ pub fn item<'a>(list: &'a List, tail: &[u32]) -> Option<&'a ListItem> {
 }
 
 pub fn item_mut<'a>(list: &'a mut List, tail: &[u32]) -> Option<&'a mut ListItem> {
-    let found = list.items.get_mut(*tail.first()? as usize)?.node_mut()?;
+    let found = list.items.get_mut(*tail.first()? as usize)?;
     if tail.len() == 1 {
         return Some(found);
     }
@@ -173,7 +158,7 @@ pub fn list_at_mut<'a>(list: &'a mut List, tail: &[u32]) -> Option<&'a mut List>
     if tail.len() <= 1 {
         return Some(list);
     }
-    let found = list.items.get_mut(tail[0] as usize)?.node_mut()?;
+    let found = list.items.get_mut(tail[0] as usize)?;
     let ListItemChild::List(nested) = found.children.get_mut(tail[1] as usize)? else {
         return None;
     };
@@ -184,7 +169,7 @@ pub fn list_at<'a>(list: &'a List, tail: &[u32]) -> Option<&'a List> {
     if tail.len() <= 1 {
         return Some(list);
     }
-    let found = list.items.get(tail[0] as usize)?.node()?;
+    let found = list.items.get(tail[0] as usize)?;
     let ListItemChild::List(nested) = found.children.get(tail[1] as usize)? else {
         return None;
     };
@@ -329,9 +314,9 @@ pub fn leaves_of_block(block: &Block, path: BlockPath, out: &mut Vec<Leaf>) {
         Block::Paragraph(_) | Block::Heading(_) | Block::Quote(_) => out.push(Leaf::Text(path)),
         Block::List(list) => leaves_of_list(list, &path, out),
         Block::Table(table) => {
-            for (r, row) in typed_rows(table).enumerate() {
+            for (r, row) in table.rows.iter().enumerate() {
                 for (c, cell) in row.cells.iter().enumerate() {
-                    let Child::Node(cell) = cell else { continue };
+                    let cell = cell;
                     let prefix = path.child(r as u32).child(c as u32);
                     for (b, inner) in cell.blocks.iter().enumerate() {
                         leaves_of_block(inner, prefix.child(b as u32), out);
@@ -339,7 +324,7 @@ pub fn leaves_of_block(block: &Block, path: BlockPath, out: &mut Vec<Leaf>) {
                 }
             }
         }
-        Block::PageBreak(_) | Block::HorizontalRule(_) | Block::Image(_) | Block::Other(_) => {
+        Block::PageBreak(_) | Block::HorizontalRule(_) | Block::Image(_) => {
             out.push(Leaf::Opaque(path))
         }
     }
@@ -347,7 +332,7 @@ pub fn leaves_of_block(block: &Block, path: BlockPath, out: &mut Vec<Leaf>) {
 
 fn leaves_of_list(list: &List, path: &BlockPath, out: &mut Vec<Leaf>) {
     for (index, child) in list.items.iter().enumerate() {
-        let Child::Node(found) = child else { continue };
+        let found = child;
         let item_path = path.child(index as u32);
         if item_has_text(found) {
             out.push(Leaf::Text(item_path.clone()));
@@ -448,11 +433,9 @@ pub fn cell_of(doc: &Document, path: &BlockPath) -> Option<Vec<u32>> {
 
 pub fn cells_of_table(table: &Table, path: &BlockPath) -> Vec<BlockPath> {
     let mut out = Vec::new();
-    for (r, row) in typed_rows(table).enumerate() {
-        for (c, cell) in row.cells.iter().enumerate() {
-            if cell.node().is_some() {
-                out.push(path.child(r as u32).child(c as u32));
-            }
+    for (r, row) in table.rows.iter().enumerate() {
+        for c in 0..row.cells.len() {
+            out.push(path.child(r as u32).child(c as u32));
         }
     }
     out

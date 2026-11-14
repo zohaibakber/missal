@@ -1,8 +1,7 @@
 use std::ops::Range;
 
-use missal_core::document::{Extra, Field, Inline, Link, Style, Text, TextFormat, TextMode};
+use missal_core::document::{Field, Inline, Link, Style, Text, TextFormat};
 use missal_page::OBJECT_LEN;
-use serde_json::Value;
 
 pub fn inline_len(inline: &Inline) -> usize {
     match inline {
@@ -10,7 +9,6 @@ pub fn inline_len(inline: &Inline) -> usize {
         Inline::LineBreak(_) => 1,
         Inline::Field(_) | Inline::Image(_) => OBJECT_LEN,
         Inline::Link(link) => len(&link.children),
-        Inline::Other(_) => 0,
     }
 }
 
@@ -35,10 +33,7 @@ fn tail_text(text: &Text, rest: String) -> Text {
         text: rest,
         format: text.format,
         style: text.style.clone(),
-        detail: text.detail,
-        mode: text.mode,
         imported_style: text.imported_style.clone(),
-        extra: text.extra.clone(),
     }
 }
 
@@ -126,12 +121,7 @@ pub fn insert(inlines: &mut Vec<Inline>, offset: usize, new: Vec<Inline>) {
 }
 
 pub fn same_attrs(a: &Text, b: &Text) -> bool {
-    a.format() == b.format()
-        && a.style == b.style
-        && a.detail == b.detail
-        && a.mode == b.mode
-        && a.imported_style == b.imported_style
-        && a.extra == b.extra
+    a.format == b.format && a.style == b.style && a.imported_style == b.imported_style
 }
 
 pub fn normalize(inlines: &mut Vec<Inline>) {
@@ -142,8 +132,6 @@ pub fn normalize(inlines: &mut Vec<Inline>) {
             Inline::Text(text) => {
                 if let Some(Inline::Text(previous)) = out.last_mut()
                     && same_attrs(previous, &text)
-                    && text.mode != Some(TextMode::Token)
-                    && previous.mode != Some(TextMode::Token)
                 {
                     previous.text.push_str(&text.text);
                     continue;
@@ -189,16 +177,11 @@ pub fn template_at(inlines: &[Inline], offset: usize) -> Option<Text> {
 }
 
 pub fn new_text(text: &str, format: TextFormat, style: Option<Style>) -> Text {
-    let mut extra = Extra::new();
-    extra.insert("version".into(), Value::from(1));
     Text {
         text: text.to_owned(),
-        format: Some(format),
-        style: Some(style.unwrap_or_else(|| Style::new(""))),
-        detail: Some(0),
-        mode: Some(TextMode::Normal),
+        format,
+        style: style.filter(|style| !style.is_empty()),
         imported_style: None,
-        extra,
     }
 }
 
@@ -234,8 +217,7 @@ fn insert_into_run(inlines: &mut [Inline], offset: usize, insert: &str, template
             }
             Inline::Text(text)
                 if ((acc < offset && offset <= acc + l) || (offset == 0 && acc == 0))
-                    && same_attrs(text, template)
-                    && text.mode != Some(TextMode::Token) =>
+                    && same_attrs(text, template) =>
             {
                 let at = floor_boundary(&text.text, offset - acc);
                 text.text.insert_str(at, insert);
@@ -401,21 +383,24 @@ fn strip_style(style: &Style, flag: TextFormat) -> Style {
     Style::new(&parts.join("; "))
 }
 
+fn stripped(style: &Option<Style>, flag: TextFormat) -> Option<Style> {
+    style
+        .as_ref()
+        .map(|style| {
+            if style_has(Some(style), flag) {
+                strip_style(style, flag)
+            } else {
+                style.clone()
+            }
+        })
+        .filter(|style| !style.is_empty())
+}
+
 pub fn set_flag_on(text: &mut Text, flag: TextFormat, on: bool) {
-    let mut format = text.format();
-    format.set(flag, on);
-    text.format = Some(format);
+    text.format.set(flag, on);
     if !on {
-        if style_has(text.style.as_ref(), flag)
-            && let Some(style) = &text.style
-        {
-            text.style = Some(strip_style(style, flag));
-        }
-        if style_has(text.imported_style.as_ref(), flag)
-            && let Some(style) = &text.imported_style
-        {
-            text.imported_style = Some(strip_style(style, flag));
-        }
+        text.style = stripped(&text.style, flag);
+        text.imported_style = stripped(&text.imported_style, flag);
     }
 }
 

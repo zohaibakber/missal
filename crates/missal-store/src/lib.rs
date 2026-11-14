@@ -1,23 +1,24 @@
+mod bundle;
 mod documents;
 mod firs;
-mod migrate;
 mod placeholders;
-mod rows;
-mod seed;
+mod schema;
 mod settings;
 mod templates;
 
+use std::io::{Read, Write};
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use missal_core::Document;
-use missal_core::error::STORAGE_FAILED;
+use flate2::Compression;
+use flate2::read::DeflateDecoder;
+use flate2::write::DeflateEncoder;
+use missal_core::error::{STORAGE_FAILED, STORED_DATA_INVALID};
 use missal_core::{
-    FirDocumentId, FirId, FirValues, RepositoryError, Revision, TemplateId, Timestamp,
+    Document, FirDocumentId, FirId, FirValues, RepositoryError, Revision, TemplateId, Timestamp,
 };
-use rusqlite::Connection;
+use rusqlite::{Connection, Row};
 
-pub use seed::TemplateBundle;
+pub use bundle::TemplateBundle;
 
 pub type Result<T, E = RepositoryError> = std::result::Result<T, E>;
 
@@ -100,68 +101,73 @@ impl Store {
         Store::from_connection(connection, bundle)
     }
 
-    pub fn from_connection(mut connection: Connection, bundle: &TemplateBundle) -> Result<Store> {
-        enable_foreign_keys(&connection)?;
-        let baseline = migrate::inspect(&connection)?;
-        configure_journal(&connection)?;
-        migrate::migrate(&mut connection, &baseline)?;
-        migrate::upgrade_document_formats(&mut connection)?;
-        seed::install_bundled_templates(&mut connection, bundle)?;
+    pub fn in_memory() -> Result<Store> {
+        let connection = Connection::open_in_memory().map_err(|_| open_error(STORAGE_FAILED))?;
+        Store::from_connection(connection, &TemplateBundle::embedded())
+    }
+
+    fn from_connection(mut connection: Connection, bundle: &TemplateBundle) -> Result<Store> {
+        schema::configure(&connection)?;
+        schema::migrate(&mut connection)?;
+        bundle::install(&mut connection, bundle)?;
         Ok(Store { connection })
     }
-
-    pub fn into_connection(self) -> Connection {
-        self.connection
-    }
 }
 
-fn enable_foreign_keys(connection: &Connection) -> Result<()> {
-    let init = failed("database.init");
-    connection
-        .pragma_update(None, "foreign_keys", "ON")
-        .map_err(&init)?;
-    connection
-        .busy_timeout(std::time::Duration::from_secs(5))
-        .map_err(&init)?;
-    let enabled: i64 = connection
-        .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
-        .map_err(&init)?;
-    if enabled != 1 {
-        return Err(RepositoryError::storage(
-            "database.init",
-            "SQLite foreign keys could not be enabled",
-        ));
+impl Drop for Store {
+    fn drop(&mut self) {
+        let _ = self.connection.execute_batch("PRAGMA optimize");
     }
-    Ok(())
-}
-
-fn configure_journal(connection: &Connection) -> Result<()> {
-    let init = failed("database.init");
-    connection
-        .query_row("PRAGMA journal_mode = WAL", [], |row| {
-            row.get::<_, String>(0)
-        })
-        .map_err(&init)?;
-    connection
-        .pragma_update(None, "synchronous", "NORMAL")
-        .map_err(&init)
 }
 
 pub(crate) fn failed(operation: &'static str) -> impl Fn(rusqlite::Error) -> RepositoryError {
     move |_| RepositoryError::storage(operation, STORAGE_FAILED)
 }
 
+pub(crate) fn invalid(operation: &str) -> RepositoryError {
+    RepositoryError::storage(operation, STORED_DATA_INVALID)
+}
+
 pub(crate) fn open_error(message: &str) -> RepositoryError {
     RepositoryError::storage("database.open", message)
 }
 
-pub(crate) fn now() -> Timestamp {
-    let millis = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_millis() as i64);
-    Timestamp::from_unix_millis(millis)
+pub(crate) fn pack(document: &Document) -> Vec<u8> {
+    let raw = document.encode();
+    let mut encoder = DeflateEncoder::new(Vec::with_capacity(raw.len() / 4), Compression::new(6));
+    encoder
+        .write_all(&raw)
+        .and_then(|()| encoder.finish())
+        .expect("compressing into memory cannot fail")
 }
 
-pub(crate) fn new_setting_key() -> String {
-    format!("global_{}", uuid::Uuid::new_v4().hyphenated()).replace('-', "_")
+pub(crate) fn unpack(bytes: &[u8], operation: &str) -> Result<Document> {
+    let mut raw = Vec::with_capacity(bytes.len() * 4);
+    DeflateDecoder::new(bytes)
+        .read_to_end(&mut raw)
+        .map_err(|_| invalid(operation))?;
+    Document::decode(&raw).map_err(|_| invalid(operation))
+}
+
+pub(crate) fn id<T>(value: i64, make: fn(i64) -> Option<T>, operation: &str) -> Result<T> {
+    make(value).ok_or_else(|| invalid(operation))
+}
+
+pub(crate) fn timestamp(row: &Row<'_>, index: usize) -> rusqlite::Result<Timestamp> {
+    row.get(index).map(Timestamp::from_unix_millis)
+}
+
+pub(crate) fn is_constraint(error: &rusqlite::Error) -> bool {
+    error.sqlite_error_code() == Some(rusqlite::ErrorCode::ConstraintViolation)
+}
+
+pub(crate) fn is_unique(error: &rusqlite::Error) -> bool {
+    matches!(
+        error,
+        rusqlite::Error::SqliteFailure(failure, _)
+            if matches!(
+                failure.extended_code,
+                rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE | rusqlite::ffi::SQLITE_CONSTRAINT_PRIMARYKEY
+            )
+    )
 }

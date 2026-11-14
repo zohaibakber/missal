@@ -29,7 +29,6 @@ use missal_text::{
 use crate::packet::{LaidOut, PacketJob, distinct_empty};
 use crate::printing::{self, Handoff};
 use crate::shortcuts::*;
-use crate::state::rows::digit_value;
 use crate::state::{
     Models, PrintTarget, Toast, ToastKind, ToastLog, db, show_toast, toast_success,
 };
@@ -41,6 +40,7 @@ use crate::ui::{
     UrRole, button, checkbox, empty_state, icon_button, isolate_urdu, primary_sm, section_label,
     sized_icon, skeleton_bar, ur_inline, ur_label, vertical_rule,
 };
+use missal_core::digit_value;
 
 const PANEL_WIDTH: f32 = 280.0;
 const FOOTER_HEIGHT: f32 = 44.0;

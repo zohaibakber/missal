@@ -12,14 +12,14 @@ missal-core.workspace = true
 missal-text.workspace = true
 gpui-kit.workspace = true
 swash.workspace = true
-image = { workspace = true, features = ["jpeg"] }
+image.workspace = true
 flate2.workspace = true
 pdf-writer.workspace = true
 subsetter.workspace = true
 gpui-pre-wgpu = { workspace = true, optional = true }
 
 [dev-dependencies]
-serde_json.workspace = true
+missal-store.workspace = true
 
 [features]
 headless = ["missal-text/headless", "dep:gpui-pre-wgpu"]
@@ -28,10 +28,7 @@ headless = ["missal-text/headless", "dep:gpui-pre-wgpu"]
 workspace = true
 
 [[example]]
-name = "templates"
-
-[[example]]
-name = "bench"
+name = "page_bench"
 
 [[example]]
 name = "render_pages"

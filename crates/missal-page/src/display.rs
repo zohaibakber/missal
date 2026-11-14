@@ -1,11 +1,9 @@
 use std::ops::Range;
-use std::sync::Arc;
 
 use missal_text::{FaceId, Rgba, Synthesis};
 
 use crate::fonts;
 use crate::geom::Rect;
-use crate::image::ImageData;
 use crate::paginate::{Piece, TablePiece, TextPiece};
 use crate::style::BorderSide;
 
@@ -51,10 +49,6 @@ pub enum DisplayItem {
         kind: RectKind,
     },
     Glyphs(GlyphRun),
-    Image {
-        rect: Rect,
-        image: Arc<ImageData>,
-    },
     FieldHighlight {
         rect: Rect,
         unresolved: bool,
@@ -64,9 +58,7 @@ pub enum DisplayItem {
 impl DisplayItem {
     pub fn bounds(&self) -> Rect {
         match self {
-            DisplayItem::Rect { rect, .. }
-            | DisplayItem::Image { rect, .. }
-            | DisplayItem::FieldHighlight { rect, .. } => *rect,
+            DisplayItem::Rect { rect, .. } | DisplayItem::FieldHighlight { rect, .. } => *rect,
             DisplayItem::Glyphs(run) => run.bounds,
         }
     }
@@ -364,26 +356,6 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
             }
         }
     }
-    for object in layout.objects() {
-        if object.line < piece.lines.start || object.line >= piece.lines.end {
-            continue;
-        }
-        let Some(info) = node.objects.iter().find(|o| o.id == object.id) else {
-            continue;
-        };
-        let Some(image) = &info.image else { continue };
-        let lb = node.lines[object.line];
-        let rect = Rect::new(
-            dx + node.content.x + object.rect.x,
-            dy + lb.baseline - object.rect.height,
-            object.rect.width,
-            object.rect.height,
-        );
-        layers.content.push(DisplayItem::Image {
-            rect,
-            image: image.clone(),
-        });
-    }
     if piece.first
         && let Some(marker) = &node.marker
         && let (Some(first), Some(mline)) = (node.lines.first(), marker.layout.lines().first())
@@ -518,14 +490,6 @@ pub(crate) fn build(pieces: &[Piece]) -> DisplayList {
                     color: Rgba::rgb(0xeeeeee),
                     kind: RectKind::Rule,
                 });
-            }
-            Piece::Image { rect, image, .. } => {
-                if let Some(data) = &image.image {
-                    layers.content.push(DisplayItem::Image {
-                        rect: *rect,
-                        image: data.clone(),
-                    });
-                }
             }
         }
     }

@@ -14,7 +14,7 @@ flate2.workspace = true
 roxmltree.workspace = true
 
 [dev-dependencies]
-flate2.workspace = true
+missal-store.workspace = true
 serde_json.workspace = true
 
 [lints]

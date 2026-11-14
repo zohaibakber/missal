@@ -1,27 +1,93 @@
 use std::collections::{HashMap, HashSet};
 
-use missal_core::{Document, Entity, FirDocumentId, FirId, RepositoryError, Revision, TemplateId};
-use rusqlite::{Connection, params};
+use missal_core::{
+    Document, Entity, FirDocumentId, FirId, RepositoryError, Revision, TemplateId, Timestamp,
+};
+use rusqlite::{Connection, Row, params};
 
 use crate::firs::find_fir;
-use crate::rows::{self, FIR_DOCUMENT_RECORD_COLUMNS, FIR_DOCUMENT_SUMMARY_COLUMNS};
 use crate::templates::revision_conflict;
-use crate::{FirDocumentRecord, FirDocumentSummary, Result, SaveAck, Store, failed, now};
+use crate::{
+    FirDocumentRecord, FirDocumentSummary, Result, SaveAck, Store, failed, id, pack, timestamp,
+    unpack,
+};
+
+const SUMMARY_COLUMNS: &str = "id, fir_id, template_id, source_revision, title, revision, position, preview, field_count, created_at, updated_at";
+
+struct RawSummary {
+    ids: [i64; 4],
+    title: String,
+    revision: i64,
+    position: i64,
+    preview_text: String,
+    field_count: i64,
+    created_at: Timestamp,
+    updated_at: Timestamp,
+}
+
+fn raw_summary(row: &Row<'_>) -> rusqlite::Result<RawSummary> {
+    Ok(RawSummary {
+        ids: [row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?],
+        title: row.get(4)?,
+        revision: row.get(5)?,
+        position: row.get(6)?,
+        preview_text: row.get(7)?,
+        field_count: row.get(8)?,
+        created_at: timestamp(row, 9)?,
+        updated_at: timestamp(row, 10)?,
+    })
+}
+
+fn summary(raw: RawSummary, operation: &str) -> Result<FirDocumentSummary> {
+    let [document, fir, template, source] = raw.ids;
+    Ok(FirDocumentSummary {
+        id: id(document, FirDocumentId::new, operation)?,
+        fir_id: id(fir, FirId::new, operation)?,
+        template_id: id(template, TemplateId::new, operation)?,
+        source_template_revision: id(source, Revision::new, operation)?,
+        title: raw.title,
+        revision: id(raw.revision, Revision::new, operation)?,
+        position: raw.position,
+        preview_text: raw.preview_text,
+        field_count: raw.field_count,
+        created_at: raw.created_at,
+        updated_at: raw.updated_at,
+    })
+}
 
 pub(crate) fn summaries_for(
     connection: &Connection,
     fir_id: FirId,
     operation: &'static str,
 ) -> Result<Vec<FirDocumentSummary>> {
-    rows::all(
-        connection,
-        &format!(
-            "SELECT {FIR_DOCUMENT_SUMMARY_COLUMNS} FROM fir_documents WHERE fir_id = ?1 ORDER BY position ASC, id ASC"
-        ),
-        [fir_id.get()],
-        rows::fir_document_summary,
-        operation,
-    )
+    let rows = connection
+        .prepare_cached(&format!(
+            "SELECT {SUMMARY_COLUMNS} FROM documents WHERE fir_id = ?1 ORDER BY position, id"
+        ))
+        .and_then(|mut statement| {
+            statement
+                .query_map([fir_id.get()], raw_summary)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .map_err(failed(operation))?;
+    rows.into_iter()
+        .map(|raw| summary(raw, operation))
+        .collect()
+}
+
+fn record(summary: FirDocumentSummary, document: Document) -> FirDocumentRecord {
+    FirDocumentRecord {
+        id: summary.id,
+        fir_id: summary.fir_id,
+        template_id: summary.template_id,
+        source_template_revision: summary.source_template_revision,
+        title: summary.title,
+        document,
+        revision: summary.revision,
+        position: summary.position,
+        created_at: summary.created_at,
+        updated_at: summary.updated_at,
+    }
 }
 
 impl Store {
@@ -29,41 +95,38 @@ impl Store {
         summaries_for(&self.connection, fir_id, "firDocument.listForFir")
     }
 
-    pub fn fir_document(&self, id: FirDocumentId) -> Result<FirDocumentRecord> {
-        rows::one(
-            &self.connection,
-            &format!("SELECT {FIR_DOCUMENT_RECORD_COLUMNS} FROM fir_documents WHERE id = ?1"),
-            [id.get()],
-            rows::fir_document_record,
-            "firDocument.get",
-        )?
-        .ok_or_else(|| RepositoryError::not_found(Entity::FirDocument, id))
+    pub fn fir_document(&self, document: FirDocumentId) -> Result<FirDocumentRecord> {
+        self.fir_documents_by_id(&[document])
+            .map(|mut found| found.remove(0))
     }
 
     pub fn fir_documents_by_id(&self, ids: &[FirDocumentId]) -> Result<Vec<FirDocumentRecord>> {
-        if ids.is_empty() {
-            return Ok(Vec::new());
-        }
-        let marks = vec!["?"; ids.len()].join(", ");
-        let found = rows::all(
-            &self.connection,
-            &format!(
-                "SELECT {FIR_DOCUMENT_RECORD_COLUMNS} FROM fir_documents WHERE id IN ({marks})"
-            ),
-            rusqlite::params_from_iter(ids.iter().map(|id| id.get())),
-            rows::fir_document_record,
-            "firDocument.getMany",
-        )?;
-        let by_id: HashMap<FirDocumentId, FirDocumentRecord> = found
-            .into_iter()
-            .map(|record| (record.id, record))
-            .collect();
+        let operation = "firDocument.get";
+        let mut statement = self
+            .connection
+            .prepare_cached(&format!(
+                "SELECT {SUMMARY_COLUMNS}, b.body FROM documents d JOIN document_bodies b ON b.document_id = d.id WHERE d.id = ?1"
+            ))
+            .map_err(failed(operation))?;
+        let mut loaded: HashMap<FirDocumentId, FirDocumentRecord> = HashMap::new();
         ids.iter()
-            .map(|id| {
-                by_id
-                    .get(id)
-                    .cloned()
-                    .ok_or_else(|| RepositoryError::not_found(Entity::FirDocument, id))
+            .map(|document| {
+                if let Some(found) = loaded.get(document) {
+                    return Ok(found.clone());
+                }
+                let (raw, bytes) = statement
+                    .query_row([document.get()], |row| {
+                        Ok((raw_summary(row)?, row.get::<_, Vec<u8>>(11)?))
+                    })
+                    .map_err(|error| match error {
+                        rusqlite::Error::QueryReturnedNoRows => {
+                            RepositoryError::not_found(Entity::FirDocument, document)
+                        }
+                        other => failed(operation)(other),
+                    })?;
+                let found = record(summary(raw, operation)?, unpack(&bytes, operation)?);
+                loaded.insert(*document, found.clone());
+                Ok(found)
             })
             .collect()
     }
@@ -77,68 +140,33 @@ impl Store {
         let transaction = self.connection.transaction().map_err(failed(operation))?;
         find_fir(&transaction, fir_id, operation)?;
         let existing = summaries_for(&transaction, fir_id, operation)?;
-        let attached: HashSet<TemplateId> = existing
-            .iter()
-            .map(|document| document.template_id)
-            .collect();
-        let mut seen = HashSet::new();
-        let missing: Vec<TemplateId> = template_ids
-            .iter()
-            .copied()
-            .filter(|id| seen.insert(*id) && !attached.contains(id))
-            .collect();
-        if !missing.is_empty() {
-            let mut templates = Vec::with_capacity(missing.len());
-            for id in &missing {
-                let row: Option<(String, String, i64)> = transaction
-                    .query_row(
-                        "SELECT name, document, revision FROM templates WHERE id = ?1",
-                        [id.get()],
-                        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        let mut seen: HashSet<TemplateId> = existing.iter().map(|d| d.template_id).collect();
+        let mut position = existing.iter().map(|d| d.position).max().unwrap_or(-1);
+        let now = Timestamp::now().unix_millis();
+        for template in template_ids.iter().copied().filter(|t| seen.insert(*t)) {
+            position += 1;
+            let document_id: i64 = transaction
+                .prepare_cached(
+                    "INSERT INTO documents (fir_id, template_id, source_revision, title, revision, position, field_count, created_at, updated_at, preview) SELECT ?1, id, revision, name, 1, ?2, field_count, ?3, ?3, preview FROM templates WHERE id = ?4 RETURNING id",
+                )
+                .and_then(|mut statement| {
+                    statement.query_row(
+                        params![fir_id.get(), position, now, template.get()],
+                        |row| row.get(0),
                     )
-                    .map(Some)
-                    .or_else(|error| match error {
-                        rusqlite::Error::QueryReturnedNoRows => Ok(None),
-                        other => Err(other),
-                    })
-                    .map_err(failed(operation))?;
-                let (name, document, revision) =
-                    row.ok_or_else(|| RepositoryError::not_found(Entity::Template, id))?;
-                templates.push((*id, name, document, revision));
-            }
-            let mut position = existing
-                .iter()
-                .map(|document| document.position)
-                .max()
-                .unwrap_or(-1);
-            let timestamp = now();
-            for (template_id, name, document, revision) in templates {
-                let decode = rows::Decode {
-                    operation: "template.document.decode",
-                };
-                let document = decode.document(&document)?;
-                let title = decode.required(&name)?;
-                let projections = document.projections();
-                position += 1;
-                transaction
-                    .execute(
-                        "INSERT INTO fir_documents (fir_id, template_id, source_template_revision, title, document, revision, position, plain_text, preview_text, field_references, field_count, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7, ?8, ?9, ?10, ?11, ?11)",
-                        params![
-                            fir_id.get(),
-                            template_id.get(),
-                            revision,
-                            title,
-                            document.encode(),
-                            position,
-                            projections.plain_text,
-                            projections.preview_text,
-                            projections.field_references_json(),
-                            projections.field_count as i64,
-                            timestamp.as_str(),
-                        ],
-                    )
-                    .map_err(failed(operation))?;
-            }
+                })
+                .map_err(|error| match error {
+                    rusqlite::Error::QueryReturnedNoRows => {
+                        RepositoryError::not_found(Entity::Template, template)
+                    }
+                    other => failed(operation)(other),
+                })?;
+            transaction
+                .prepare_cached(
+                    "INSERT INTO document_bodies (document_id, body) SELECT ?1, body FROM template_bodies WHERE template_id = ?2",
+                )
+                .and_then(|mut statement| statement.execute(params![document_id, template.get()]))
+                .map_err(failed(operation))?;
         }
         let documents = summaries_for(&transaction, fir_id, operation)?;
         transaction.commit().map_err(failed(operation))?;
@@ -147,48 +175,50 @@ impl Store {
 
     pub fn save_fir_document(
         &mut self,
-        id: FirDocumentId,
+        document_id: FirDocumentId,
         expected_revision: Revision,
         document: &Document,
     ) -> Result<SaveAck<FirDocumentId>> {
         let operation = "firDocument.save";
         let projections = document.projections();
-        let timestamp = now();
-        let saved = rows::one(
-            &self.connection,
-            &format!(
-                "UPDATE fir_documents SET revision = ?1, updated_at = ?2, document = ?3, plain_text = ?4, preview_text = ?5, field_references = ?6, field_count = ?7 WHERE id = ?8 AND revision = ?9 RETURNING {FIR_DOCUMENT_SUMMARY_COLUMNS}"
-            ),
-            params![
-                expected_revision.next().get(),
-                timestamp.as_str(),
-                document.encode(),
-                projections.plain_text,
-                projections.preview_text,
-                projections.field_references_json(),
-                projections.field_count as i64,
-                id.get(),
-                expected_revision.get(),
-            ],
-            rows::fir_document_summary,
-            operation,
-        )?;
-        let Some(summary) = saved else {
+        let now = Timestamp::now();
+        let transaction = self.connection.transaction().map_err(failed(operation))?;
+        let changed = transaction
+            .prepare_cached(
+                "UPDATE documents SET revision = ?1, updated_at = ?2, preview = ?3, field_count = ?4 WHERE id = ?5 AND revision = ?6",
+            )
+            .and_then(|mut statement| {
+                statement.execute(params![
+                    expected_revision.next().get(),
+                    now.unix_millis(),
+                    projections.preview_text,
+                    projections.field_count as i64,
+                    document_id.get(),
+                    expected_revision.get(),
+                ])
+            })
+            .map_err(failed(operation))?;
+        if changed == 0 {
             return Err(revision_conflict(
-                &self.connection,
-                "fir_documents",
+                &transaction,
+                "documents",
                 Entity::FirDocument,
-                id.get(),
+                document_id.get(),
                 expected_revision,
                 operation,
             ));
-        };
+        }
+        transaction
+            .prepare_cached("UPDATE document_bodies SET body = ?1 WHERE document_id = ?2")
+            .and_then(|mut statement| statement.execute(params![pack(document), document_id.get()]))
+            .map_err(failed(operation))?;
+        transaction.commit().map_err(failed(operation))?;
         Ok(SaveAck {
-            id: summary.id,
-            revision: summary.revision,
-            updated_at: summary.updated_at,
-            preview_text: summary.preview_text,
-            field_count: summary.field_count,
+            id: document_id,
+            revision: expected_revision.next(),
+            updated_at: now,
+            preview_text: projections.preview_text,
+            field_count: projections.field_count as i64,
         })
     }
 
@@ -199,14 +229,10 @@ impl Store {
     ) -> Result<Vec<FirDocumentSummary>> {
         let operation = "firDocument.reorder";
         let transaction = self.connection.transaction().map_err(failed(operation))?;
-        let existing: HashSet<i64> = transaction
-            .prepare("SELECT id FROM fir_documents WHERE fir_id = ?1")
-            .and_then(|mut statement| {
-                statement
-                    .query_map([fir_id.get()], |row| row.get(0))?
-                    .collect()
-            })
-            .map_err(failed(operation))?;
+        let existing: HashSet<FirDocumentId> = summaries_for(&transaction, fir_id, operation)?
+            .into_iter()
+            .map(|document| document.id)
+            .collect();
         let distinct: HashSet<FirDocumentId> = document_ids.iter().copied().collect();
         if existing.len() != document_ids.len() || distinct.len() != document_ids.len() {
             return Err(RepositoryError::conflict(
@@ -215,16 +241,15 @@ impl Store {
                 fir_id,
             ));
         }
-        if let Some(unknown) = document_ids.iter().find(|id| !existing.contains(&id.get())) {
+        if let Some(unknown) = document_ids.iter().find(|id| !existing.contains(id)) {
             return Err(RepositoryError::not_found(Entity::FirDocument, unknown));
         }
-        let timestamp = now();
-        for (position, id) in document_ids.iter().enumerate() {
+        for (position, document) in document_ids.iter().enumerate() {
             transaction
-                .execute(
-                    "UPDATE fir_documents SET position = ?1, updated_at = ?2 WHERE id = ?3",
-                    params![position as i64, timestamp.as_str(), id.get()],
-                )
+                .prepare_cached("UPDATE documents SET position = ?1 WHERE id = ?2")
+                .and_then(|mut statement| {
+                    statement.execute(params![position as i64, document.get()])
+                })
                 .map_err(failed(operation))?;
         }
         let documents = summaries_for(&transaction, fir_id, operation)?;
@@ -232,13 +257,13 @@ impl Store {
         Ok(documents)
     }
 
-    pub fn remove_fir_document(&mut self, id: FirDocumentId) -> Result<()> {
+    pub fn remove_fir_document(&mut self, document: FirDocumentId) -> Result<()> {
         let removed = self
             .connection
-            .execute("DELETE FROM fir_documents WHERE id = ?1", [id.get()])
+            .execute("DELETE FROM documents WHERE id = ?1", [document.get()])
             .map_err(failed("firDocument.remove"))?;
         if removed == 0 {
-            return Err(RepositoryError::not_found(Entity::FirDocument, id));
+            return Err(RepositoryError::not_found(Entity::FirDocument, document));
         }
         Ok(())
     }

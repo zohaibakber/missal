@@ -1,57 +1,59 @@
-pub fn is_js_whitespace(c: char) -> bool {
-    matches!(
-        c,
-        '\t' | '\n' | '\u{0B}' | '\u{0C}' | '\r' | ' ' | '\u{A0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200A}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202F}'
-                | '\u{205F}'
-                | '\u{3000}'
-                | '\u{FEFF}'
-    )
+pub fn collapse_whitespace(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-pub fn js_trim(value: &str) -> &str {
-    value.trim_matches(is_js_whitespace)
-}
+const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-pub(crate) fn collapse_whitespace(value: &str) -> String {
-    let mut result = String::with_capacity(value.len());
-    let mut in_space = false;
-    for c in value.chars() {
-        if is_js_whitespace(c) {
-            if !in_space {
-                result.push(' ');
-                in_space = true;
+pub fn encode_base64(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let value = chunk.iter().enumerate().fold(0u32, |value, (index, byte)| {
+            value | u32::from(*byte) << (16 - 8 * index)
+        });
+        for index in 0..4 {
+            if index <= chunk.len() {
+                out.push(char::from(
+                    BASE64[(value >> (18 - 6 * index) & 63) as usize],
+                ));
+            } else {
+                out.push('=');
             }
-        } else {
-            result.push(c);
-            in_space = false;
         }
     }
-    result
+    out
 }
 
-pub(crate) fn utf16_len(value: &str) -> usize {
-    value.chars().map(char::len_utf16).sum()
+fn base64_value(c: u8) -> Option<u32> {
+    Some(match c {
+        b'A'..=b'Z' => u32::from(c - b'A'),
+        b'a'..=b'z' => u32::from(c - b'a' + 26),
+        b'0'..=b'9' => u32::from(c - b'0' + 52),
+        b'+' | b'-' => 62,
+        b'/' | b'_' => 63,
+        _ => return None,
+    })
 }
 
-pub(crate) fn utf16_prefix(value: &str, limit: usize) -> String {
-    let mut units = 0;
-    let mut result = String::new();
-    for c in value.chars() {
-        let width = c.len_utf16();
-        if units + width > limit {
-            if units < limit {
-                result.push('\u{FFFD}');
-            }
+pub fn decode_base64(input: &str) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(input.len() * 3 / 4);
+    let mut buffer = 0u32;
+    let mut bits = 0u32;
+    for c in input.bytes() {
+        if c == b'=' {
             break;
         }
-        units += width;
-        result.push(c);
+        if c.is_ascii_whitespace() {
+            continue;
+        }
+        buffer = (buffer << 6) | base64_value(c)?;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((buffer >> bits) as u8);
+            buffer &= (1 << bits) - 1;
+        }
     }
-    result
+    Some(out)
 }
 
 #[cfg(test)]
@@ -59,15 +61,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn whitespace_follows_ecmascript() {
-        assert_eq!(js_trim("\u{FEFF} a \u{85}"), "a \u{85}");
-        assert_eq!(collapse_whitespace("a \t\n b\u{3000}c"), "a b c");
+    fn whitespace_collapses_and_trims() {
+        assert_eq!(collapse_whitespace(" a \t\n b\u{3000}c "), "a b c");
     }
 
     #[test]
-    fn utf16_prefix_replaces_split_surrogates() {
-        assert_eq!(utf16_prefix("ab😀c", 3), "ab\u{FFFD}");
-        assert_eq!(utf16_prefix("ab😀c", 4), "ab😀");
-        assert_eq!(utf16_prefix("ab", 280), "ab");
+    fn base64_round_trips() {
+        for input in [
+            &b""[..],
+            b"h",
+            b"he",
+            b"hel",
+            b"hello world",
+            &[0, 255, 128, 7],
+        ] {
+            assert_eq!(decode_base64(&encode_base64(input)).unwrap(), input);
+        }
+        assert_eq!(encode_base64(b"hello"), "aGVsbG8=");
+        assert_eq!(decode_base64("aGVsbG8gd29ybGQ").unwrap(), b"hello world");
     }
 }

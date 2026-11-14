@@ -1,6 +1,5 @@
 use crate::error::Invalid;
 use crate::ids::FirId;
-use crate::text::js_trim;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum FirStatus {
@@ -199,14 +198,14 @@ impl Fir {
 
     pub fn validated(&self) -> Result<Fir, Invalid> {
         let required = |value: &str, field: &'static str| {
-            let trimmed = js_trim(value);
+            let trimmed = value.trim();
             if trimmed.is_empty() {
                 Err(Invalid::Required(field))
             } else {
                 Ok(trimmed.to_owned())
             }
         };
-        let optional = |value: &str| js_trim(value).to_owned();
+        let optional = |value: &str| value.trim().to_owned();
         let entries = |values: &[String], field: &'static str| {
             values
                 .iter()

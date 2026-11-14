@@ -1,5 +1,5 @@
 use missal_core::document::{
-    Block, Child, Document, ElementProps, Field, Inline, Leaf, PageLayout, Paragraph, Style, Table,
+    Block, Document, ElementProps, Field, Inline, Leaf, PageLayout, Paragraph, Style, Table,
     TableCell, TableRow, Text,
 };
 use missal_core::{FieldDisplayText, FieldReference};
@@ -33,34 +33,32 @@ fn page_break() -> Block {
     Block::PageBreak(Leaf::default())
 }
 
-fn cell(blocks: Vec<Block>) -> Child<TableCell> {
-    Child::Node(TableCell {
+fn cell(blocks: Vec<Block>) -> TableCell {
+    TableCell {
         props: ElementProps::rtl(),
         blocks,
         ..TableCell::default()
-    })
+    }
 }
 
-fn header_cell(blocks: Vec<Block>) -> Child<TableCell> {
-    Child::Node(TableCell {
+fn header_cell(blocks: Vec<Block>) -> TableCell {
+    TableCell {
         props: ElementProps::rtl(),
         header_state: Some(1),
         blocks,
         ..TableCell::default()
-    })
+    }
 }
 
-fn table(rows: Vec<Vec<Child<TableCell>>>) -> Block {
+fn table(rows: Vec<Vec<TableCell>>) -> Block {
     Block::Table(Table {
         props: ElementProps::rtl(),
         rows: rows
             .into_iter()
-            .map(|cells| {
-                Child::Node(TableRow {
-                    props: ElementProps::rtl(),
-                    cells,
-                    ..TableRow::default()
-                })
+            .map(|cells| TableRow {
+                props: ElementProps::rtl(),
+                cells,
+                ..TableRow::default()
             })
             .collect(),
         ..Table::default()
@@ -469,8 +467,8 @@ fn incremental_relayout_matches_full_layout() {
             Edit::Block(BlockPath::new(&[3, 0, 0, 0])),
             Box::new(|d: &mut Document| {
                 if let Block::Table(t) = &mut d.blocks[3]
-                    && let Child::Node(row) = &mut t.rows[0]
-                    && let Child::Node(c) = &mut row.cells[0]
+                    && let row = &mut t.rows[0]
+                    && let c = &mut row.cells[0]
                 {
                     c.blocks[0] = para(&words(60));
                 }

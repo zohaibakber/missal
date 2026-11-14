@@ -1,10 +1,10 @@
 use missal_core::document::{
-    Block, Child, Direction, Document, ElementProps, Inline, List, ListItem, ListItemChild,
-    ListTag, ListType, Paragraph, Text,
+    Block, Direction, Document, ElementProps, Inline, List, ListItem, ListItemChild, ListTag,
+    ListType, Paragraph, Text,
 };
 use missal_page::{BlockPath, Position};
 
-use super::edit::{new_item, version_extra};
+use super::edit::{new_item, with_text_defaults};
 use super::inline::{self, split_off};
 use super::selection::pos;
 use super::tree::{
@@ -15,7 +15,7 @@ use super::tree::{
 pub fn renumber(list: &mut List) {
     let mut value = list.start.unwrap_or(1);
     for child in &mut list.items {
-        let Child::Node(item) = child else { continue };
+        let item = child;
         if item_has_text(item) {
             item.value = Some(value);
             value += 1;
@@ -41,7 +41,7 @@ pub fn remove_item_text(list: &mut List, tail: &[u32]) -> bool {
 fn remove_in(list: &mut List, tail: &[u32]) {
     let index = tail[0] as usize;
     if tail.len() == 1 {
-        if let Some(Child::Node(item)) = list.items.get_mut(index) {
+        if let Some(item) = list.items.get_mut(index) {
             item.children
                 .retain(|child| matches!(child, ListItemChild::List(_)));
             if is_empty_item(item) {
@@ -51,7 +51,7 @@ fn remove_in(list: &mut List, tail: &[u32]) {
         return;
     }
     let child_index = tail[1] as usize;
-    let Some(Child::Node(holder)) = list.items.get_mut(index) else {
+    let Some(holder) = list.items.get_mut(index) else {
         return;
     };
     let mut drop_child = false;
@@ -78,17 +78,6 @@ fn list_block_mut<'a>(
     }
 }
 
-fn with_defaults(mut props: ElementProps, template: &Text) -> ElementProps {
-    props.text_format = Some(template.format());
-    props.text_style = Some(
-        template
-            .style
-            .clone()
-            .unwrap_or_else(|| missal_core::document::Style::new("")),
-    );
-    props
-}
-
 pub fn split_item(doc: &mut Document, at: &Position, template: &Text) -> Position {
     let Some(found) = anatomy(doc, &at.path) else {
         return at.clone();
@@ -100,13 +89,13 @@ pub fn split_item(doc: &mut Document, at: &Position, template: &Text) -> Positio
         return at.clone();
     };
     let tail = with_item_inlines(current, |v| split_off(v, at.offset));
-    let mut fresh = new_item(with_defaults(current.props.clone(), template), tail);
+    let mut fresh = new_item(with_text_defaults(current.props.clone(), template), tail);
     fresh.checked = current.checked.map(|_| false);
     let index = *found.tail.last().expect("item tails are never empty") as usize;
     let Some(parent) = list_at_mut(list, &found.tail) else {
         return at.clone();
     };
-    parent.items.insert(index + 1, Child::Node(fresh));
+    parent.items.insert(index + 1, fresh);
     renumber(list);
     let mut steps = at.path.steps().to_vec();
     *steps.last_mut().expect("non-empty") += 1;
@@ -131,7 +120,7 @@ fn paragraph_from(item: ListItem) -> (Paragraph, Vec<ListItemChild>) {
     )
 }
 
-fn sibling_list(list: &List, items: Vec<Child<ListItem>>) -> List {
+fn sibling_list(list: &List, items: Vec<ListItem>) -> List {
     List {
         props: list.props.clone(),
         list_type: list.list_type,
@@ -159,22 +148,20 @@ pub fn outdent(doc: &mut Document, path: &BlockPath) -> Position {
         if index >= list.items.len() {
             return pos(path.clone(), 0);
         }
-        let after: Vec<Child<ListItem>> = list.items.split_off(index + 1);
-        let Child::Node(item) = list.items.pop().expect("index is in range") else {
-            return pos(path.clone(), 0);
-        };
+        let after: Vec<ListItem> = list.items.split_off(index + 1);
+        let item = list.items.pop().expect("index is in range");
         let before_empty = list.items.is_empty();
         let (paragraph, nested) = paragraph_from(item);
         let mut after = after;
         if !nested.is_empty() {
             after.insert(
                 0,
-                Child::Node(ListItem {
+                ListItem {
                     props: paragraph.props.clone(),
                     value: None,
                     checked: None,
                     children: nested,
-                }),
+                },
             );
         }
         let mut replacement = Vec::new();
@@ -207,7 +194,7 @@ pub fn outdent(doc: &mut Document, path: &BlockPath) -> Position {
     let Some(parent) = list_at_mut(list, parent_tail) else {
         return pos(path.clone(), 0);
     };
-    let Some(Child::Node(holder)) = parent.items.get_mut(p) else {
+    let Some(holder) = parent.items.get_mut(p) else {
         return pos(path.clone(), 0);
     };
     let Some(ListItemChild::List(nested)) = holder.children.get_mut(child_index) else {
@@ -234,12 +221,12 @@ pub fn outdent(doc: &mut Document, path: &BlockPath) -> Position {
         let rest = sibling_list(&template, after);
         parent.items.insert(
             insert_at + 1,
-            Child::Node(ListItem {
+            ListItem {
                 props: ElementProps::default(),
                 value: None,
                 checked: None,
                 children: vec![ListItemChild::List(rest)],
-            }),
+            },
         );
     }
     renumber(list);
@@ -260,18 +247,20 @@ pub fn indent(doc: &mut Document, path: &BlockPath) -> Option<Position> {
         return None;
     }
     let parent = list_at_mut(list, &tail)?;
-    let previous_holder = match parent.items.get(i - 1)? {
-        Child::Node(previous) if !item_has_text(previous) => previous
+    let previous = parent.items.get(i - 1)?;
+    let previous_holder = if item_has_text(previous) {
+        None
+    } else {
+        previous
             .children
             .iter()
-            .rposition(|c| matches!(c, ListItemChild::List(_))),
-        _ => None,
+            .rposition(|c| matches!(c, ListItemChild::List(_)))
     };
     let moved = parent.items.remove(i);
     let template = sibling_list(parent, Vec::new());
     let new_tail_end: Vec<u32> = match previous_holder {
         Some(child_index) => {
-            let Some(Child::Node(previous)) = parent.items.get_mut(i - 1) else {
+            let Some(previous) = parent.items.get_mut(i - 1) else {
                 return None;
             };
             let ListItemChild::List(nested) = &mut previous.children[child_index] else {
@@ -285,24 +274,20 @@ pub fn indent(doc: &mut Document, path: &BlockPath) -> Option<Position> {
             ]
         }
         None => {
-            let direction = match &moved {
-                Child::Node(item) => item.props.direction,
-                Child::Other(_) => Some(Direction::Rtl),
-            };
+            let direction = moved.props.direction;
             let mut nested = template;
             nested.start = Some(1);
             nested.items.push(moved);
             let holder = ListItem {
                 props: ElementProps {
                     direction,
-                    extra: version_extra(),
                     ..ElementProps::default()
                 },
                 value: None,
                 checked: None,
                 children: vec![ListItemChild::List(nested)],
             };
-            parent.items.insert(i, Child::Node(holder));
+            parent.items.insert(i, holder);
             vec![i as u32, 0, 0]
         }
     };
@@ -314,7 +299,7 @@ pub fn indent(doc: &mut Document, path: &BlockPath) -> Option<Position> {
 
 fn flatten_items(list: List, out: &mut Vec<Block>) {
     for child in list.items {
-        let Child::Node(item) = child else { continue };
+        let item = child;
         let (paragraph, nested) = paragraph_from(item);
         let has_text = !paragraph.children.is_empty() || nested.is_empty();
         if has_text {
@@ -335,13 +320,9 @@ fn retype(list: &mut List, kind: ListType) {
     } else {
         ListTag::Ul
     });
-    for child in &mut list.items {
-        if let Child::Node(item) = child {
-            for inner in &mut item.children {
-                if let ListItemChild::List(nested) = inner {
-                    retype(nested, kind);
-                }
-            }
+    for inner in list.items.iter_mut().flat_map(|item| &mut item.children) {
+        if let ListItemChild::List(nested) = inner {
+            retype(nested, kind);
         }
     }
 }
@@ -359,7 +340,6 @@ fn new_list(kind: ListType, direction: Option<Direction>) -> List {
         props: ElementProps {
             direction: direction.or(Some(Direction::Rtl)),
             indent: Some(0),
-            extra: version_extra(),
             ..ElementProps::default()
         },
         list_type: Some(kind),
@@ -373,8 +353,8 @@ fn new_list(kind: ListType, direction: Option<Direction>) -> List {
     }
 }
 
-fn item_from(props: ElementProps, children: Vec<Inline>) -> Child<ListItem> {
-    Child::Node(new_item(props, children))
+fn item_from(props: ElementProps, children: Vec<Inline>) -> ListItem {
+    new_item(props, children)
 }
 
 pub fn list_state(doc: &Document, path: &BlockPath) -> Option<ListType> {

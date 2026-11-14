@@ -13,7 +13,6 @@ use crate::FieldSource;
 use crate::css::Length;
 use crate::fonts;
 use crate::geom::Rect;
-use crate::image::ImageData;
 use crate::style::{self, BoxProps, Computed, Declarations, Decoration, TextProps, UnicodeBidi};
 
 pub const OBJECT: char = '\u{FFFC}';
@@ -38,9 +37,8 @@ pub fn logical_text(inlines: &[Inline]) -> String {
             match inline {
                 Inline::Text(text) => out.push_str(&text.text),
                 Inline::LineBreak(_) => out.push('\n'),
-                Inline::Field(_) | Inline::Image(_) => out.push(OBJECT),
+                Inline::Field(_) => out.push(OBJECT),
                 Inline::Link(link) => walk(&link.children, out),
-                Inline::Other(_) => {}
             }
         }
     }
@@ -54,9 +52,8 @@ pub fn logical_len(inlines: &[Inline]) -> usize {
         .map(|inline| match inline {
             Inline::Text(text) => text.text.len(),
             Inline::LineBreak(_) => 1,
-            Inline::Field(_) | Inline::Image(_) => OBJECT_LEN,
+            Inline::Field(_) => OBJECT_LEN,
             Inline::Link(link) => logical_len(&link.children),
-            Inline::Other(_) => 0,
         })
         .sum()
 }
@@ -73,9 +70,8 @@ pub fn locate(inlines: &[Inline], offset: usize) -> Option<InlineLocation> {
         let len = match inline {
             Inline::Text(text) => text.text.len(),
             Inline::LineBreak(_) => 1,
-            Inline::Field(_) | Inline::Image(_) => OBJECT_LEN,
+            Inline::Field(_) => OBJECT_LEN,
             Inline::Link(link) => logical_len(&link.children),
-            Inline::Other(_) => 0,
         };
         if remaining < len || (remaining == len && index + 1 == inlines.len()) {
             if let Inline::Link(link) = inline
@@ -267,12 +263,6 @@ pub struct FieldSpan {
     pub descent: f32,
 }
 
-#[derive(Clone, Debug)]
-pub(crate) struct ObjectInfo {
-    pub id: u64,
-    pub image: Option<Arc<ImageData>>,
-}
-
 pub(crate) struct InlineContent {
     pub text: AttributedText,
     pub map: OffsetMap,
@@ -280,7 +270,6 @@ pub(crate) struct InlineContent {
     pub decorations: Vec<DecoSpan>,
     pub backgrounds: Vec<BackgroundSpan>,
     pub fields: Vec<FieldSpan>,
-    pub objects: Vec<ObjectInfo>,
 }
 
 struct Builder<'a> {
@@ -290,7 +279,6 @@ struct Builder<'a> {
     text: String,
     spans: Vec<(Range<usize>, Attr)>,
     objects: Vec<InlineObject>,
-    object_info: Vec<ObjectInfo>,
     segs: Vec<Seg>,
     logical: usize,
     boxes: Vec<(Range<usize>, InlineBox)>,
@@ -557,32 +545,6 @@ impl Builder<'_> {
                     let computed = style::compute(parent, base, &decls);
                     self.inlines(&link.children, &computed.text, &computed.boxp);
                 }
-                Inline::Image(image) => {
-                    let data = image.src.as_deref().and_then(ImageData::from_data_uri);
-                    let (natural_w, natural_h) = data
-                        .as_ref()
-                        .map(|d| (d.width as f32, d.height as f32))
-                        .unwrap_or((0.0, 0.0));
-                    let width = image.width.map(|w| w as f32).unwrap_or(natural_w);
-                    let height = image.height.map(|h| h as f32).unwrap_or(natural_h);
-                    let id = self.object_info.len() as u64;
-                    let index = self.text.len();
-                    self.objects.push(InlineObject {
-                        id,
-                        index,
-                        width,
-                        height,
-                        baseline: Some(height),
-                    });
-                    self.object_info.push(ObjectInfo { id, image: data });
-                    self.segs.push(Seg {
-                        logical: self.logical..self.logical + OBJECT_LEN,
-                        layout: index..index,
-                        kind: SegKind::Atomic,
-                    });
-                    self.logical += OBJECT_LEN;
-                }
-                Inline::Other(_) => {}
             }
         }
     }
@@ -611,7 +573,6 @@ pub(crate) fn build_inline(
         text: String::new(),
         spans: Vec::new(),
         objects: Vec::new(),
-        object_info: Vec::new(),
         segs: Vec::new(),
         logical: 0,
         boxes: Vec::new(),
@@ -658,7 +619,6 @@ pub(crate) fn build_inline(
         decorations: builder.decorations,
         backgrounds: builder.backgrounds,
         fields: builder.field_spans,
-        objects: builder.object_info,
     }
 }
 
@@ -705,7 +665,6 @@ pub struct TextBox {
     pub(crate) decorations: Vec<DecoSpan>,
     pub(crate) backgrounds: Vec<BackgroundSpan>,
     pub(crate) fields: Vec<FieldSpan>,
-    pub(crate) objects: Vec<ObjectInfo>,
     pub(crate) marker: Option<Marker>,
     pub(crate) break_before: style::BreakValue,
     pub(crate) break_after: style::BreakValue,
@@ -894,7 +853,7 @@ pub(crate) fn hash_inlines<H: Hasher>(inlines: &[Inline], fields: &dyn FieldSour
             Inline::Text(text) => {
                 0u8.hash(state);
                 text.text.hash(state);
-                text.format.map(|f| f.0).hash(state);
+                text.format.0.hash(state);
                 hash_style(&text.style, state);
                 hash_style(&text.imported_style, state);
             }
@@ -911,13 +870,6 @@ pub(crate) fn hash_inlines<H: Hasher>(inlines: &[Inline], fields: &dyn FieldSour
                 hash_style(&link.props.imported_style, state);
                 hash_inlines(&link.children, fields, state);
             }
-            Inline::Image(image) => {
-                4u8.hash(state);
-                image.src.hash(state);
-                image.width.map(f64::to_bits).hash(state);
-                image.height.map(f64::to_bits).hash(state);
-            }
-            Inline::Other(_) => 5u8.hash(state),
         }
     }
 }
@@ -1132,7 +1084,6 @@ pub(crate) fn measure_text_block(
         decorations: content.decorations,
         backgrounds: content.backgrounds,
         fields: content.fields,
-        objects: content.objects,
         marker,
         break_before: boxp.break_before,
         break_after: boxp.break_after,

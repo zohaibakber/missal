@@ -7,7 +7,7 @@ pub mod ids;
 pub mod text;
 pub mod timestamp;
 
-pub use date::{CalendarDate, format_date, parse_date};
+pub use date::{CalendarDate, digit_value, fold_digits, format_date, parse_date};
 pub use document::{Document, DocumentError, Projections};
 pub use error::{Entity, Invalid, RepositoryError};
 pub use field::{

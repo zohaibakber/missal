@@ -453,7 +453,7 @@ impl EditorCore {
             && text.chars().next() == open_first
         {
             let selected = self.selected_plain_text();
-            let trimmed = missal_core::text::js_trim(&selected).to_owned();
+            let trimmed = selected.trim().to_owned();
             if !trimmed.is_empty() {
                 let reference = self.catalog.reference_for(&trimmed);
                 return self.insert_field(reference);

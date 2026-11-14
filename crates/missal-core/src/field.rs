@@ -2,14 +2,12 @@ use std::collections::{BTreeMap, HashMap};
 use std::ops::Range;
 use std::sync::LazyLock;
 
-use serde_json::{Map, Value, json};
 use unicode_general_category::{GeneralCategory, get_general_category};
 
 use crate::error::Invalid;
 use crate::fir::{Fir, FirProperty, FirRecord, FirValue};
 use crate::ids::{FirId, PlaceholderId};
-use crate::text::{collapse_whitespace, is_js_whitespace, js_trim, utf16_len};
-use crate::timestamp::Timestamp;
+use crate::text::collapse_whitespace;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FirField {
@@ -22,70 +20,6 @@ pub enum FieldReference {
     Catalog(PlaceholderId),
     Fir(FirField),
     Unresolved(String),
-}
-
-impl FieldReference {
-    pub fn from_json(value: &Value) -> Option<FieldReference> {
-        let object = value.as_object()?;
-        match object.get("_tag")?.as_str()? {
-            "CatalogField" => {
-                PlaceholderId::new(json_int(object.get("id")?)?).map(FieldReference::Catalog)
-            }
-            "FirField" => {
-                let property = FirProperty::parse(object.get("property")?.as_str()?)?;
-                let index = match object.get("index") {
-                    None => None,
-                    Some(index) => {
-                        let index = json_int(index)?;
-                        if index < 1 {
-                            return None;
-                        }
-                        Some(u32::try_from(index).ok()?)
-                    }
-                };
-                Some(FieldReference::Fir(FirField { property, index }))
-            }
-            "UnresolvedToken" => Some(FieldReference::Unresolved(
-                object.get("text")?.as_str()?.to_owned(),
-            )),
-            _ => None,
-        }
-    }
-
-    pub fn to_json(&self) -> Value {
-        match self {
-            FieldReference::Catalog(id) => json!({ "_tag": "CatalogField", "id": id.get() }),
-            FieldReference::Fir(FirField {
-                property,
-                index: None,
-            }) => json!({ "_tag": "FirField", "property": property.as_str() }),
-            FieldReference::Fir(FirField {
-                property,
-                index: Some(index),
-            }) => json!({ "_tag": "FirField", "property": property.as_str(), "index": index }),
-            FieldReference::Unresolved(text) => json!({ "_tag": "UnresolvedToken", "text": text }),
-        }
-    }
-
-    pub(crate) fn dedupe_key(&self) -> String {
-        match self {
-            FieldReference::Catalog(id) => format!("id:{id}"),
-            FieldReference::Fir(FirField { property, index }) => format!(
-                "fir:{}:{}",
-                property.as_str(),
-                index.map(|index| index.to_string()).unwrap_or_default()
-            ),
-            FieldReference::Unresolved(text) => format!("token:{text}"),
-        }
-    }
-}
-
-pub fn json_int(value: &Value) -> Option<i64> {
-    if let Some(int) = value.as_i64() {
-        return Some(int);
-    }
-    let float = value.as_f64()?;
-    (float.fract() == 0.0 && float.abs() <= 9_007_199_254_740_991.0).then_some(float as i64)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,12 +89,12 @@ pub fn fir_field_by_key(key: &str) -> Option<FirField> {
 
 pub fn field_lookup_key(name: &str) -> String {
     name.chars()
-        .filter(|&c| !(is_js_whitespace(c) || c == '_' || c == '\u{200C}'))
+        .filter(|&c| !(c.is_whitespace() || c == '_' || c == '\u{200C}'))
         .collect()
 }
 
 pub fn normalize_placeholder_name(name: &str) -> String {
-    collapse_whitespace(js_trim(name))
+    collapse_whitespace(name)
 }
 
 pub fn placeholder_name(name: &str) -> Result<String, Invalid> {
@@ -174,35 +108,10 @@ pub fn placeholder_name(name: &str) -> Result<String, Invalid> {
     Ok(normalized)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PlaceholderSource {
-    SharedSetting { setting: String },
+    Shared,
     Custom,
-}
-
-impl PlaceholderSource {
-    pub fn from_json(value: &Value) -> Option<PlaceholderSource> {
-        let object = value.as_object()?;
-        match object.get("_tag")?.as_str()? {
-            "SharedSetting" => {
-                let setting = js_trim(object.get("setting")?.as_str()?);
-                (!setting.is_empty()).then(|| PlaceholderSource::SharedSetting {
-                    setting: setting.to_owned(),
-                })
-            }
-            "Custom" => Some(PlaceholderSource::Custom),
-            _ => None,
-        }
-    }
-
-    pub fn to_json(&self) -> Value {
-        match self {
-            PlaceholderSource::SharedSetting { setting } => {
-                json!({ "_tag": "SharedSetting", "setting": setting })
-            }
-            PlaceholderSource::Custom => json!({ "_tag": "Custom" }),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -243,7 +152,6 @@ pub struct PlaceholderValue {
     pub fir_id: FirId,
     pub placeholder_id: PlaceholderId,
     pub value: String,
-    pub updated_at: Timestamp,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -317,7 +225,7 @@ impl FieldCatalog {
             let name_start = open + markers.open.len();
             let close = name_start + text[name_start..].find(markers.close.as_str())?;
             let name = &text[name_start..close];
-            if utf16_len(name) <= MAX_TOKEN_NAME_LENGTH
+            if name.chars().count() <= MAX_TOKEN_NAME_LENGTH
                 && !name.contains('\n')
                 && let Some(reference) = self.resolve(name)
             {
@@ -384,7 +292,7 @@ pub fn is_valid_marker(marker: &str) -> bool {
     let count = marker.chars().count();
     (1..=3).contains(&count)
         && marker.chars().all(|c| {
-            !is_js_whitespace(c)
+            !c.is_whitespace()
                 && !matches!(
                     get_general_category(c),
                     GeneralCategory::UppercaseLetter
@@ -401,7 +309,7 @@ pub fn is_valid_marker(marker: &str) -> bool {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct AppSettings {
-    pub shared_placeholders: BTreeMap<String, String>,
+    pub shared_values: BTreeMap<PlaceholderId, String>,
     pub field_markers: FieldMarkers,
 }
 
@@ -409,7 +317,7 @@ pub struct AppSettings {
 pub struct FirValues {
     pub fir: FirRecord,
     pub overrides: Vec<PlaceholderValue>,
-    pub shared_settings: BTreeMap<String, String>,
+    pub shared_values: BTreeMap<PlaceholderId, String>,
 }
 
 impl FirValues {
@@ -481,9 +389,9 @@ impl<'a> FieldPresentation<'a> {
             FieldReference::Catalog(id) => match self.catalog.placeholder(*id) {
                 Some(placeholder) => {
                     self.present(&placeholder.label, |values| match &placeholder.source {
-                        PlaceholderSource::SharedSetting { setting } => values
-                            .shared_settings
-                            .get(setting)
+                        PlaceholderSource::Shared => values
+                            .shared_values
+                            .get(&placeholder.id)
                             .cloned()
                             .unwrap_or_default(),
                         PlaceholderSource::Custom => values
@@ -508,7 +416,7 @@ impl<'a> FieldPresentation<'a> {
             };
         };
         let text = value(values);
-        if js_trim(&text).is_empty() {
+        if text.trim().is_empty() {
             FieldDisplayText {
                 text: label.to_owned(),
                 unresolved: true,
@@ -532,61 +440,6 @@ pub fn fir_value(fir: &Fir, field: FirField) -> String {
     }
 }
 
-pub type ReferenceMap<'a> = dyn FnMut(&Map<String, Value>) -> Option<Value> + 'a;
-
-pub fn map_references(value: &mut Value, map: &mut ReferenceMap<'_>) {
-    match value {
-        Value::Array(items) => {
-            for item in items {
-                map_references(item, map);
-            }
-        }
-        Value::Object(object) => map_reference_entries(object, map),
-        _ => {}
-    }
-}
-
-pub(crate) fn map_reference_entries(object: &mut Map<String, Value>, map: &mut ReferenceMap<'_>) {
-    for (key, child) in object.iter_mut() {
-        if key == "reference"
-            && let Value::Object(reference) = child
-        {
-            if let Some(replacement) = map(reference) {
-                *child = replacement;
-            }
-        } else {
-            map_references(child, map);
-        }
-    }
-}
-
-pub fn bind_reference_json(
-    reference: &Map<String, Value>,
-    ids: &HashMap<String, PlaceholderId>,
-) -> Option<Value> {
-    if reference.get("_tag").and_then(Value::as_str) != Some("UnresolvedToken") {
-        return None;
-    }
-    let key = field_lookup_key(reference.get("text")?.as_str()?);
-    if let Some(field) = fir_field_by_key(&key) {
-        return Some(FieldReference::Fir(field).to_json());
-    }
-    ids.get(&key)
-        .map(|id| FieldReference::Catalog(*id).to_json())
-}
-
-pub fn unbind_reference_json(
-    reference: &Map<String, Value>,
-    label_of: &dyn Fn(PlaceholderId) -> Option<String>,
-) -> Option<Value> {
-    if reference.get("_tag").and_then(Value::as_str) != Some("CatalogField") {
-        return None;
-    }
-    let id = reference.get("id").and_then(json_int)?;
-    let label = PlaceholderId::new(id).and_then(label_of)?;
-    (!label.is_empty()).then(|| FieldReference::Unresolved(label).to_json())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -597,9 +450,7 @@ mod tests {
             Placeholder {
                 id: PlaceholderId::new(1).unwrap(),
                 label: "تھانہ نام".into(),
-                source: PlaceholderSource::SharedSetting {
-                    setting: "global_a".into(),
-                },
+                source: PlaceholderSource::Shared,
             },
             Placeholder {
                 id: PlaceholderId::new(2).unwrap(),
@@ -624,9 +475,8 @@ mod tests {
                 fir_id: FirId::new(7).unwrap(),
                 placeholder_id: PlaceholderId::new(2).unwrap(),
                 value: "HBL".into(),
-                updated_at: Timestamp::from_unix_millis(0),
             }],
-            shared_settings: BTreeMap::from([("global_a".to_owned(), "صدر".to_owned())]),
+            shared_values: BTreeMap::from([(PlaceholderId::new(1).unwrap(), "صدر".to_owned())]),
         }
     }
 
@@ -637,49 +487,6 @@ mod tests {
         assert_eq!(normalize_placeholder_name("  a \t b "), "a b");
         assert_eq!(placeholder_name("Date  FIR"), Err(Invalid::FirFieldName));
         assert_eq!(placeholder_name(" "), Err(Invalid::EmptyName));
-    }
-
-    #[test]
-    fn references_round_trip_json() {
-        let references = [
-            FieldReference::Catalog(PlaceholderId::new(4).unwrap()),
-            FieldReference::Fir(FirField {
-                property: FirProperty::Zimni,
-                index: Some(3),
-            }),
-            FieldReference::Fir(FirField {
-                property: FirProperty::FirNo,
-                index: None,
-            }),
-            FieldReference::Unresolved("x".into()),
-        ];
-        for reference in references {
-            assert_eq!(
-                FieldReference::from_json(&reference.to_json()),
-                Some(reference)
-            );
-        }
-        assert_eq!(
-            serde_json::to_string(
-                &FieldReference::Fir(FirField {
-                    property: FirProperty::Zimni,
-                    index: Some(3)
-                })
-                .to_json()
-            )
-            .unwrap(),
-            r#"{"_tag":"FirField","property":"zimni","index":3}"#
-        );
-        assert!(
-            FieldReference::from_json(
-                &json!({"_tag": "FirField", "property": "fir_no", "index": 0})
-            )
-            .is_none()
-        );
-        assert!(FieldReference::from_json(&json!({"_tag": "CatalogField", "id": 0})).is_none());
-        assert!(
-            FieldReference::from_json(&json!({"_tag": "FirField", "property": "nic"})).is_none()
-        );
     }
 
     #[test]

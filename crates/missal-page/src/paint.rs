@@ -13,7 +13,6 @@ use swash::zeno::{Angle, Format, Transform, Vector};
 use crate::display::{DisplayItem, DisplayList, GlyphRun};
 use crate::engine::Page;
 use crate::geom::Rect;
-use crate::image::ImageData;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PagePaint {
@@ -68,7 +67,6 @@ impl PagePaint {
 struct PaintCache {
     context: ScaleContext,
     rasters: HashMap<RasterKey, Option<Raster>>,
-    images: HashMap<usize, Arc<RenderImage>>,
 }
 
 impl Global for PaintCache {}
@@ -144,16 +142,6 @@ fn rasterize(
         width: placement.width,
         height: placement.height,
     })
-}
-
-fn render_image(data: &ImageData) -> Option<Arc<RenderImage>> {
-    let decoded = data.decoded()?;
-    let mut bgra = decoded.rgba.clone();
-    for px in bgra.as_chunks_mut::<4>().0 {
-        px.swap(0, 2);
-    }
-    let buffer = RgbaImage::from_raw(decoded.width, decoded.height, bgra)?;
-    Some(Arc::new(RenderImage::new(vec![Frame::new(buffer)])))
 }
 
 fn to_bounds(origin: GPoint<Pixels>, rect: Rect, zoom: f32) -> Bounds<Pixels> {
@@ -274,26 +262,6 @@ pub fn paint_display_list(
                         ));
                         x += if empty { 5.0 } else { 6.0 };
                     }
-                }
-            }
-            DisplayItem::Image { rect, image } => {
-                let key = Arc::as_ptr(&image.bytes) as *const u8 as usize;
-                let cache = cx.global_mut::<PaintCache>();
-                let render = match cache.images.get(&key) {
-                    Some(r) => Some(r.clone()),
-                    None => {
-                        let r = render_image(image);
-                        if let Some(r) = &r {
-                            cache.images.insert(key, r.clone());
-                        }
-                        r
-                    }
-                };
-                if let Some(render) = render {
-                    let bounds = to_bounds(origin, *rect, zoom);
-                    window
-                        .paint_image(bounds, bounds, Corners::default(), render, 0, false)
-                        .ok();
                 }
             }
             DisplayItem::Glyphs(run) => paint_run(list, run, origin, options, zoom, window, cx),

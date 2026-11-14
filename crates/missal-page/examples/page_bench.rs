@@ -1,31 +1,14 @@
-use std::io::Read;
 use std::time::Instant;
 
-use flate2::read::GzDecoder;
-use missal_core::document::{Block, Child, Envelope, Inline};
+use missal_core::document::{Block, Inline};
 use missal_core::{Document, FieldDisplayText, FieldReference};
 use missal_page::pdf::{PdfOptions, write_packet};
 use missal_page::{BlockPath, DocSource, Edit, FieldSource, PageEngine, TokenFields};
-use serde_json::Value;
-
-const BUNDLE: &[u8] = include_bytes!("../../../templates/bundle.json.gz");
 
 fn bundle() -> Vec<(String, Document)> {
-    let mut text = String::new();
-    GzDecoder::new(BUNDLE).read_to_string(&mut text).unwrap();
-    let Value::Array(items) = serde_json::from_str(&text).unwrap() else {
-        panic!()
-    };
-    items
-        .into_iter()
-        .map(|item| {
-            let envelope = Envelope::from_value(item["document"].clone()).unwrap();
-            (
-                item["name"].as_str().unwrap().to_owned(),
-                Document::from_envelope(&envelope).unwrap(),
-            )
-        })
-        .collect()
+    missal_store::TemplateBundle::embedded()
+        .templates()
+        .unwrap()
 }
 
 fn text_of(block: &mut Block) -> Option<&mut String> {
@@ -53,9 +36,9 @@ fn find_cell_paragraph(doc: &Document, from: usize) -> BlockPath {
     for (i, block) in doc.blocks.iter().enumerate().skip(from) {
         if let Block::Table(t) = block {
             for (r, row) in t.rows.iter().enumerate() {
-                let Child::Node(row) = row else { continue };
+                let row = row;
                 for (c, cell) in row.cells.iter().enumerate() {
-                    let Child::Node(cell) = cell else { continue };
+                    let cell = cell;
                     for (b, inner) in cell.blocks.iter().enumerate() {
                         if text_of(&mut inner.clone()).is_some() {
                             return BlockPath::new(&[i as u32, r as u32, c as u32, b as u32]);
@@ -73,12 +56,8 @@ fn cell_text<'a>(doc: &'a mut Document, path: &BlockPath) -> &'a mut String {
     let Block::Table(t) = &mut doc.blocks[s[0] as usize] else {
         panic!()
     };
-    let Child::Node(row) = &mut t.rows[s[1] as usize] else {
-        panic!()
-    };
-    let Child::Node(cell) = &mut row.cells[s[2] as usize] else {
-        panic!()
-    };
+    let row = &mut t.rows[s[1] as usize];
+    let cell = &mut row.cells[s[2] as usize];
     text_of(&mut cell.blocks[s[3] as usize]).unwrap()
 }
 

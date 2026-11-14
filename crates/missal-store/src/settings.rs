@@ -1,75 +1,33 @@
-use std::collections::BTreeMap;
-
 use missal_core::{AppSettings, FieldMarkers};
-use rusqlite::{Connection, OptionalExtension};
-use serde_json::json;
+use rusqlite::params;
 
-use crate::{Result, Store, failed, rows};
-
-pub(crate) fn read_settings(connection: &Connection) -> Result<AppSettings> {
-    let row: Option<(String, String)> = connection
-        .query_row(
-            "SELECT shared_placeholders, field_markers FROM app_settings",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .optional()
-        .map_err(failed("settings.get"))?;
-    match row {
-        None => Ok(AppSettings::default()),
-        Some((shared, markers)) => rows::settings(&shared, &markers),
-    }
-}
-
-fn upsert(
-    connection: &Connection,
-    column: &str,
-    value: String,
-    operation: &'static str,
-) -> Result<AppSettings> {
-    let (shared, markers): (String, String) = connection
-        .query_row(
-            &format!(
-                "INSERT INTO app_settings ({column}) VALUES (?1) ON CONFLICT (id) DO UPDATE SET {column} = excluded.{column} RETURNING shared_placeholders, field_markers"
-            ),
-            [value],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(failed(operation))?;
-    rows::settings(&shared, &markers)
-}
-
-pub(crate) fn write_shared(
-    connection: &Connection,
-    values: &BTreeMap<String, String>,
-    operation: &'static str,
-) -> Result<AppSettings> {
-    upsert(
-        connection,
-        "shared_placeholders",
-        serde_json::to_string(values).unwrap_or_else(|_| "{}".to_owned()),
-        operation,
-    )
-}
+use crate::placeholders::shared_values;
+use crate::{Result, Store, failed, invalid};
 
 impl Store {
     pub fn settings(&self) -> Result<AppSettings> {
-        read_settings(&self.connection)
-    }
-
-    pub fn save_shared_placeholders(
-        &mut self,
-        values: &BTreeMap<String, String>,
-    ) -> Result<AppSettings> {
-        write_shared(&self.connection, values, "settings.save")
+        let operation = "settings.get";
+        let (open, close): (String, String) = self
+            .connection
+            .query_row(
+                "SELECT open_marker, close_marker FROM settings WHERE id = 1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .map_err(failed(operation))?;
+        Ok(AppSettings {
+            shared_values: shared_values(&self.connection, operation)?,
+            field_markers: FieldMarkers::new(&open, &close).map_err(|_| invalid(operation))?,
+        })
     }
 
     pub fn save_field_markers(&mut self, markers: &FieldMarkers) -> Result<AppSettings> {
-        upsert(
-            &self.connection,
-            "field_markers",
-            json!({ "open": markers.open(), "close": markers.close() }).to_string(),
-            "settings.saveFieldMarkers",
-        )
+        self.connection
+            .execute(
+                "UPDATE settings SET open_marker = ?1, close_marker = ?2 WHERE id = 1",
+                params![markers.open(), markers.close()],
+            )
+            .map_err(failed("settings.saveFieldMarkers"))?;
+        self.settings()
     }
 }
