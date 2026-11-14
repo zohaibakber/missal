@@ -243,12 +243,14 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
             continue;
         };
         let lb = node.lines[line];
-        let content: String = text
-            .get(info.text_range.clone())
-            .unwrap_or("")
-            .chars()
-            .filter(|c| !is_control(*c) && *c != '\n')
-            .collect();
+        let slice = text.get(info.text_range.clone()).unwrap_or("");
+        let content = if slice.bytes().any(|b| b == 0xE2 || b == b'\n') {
+            let mut content = String::with_capacity(slice.len());
+            content.extend(slice.chars().filter(|c| !is_control(*c) && *c != '\n'));
+            content
+        } else {
+            slice.to_owned()
+        };
         layers.lines.push(TextLine {
             text: content,
             rtl: layout.is_rtl(),
@@ -300,7 +302,9 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
                 }
             }
         };
-        for g in layout.glyphs(run) {
+        let run_glyphs = layout.glyphs(run);
+        layers.glyphs.reserve(run_glyphs.len());
+        for g in run_glyphs {
             let x = dx + node.content.x + g.x + shift;
             let y = gy + g.y;
             let center = x + g.advance * 0.5;
@@ -493,7 +497,14 @@ pub(crate) fn build(pieces: &[Piece]) -> DisplayList {
             }
         }
     }
-    let mut items = layers.backgrounds;
+    let mut items = Vec::with_capacity(
+        layers.backgrounds.len()
+            + layers.highlights.len()
+            + layers.content.len()
+            + layers.decorations.len()
+            + layers.borders.len(),
+    );
+    items.extend(layers.backgrounds);
     items.extend(layers.highlights);
     items.extend(layers.content);
     items.extend(layers.decorations);

@@ -1,4 +1,6 @@
-use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hash, Hasher};
+use std::sync::Arc;
 
 use missal_core::document::{Align as DocAlign, Direction as DocDirection, Style, TextFormat};
 use missal_text::{Align, FontFamily, Rgba};
@@ -464,70 +466,126 @@ pub struct Computed {
     pub boxp: BoxProps,
 }
 
-fn weight(value: &str, parent: u16) -> Option<u16> {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum Weight {
+    Fixed(u16),
+    Bolder,
+    Lighter,
+}
+
+impl Weight {
+    fn resolve(self, parent: u16) -> u16 {
+        match self {
+            Weight::Fixed(w) => w,
+            Weight::Bolder => {
+                if parent < 350 {
+                    400
+                } else if parent < 550 {
+                    700
+                } else {
+                    900
+                }
+            }
+            Weight::Lighter => {
+                if parent < 550 {
+                    100
+                } else if parent < 750 {
+                    400
+                } else {
+                    700
+                }
+            }
+        }
+    }
+}
+
+fn weight(value: &str) -> Option<Weight> {
     let value = css::clean(value).to_ascii_lowercase();
     Some(match value.as_str() {
-        "normal" => 400,
-        "bold" => 700,
-        "bolder" => {
-            if parent < 350 {
-                400
-            } else if parent < 550 {
-                700
-            } else {
-                900
-            }
-        }
-        "lighter" => {
-            if parent < 550 {
-                100
-            } else if parent < 750 {
-                400
-            } else {
-                700
-            }
-        }
-        other => other.parse::<f32>().ok()?.clamp(1.0, 1000.0) as u16,
+        "normal" => Weight::Fixed(400),
+        "bold" => Weight::Fixed(700),
+        "bolder" => Weight::Bolder,
+        "lighter" => Weight::Lighter,
+        other => Weight::Fixed(other.parse::<f32>().ok()?.clamp(1.0, 1000.0) as u16),
     })
 }
 
-fn font_size(value: &str, parent: f32) -> Option<f32> {
-    let lower = css::clean(value).to_ascii_lowercase();
-    let keyword = match lower.as_str() {
-        "xx-small" => Some(9.0),
-        "x-small" => Some(10.0),
-        "small" => Some(13.0),
-        "medium" => Some(16.0),
-        "large" => Some(18.0),
-        "x-large" => Some(24.0),
-        "xx-large" => Some(32.0),
-        "smaller" => Some(parent / 1.2),
-        "larger" => Some(parent * 1.2),
-        _ => None,
-    };
-    if keyword.is_some() {
-        return keyword;
-    }
-    match css::length(&lower)? {
-        Length::Auto => None,
-        Length::Percent(p) => Some(parent * p / 100.0),
-        Length::Em(e) => Some(parent * e),
-        other => Some(other.resolve(parent, parent)),
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum FontSize {
+    Px(f32),
+    Smaller,
+    Larger,
+    Percent(f32),
+    Em(f32),
+}
+
+impl FontSize {
+    fn resolve(self, parent: f32) -> f32 {
+        match self {
+            FontSize::Px(v) => v,
+            FontSize::Smaller => parent / 1.2,
+            FontSize::Larger => parent * 1.2,
+            FontSize::Percent(p) => parent * p / 100.0,
+            FontSize::Em(e) => parent * e,
+        }
     }
 }
 
-fn line_height(value: &str, size: f32) -> Option<LineHeightSpec> {
+fn font_size(value: &str) -> Option<FontSize> {
+    let lower = css::clean(value).to_ascii_lowercase();
+    let keyword = match lower.as_str() {
+        "xx-small" => 9.0,
+        "x-small" => 10.0,
+        "small" => 13.0,
+        "medium" => 16.0,
+        "large" => 18.0,
+        "x-large" => 24.0,
+        "xx-large" => 32.0,
+        "smaller" => return Some(FontSize::Smaller),
+        "larger" => return Some(FontSize::Larger),
+        _ => {
+            return match css::length(&lower)? {
+                Length::Auto => None,
+                Length::Percent(p) => Some(FontSize::Percent(p)),
+                Length::Em(e) => Some(FontSize::Em(e)),
+                other => Some(FontSize::Px(other.resolve(0.0, 0.0))),
+            };
+        }
+    };
+    Some(FontSize::Px(keyword))
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum LineHeightValue {
+    Spec(LineHeightSpec),
+    Percent(f32),
+    Length(Length),
+}
+
+impl LineHeightValue {
+    fn resolve(self, size: f32) -> LineHeightSpec {
+        match self {
+            LineHeightValue::Spec(spec) => spec,
+            LineHeightValue::Percent(p) => LineHeightSpec::Px(size * p / 100.0),
+            LineHeightValue::Length(l) => LineHeightSpec::Px(l.resolve(size, 0.0).max(0.0)),
+        }
+    }
+}
+
+fn line_height(value: &str) -> Option<LineHeightValue> {
     let lower = css::clean(value).to_ascii_lowercase();
     if lower == "normal" {
-        return Some(LineHeightSpec::Normal);
+        return Some(LineHeightValue::Spec(LineHeightSpec::Normal));
     }
     if let Ok(factor) = lower.parse::<f32>() {
-        return Some(LineHeightSpec::Factor(factor.max(0.0)));
+        return Some(LineHeightValue::Spec(LineHeightSpec::Factor(
+            factor.max(0.0),
+        )));
     }
     match css::length(&lower)? {
         Length::Auto => None,
-        Length::Percent(p) => Some(LineHeightSpec::Px(size * p / 100.0)),
-        other => Some(LineHeightSpec::Px(other.resolve(size, 0.0).max(0.0))),
+        Length::Percent(p) => Some(LineHeightValue::Percent(p)),
+        other => Some(LineHeightValue::Length(other)),
     }
 }
 
@@ -561,7 +619,7 @@ pub fn doc_dir(direction: DocDirection) -> Dir {
     }
 }
 
-fn border_shorthand(value: &str) -> BorderSide {
+pub(crate) fn border_shorthand(value: &str) -> BorderSide {
     let mut side = BorderSide {
         width: 3.0,
         style: BorderStyle::None,
@@ -590,11 +648,34 @@ fn border_width(value: &str) -> Option<f32> {
     }
 }
 
-fn decoration(value: &str, current: Decoration) -> Decoration {
-    let mut d = Decoration {
-        color: current.color,
-        dashed: current.dashed,
-        ..Decoration::default()
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct DecorationLine {
+    underline: bool,
+    overline: bool,
+    strike: bool,
+    dashed: Option<bool>,
+    color: Option<Rgba>,
+}
+
+impl DecorationLine {
+    fn apply(self, current: Decoration) -> Decoration {
+        Decoration {
+            underline: self.underline,
+            overline: self.overline,
+            strike: self.strike,
+            dashed: self.dashed.unwrap_or(current.dashed),
+            color: self.color.or(current.color),
+        }
+    }
+}
+
+fn decoration(value: &str) -> DecorationLine {
+    let mut d = DecorationLine {
+        underline: false,
+        overline: false,
+        strike: false,
+        dashed: None,
+        color: None,
     };
     for part in css::split_values(css::clean(value)) {
         match part.to_ascii_lowercase().as_str() {
@@ -602,8 +683,8 @@ fn decoration(value: &str, current: Decoration) -> Decoration {
             "underline" => d.underline = true,
             "overline" => d.overline = true,
             "line-through" => d.strike = true,
-            "dashed" | "dotted" => d.dashed = true,
-            "solid" | "double" | "wavy" => d.dashed = false,
+            "dashed" | "dotted" => d.dashed = Some(true),
+            "solid" | "double" | "wavy" => d.dashed = Some(false),
             other => {
                 if let Some(color) = css::color(other) {
                     d.color = Some(color);
@@ -626,238 +707,241 @@ fn vertical_align(value: &str) -> Option<VerticalAlign> {
     })
 }
 
-pub struct Declarations<'a> {
-    list: Vec<(&'a str, &'a str)>,
+fn absolute_width(value: &str) -> Option<f32> {
+    let value = css::clean(value).to_ascii_lowercase();
+    let split = value
+        .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .unwrap_or(value.len());
+    let (number, unit) = value.split_at(split);
+    let n: f32 = number.parse().ok()?;
+    Some(n * css::unit_factor(unit)?)
 }
 
-impl<'a> Declarations<'a> {
-    pub fn new() -> Declarations<'a> {
-        Declarations { list: Vec::new() }
-    }
-
-    pub fn push_style(&mut self, style: Option<&'a Style>) {
-        if let Some(style) = style {
-            self.list.extend(style.declarations());
-        }
-    }
-
-    pub fn push(&mut self, property: &'a str, value: &'a str) {
-        self.list.push((property, value));
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (&'a str, &'a str)> + '_ {
-        self.list.iter().copied()
-    }
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Op {
+    FontSize(FontSize),
+    Family(FontFamily),
+    Weight(Weight),
+    Italic(bool),
+    Color(Rgba),
+    Background(Option<Rgba>),
+    LineHeight(LineHeightValue),
+    LetterSpacing(Option<Length>),
+    WordSpacing(Option<Length>),
+    WhiteSpace(WhiteSpace),
+    Decoration(DecorationLine),
+    DecorationColor(Option<Rgba>),
+    DecorationDashed(bool),
+    VerticalAlign(VerticalAlign),
+    Direction(Dir),
+    UnicodeBidi(UnicodeBidi),
+    Align(Align),
+    Indent(Length),
+    Orphans(u32),
+    Widows(u32),
+    BorderCollapse(bool),
+    TableFixed(bool),
+    Width(Option<Length>),
+    MinWidth(Option<Length>),
+    MaxWidth(Option<Length>),
+    Height(Option<Length>),
+    MinHeight(Option<Length>),
+    Margin([Length; 4]),
+    Padding([Length; 4]),
+    MarginSide(usize, Length),
+    PaddingSide(usize, Length),
+    MarginInline(usize, Option<Length>),
+    PaddingInline(usize, Option<Length>),
+    Border(BorderSide),
+    BorderWidth([f32; 4]),
+    BorderStyle([BorderStyle; 4]),
+    BorderColor([Rgba; 4]),
+    BorderSide(usize, BorderSide),
+    BorderSideWidth(usize, f32),
+    BorderSideStyle(usize, BorderStyle),
+    BorderSideColor(usize, Option<Rgba>),
+    BorderInlineStart(BorderSide),
+    BreakBefore(BreakValue),
+    BreakAfter(BreakValue),
+    BreakInside(BreakValue),
 }
 
-impl Default for Declarations<'_> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-pub fn compute(parent: &TextProps, base: BoxProps, decls: &Declarations<'_>) -> Computed {
-    let mut text = parent.clone();
-    let mut boxp = base;
-    for (property, value) in decls.iter() {
-        if property.eq_ignore_ascii_case("font-size")
-            && let Some(size) = font_size(value, parent.size)
-        {
-            text.size = size.max(0.0);
+impl Op {
+    pub(crate) fn parse(property: &str, value: &str) -> Option<Op> {
+        if property.eq_ignore_ascii_case("font-size") {
+            return font_size(value).map(Op::FontSize);
         }
-    }
-    for (property, value) in decls.iter() {
-        apply(property, value, parent, &mut text, &mut boxp);
-    }
-    Computed { text, boxp }
-}
-
-fn apply(
-    property: &str,
-    value: &str,
-    parent: &TextProps,
-    text: &mut TextProps,
-    boxp: &mut BoxProps,
-) {
-    let property = property.trim().to_ascii_lowercase();
-    let value = css::clean(value);
-    if value.to_ascii_lowercase().contains("var(") {
-        return;
-    }
-    let lower = value.to_ascii_lowercase();
-    if lower == "inherit" || lower == "initial" || lower == "unset" {
-        return;
-    }
-    let len = || css::length(value);
-    match property.as_str() {
-        "font-family" => {
-            if let Some(name) = css::first_family(value) {
-                text.family = fonts::family_for(&name);
+        let property = property.trim().to_ascii_lowercase();
+        let value = css::clean(value);
+        let lower = value.to_ascii_lowercase();
+        if lower.contains("var(") || lower == "inherit" || lower == "initial" || lower == "unset" {
+            return None;
+        }
+        let len = || css::length(value);
+        Some(match property.as_str() {
+            "font-family" => Op::Family(fonts::family_for(&css::first_family(value)?)),
+            "font-weight" => Op::Weight(weight(value)?),
+            "font-style" => Op::Italic(matches!(lower.as_str(), "italic" | "oblique")),
+            "color" => Op::Color(css::color(value)?),
+            "background-color" | "background" => {
+                if let Some(c) = css::split_values(value).into_iter().find_map(css::color) {
+                    Op::Background((c.alpha() > 0).then_some(c))
+                } else if lower == "none" || lower == "transparent" {
+                    Op::Background(None)
+                } else {
+                    return None;
+                }
             }
-        }
-        "font-weight" => {
-            if let Some(w) = weight(value, parent.weight) {
-                text.weight = w;
-            }
-        }
-        "font-style" => text.italic = matches!(lower.as_str(), "italic" | "oblique"),
-        "color" => {
-            if let Some(c) = css::color(value) {
-                text.color = c;
-            }
-        }
-        "background-color" | "background" => {
-            if let Some(c) = css::split_values(value).into_iter().find_map(css::color) {
-                boxp.background = (c.alpha() > 0).then_some(c);
-            } else if lower == "none" || lower == "transparent" {
-                boxp.background = None;
-            }
-        }
-        "line-height" => {
-            if let Some(lh) = line_height(value, text.size) {
-                text.line_height = lh;
-            }
-        }
-        "letter-spacing" => {
-            text.letter_spacing = if lower == "normal" {
-                0.0
+            "line-height" => Op::LineHeight(line_height(value)?),
+            "letter-spacing" => Op::LetterSpacing(if lower == "normal" {
+                None
             } else {
-                len()
-                    .map(|l| l.resolve(text.size, 0.0))
-                    .unwrap_or(text.letter_spacing)
-            }
-        }
-        "word-spacing" => {
-            text.word_spacing = if lower == "normal" {
-                0.0
+                Some(len()?)
+            }),
+            "word-spacing" => Op::WordSpacing(if lower == "normal" {
+                None
             } else {
-                len()
-                    .map(|l| l.resolve(text.size, 0.0))
-                    .unwrap_or(text.word_spacing)
-            }
-        }
-        "white-space" => {
-            text.white_space = match lower.as_str() {
+                Some(len()?)
+            }),
+            "white-space" => Op::WhiteSpace(match lower.as_str() {
                 "normal" => WhiteSpace::Normal,
                 "nowrap" => WhiteSpace::NoWrap,
                 "pre" => WhiteSpace::Pre,
                 "pre-line" => WhiteSpace::PreLine,
                 "pre-wrap" | "break-spaces" => WhiteSpace::PreWrap,
-                _ => text.white_space,
+                _ => return None,
+            }),
+            "text-decoration" | "text-decoration-line" => Op::Decoration(decoration(value)),
+            "text-decoration-color" => Op::DecorationColor(css::color(value)),
+            "text-decoration-style" => {
+                Op::DecorationDashed(matches!(lower.as_str(), "dashed" | "dotted"))
             }
-        }
-        "text-decoration" | "text-decoration-line" => {
-            boxp.decoration = decoration(value, boxp.decoration)
-        }
-        "text-decoration-color" => boxp.decoration.color = css::color(value),
-        "text-decoration-style" => {
-            boxp.decoration.dashed = matches!(lower.as_str(), "dashed" | "dotted")
-        }
-        "vertical-align" => {
-            if let Some(v) = vertical_align(value) {
-                boxp.vertical_align = v;
-            }
-        }
-        "direction" => match lower.as_str() {
-            "rtl" => text.direction = Dir::Rtl,
-            "ltr" => text.direction = Dir::Ltr,
-            _ => {}
-        },
-        "unicode-bidi" => {
-            boxp.unicode_bidi = match lower.as_str() {
+            "vertical-align" => Op::VerticalAlign(vertical_align(value)?),
+            "direction" => Op::Direction(match lower.as_str() {
+                "rtl" => Dir::Rtl,
+                "ltr" => Dir::Ltr,
+                _ => return None,
+            }),
+            "unicode-bidi" => Op::UnicodeBidi(match lower.as_str() {
                 "embed" => UnicodeBidi::Embed,
                 "isolate" | "-webkit-isolate" => UnicodeBidi::Isolate,
                 "bidi-override" => UnicodeBidi::Override,
                 "isolate-override" => UnicodeBidi::IsolateOverride,
                 "plaintext" => UnicodeBidi::Plaintext,
                 _ => UnicodeBidi::Normal,
-            }
-        }
-        "text-align" => {
-            if let Some(a) = align(value) {
-                text.align = a;
-            }
-        }
-        "text-indent" => {
-            if let Some(l) = len() {
-                text.indent = l;
-            }
-        }
-        "orphans" => {
-            if let Some(n) = css::number(value) {
-                text.orphans = n.max(1.0) as u32;
-            }
-        }
-        "widows" => {
-            if let Some(n) = css::number(value) {
-                text.widows = n.max(1.0) as u32;
-            }
-        }
-        "border-collapse" => text.border_collapse = lower == "collapse",
-        "table-layout" => boxp.table_fixed = lower == "fixed",
-        "width" => boxp.width = len(),
-        "min-width" => boxp.min_width = len(),
-        "max-width" => boxp.max_width = if lower == "none" { None } else { len() },
-        "height" => boxp.height = len(),
-        "min-height" => boxp.min_height = len(),
-        "margin" => {
-            if let Some(m) = css::box_values(value, css::length) {
-                boxp.margin = m;
-                boxp.margin_inline = [None; 2];
-            }
-        }
-        "padding" => {
-            if let Some(p) = css::box_values(value, css::length) {
-                boxp.padding = p;
-                boxp.padding_inline = [None; 2];
-            }
-        }
-        "border" => {
-            let side = border_shorthand(value);
-            boxp.border = [side; 4];
-            boxp.border_inline_start = None;
-        }
-        "border-width" => {
-            if let Some(w) = css::box_values(value, border_width) {
-                for (side, w) in boxp.border.iter_mut().zip(w) {
-                    side.width = w;
-                }
-            }
-        }
-        "border-style" => {
-            if let Some(s) = css::box_values(value, BorderStyle::parse) {
-                for (side, s) in boxp.border.iter_mut().zip(s) {
-                    side.style = s;
-                }
-            }
-        }
-        "border-color" => {
-            if let Some(c) = css::box_values(value, css::color) {
-                for (side, c) in boxp.border.iter_mut().zip(c) {
-                    side.color = Some(c);
-                }
-            }
-        }
-        "break-before" | "page-break-before" => {
-            if let Some(b) = BreakValue::parse(value) {
-                boxp.break_before = b;
-            }
-        }
-        "break-after" | "page-break-after" => {
-            if let Some(b) = BreakValue::parse(value) {
-                boxp.break_after = b;
-            }
-        }
-        "break-inside" | "page-break-inside" => {
-            if let Some(b) = BreakValue::parse(value) {
-                boxp.break_inside = if b == BreakValue::Page {
+            }),
+            "text-align" => Op::Align(align(value)?),
+            "text-indent" => Op::Indent(len()?),
+            "orphans" => Op::Orphans(css::number(value)?.max(1.0) as u32),
+            "widows" => Op::Widows(css::number(value)?.max(1.0) as u32),
+            "border-collapse" => Op::BorderCollapse(lower == "collapse"),
+            "table-layout" => Op::TableFixed(lower == "fixed"),
+            "width" => Op::Width(len()),
+            "min-width" => Op::MinWidth(len()),
+            "max-width" => Op::MaxWidth(if lower == "none" { None } else { len() }),
+            "height" => Op::Height(len()),
+            "min-height" => Op::MinHeight(len()),
+            "margin" => Op::Margin(css::box_values(value, css::length)?),
+            "padding" => Op::Padding(css::box_values(value, css::length)?),
+            "border" => Op::Border(border_shorthand(value)),
+            "border-width" => Op::BorderWidth(css::box_values(value, border_width)?),
+            "border-style" => Op::BorderStyle(css::box_values(value, BorderStyle::parse)?),
+            "border-color" => Op::BorderColor(css::box_values(value, css::color)?),
+            "break-before" | "page-break-before" => Op::BreakBefore(BreakValue::parse(value)?),
+            "break-after" | "page-break-after" => Op::BreakAfter(BreakValue::parse(value)?),
+            "break-inside" | "page-break-inside" => {
+                let b = BreakValue::parse(value)?;
+                Op::BreakInside(if b == BreakValue::Page {
                     BreakValue::Auto
                 } else {
                     b
-                };
+                })
             }
+            other => side_op(other, value)?,
+        })
+    }
+
+    fn apply(&self, parent: &TextProps, text: &mut TextProps, boxp: &mut BoxProps) {
+        match self {
+            Op::FontSize(_) => {}
+            Op::Family(family) => text.family = family.clone(),
+            Op::Weight(w) => text.weight = w.resolve(parent.weight),
+            Op::Italic(italic) => text.italic = *italic,
+            Op::Color(c) => text.color = *c,
+            Op::Background(c) => boxp.background = *c,
+            Op::LineHeight(lh) => text.line_height = lh.resolve(text.size),
+            Op::LetterSpacing(l) => {
+                text.letter_spacing = l.map_or(0.0, |l| l.resolve(text.size, 0.0))
+            }
+            Op::WordSpacing(l) => text.word_spacing = l.map_or(0.0, |l| l.resolve(text.size, 0.0)),
+            Op::WhiteSpace(w) => text.white_space = *w,
+            Op::Decoration(d) => boxp.decoration = d.apply(boxp.decoration),
+            Op::DecorationColor(c) => boxp.decoration.color = *c,
+            Op::DecorationDashed(dashed) => boxp.decoration.dashed = *dashed,
+            Op::VerticalAlign(v) => boxp.vertical_align = *v,
+            Op::Direction(d) => text.direction = *d,
+            Op::UnicodeBidi(u) => boxp.unicode_bidi = *u,
+            Op::Align(a) => text.align = *a,
+            Op::Indent(l) => text.indent = *l,
+            Op::Orphans(n) => text.orphans = *n,
+            Op::Widows(n) => text.widows = *n,
+            Op::BorderCollapse(b) => text.border_collapse = *b,
+            Op::TableFixed(b) => boxp.table_fixed = *b,
+            Op::Width(l) => boxp.width = *l,
+            Op::MinWidth(l) => boxp.min_width = *l,
+            Op::MaxWidth(l) => boxp.max_width = *l,
+            Op::Height(l) => boxp.height = *l,
+            Op::MinHeight(l) => boxp.min_height = *l,
+            Op::Margin(m) => {
+                boxp.margin = *m;
+                boxp.margin_inline = [None; 2];
+            }
+            Op::Padding(p) => {
+                boxp.padding = *p;
+                boxp.padding_inline = [None; 2];
+            }
+            Op::MarginSide(i, l) => {
+                boxp.margin[*i] = *l;
+                if *i == 1 || *i == 3 {
+                    boxp.margin_inline = [None; 2];
+                }
+            }
+            Op::PaddingSide(i, l) => {
+                boxp.padding[*i] = *l;
+                if *i == 1 || *i == 3 {
+                    boxp.padding_inline = [None; 2];
+                }
+            }
+            Op::MarginInline(i, l) => boxp.margin_inline[*i] = *l,
+            Op::PaddingInline(i, l) => boxp.padding_inline[*i] = *l,
+            Op::Border(side) => {
+                boxp.border = [*side; 4];
+                boxp.border_inline_start = None;
+            }
+            Op::BorderWidth(w) => {
+                for (side, w) in boxp.border.iter_mut().zip(w) {
+                    side.width = *w;
+                }
+            }
+            Op::BorderStyle(s) => {
+                for (side, s) in boxp.border.iter_mut().zip(s) {
+                    side.style = *s;
+                }
+            }
+            Op::BorderColor(c) => {
+                for (side, c) in boxp.border.iter_mut().zip(c) {
+                    side.color = Some(*c);
+                }
+            }
+            Op::BorderSide(i, side) => boxp.border[*i] = *side,
+            Op::BorderSideWidth(i, w) => boxp.border[*i].width = *w,
+            Op::BorderSideStyle(i, s) => boxp.border[*i].style = *s,
+            Op::BorderSideColor(i, c) => boxp.border[*i].color = *c,
+            Op::BorderInlineStart(side) => boxp.border_inline_start = Some(*side),
+            Op::BreakBefore(b) => boxp.break_before = *b,
+            Op::BreakAfter(b) => boxp.break_after = *b,
+            Op::BreakInside(b) => boxp.break_inside = *b,
         }
-        other => apply_side(other, value, boxp),
     }
 }
 
@@ -871,83 +955,154 @@ fn side_index(name: &str) -> Option<usize> {
     })
 }
 
-fn apply_side(property: &str, value: &str, boxp: &mut BoxProps) {
+fn side_op(property: &str, value: &str) -> Option<Op> {
     if let Some(rest) = property.strip_prefix("margin-") {
-        match rest {
-            "inline-start" => boxp.margin_inline[0] = css::length(value),
-            "inline-end" => boxp.margin_inline[1] = css::length(value),
-            "block-start" => {
-                if let Some(l) = css::length(value) {
-                    boxp.margin[0] = l;
-                }
-            }
-            "block-end" => {
-                if let Some(l) = css::length(value) {
-                    boxp.margin[2] = l;
-                }
-            }
-            side => {
-                if let (Some(i), Some(l)) = (side_index(side), css::length(value)) {
-                    boxp.margin[i] = l;
-                    if i == 1 || i == 3 {
-                        boxp.margin_inline = [None; 2];
-                    }
-                }
-            }
-        }
-        return;
+        return Some(match rest {
+            "inline-start" => Op::MarginInline(0, css::length(value)),
+            "inline-end" => Op::MarginInline(1, css::length(value)),
+            "block-start" => Op::MarginSide(0, css::length(value)?),
+            "block-end" => Op::MarginSide(2, css::length(value)?),
+            side => Op::MarginSide(side_index(side)?, css::length(value)?),
+        });
     }
     if let Some(rest) = property.strip_prefix("padding-") {
-        match rest {
-            "inline-start" => boxp.padding_inline[0] = css::length(value),
-            "inline-end" => boxp.padding_inline[1] = css::length(value),
-            "block-start" => {
-                if let Some(l) = css::length(value) {
-                    boxp.padding[0] = l;
-                }
-            }
-            "block-end" => {
-                if let Some(l) = css::length(value) {
-                    boxp.padding[2] = l;
-                }
-            }
-            side => {
-                if let (Some(i), Some(l)) = (side_index(side), css::length(value)) {
-                    boxp.padding[i] = l;
-                    if i == 1 || i == 3 {
-                        boxp.padding_inline = [None; 2];
-                    }
-                }
-            }
-        }
-        return;
+        return Some(match rest {
+            "inline-start" => Op::PaddingInline(0, css::length(value)),
+            "inline-end" => Op::PaddingInline(1, css::length(value)),
+            "block-start" => Op::PaddingSide(0, css::length(value)?),
+            "block-end" => Op::PaddingSide(2, css::length(value)?),
+            side => Op::PaddingSide(side_index(side)?, css::length(value)?),
+        });
     }
-    if let Some(rest) = property.strip_prefix("border-") {
-        let (side, part) = match rest.split_once('-') {
-            Some((side, part)) => (side, Some(part)),
-            None => (rest, None),
-        };
-        if side == "inline" && part == Some("start") {
-            boxp.border_inline_start = Some(border_shorthand(value));
-            return;
+    let rest = property.strip_prefix("border-")?;
+    let (side, part) = match rest.split_once('-') {
+        Some((side, part)) => (side, Some(part)),
+        None => (rest, None),
+    };
+    if side == "inline" && part == Some("start") {
+        return Some(Op::BorderInlineStart(border_shorthand(value)));
+    }
+    let i = side_index(side)?;
+    Some(match part {
+        None => Op::BorderSide(i, border_shorthand(value)),
+        Some("width") => Op::BorderSideWidth(i, border_width(value)?),
+        Some("style") => Op::BorderSideStyle(i, BorderStyle::parse(value)?),
+        Some("color") => Op::BorderSideColor(i, css::color(value)),
+        _ => return None,
+    })
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct Parsed {
+    font_size: Option<FontSize>,
+    ops: Vec<Op>,
+    pub direction: bool,
+    pub width: Option<f32>,
+}
+
+impl Parsed {
+    fn new(style: &Style) -> Parsed {
+        let mut parsed = Parsed::default();
+        let mut width = None;
+        for (property, value) in style.declarations() {
+            if property.eq_ignore_ascii_case("direction") {
+                parsed.direction = true;
+            }
+            if property.eq_ignore_ascii_case("width") {
+                width = Some(value);
+            }
+            match Op::parse(property, value) {
+                Some(Op::FontSize(size)) => parsed.font_size = Some(size),
+                Some(op) => parsed.ops.push(op),
+                None => {}
+            }
         }
-        let Some(i) = side_index(side) else { return };
-        match part {
-            None => boxp.border[i] = border_shorthand(value),
-            Some("width") => {
-                if let Some(w) = border_width(value) {
-                    boxp.border[i].width = w;
-                }
-            }
-            Some("style") => {
-                if let Some(s) = BorderStyle::parse(value) {
-                    boxp.border[i].style = s;
-                }
-            }
-            Some("color") => boxp.border[i].color = css::color(value),
-            _ => {}
+        parsed.width = width.and_then(absolute_width);
+        parsed
+    }
+}
+
+#[derive(Default)]
+struct AddressHasher(u64);
+
+impl Hasher for AddressHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 = (self.0 ^ b as u64).wrapping_mul(0x0100_0000_01b3);
         }
     }
+
+    fn write_usize(&mut self, n: usize) {
+        let h = (n as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        self.0 = h ^ (h >> 29);
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct StyleCache {
+    map: HashMap<usize, (Style, Arc<Parsed>), BuildHasherDefault<AddressHasher>>,
+}
+
+impl StyleCache {
+    pub(crate) fn get(&mut self, style: &Style) -> Arc<Parsed> {
+        let key = style.as_str().as_ptr() as usize;
+        self.map
+            .entry(key)
+            .or_insert_with(|| (style.clone(), Arc::new(Parsed::new(style))))
+            .1
+            .clone()
+    }
+
+    pub(crate) fn parsed(&mut self, style: Option<&Style>) -> Option<Arc<Parsed>> {
+        style.map(|s| self.get(s))
+    }
+
+    pub(crate) fn trim(&mut self) {
+        if self.map.len() > 8192 {
+            self.map.clear();
+        }
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.map.clear();
+    }
+}
+
+pub(crate) fn compute<'a>(
+    parent: &TextProps,
+    base: BoxProps,
+    extra: impl Iterator<Item = &'a Op> + Clone,
+    styles: &[Option<&Parsed>],
+) -> Computed {
+    let mut text = parent.clone();
+    let mut boxp = base;
+    let mut size = None;
+    for op in extra.clone() {
+        if let Op::FontSize(s) = op {
+            size = Some(*s);
+        }
+    }
+    for parsed in styles.iter().flatten() {
+        if parsed.font_size.is_some() {
+            size = parsed.font_size;
+        }
+    }
+    if let Some(size) = size {
+        text.size = size.resolve(parent.size).max(0.0);
+    }
+    for op in extra {
+        op.apply(parent, &mut text, &mut boxp);
+    }
+    for parsed in styles.iter().flatten() {
+        for op in &parsed.ops {
+            op.apply(parent, &mut text, &mut boxp);
+        }
+    }
+    Computed { text, boxp }
 }
 
 pub fn apply_format(text: &mut TextProps, boxp: &mut BoxProps, format: TextFormat) {

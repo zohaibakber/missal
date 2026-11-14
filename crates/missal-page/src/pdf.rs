@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Write;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
@@ -41,12 +42,78 @@ struct FontPlan {
     remap: subsetter::GlyphRemapper,
     font_ref: Ref,
     glyphs: BTreeSet<u16>,
+    advances: Option<swash::GlyphMetrics<'static>>,
 }
 
-fn deflate(data: &[u8]) -> Vec<u8> {
-    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::new(6));
-    encoder.write_all(data).expect("in-memory write");
-    encoder.finish().expect("in-memory write")
+#[derive(Default)]
+struct Deflater(Option<ZlibEncoder<Vec<u8>>>);
+
+impl Deflater {
+    fn deflate(&mut self, data: &[u8]) -> Vec<u8> {
+        let encoder = self
+            .0
+            .get_or_insert_with(|| ZlibEncoder::new(Vec::new(), Compression::new(6)));
+        encoder.write_all(data).expect("in-memory write");
+        encoder.try_finish().expect("in-memory write");
+        encoder.reset(Vec::new()).expect("in-memory write")
+    }
+}
+
+fn run_parallel<T: Send>(count: usize, task: impl Fn(usize, &mut Deflater) -> T + Sync) -> Vec<T> {
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .min(8)
+        .min(count);
+    if threads < 2 {
+        let mut deflater = Deflater::default();
+        return (0..count).map(|i| task(i, &mut deflater)).collect();
+    }
+    let next = AtomicUsize::new(0);
+    let chunks: Vec<Vec<(usize, T)>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..threads)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut deflater = Deflater::default();
+                    let mut out = Vec::new();
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        if index >= count {
+                            break;
+                        }
+                        out.push((index, task(index, &mut deflater)));
+                    }
+                    out
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().expect("pdf worker"))
+            .collect()
+    });
+    let mut results: Vec<Option<T>> = (0..count).map(|_| None).collect();
+    for (index, value) in chunks.into_iter().flatten() {
+        results[index] = Some(value);
+    }
+    results.into_iter().map(|r| r.expect("pdf task")).collect()
+}
+
+struct FontFile {
+    subset: Vec<u8>,
+    compressed: Vec<u8>,
+}
+
+enum Prepared {
+    Font(FontFile),
+    Page(Vec<u8>),
+}
+
+fn font_file(plan: &FontPlan, deflater: &mut Deflater) -> FontFile {
+    let data = missal_text::face(plan.face).data;
+    let subset = subsetter::subset(data, 0, &plan.remap).unwrap_or_else(|_| data.to_vec());
+    let compressed = deflater.deflate(&subset);
+    FontFile { subset, compressed }
 }
 
 fn subset_tag(index: usize) -> String {
@@ -94,13 +161,40 @@ pub fn write_pages<'a>(
         }
         let file = missal_text::face(face).file_name;
         let base = file.trim_end_matches(".ttf").replace(['-', ' '], "");
+        let advances = swash::FontRef::from_index(missal_text::face(face).data, 0)
+            .map(|font| font.glyph_metrics(&[]));
         plans.push(FontPlan {
             face,
             name: format!("{}+{}", subset_tag(index), base),
             remap,
             font_ref: alloc.next(),
             glyphs,
+            advances,
         });
+    }
+    let font_index: HashMap<u16, usize> = plans
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.face.0, i))
+        .collect();
+    let mut prepared = run_parallel(plans.len() + pages.len(), |task, deflater| {
+        if task < plans.len() {
+            Prepared::Font(font_file(&plans[task], deflater))
+        } else {
+            let content = page_content(pages[task - plans.len()], &plans, &font_index);
+            Prepared::Page(if options.compress {
+                deflater.deflate(&content)
+            } else {
+                content
+            })
+        }
+    })
+    .into_iter();
+    let mut font_files = Vec::with_capacity(plans.len());
+    for _ in 0..plans.len() {
+        if let Some(Prepared::Font(file)) = prepared.next() {
+            font_files.push(file);
+        }
     }
     let mut stats = PdfStats {
         pages: pages.len(),
@@ -111,7 +205,9 @@ pub fn write_pages<'a>(
         let page_id = alloc.next();
         let content_id = alloc.next();
         page_ids.push(page_id);
-        let content = page_content(page, &plans);
+        let Some(Prepared::Page(content)) = prepared.next() else {
+            unreachable!("pages follow fonts");
+        };
         let width = page.size.width * PT_PER_PX;
         let height = page.size.height * PT_PER_PX;
         {
@@ -128,9 +224,7 @@ pub fn write_pages<'a>(
             }
         }
         if options.compress {
-            let compressed = deflate(&content);
-            pdf.stream(content_id, &compressed)
-                .filter(Filter::FlateDecode);
+            pdf.stream(content_id, &content).filter(Filter::FlateDecode);
         } else {
             pdf.stream(content_id, &content);
         }
@@ -145,8 +239,8 @@ pub fn write_pages<'a>(
             .title(TextStr(title))
             .producer(TextStr("Missal"));
     }
-    for plan in &plans {
-        let sizes = write_font(&mut pdf, &mut alloc, plan);
+    for (plan, file) in plans.iter().zip(&font_files) {
+        let sizes = write_font(&mut pdf, &mut alloc, plan, file);
         stats
             .fonts
             .push((plan.name.clone(), plan.glyphs.len(), sizes));
@@ -160,7 +254,7 @@ pub fn write_packet(packet: &Packet, options: &PdfOptions) -> (Vec<u8>, PdfStats
     write_pages(packet.pages(), options)
 }
 
-fn write_font(pdf: &mut Pdf, alloc: &mut Alloc, plan: &FontPlan) -> usize {
+fn write_font(pdf: &mut Pdf, alloc: &mut Alloc, plan: &FontPlan, file: &FontFile) -> usize {
     let data = missal_text::face(plan.face).data;
     let metrics = fonts::metrics(plan.face);
     let units = metrics.units_per_em;
@@ -170,8 +264,8 @@ fn write_font(pdf: &mut Pdf, alloc: &mut Alloc, plan: &FontPlan) -> usize {
     let descriptor_ref = alloc.next();
     let file_ref = alloc.next();
     let cmap_ref = alloc.next();
-    let subset = subsetter::subset(data, 0, &plan.remap).unwrap_or_else(|_| data.to_vec());
-    let compressed = deflate(&subset);
+    let subset = &file.subset;
+    let compressed = &file.compressed;
     let name = Name(plan.name.as_bytes());
     let system = SystemInfo {
         registry: Str(b"Adobe"),
@@ -236,7 +330,7 @@ fn write_font(pdf: &mut Pdf, alloc: &mut Alloc, plan: &FontPlan) -> usize {
         .cap_height(metrics.ascent * 700.0 / units)
         .stem_v(80.0 + (face.weight as f32 - 400.0) / 4.0)
         .font_file2(file_ref);
-    pdf.stream(file_ref, &compressed)
+    pdf.stream(file_ref, compressed)
         .filter(Filter::FlateDecode)
         .pair(Name(b"Length1"), subset.len() as i32);
     let mut reverse: HashMap<u16, char> = HashMap::new();
@@ -259,16 +353,11 @@ fn write_font(pdf: &mut Pdf, alloc: &mut Alloc, plan: &FontPlan) -> usize {
     subset.len()
 }
 
-fn page_content(page: &Page, plans: &[FontPlan]) -> Vec<u8> {
+fn page_content(page: &Page, plans: &[FontPlan], font_index: &HashMap<u16, usize>) -> Vec<u8> {
     let list: &DisplayList = page.display_list();
     let mut content = Content::new();
     let height = page.size.height * PT_PER_PX;
     content.transform([PT_PER_PX, 0.0, 0.0, -PT_PER_PX, 0.0, height]);
-    let font_index: HashMap<u16, usize> = plans
-        .iter()
-        .enumerate()
-        .map(|(i, p)| (p.face.0, i))
-        .collect();
     let mut open_line: Option<u32> = None;
     let mut fill: Option<Rgba> = None;
     for item in &list.items {
@@ -337,12 +426,10 @@ fn glyph_run(
     if glyphs.is_empty() {
         return;
     }
-    let data = missal_text::face(plan.face).data;
     let metrics = fonts::metrics(plan.face);
-    let Some(font_ref) = swash::FontRef::from_index(data, 0) else {
+    let Some(glyph_metrics) = plan.advances else {
         return;
     };
-    let glyph_metrics = font_ref.glyph_metrics(&[]);
     let size = run.size;
     let skew = run.synthesis.skew.to_radians().tan();
     content.begin_text();

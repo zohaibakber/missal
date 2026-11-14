@@ -1,13 +1,14 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use missal_core::document::{Table, TableCell, TableRow};
 use missal_text::Rgba;
 
 use crate::css::{self, Length};
-use crate::measure::{Ctx, Flow, compute_element, measure_blocks};
+use crate::measure::{Ctx, Flow, compute_element, compute_parsed, measure_blocks};
 use crate::position::BlockPath;
 use crate::style::{
-    BorderSide, BorderStyle, BoxProps, BreakValue, Computed, Edges, TextProps, VerticalAlign,
+    BorderSide, BorderStyle, BoxProps, BreakValue, Computed, Edges, Op, StyleCache, TextProps,
+    VerticalAlign, border_shorthand,
 };
 
 #[derive(Clone, Debug)]
@@ -83,17 +84,6 @@ impl TableBox {
     }
 }
 
-fn absolute_width(style: Option<&missal_core::document::Style>) -> Option<f32> {
-    let value = style?.get("width")?;
-    let value = css::clean(value).to_ascii_lowercase();
-    let split = value
-        .find(|c: char| !(c.is_ascii_digit() || c == '.'))
-        .unwrap_or(value.len());
-    let (number, unit) = value.split_at(split);
-    let n: f32 = number.parse().ok()?;
-    Some(n * css::unit_factor(unit)?)
-}
-
 struct Grid {
     ncols: usize,
     placements: Vec<(usize, usize, usize, usize, u32, u32)>,
@@ -109,7 +99,6 @@ fn build_grid(rows: &[&TableRow]) -> Grid {
         }
         let mut col = 0;
         for (c, cell) in row.cells.iter().enumerate() {
-            let cell = cell;
             while occupied[r].get(col).copied().unwrap_or(false) {
                 col += 1;
             }
@@ -135,7 +124,15 @@ fn build_grid(rows: &[&TableRow]) -> Grid {
     Grid { ncols, placements }
 }
 
-fn cell_style(row: &Computed, cell: &TableCell, row_total: f32) -> Computed {
+static CELL_BORDER: LazyLock<Op> =
+    LazyLock::new(|| Op::Border(border_shorthand("1px solid black")));
+
+fn cell_style(
+    styles: &mut StyleCache,
+    row: &Computed,
+    cell: &TableCell,
+    row_total: f32,
+) -> Computed {
     let base = BoxProps {
         padding: [
             Length::Px(4.0),
@@ -147,22 +144,34 @@ fn cell_style(row: &Computed, cell: &TableCell, row_total: f32) -> Computed {
         vertical_align: VerticalAlign::Top,
         ..BoxProps::default()
     };
-    let mut extra: Vec<(&str, String)> = Vec::new();
-    if let Some(bg) = &cell.background_color {
-        extra.push(("background-color", bg.clone()));
-    }
-    extra.push(("border", "1px solid black".into()));
-    if let Some(width) = cell.width.filter(|w| *w > 0.0) {
-        extra.push(("width", format!("{width}px")));
-    }
-    extra.push((
-        "vertical-align",
-        cell.vertical_align.clone().unwrap_or_else(|| "top".into()),
-    ));
-    extra.push(("text-align", "start".into()));
-    let extra_refs: Vec<(&str, &str)> = extra.iter().map(|(p, v)| (*p, v.as_str())).collect();
-    let mut computed = compute_element(&row.text, base, &cell.props, &extra_refs);
-    if let Some(width) = absolute_width(cell.props.imported_style.as_ref())
+    let background = cell
+        .background_color
+        .as_deref()
+        .and_then(|bg| Op::parse("background-color", bg));
+    let width = cell
+        .width
+        .filter(|w| *w > 0.0)
+        .map(|width| Op::Width(css::length(&format!("{width}px"))));
+    let valign = match cell.vertical_align.as_deref() {
+        Some(v) => Op::parse("vertical-align", v),
+        None => Some(Op::VerticalAlign(VerticalAlign::Top)),
+    };
+    let align = Op::Align(missal_text::Align::Start);
+    let imported = styles.parsed(cell.props.imported_style.as_ref());
+    let mut computed = compute_parsed(
+        &row.text,
+        base,
+        &cell.props,
+        &[
+            background.as_slice(),
+            std::slice::from_ref(&*CELL_BORDER),
+            width.as_slice(),
+            valign.as_slice(),
+            std::slice::from_ref(&align),
+        ],
+        imported.as_deref(),
+    );
+    if let Some(width) = imported.as_ref().and_then(|p| p.width)
         && row_total > 0.0
     {
         let percent = ((width / row_total) * 100.0 * 1000.0).round() / 1000.0;
@@ -226,7 +235,7 @@ pub(crate) fn measure_table(
         border: [BorderSide::default(); 4],
         ..BoxProps::default()
     };
-    let mut computed = compute_element(parent, base, &table.props, &[]);
+    let mut computed = compute_element(&mut ctx.cache.styles, parent, base, &table.props, &[]);
     if imported {
         computed.boxp.margin[1] = Length::Px(0.0);
         computed.boxp.margin[3] = Length::Px(0.0);
@@ -260,12 +269,16 @@ pub(crate) fn measure_table(
     let row_styles: Vec<Computed> = rows
         .iter()
         .map(|row| {
-            let mut extra = Vec::new();
-            let height = row.height.map(|h| format!("{h}px"));
-            if let Some(h) = &height {
-                extra.push(("height", h.as_str()));
-            }
-            compute_element(&table_text, BoxProps::default(), &row.props, &extra)
+            let height = row
+                .height
+                .map(|h| Op::Height(css::length(&format!("{h}px"))));
+            compute_element(
+                &mut ctx.cache.styles,
+                &table_text,
+                BoxProps::default(),
+                &row.props,
+                height.as_slice(),
+            )
         })
         .collect();
     let row_totals: Vec<f32> = rows
@@ -273,7 +286,13 @@ pub(crate) fn measure_table(
         .map(|row| {
             row.cells
                 .iter()
-                .map(|c| absolute_width(c.props.imported_style.as_ref()).unwrap_or(0.0))
+                .map(|c| {
+                    ctx.cache
+                        .styles
+                        .parsed(c.props.imported_style.as_ref())
+                        .and_then(|p| p.width)
+                        .unwrap_or(0.0)
+                })
                 .sum()
         })
         .collect();
@@ -290,7 +309,7 @@ pub(crate) fn measure_table(
             .iter()
             .map(|&(r, _, _, _, sr, sc)| {
                 let cell = &rows[sr as usize].cells[sc as usize];
-                cell_style(&row_styles[r], cell, row_totals[r])
+                cell_style(&mut ctx.cache.styles, &row_styles[r], cell, row_totals[r])
             })
             .collect(),
     };

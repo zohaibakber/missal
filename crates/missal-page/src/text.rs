@@ -13,7 +13,7 @@ use crate::FieldSource;
 use crate::css::Length;
 use crate::fonts;
 use crate::geom::Rect;
-use crate::style::{self, BoxProps, Computed, Declarations, Decoration, TextProps, UnicodeBidi};
+use crate::style::{self, BoxProps, Computed, Decoration, Op, StyleCache, TextProps, UnicodeBidi};
 
 pub const OBJECT: char = '\u{FFFC}';
 pub const OBJECT_LEN: usize = 3;
@@ -276,6 +276,7 @@ struct Builder<'a> {
     base: &'a TextProps,
     block_decoration: Decoration,
     fields: &'a dyn FieldSource,
+    styles: &'a mut StyleCache,
     text: String,
     spans: Vec<(Range<usize>, Attr)>,
     objects: Vec<InlineObject>,
@@ -468,14 +469,18 @@ impl Builder<'_> {
     }
 
     fn text_node(&mut self, text: &Text, parent: &TextProps, inherited: &BoxProps) {
-        let mut decls = Declarations::new();
-        decls.push_style(text.imported_style.as_ref());
-        decls.push_style(text.css());
+        let imported = self.styles.parsed(text.imported_style.as_ref());
+        let css = self.styles.parsed(text.css());
         let base = BoxProps {
             decoration: inherited.decoration,
             ..BoxProps::default()
         };
-        let mut computed = style::compute(parent, base, &decls);
+        let mut computed = style::compute(
+            parent,
+            base,
+            [].iter(),
+            &[imported.as_deref(), css.as_deref()],
+        );
         style::apply_format(&mut computed.text, &mut computed.boxp, text.format());
         if inherited.background.is_some() && computed.boxp.background.is_none() {
             computed.boxp.background = inherited.background;
@@ -506,18 +511,14 @@ impl Builder<'_> {
                 }
                 Inline::Field(field) => {
                     let display = self.fields.display(&field.reference);
-                    let mut decls = Declarations::new();
-                    decls.push_style(field.imported_style.as_ref());
+                    let imported = self.styles.parsed(field.imported_style.as_ref());
                     let base = BoxProps {
                         unicode_bidi: UnicodeBidi::Isolate,
                         decoration: inherited.decoration,
                         ..BoxProps::default()
                     };
-                    let has_direction = field
-                        .imported_style
-                        .as_ref()
-                        .is_some_and(|s| s.get("direction").is_some());
-                    let computed = style::compute(parent, base, &decls);
+                    let has_direction = imported.as_ref().is_some_and(|s| s.direction);
+                    let computed = style::compute(parent, base, [].iter(), &[imported.as_deref()]);
                     let logical = self.logical;
                     let range = self.run(
                         &display.text,
@@ -537,12 +538,15 @@ impl Builder<'_> {
                     });
                 }
                 Inline::Link(link) => {
-                    let mut decls = Declarations::new();
-                    decls.push("color", "#0000ee");
-                    decls.push_style(link.props.imported_style.as_ref());
+                    let imported = self.styles.parsed(link.props.imported_style.as_ref());
                     let mut base = inherited.clone();
                     base.decoration.underline = true;
-                    let computed = style::compute(parent, base, &decls);
+                    let computed = style::compute(
+                        parent,
+                        base,
+                        [Op::Color(Rgba::rgb(0x0000ee))].iter(),
+                        &[imported.as_deref()],
+                    );
                     self.inlines(&link.children, &computed.text, &computed.boxp);
                 }
             }
@@ -564,12 +568,14 @@ pub(crate) fn build_inline(
     block: &Computed,
     inlines: &[Inline],
     fields: &dyn FieldSource,
+    styles: &mut StyleCache,
     indent: f32,
 ) -> InlineContent {
     let mut builder = Builder {
         base: &block.text,
         block_decoration: block.boxp.decoration,
         fields,
+        styles,
         text: String::new(),
         spans: Vec::new(),
         objects: Vec::new(),
@@ -826,7 +832,7 @@ pub(crate) fn content_hash(
     available: f32,
     fields: &dyn FieldSource,
 ) -> u64 {
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = BufferedHasher::default();
     computed.text.hash(&mut hasher);
     computed.boxp.hash(&mut hasher);
     available.to_bits().hash(&mut hasher);
@@ -837,6 +843,45 @@ pub(crate) fn content_hash(
     }
     hash_inlines(inlines, fields, &mut hasher);
     hasher.finish()
+}
+
+const HASH_BUFFER: usize = 512;
+
+struct BufferedHasher {
+    inner: DefaultHasher,
+    buf: [u8; HASH_BUFFER],
+    len: usize,
+}
+
+impl Default for BufferedHasher {
+    fn default() -> BufferedHasher {
+        BufferedHasher {
+            inner: DefaultHasher::new(),
+            buf: [0; HASH_BUFFER],
+            len: 0,
+        }
+    }
+}
+
+impl Hasher for BufferedHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        if self.len + bytes.len() > HASH_BUFFER {
+            self.inner.write(&self.buf[..self.len]);
+            self.len = 0;
+            if bytes.len() > HASH_BUFFER {
+                self.inner.write(bytes);
+                return;
+            }
+        }
+        self.buf[self.len..self.len + bytes.len()].copy_from_slice(bytes);
+        self.len += bytes.len();
+    }
+
+    fn finish(&self) -> u64 {
+        let mut inner = self.inner.clone();
+        inner.write(&self.buf[..self.len]);
+        inner.finish()
+    }
 }
 
 fn hash_style<H: Hasher>(style: &Option<Style>, state: &mut H) {
@@ -907,6 +952,7 @@ pub(crate) fn measure_text_block(
     engine: &mut TextEngine,
     input: TextBlockInput<'_>,
     fields: &dyn FieldSource,
+    styles: &mut StyleCache,
 ) -> TextBox {
     let computed = input.computed;
     let text_props = &computed.text;
@@ -932,7 +978,7 @@ pub(crate) fn measure_text_block(
     let content_width =
         (border_width - paddings.horizontal() - border_widths.horizontal()).max(0.0);
     let indent = text_props.indent.resolve(text_props.size, content_width);
-    let mut content = build_inline(computed, input.inlines, fields, indent.max(0.0));
+    let mut content = build_inline(computed, input.inlines, fields, styles, indent.max(0.0));
     let mut layout = layout_paragraph(engine, &content.text, text_props, content_width);
     let mut layout_dx = 0.0;
     if indent < 0.0 {

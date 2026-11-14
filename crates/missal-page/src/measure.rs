@@ -10,7 +10,8 @@ use crate::FieldSource;
 use crate::css::Length;
 use crate::position::BlockPath;
 use crate::style::{
-    self, BorderSide, BoxProps, BreakValue, Computed, Declarations, TextProps, doc_align, doc_dir,
+    self, BorderSide, BoxProps, BreakValue, Computed, FontSize, Op, Parsed, StyleCache, TextProps,
+    Weight, doc_align, doc_dir,
 };
 use crate::table::{self, TableBox};
 use crate::text::{self, MarkerKind, TextBlockInput, TextBox};
@@ -107,6 +108,7 @@ pub(crate) struct TextCache {
     generation: u64,
     pub hits: u64,
     pub misses: u64,
+    pub styles: StyleCache,
 }
 
 impl TextCache {
@@ -116,6 +118,7 @@ impl TextCache {
             generation: 0,
             hits: 0,
             misses: 0,
+            styles: StyleCache::default(),
         }
     }
 
@@ -125,6 +128,7 @@ impl TextCache {
             let keep = self.generation.saturating_sub(2);
             self.map.retain(|_, (_, g)| *g >= keep);
         }
+        self.styles.trim();
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -133,6 +137,7 @@ impl TextCache {
 
     pub(crate) fn sync_generation(&mut self, other: &TextCache) {
         self.generation = other.generation;
+        self.styles.trim();
     }
 
     pub(crate) fn absorb(&mut self, other: &mut TextCache) {
@@ -148,6 +153,7 @@ impl TextCache {
 
     pub(crate) fn clear(&mut self) {
         self.map.clear();
+        self.styles.clear();
     }
 }
 
@@ -182,34 +188,23 @@ impl Ctx<'_> {
                 available,
             },
             self.fields,
+            &mut self.cache.styles,
         ));
         self.cache.map.insert(key, (measured.clone(), generation));
         measured
     }
 }
 
-pub(crate) fn element_decls<'a>(props: &'a ElementProps, decls: &mut Declarations<'a>) {
-    if let Some(direction) = props.direction {
-        decls.push(
-            "direction",
-            match direction {
-                missal_core::document::Direction::Rtl => "rtl",
-                missal_core::document::Direction::Ltr => "ltr",
-            },
-        );
-    }
-    decls.push_style(props.imported_style.as_ref());
-}
-
-fn apply_element_overrides(computed: &mut Computed, props: &ElementProps) {
+fn apply_element_overrides(
+    computed: &mut Computed,
+    props: &ElementProps,
+    imported: Option<&Parsed>,
+) {
     if let Some(align) = props.align {
         computed.text.align = doc_align(align);
     }
     if let Some(direction) = props.direction
-        && props
-            .imported_style
-            .as_ref()
-            .is_none_or(|s| s.get("direction").is_none())
+        && imported.is_none_or(|s| !s.direction)
     {
         computed.text.direction = doc_dir(direction);
     }
@@ -242,18 +237,27 @@ fn heading_scale(level: Option<HeadingLevel>) -> f32 {
 }
 
 pub(crate) fn compute_element(
+    styles: &mut StyleCache,
     parent: &TextProps,
     base: BoxProps,
     props: &ElementProps,
-    extra: &[(&str, &str)],
+    extra: &[Op],
 ) -> Computed {
-    let mut decls = Declarations::new();
-    for (p, v) in extra {
-        decls.push(p, v);
-    }
-    element_decls(props, &mut decls);
-    let mut computed = style::compute(parent, base, &decls);
-    apply_element_overrides(&mut computed, props);
+    let imported = styles.parsed(props.imported_style.as_ref());
+    compute_parsed(parent, base, props, &[extra], imported.as_deref())
+}
+
+pub(crate) fn compute_parsed(
+    parent: &TextProps,
+    base: BoxProps,
+    props: &ElementProps,
+    extra: &[&[Op]],
+    imported: Option<&Parsed>,
+) -> Computed {
+    let direction = props.direction.map(|d| Op::Direction(doc_dir(d)));
+    let ops = extra.iter().copied().flatten().chain(direction.as_slice());
+    let mut computed = style::compute(parent, base, ops, &[imported]);
+    apply_element_overrides(&mut computed, props, imported);
     computed
 }
 
@@ -283,16 +287,25 @@ pub(crate) fn measure_block(
 ) {
     match block {
         Block::Paragraph(p) => {
-            let computed = compute_element(parent, paragraph_defaults(), &p.props, &[]);
+            let computed = compute_element(
+                &mut ctx.cache.styles,
+                parent,
+                paragraph_defaults(),
+                &p.props,
+                &[],
+            );
             push_text(out, ctx, &computed, &p.children, None, available, path, 0.0);
         }
         Block::Heading(h) => {
-            let size = format!("{}em", heading_scale(h.level));
             let computed = compute_element(
+                &mut ctx.cache.styles,
                 parent,
                 BoxProps::default(),
                 &h.props,
-                &[("font-size", size.as_str()), ("font-weight", "bold")],
+                &[
+                    Op::FontSize(FontSize::Em(heading_scale(h.level))),
+                    Op::Weight(Weight::Fixed(700)),
+                ],
             );
             push_text(out, ctx, &computed, &h.children, None, available, path, 0.0);
         }
@@ -302,7 +315,7 @@ pub(crate) fn measure_block(
                 padding_inline: [Some(Length::Px(16.0)), None],
                 ..BoxProps::default()
             };
-            let computed = compute_element(parent, base, &q.props, &[]);
+            let computed = compute_element(&mut ctx.cache.styles, parent, base, &q.props, &[]);
             push_text(out, ctx, &computed, &q.children, None, available, path, 0.0);
         }
         Block::List(list) => measure_list(list, parent, available, &path, 0.0, ctx, out),
@@ -388,7 +401,7 @@ fn measure_list(
         padding_inline: [Some(Length::Px(24.0)), None],
         ..BoxProps::default()
     };
-    let computed = compute_element(parent, base, &list.props, &[]);
+    let computed = compute_element(&mut ctx.cache.styles, parent, base, &list.props, &[]);
     let paddings = computed.boxp.paddings(&computed.text, available);
     let margins = computed.boxp.margins(&computed.text, available);
     let inner = (available - paddings.horizontal() - margins.horizontal()).max(0.0);
@@ -415,8 +428,13 @@ fn measure_list(
         if !nested_only {
             let value = item.value.unwrap_or(counter);
             counter = value + 1;
-            let item_computed =
-                compute_element(&computed.text, BoxProps::default(), &item.props, &[]);
+            let item_computed = compute_element(
+                &mut ctx.cache.styles,
+                &computed.text,
+                BoxProps::default(),
+                &item.props,
+                &[],
+            );
             let marker = if ordered {
                 MarkerKind::Text(value.to_string())
             } else {

@@ -355,12 +355,11 @@ pub(crate) fn fragment_flow(
                         placed,
                     };
                 }
-                match node {
-                    Node::Rule { width, height } => out.push(Piece::Rule {
+                if let Node::Rule { width, height } = node {
+                    out.push(Piece::Rule {
                         path: compose(prefix, &item.path),
                         rect: Rect::new(region.x + item.x, item_top, *width, *height),
-                    }),
-                    _ => {}
+                    });
                 }
                 y = item_top + height;
             }
