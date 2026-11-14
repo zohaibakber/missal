@@ -179,28 +179,37 @@ fn validation_blocks_an_empty_fir(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn edit_an_fir_through_the_form(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
-    let record = Store::open(&fixture.database)
-        .unwrap()
-        .fir(FirId::new(2).unwrap())
-        .unwrap();
-    fixture.go(cx, Route::Firs);
-    fixture.with(cx, |window, cx| {
-        missal_app::screens::edit_sheet::open_edit_sheet(record, window, cx)
-    });
-    let offence = fixture.with(cx, |window, cx| {
-        assert!(window.has_active_sheet(cx));
-        window.focused_input(cx).is_none()
-    });
-    let _ = offence;
-    fixture.click(cx, "edit-reset");
-    fixture.click(cx, "edit-save");
-    assert!(fixture.with(cx, |window, cx| window.has_active_sheet(cx)));
     let id = FirId::new(2).unwrap();
-    let mut store = Store::open(&fixture.database).unwrap();
-    let mut changed = store.fir(id).unwrap();
-    changed.fir.offence = "ڈکیتی ۳۹۲".into();
-    store.update_fir(&changed).unwrap();
-    assert_eq!(store.fir(id).unwrap().fir.offence, "ڈکیتی ۳۹۲");
+    fixture.go(cx, Route::Fir(id));
+    fixture.press(cx, "e");
+    assert_eq!(fixture.route(cx), Route::EditFir(id));
+    let form = cx.update(|cx| {
+        fixture
+            .shell
+            .read(cx)
+            .new_fir()
+            .unwrap()
+            .read(cx)
+            .form()
+            .clone()
+    });
+    let stored = Store::open(&fixture.database).unwrap().fir(id).unwrap();
+    assert_eq!(cx.update(|cx| form.read(cx).values(cx)), stored.fir);
+    assert!(!cx.update(|cx| form.read(cx).is_dirty()));
+    let offence = cx.update(|cx| form.read(cx).offence_input().clone());
+    fixture.with(cx, |window, cx| {
+        offence.update(cx, |input, cx| {
+            input.set_text("", cx);
+            input.focus(window, cx);
+        })
+    });
+    fixture.type_text(cx, "ڈکیتی ۳۹۲");
+    assert!(cx.update(|cx| form.read(cx).is_dirty()));
+    fixture.press(cx, "secondary-s");
+    assert_eq!(fixture.route(cx), Route::Fir(id));
+    let saved = Store::open(&fixture.database).unwrap().fir(id).unwrap();
+    assert_eq!(saved.fir.offence, "ڈکیتی ۳۹۲");
+    assert_eq!(saved.fir.accused, stored.fir.accused);
 }
 
 #[gpui_kit::test]
@@ -490,24 +499,53 @@ fn custom_field_values_are_saved_per_fir(cx: &mut TestAppContext) {
     let fir = FirId::new(3).unwrap();
     fixture.go(cx, Route::Fir(fir));
     let workspace = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
-    fixture.with(cx, |window, cx| {
-        workspace.update(cx, |ws, cx| ws.edit_custom_values(window, cx))
+    let panel = cx.update(|cx| workspace.read(cx).panel().clone());
+    fixture.click(cx, "details-tab");
+    fixture.with(cx, |_, cx| {
+        panel.update(cx, |panel, cx| panel.set_show_all(true, cx))
     });
-    assert!(fixture.with(cx, |window, cx| window.has_active_sheet(cx)));
-    let customs = Store::open(&fixture.database)
+    let custom = Store::open(&fixture.database)
         .unwrap()
         .placeholders()
-        .unwrap();
-    let custom = customs
-        .iter()
+        .unwrap()
+        .into_iter()
         .find(|p| p.source == missal_core::PlaceholderSource::Custom)
         .unwrap()
         .id;
-    let mut store = Store::open(&fixture.database).unwrap();
-    store.set_placeholder_value(fir, custom, "قدر").unwrap();
-    assert_eq!(store.placeholder_values(fir).unwrap()[0].value, "قدر");
-    store.remove_placeholder_value(fir, custom).unwrap();
-    assert!(store.placeholder_values(fir).unwrap().is_empty());
+    let input = cx.update(|cx| panel.read(cx).custom_input(custom).unwrap());
+    focus_input(&fixture, cx, &input);
+    fixture.type_text(cx, "قدر");
+    fixture.press(cx, "enter");
+    let stored = Store::open(&fixture.database)
+        .unwrap()
+        .placeholder_values(fir)
+        .unwrap();
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].value, "قدر");
+    let values = cx.update(|cx| workspace.read(cx).values().unwrap().clone());
+    assert_eq!(values.overrides[0].value, "قدر");
+    fixture.with(cx, |window, cx| {
+        input.update(cx, |input, cx| {
+            input.set_text("", cx);
+            input.focus(window, cx);
+        })
+    });
+    fixture.press(cx, "enter");
+    assert!(
+        Store::open(&fixture.database)
+            .unwrap()
+            .placeholder_values(fir)
+            .unwrap()
+            .is_empty()
+    );
+    fixture.go(cx, Route::Fir(FirId::new(2).unwrap()));
+    assert!(
+        Store::open(&fixture.database)
+            .unwrap()
+            .placeholder_values(FirId::new(2).unwrap())
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[gpui_kit::test]
@@ -640,4 +678,159 @@ fn the_palette_lists_recently_opened_firs_first(cx: &mut TestAppContext) {
             .collect::<Vec<_>>()
     });
     assert_eq!(recent, [first, second]);
+}
+
+#[gpui_kit::test]
+fn template_rename_saves_on_enter_and_cancels_on_escape(cx: &mut TestAppContext) {
+    let fixture = boot(cx, 0);
+    let template = cx.update(|cx| fixture.models.templates.read(cx).items.first().unwrap().id);
+    fixture.go(cx, Route::Template(template));
+    let page = cx.update(|cx| {
+        fixture
+            .shell
+            .read(cx)
+            .templates()
+            .unwrap()
+            .read(cx)
+            .page()
+            .cloned()
+            .unwrap()
+    });
+    let stored_name = |fixture: &Fixture| {
+        Store::open(&fixture.database)
+            .unwrap()
+            .templates()
+            .unwrap()
+            .into_iter()
+            .find(|item| item.id == template)
+            .unwrap()
+            .name
+    };
+    let original = stored_name(&fixture);
+    let title = cx.update(|cx| page.read(cx).title_input().clone());
+
+    assert!(!cx.update(|cx| page.read(cx).is_renaming()));
+    fixture.press(cx, "f2");
+    assert!(cx.update(|cx| page.read(cx).is_renaming()));
+    fixture.with(cx, |_, cx| {
+        title.update(cx, |input, cx| input.set_text("غلط نام", cx))
+    });
+    fixture.press(cx, "escape");
+    assert!(!cx.update(|cx| page.read(cx).is_renaming()));
+    assert_eq!(cx.update(|cx| title.read(cx).text().to_owned()), original);
+    assert_eq!(stored_name(&fixture), original);
+
+    fixture.press(cx, "f2");
+    fixture.with(cx, |_, cx| {
+        title.update(cx, |input, cx| input.set_text("نیا نام", cx))
+    });
+    fixture.press(cx, "enter");
+    assert!(!cx.update(|cx| page.read(cx).is_renaming()));
+    assert_eq!(stored_name(&fixture), "نیا نام");
+    let listed = cx.update(|cx| {
+        fixture
+            .models
+            .templates
+            .read(cx)
+            .get(template)
+            .map(|item| item.name.clone())
+    });
+    assert_eq!(listed.as_deref(), Some("نیا نام"));
+}
+
+#[gpui_kit::test]
+fn settings_global_values_save_without_a_save_button(cx: &mut TestAppContext) {
+    let fixture = boot(cx, 0);
+    fixture.go(cx, Route::Settings);
+    let settings = cx.update(|cx| fixture.shell.read(cx).settings().unwrap());
+    let stored = |fixture: &Fixture| {
+        Store::open(&fixture.database)
+            .unwrap()
+            .global_placeholders()
+            .unwrap()
+    };
+    let before = stored(&fixture).len();
+    fixture.click(cx, "add-global");
+    fixture.type_text(cx, "نیا حوالہ");
+    fixture.press(cx, "enter");
+    assert_eq!(stored(&fixture).len(), before + 1);
+    assert!(
+        stored(&fixture)
+            .iter()
+            .any(|global| global.label == "نیا حوالہ")
+    );
+
+    let (_, value) = cx.update(|cx| settings.read(cx).global_inputs().last().cloned().unwrap());
+    focus_input(&fixture, cx, &value);
+    fixture.type_text(cx, "قدر");
+    fixture.press(cx, "enter");
+    let saved = stored(&fixture);
+    let row = saved
+        .iter()
+        .find(|global| global.label == "نیا حوالہ")
+        .unwrap();
+    assert_eq!(row.value, "قدر");
+    assert!(!cx.update(|cx| settings.read(cx).globals_dirty(cx)));
+
+    fixture.click(cx, "add-global");
+    fixture.type_text(cx, "نیا حوالہ");
+    fixture.press(cx, "enter");
+    assert_eq!(
+        stored(&fixture).len(),
+        before + 1,
+        "a duplicate name is not saved"
+    );
+    assert!(cx.update(|cx| settings.read(cx).globals_dirty(cx)));
+}
+
+#[gpui_kit::test]
+fn settings_markers_save_on_enter_and_reject_letters(cx: &mut TestAppContext) {
+    let fixture = boot(cx, 0);
+    fixture.go(cx, Route::Settings);
+    let settings = cx.update(|cx| fixture.shell.read(cx).settings().unwrap());
+    let (open, _) = cx.update(|cx| settings.read(cx).marker_inputs());
+    fixture.with(cx, |_, cx| {
+        open.update(cx, |input, cx| input.set_text("ab", cx))
+    });
+    focus_input(&fixture, cx, &open);
+    fixture.press(cx, "enter");
+    let saved = Store::open(&fixture.database).unwrap().settings().unwrap();
+    assert_eq!(saved.field_markers.open(), "«");
+    fixture.with(cx, |_, cx| {
+        open.update(cx, |input, cx| input.set_text("<<", cx))
+    });
+    fixture.press(cx, "enter");
+    let saved = Store::open(&fixture.database).unwrap().settings().unwrap();
+    assert_eq!(saved.field_markers.open(), "<<");
+}
+
+#[gpui_kit::test]
+fn settings_appearance_and_built_in_fields_respond(cx: &mut TestAppContext) {
+    let fixture = boot(cx, 0);
+    fixture.go(cx, Route::Settings);
+    let settings = cx.update(|cx| fixture.shell.read(cx).settings().unwrap());
+    let section = |fixture: &Fixture, cx: &mut TestAppContext, index: usize| {
+        fixture.with(cx, |window, cx| window.click(("settings-nav", index), cx))
+    };
+    section(&fixture, cx, 4);
+    fixture.with(cx, |window, cx| {
+        missal_app::app::set_theme(missal_app::prefs::ThemeChoice::Dark, window, cx)
+    });
+    assert_eq!(
+        cx.update(|cx| fixture.models.prefs.read(cx).read().theme),
+        missal_app::prefs::ThemeChoice::Dark
+    );
+    fixture.with(cx, |window, cx| {
+        missal_app::app::set_theme(missal_app::prefs::ThemeChoice::System, window, cx)
+    });
+    assert_eq!(
+        cx.update(|cx| fixture.models.prefs.read(cx).read().theme),
+        missal_app::prefs::ThemeChoice::System
+    );
+    section(&fixture, cx, 3);
+    assert!(!cx.update(|cx| settings.read(cx).built_in_open()));
+    fixture.click(cx, "built-in-toggle");
+    assert!(cx.update(|cx| settings.read(cx).built_in_open()));
+    fixture.click(cx, "built-in-toggle");
+    assert!(!cx.update(|cx| settings.read(cx).built_in_open()));
 }

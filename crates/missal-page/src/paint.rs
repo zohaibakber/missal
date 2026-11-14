@@ -23,6 +23,11 @@ pub struct PagePaint {
     pub field_text: Option<Hsla>,
     pub field_background: Option<Hsla>,
     pub unresolved_underline: Option<Hsla>,
+    pub field_radius: f32,
+    pub empty_text: Option<Hsla>,
+    pub empty_background: Option<Hsla>,
+    pub empty_underline: Option<Hsla>,
+    pub ink: Option<Hsla>,
 }
 
 impl PagePaint {
@@ -34,6 +39,11 @@ impl PagePaint {
             field_text: None,
             field_background: None,
             unresolved_underline: None,
+            field_radius: 0.0,
+            empty_text: None,
+            empty_background: None,
+            empty_underline: None,
+            ink: None,
         }
     }
 
@@ -45,6 +55,11 @@ impl PagePaint {
             field_text: Some(to_hsla(Rgba::rgb(0x1d4ed8))),
             field_background: Some(to_hsla(Rgba(0x1d4ed81a))),
             unresolved_underline: Some(to_hsla(Rgba(0x1d4ed88c))),
+            field_radius: 0.0,
+            empty_text: None,
+            empty_background: None,
+            empty_underline: None,
+            ink: None,
         }
     }
 }
@@ -213,25 +228,51 @@ pub fn paint_display_list(
                 if r.width * zoom < 1.0 {
                     r.width = 1.0 / zoom;
                 }
-                window.paint_quad(fill(to_bounds(origin, r, zoom), to_hsla(*color)));
+                window.paint_quad(fill(to_bounds(origin, r, zoom), inked(options, *color)));
             }
             DisplayItem::FieldHighlight { rect, unresolved } => {
                 if !options.show_fields {
                     continue;
                 }
-                if let Some(bg) = options.field_background {
-                    window.paint_quad(fill(to_bounds(origin, *rect, zoom), bg));
+                let empty = *unresolved && options.empty_background.is_some();
+                let background = if empty {
+                    options.empty_background
+                } else {
+                    options.field_background
+                };
+                if let Some(bg) = background {
+                    let radius = px(options.field_radius * zoom);
+                    let corners = if empty {
+                        Corners {
+                            top_left: radius,
+                            top_right: radius,
+                            bottom_left: px(0.),
+                            bottom_right: px(0.),
+                        }
+                    } else {
+                        Corners::all(radius)
+                    };
+                    window
+                        .paint_quad(fill(to_bounds(origin, *rect, zoom), bg).corner_radii(corners));
                 }
-                if *unresolved && let Some(line) = options.unresolved_underline {
-                    let y = rect.bottom() - 1.0;
+                let underline = if empty {
+                    options.empty_underline
+                } else if *unresolved {
+                    options.unresolved_underline
+                } else {
+                    None
+                };
+                if let Some(line) = underline {
+                    let thickness = if empty { 1.5 } else { 1.0 };
+                    let y = rect.bottom() - thickness;
                     let mut x = rect.x;
                     while x < rect.right() {
                         let w = 3.0f32.min(rect.right() - x);
                         window.paint_quad(fill(
-                            to_bounds(origin, Rect::new(x, y, w, 1.0), zoom),
+                            to_bounds(origin, Rect::new(x, y, w, thickness), zoom),
                             line,
                         ));
-                        x += 6.0;
+                        x += if empty { 5.0 } else { 6.0 };
                     }
                 }
             }
@@ -260,6 +301,14 @@ pub fn paint_display_list(
     }
 }
 
+fn inked(options: &PagePaint, color: Rgba) -> Hsla {
+    let hsla = to_hsla(color);
+    match options.ink {
+        Some(ink) if hsla.l < 0.2 && hsla.s < 0.25 => ink.opacity(hsla.a),
+        _ => hsla,
+    }
+}
+
 fn paint_run(
     list: &DisplayList,
     run: &GlyphRun,
@@ -269,9 +318,14 @@ fn paint_run(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let color = match (options.show_fields, run.field, options.field_text) {
-        (true, Some(_), Some(c)) => c,
-        _ => to_hsla(run.color),
+    let color = match (options.show_fields, run.field) {
+        (true, Some(mark)) => if mark.unresolved {
+            options.empty_text.or(options.field_text)
+        } else {
+            options.field_text
+        }
+        .unwrap_or_else(|| inked(options, run.color)),
+        _ => inked(options, run.color),
     };
     let ox: f32 = origin.x.into();
     let oy: f32 = origin.y.into();

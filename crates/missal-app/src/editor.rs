@@ -2,9 +2,11 @@ use std::rc::Rc;
 
 use gpui_kit::{AnyView, App, AppContext, Entity, Global, Subscription, Window};
 use missal_core::{
-    DisplayMode, Document, FieldCatalog, FieldMarkers, FieldPresentation, FirValues,
+    DisplayMode, Document, FieldCatalog, FieldMarkers, FieldPresentation, FieldReference, FirValues,
 };
-use missal_editor::{Editor, EditorFields};
+use missal_editor::{Editor, EditorFields, EditorTheme};
+
+use crate::theme::Palette;
 
 #[derive(Clone)]
 pub struct FieldContext {
@@ -63,6 +65,7 @@ pub struct Snapshot {
 pub enum EditorEvent {
     DirtyChanged(bool),
     SaveRequested,
+    ModeRequested(DisplayMode),
 }
 
 pub trait DocumentEditor {
@@ -77,6 +80,18 @@ pub trait DocumentEditor {
     fn on_event(&self, cx: &mut App, listener: EditorListener) -> Subscription;
     fn editor_entity(&self) -> Option<Entity<Editor>> {
         None
+    }
+    fn set_mode_toggle(&self, _shown: bool, _cx: &mut App) {}
+    fn field_references(&self, _cx: &App) -> Vec<FieldReference> {
+        Vec::new()
+    }
+    fn reveal_field(
+        &self,
+        _reference: &FieldReference,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> bool {
+        false
     }
 }
 
@@ -110,6 +125,41 @@ impl EditorFactory {
 pub fn install(cx: &mut App) {
     missal_editor::init(cx);
     cx.set_global(EditorFactory::rich());
+    sync_theme(cx);
+    cx.observe_global::<Palette>(sync_theme).detach();
+}
+
+fn sync_theme(cx: &mut App) {
+    let Some(palette) = cx.try_global::<Palette>().copied() else {
+        return;
+    };
+    EditorTheme {
+        surface: palette.surface,
+        raised: palette.raised,
+        canvas: palette.sunken,
+        paper: palette.paper,
+        ink: palette.ink,
+        ink_muted: palette.ink_muted,
+        ink_faint: palette.ink_faint,
+        line: palette.line,
+        line_strong: palette.line_strong,
+        hover: palette.hover,
+        pressed: palette.pressed,
+        accent: palette.accent,
+        field_wash: palette.field_wash,
+        notice: palette.notice,
+        notice_text: palette.notice_text,
+        notice_wash: palette.notice_wash,
+        selection: palette
+            .accent
+            .opacity(if palette.dark { 0.40 } else { 0.28 }),
+        shadow: if palette.dark {
+            gpui_kit::black().opacity(0.35)
+        } else {
+            crate::theme::hex(0x14110e).opacity(0.05)
+        },
+    }
+    .install(cx);
 }
 
 fn editor_fields(fields: FieldContext) -> EditorFields {
@@ -176,6 +226,21 @@ impl DocumentEditor for RichEditor {
         Some(self.editor.clone())
     }
 
+    fn set_mode_toggle(&self, shown: bool, cx: &mut App) {
+        self.editor
+            .update(cx, |editor, cx| editor.set_mode_toggle(shown, cx));
+    }
+
+    fn field_references(&self, cx: &App) -> Vec<FieldReference> {
+        self.editor.read(cx).document().field_references()
+    }
+
+    fn reveal_field(&self, reference: &FieldReference, window: &mut Window, cx: &mut App) -> bool {
+        self.editor.update(cx, |editor, cx| {
+            editor.reveal_reference(reference, window, cx)
+        })
+    }
+
     fn on_event(&self, cx: &mut App, listener: EditorListener) -> Subscription {
         cx.subscribe(
             &self.editor,
@@ -185,6 +250,9 @@ impl DocumentEditor for RichEditor {
                         EditorEvent::DirtyChanged(*dirty)
                     }
                     missal_editor::EditorEvent::SaveRequested => EditorEvent::SaveRequested,
+                    missal_editor::EditorEvent::ModeRequested(mode) => {
+                        EditorEvent::ModeRequested(*mode)
+                    }
                 };
                 listener(&event, cx)
             },

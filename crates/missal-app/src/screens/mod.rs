@@ -1,5 +1,4 @@
-pub mod custom_values;
-pub mod edit_sheet;
+pub mod fields_panel;
 pub mod fir_form;
 pub mod fir_list;
 pub mod placeholder;

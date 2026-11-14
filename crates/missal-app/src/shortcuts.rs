@@ -46,6 +46,8 @@ actions!(
         PreviewZoomOut,
         PreviewZoomFit,
         PreviewClose,
+        SelectAllRows,
+        RowMenu,
     ]
 );
 
@@ -213,6 +215,7 @@ pub fn bind_keys(cx: &mut App) {
         binding(cx, "secondary-.", ToggleFieldsPanel, Some(WORKSPACE)),
         binding(cx, "shift-n", NewTemplate, Some(NOT_TYPING)),
         binding(cx, "f2", RenameTemplate, Some(TEMPLATES)),
+        binding(cx, "f2", RenameTemplate, Some("Settings")),
         binding(cx, "alt-down", NextTemplate, Some(TEMPLATES)),
         binding(cx, "alt-up", PreviousTemplate, Some(TEMPLATES)),
         binding(cx, "pagedown", PreviewNextPage, Some(PRINT_PREVIEW)),
@@ -225,6 +228,8 @@ pub fn bind_keys(cx: &mut App) {
         binding(cx, "escape", PreviewClose, Some(PRINT_PREVIEW)),
         binding(cx, "down", NextTemplate, Some(TEMPLATES_NOT_TYPING)),
         binding(cx, "up", PreviousTemplate, Some(TEMPLATES_NOT_TYPING)),
+        binding(cx, "secondary-a", SelectAllRows, Some(FIR_LIST_NOT_TYPING)),
+        binding(cx, "shift-f10", RowMenu, Some(FIR_LIST_NOT_TYPING)),
     ];
     cx.bind_keys(bindings);
 }

@@ -1,4 +1,8 @@
-use missal_core::{DisplayMode, Document, FieldCatalog, FieldPresentation, FirValues};
+use std::ops::Range;
+
+use missal_core::{
+    DisplayMode, Document, FieldCatalog, FieldPresentation, FieldReference, FirValues,
+};
 use missal_page::{DocSource, Packet, Page, PageEngine};
 
 pub struct PacketJob {
@@ -11,6 +15,8 @@ pub struct PacketJob {
 pub struct LaidOut {
     pub packet: Packet,
     pub pages: Vec<Page>,
+    pub ranges: Vec<Range<usize>>,
+    pub empty: Vec<Vec<String>>,
 }
 
 impl PacketJob {
@@ -26,8 +32,60 @@ impl PacketJob {
             .collect();
         let packet = PageEngine::new().layout(&sources);
         let pages = packet.pages().cloned().collect();
-        LaidOut { packet, pages }
+        let ranges = (0..self.documents.len())
+            .map(|document| packet.document_pages(document))
+            .collect();
+        LaidOut {
+            packet,
+            pages,
+            ranges,
+            empty: self.empty_fields(),
+        }
     }
+
+    pub fn empty_fields(&self) -> Vec<Vec<String>> {
+        let Some(values) = self
+            .values
+            .as_ref()
+            .filter(|_| self.mode == DisplayMode::Values)
+        else {
+            return vec![Vec::new(); self.documents.len()];
+        };
+        let presentation = FieldPresentation::for_fir(&self.catalog, values, self.mode);
+        self.documents
+            .iter()
+            .map(|document| {
+                let mut names: Vec<String> = Vec::new();
+                for reference in document.field_references() {
+                    let fillable = match &reference {
+                        FieldReference::Fir(_) => true,
+                        FieldReference::Catalog(id) => self.catalog.placeholder(*id).is_some(),
+                        FieldReference::Unresolved(_) => false,
+                    };
+                    if !fillable {
+                        continue;
+                    }
+                    let shown = presentation.display_text(&reference);
+                    if shown.unresolved && !names.contains(&shown.text) {
+                        names.push(shown.text);
+                    }
+                }
+                names
+            })
+            .collect()
+    }
+}
+
+pub fn distinct_empty<'a>(lists: impl IntoIterator<Item = &'a Vec<String>>) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for list in lists {
+        for name in list {
+            if !names.contains(name) {
+                names.push(name.clone());
+            }
+        }
+    }
+    names
 }
 
 fn _assert_send() {

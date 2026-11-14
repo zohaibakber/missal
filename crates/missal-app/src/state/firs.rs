@@ -3,6 +3,7 @@ use missal_core::FirId;
 
 use super::rows::FirRow;
 use super::{Load, run_db};
+use crate::prefs::RecentFir;
 
 pub enum FirsEvent {
     Changed,
@@ -85,7 +86,11 @@ impl Firs {
         self.rows.iter().find(|row| row.id == id)
     }
 
-    pub fn recent(&self, count: usize) -> &[FirRow] {
-        &self.rows[..self.rows.len().min(count)]
+    pub fn recent<'a>(&'a self, recent: &[RecentFir], count: usize) -> Vec<&'a FirRow> {
+        recent
+            .iter()
+            .filter_map(|entry| self.get(entry.id))
+            .take(count)
+            .collect()
     }
 }

@@ -10,7 +10,6 @@ use missal_app::app::{AppShell, ShellHandle, navigate, show_shortcuts, toggle_na
 use missal_app::db::Db;
 use missal_app::launch::{init_app, open_shell};
 use missal_app::prefs::{Preferences, ThemeChoice};
-use missal_app::screens::edit_sheet::open_edit_sheet;
 use missal_app::seed::seed_firs;
 use missal_app::state::{Models, Route};
 use missal_app::state::{ToastKind, show_toast};
@@ -254,37 +253,22 @@ fn run(dark: bool, out: &Path, only_wp0: bool) {
     h.shot("08-new-fir-validation");
     h.reset();
 
-    h.with_window(|window, cx| {
-        let record = Models::get(cx);
-        let _ = record;
-        let _ = window;
-    });
-    let record = {
-        let id = FirId::new(3).expect("id");
-        h.cx.update(|cx| {
-            let store_db = missal_app::state::db(cx);
-            let reply = store_db.run(move |store| store.fir(id));
-            let waker = std::task::Waker::noop();
-            let mut context = std::task::Context::from_waker(waker);
-            let mut reply = Box::pin(reply);
-            match std::future::Future::poll(reply.as_mut(), &mut context) {
-                std::task::Poll::Ready(result) => result.expect("fir"),
-                std::task::Poll::Pending => panic!("inline database replies immediately"),
-            }
-        })
-    };
-    h.go(Route::Firs);
-    h.with_window(|window, cx| open_edit_sheet(record, window, cx));
-    h.shot("09-edit-sheet");
+    h.go(Route::EditFir(FirId::new(3).expect("id")));
+    h.shot("09-edit-fir");
     h.reset();
 
     h.go(Route::Fir(FirId::new(3).expect("id")));
     h.shot("10-workspace");
     h.click("add-templates-trigger");
-    h.shot("11-add-templates");
+    h.with_window(|window, cx| window.input("ریمانڈ", cx));
+    h.shot("11-add-document");
     h.press("escape");
-    h.click("custom-values-button");
-    h.shot("12-custom-values");
+    h.with_window(|window, cx| {
+        if let Some(workspace) = shell(cx).read(cx).workspace() {
+            workspace.update(cx, |workspace, cx| workspace.show_fields(window, cx));
+        }
+    });
+    h.shot("12-fields-panel");
     h.reset();
 
     h.go(Route::Templates);

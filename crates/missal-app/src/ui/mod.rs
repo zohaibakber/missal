@@ -5,6 +5,7 @@ pub mod input;
 pub mod menu;
 pub mod nav_menu;
 pub mod palette;
+pub mod popup_menu;
 pub mod print_preview;
 pub mod status;
 pub mod titlebar;

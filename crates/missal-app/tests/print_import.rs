@@ -458,10 +458,8 @@ fn word_import_fills_a_new_template_through_the_file_picker(cx: &mut TestAppCont
     assert!(!text.trim().is_empty());
     assert!(dirty);
     assert!(!name.trim().is_empty());
-    let toasts = fixture.toasts();
-    let last = toasts.last().expect("a toast");
-    assert_eq!(last.title.as_deref(), Some("Word document imported"));
-    assert!(matches!(last.kind, ToastKind::Success | ToastKind::Warning));
+    assert!(cx.update(|cx| page.read(cx).is_reviewing()));
+    assert!(fixture.toasts().is_empty());
 
     fixture.click(cx, "template-save");
     let saved = Store::open(&fixture.database).unwrap().templates().unwrap();

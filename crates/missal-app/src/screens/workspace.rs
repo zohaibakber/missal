@@ -1,43 +1,44 @@
 use std::collections::HashSet;
 use std::rc::Rc;
+use std::time::Duration;
 
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::Disableable as _;
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::checkbox::Checkbox;
-use gpui_kit::component::menu::DropdownMenu as _;
 use gpui_kit::component::menu::{ContextMenuExt as _, PopupMenu, PopupMenuItem};
 use gpui_kit::component::popover::Popover;
-use gpui_kit::component::{Sizable, StyledExt, h_flex, v_flex};
+use gpui_kit::component::{Selectable, h_flex, v_flex};
 use gpui_kit::prelude::*;
 
 use gpui_kit::{
-    AnyElement, App, Context, Entity, FocusHandle, InteractiveElement, IntoElement, MouseButton,
-    ParentElement, Render, StatefulInteractiveElement, Styled, Subscription, WeakEntity, Window,
-    div, px,
+    AnyElement, App, AppContext, Context, Entity, FocusHandle, FontWeight, InteractiveElement,
+    IntoElement, KeyDownEvent, MouseButton, ParentElement, Render, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, Subscription, Task, WeakEntity, Window, div, px,
 };
-use missal_core::{
-    DisplayMode, FirDocumentId, FirId, FirValues, Revision, TemplateId, format_date,
-};
+use missal_core::{DisplayMode, FirDocumentId, FirId, FirValues, Revision, TemplateId};
 use missal_store::{FirDocumentSummary, FirWorkspace};
-use missal_text::{TextInput, TextInputEvent, label};
+use missal_text::{TextInput, TextInputEvent};
 
-use crate::app::{navigate_replace, open_print_preview};
+use crate::app::{navigate, navigate_replace, open_print_preview};
 use crate::editor::{DocumentEditor, EditorEvent, EditorFactory, FieldContext, LoadRequest};
-use crate::screens::custom_values::open_custom_values;
-use crate::screens::edit_sheet::open_edit_sheet;
+use crate::screens::fields_panel::{
+    AUTO_HIDE_BELOW, FieldsPanel, FieldsPanelEvent, FieldsTab, take_pending_fields,
+};
 use crate::shortcuts::*;
 use crate::state::catalog::CatalogEvent;
 use crate::state::firs::FirsEvent;
 use crate::state::rows::fold_for_search;
-use crate::state::{Models, Route, run_db_in, toast_error, toast_success, toast_warning};
-use crate::theme::{DETAILS_RAIL_WIDTH, Palette};
+use crate::state::{
+    Models, PrintTarget, Route, run_db_in, toast_error, toast_success, toast_warning,
+};
+use crate::theme::{ICON_SM, Palette, RAIL_WIDTH};
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
-use crate::ui::input::{Kind, text_input};
+use crate::ui::input::{Kind, field_input};
+use crate::ui::menu::{menu_item, menu_panel, menu_separator};
 use crate::ui::print_preview::{PreviewDocument, PrintRequest};
-use crate::ui::status::status_dot;
-use crate::ui::{empty_state, kit_icon_button, pane_header, rail_header, small_icon, status_bar};
+use crate::ui::{
+    IconButton, SaveState, UrRole, button, checkbox, dirty_dot, empty_state, icon_button, keycap,
+    save_state, section_label, sized_icon, skeleton_bar, ur_label,
+};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum WorkspaceState {
@@ -54,13 +55,92 @@ pub enum DocumentState {
     Failed(String),
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Menu {
+    More,
+    Document(FirDocumentId),
+}
+
 type Continuation =
     Box<dyn FnOnce(&mut WorkspaceScreen, &mut Window, &mut Context<WorkspaceScreen>)>;
+
+#[derive(IntoElement)]
+struct Trigger {
+    button: IconButton,
+    open: bool,
+}
+
+impl Selectable for Trigger {
+    fn selected(mut self, selected: bool) -> Self {
+        self.open = selected;
+        self
+    }
+
+    fn is_selected(&self) -> bool {
+        self.open
+    }
+}
+
+impl RenderOnce for Trigger {
+    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+        self.button.toggled(self.open)
+    }
+}
+
+#[derive(IntoElement)]
+struct AddRow {
+    open: bool,
+}
+
+impl Selectable for AddRow {
+    fn selected(mut self, selected: bool) -> Self {
+        self.open = selected;
+        self
+    }
+
+    fn is_selected(&self) -> bool {
+        self.open
+    }
+}
+
+impl RenderOnce for AddRow {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let palette = *Palette::get(cx);
+        let ink = palette.ink;
+        h_flex()
+            .id("add-templates-trigger")
+            .h(px(32.))
+            .mx(px(8.))
+            .my(px(4.))
+            .px(px(10.))
+            .gap(px(8.))
+            .items_center()
+            .rounded(px(6.))
+            .text_size(px(13.))
+            .line_height(px(20.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(if self.open {
+                palette.ink
+            } else {
+                palette.ink_muted
+            })
+            .cursor_pointer()
+            .when(self.open, |this| this.bg(palette.pressed))
+            .hover(move |s| s.bg(palette.hover).text_color(ink))
+            .role(gpui_kit::accesskit::Role::Button)
+            .aria_label("Add document")
+            .child(sized_icon(IconName::Plus, ICON_SM, palette.ink_muted))
+            .child(div().flex_1().child("Add document"))
+            .child(keycap(&palette, "A"))
+            .test_support()
+    }
+}
 
 pub struct WorkspaceScreen {
     models: Models,
     id: FirId,
     focus: FocusHandle,
+    rail_focus: FocusHandle,
     state: WorkspaceState,
     values: Option<Rc<FirValues>>,
     documents: Vec<FirDocumentSummary>,
@@ -72,10 +152,16 @@ pub struct WorkspaceScreen {
     editor: Rc<dyn DocumentEditor>,
     editor_dirty: bool,
     saving: bool,
+    slow: bool,
     add_open: bool,
     add_selected: HashSet<TemplateId>,
+    add_highlight: Option<usize>,
     add_search: Entity<TextInput>,
     add_query: String,
+    menu: Option<Menu>,
+    panel: Entity<FieldsPanel>,
+    panel_choice: Option<bool>,
+    references_task: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -87,26 +173,36 @@ impl WorkspaceScreen {
         cx: &mut Context<Self>,
     ) -> WorkspaceScreen {
         let editor = EditorFactory::create(cx).build(window, cx);
+        editor.set_mode_toggle(true, cx);
         let weak = cx.entity().downgrade();
         let editor_subscription = editor.on_event(cx, {
             let weak = weak.clone();
             Box::new(move |event, cx| {
                 let event = event.clone();
-                weak.update(cx, |this, cx| {
-                    if let EditorEvent::DirtyChanged(dirty) = event {
+                weak.update(cx, |this, cx| match event {
+                    EditorEvent::DirtyChanged(dirty) => {
                         this.editor_dirty = dirty;
+                        this.refresh_references(cx);
                         cx.notify();
                     }
+                    EditorEvent::ModeRequested(mode) => {
+                        if this.mode != mode {
+                            this.toggle_field_names(cx);
+                        }
+                    }
+                    EditorEvent::SaveRequested => {}
                 })
                 .ok();
             })
         });
-        let add_search = text_input(window, cx, Kind::UrduAuto, "Search templates", "");
-        let subscriptions = vec![
+        let add_search = field_input(window, cx, Kind::SearchRtl, "تلاش", "");
+        let panel = cx.new(|cx| FieldsPanel::new(models.clone(), id, window, cx));
+        let mut subscriptions = vec![
             editor_subscription,
             cx.subscribe(&add_search, |this, input, event: &TextInputEvent, cx| {
                 if *event == TextInputEvent::Change {
                     this.add_query = input.read(cx).text().to_owned();
+                    this.add_highlight = None;
                     cx.notify();
                 }
             }),
@@ -119,16 +215,45 @@ impl WorkspaceScreen {
                     }
                 },
             ),
-            cx.subscribe(&models.catalog, |this, _, _: &CatalogEvent, cx| {
-                this.push_fields(cx);
+            cx.subscribe(&models.catalog, |this, catalog, _: &CatalogEvent, cx| {
+                let shared = catalog.read(cx).settings.shared_placeholders.clone();
+                if let Some(values) = this.values.as_ref()
+                    && values.shared_settings != shared
+                {
+                    let mut updated = (**values).clone();
+                    updated.shared_settings = shared;
+                    this.set_values(Rc::new(updated), cx);
+                } else {
+                    this.push_fields(cx);
+                }
                 cx.notify();
             }),
             cx.observe(&models.templates, |_, _, cx| cx.notify()),
+            cx.subscribe_in(
+                &panel,
+                window,
+                |this, _, event: &FieldsPanelEvent, window, cx| match event {
+                    FieldsPanelEvent::ValuesChanged(values) => {
+                        this.set_values(values.clone(), cx);
+                    }
+                    FieldsPanelEvent::Reveal(reference, focus) => {
+                        this.editor.reveal_field(reference, window, cx);
+                        if !focus && let Some(input) = this.panel.read(cx).input_for(reference) {
+                            input.update(cx, |input, cx| input.focus(window, cx));
+                        }
+                    }
+                    FieldsPanelEvent::EditDetails => this.edit_details(window, cx),
+                },
+            ),
         ];
+        if let Some(entity) = editor.editor_entity() {
+            subscriptions.push(cx.observe(&entity, |this, _, cx| this.schedule_references(cx)));
+        }
         let mut screen = WorkspaceScreen {
             models,
             id,
             focus: cx.focus_handle(),
+            rail_focus: cx.focus_handle(),
             state: WorkspaceState::Loading,
             values: None,
             documents: Vec::new(),
@@ -140,13 +265,30 @@ impl WorkspaceScreen {
             editor,
             editor_dirty: false,
             saving: false,
+            slow: false,
             add_open: false,
             add_selected: HashSet::new(),
+            add_highlight: None,
             add_search,
             add_query: String::new(),
+            menu: None,
+            panel,
+            panel_choice: None,
+            references_task: None,
             _subscriptions: subscriptions,
         };
         screen.load_workspace(window, cx);
+        cx.spawn(async move |this: WeakEntity<Self>, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(150))
+                .await;
+            this.update(cx, |this, cx| {
+                this.slow = true;
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
         screen
     }
 
@@ -160,6 +302,10 @@ impl WorkspaceScreen {
 
     pub fn state(&self) -> &WorkspaceState {
         &self.state
+    }
+
+    pub fn id(&self) -> FirId {
+        self.id
     }
 
     pub fn documents(&self) -> &[FirDocumentSummary] {
@@ -182,8 +328,40 @@ impl WorkspaceScreen {
         self.values.as_ref()
     }
 
+    pub fn panel(&self) -> &Entity<FieldsPanel> {
+        &self.panel
+    }
+
     pub fn excluded_count(&self) -> usize {
         self.excluded.len()
+    }
+
+    pub fn is_panel_open(&self, window: &Window) -> bool {
+        self.panel_choice
+            .unwrap_or_else(|| f32::from(window.viewport_size().width) >= AUTO_HIDE_BELOW)
+    }
+
+    pub fn toggle_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let open = self.is_panel_open(window);
+        self.panel_choice = Some(!open);
+        cx.notify();
+    }
+
+    pub fn show_fields(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.panel_choice = Some(true);
+        self.refresh_references(cx);
+        self.panel
+            .update(cx, |panel, cx| panel.focus_first_empty(window, cx));
+        cx.notify();
+    }
+
+    pub fn take_pending_fields(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.state == WorkspaceState::Ready
+            && self.document_state == DocumentState::Idle
+            && take_pending_fields(self.id, cx)
+        {
+            self.show_fields(window, cx);
+        }
     }
 
     fn field_context(&self, cx: &App) -> Option<FieldContext> {
@@ -201,6 +379,41 @@ impl WorkspaceScreen {
         if let Some(fields) = self.field_context(cx) {
             self.editor.set_fields(fields, cx);
         }
+    }
+
+    fn set_values(&mut self, values: Rc<FirValues>, cx: &mut Context<Self>) {
+        self.values = Some(values.clone());
+        self.panel
+            .update(cx, |panel, cx| panel.set_values(Some(values), cx));
+        self.push_fields(cx);
+        cx.notify();
+    }
+
+    fn refresh_references(&mut self, cx: &mut Context<Self>) {
+        let loaded = self.document_state == DocumentState::Idle && self.loaded.is_some();
+        let references = if loaded {
+            self.editor.field_references(cx)
+        } else {
+            Vec::new()
+        };
+        self.panel
+            .update(cx, |panel, cx| panel.set_references(references, loaded, cx));
+    }
+
+    fn schedule_references(&mut self, cx: &mut Context<Self>) {
+        if self.references_task.is_some() {
+            return;
+        }
+        self.references_task = Some(cx.spawn(async move |this: WeakEntity<Self>, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(300))
+                .await;
+            this.update(cx, |this, cx| {
+                this.references_task = None;
+                this.refresh_references(cx);
+            })
+            .ok();
+        }));
     }
 
     fn load_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -228,13 +441,21 @@ impl WorkspaceScreen {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.values = Some(Rc::new(workspace.values));
+        let values = Rc::new(workspace.values);
+        self.values = Some(values.clone());
+        self.panel
+            .update(cx, |panel, cx| panel.set_values(Some(values), cx));
         self.documents = workspace.documents;
         self.state = WorkspaceState::Ready;
         let first = self.documents.first().map(|document| document.id);
         match first {
             Some(first) => self.open_document(first, window, cx),
-            None => self.active = None,
+            None => {
+                self.active = None;
+                self.panel
+                    .update(cx, |panel, cx| panel.set_tab(FieldsTab::Details, cx));
+                self.refresh_references(cx);
+            }
         }
     }
 
@@ -246,9 +467,7 @@ impl WorkspaceScreen {
             move |store| store.fir_values(id),
             |this, result, _, cx| {
                 if let Ok(values) = result {
-                    this.values = Some(Rc::new(values));
-                    this.push_fields(cx);
-                    cx.notify();
+                    this.set_values(Rc::new(values), cx);
                 }
             },
         );
@@ -284,6 +503,8 @@ impl WorkspaceScreen {
                             cx,
                         );
                         this.editor_dirty = false;
+                        this.refresh_references(cx);
+                        this.take_pending_fields(window, cx);
                     }
                     Err(error) => this.document_state = DocumentState::Failed(error.message()),
                 }
@@ -314,8 +535,7 @@ impl WorkspaceScreen {
             "Save changes first?",
             "This document has unsaved changes.",
             vec![
-                Choice::new("cancel", "Cancel", Tone::Neutral, |_, _| {}),
-                Choice::new("discard", "Discard", Tone::Danger, move |window, cx| {
+                Choice::new("discard", "Don't save", Tone::Ghost, move |window, cx| {
                     discard
                         .update(cx, |this, cx| {
                             this.editor.discard(window, cx);
@@ -324,6 +544,7 @@ impl WorkspaceScreen {
                         })
                         .ok();
                 }),
+                Choice::new("cancel", "Cancel", Tone::Neutral, |_, _| {}),
                 Choice::new("save", "Save", Tone::Primary, move |window, cx| {
                     save.update(cx, |this, cx| {
                         this.save_active(
@@ -397,7 +618,6 @@ impl WorkspaceScreen {
                             summary.field_count = ack.field_count;
                             summary.updated_at = ack.updated_at;
                         }
-                        toast_success(window, cx, "Document saved");
                         if let Some(then) = then {
                             then(this, window, cx);
                         }
@@ -492,7 +712,10 @@ impl WorkspaceScreen {
                             this.loaded = None;
                             match next {
                                 Some(next) => this.open_document(next, window, cx),
-                                None => this.editor_dirty = false,
+                                None => {
+                                    this.editor_dirty = false;
+                                    this.refresh_references(cx);
+                                }
                             }
                         }
                         toast_success(window, cx, "Document removed");
@@ -525,14 +748,18 @@ impl WorkspaceScreen {
                             .map(|d| d.id)
                             .filter(|id| !before.contains(id))
                             .collect();
+                        let names: Vec<String> = documents
+                            .iter()
+                            .filter(|d| added.contains(&d.id))
+                            .map(|d| d.title.clone())
+                            .collect();
                         this.documents = documents;
                         this.add_selected.clear();
                         this.add_search
                             .update(cx, |input, cx| input.set_text("", cx));
-                        let message = if added.len() == 1 {
-                            "Document added".to_owned()
-                        } else {
-                            format!("{} documents added", added.len())
+                        let message = match names.as_slice() {
+                            [one] => format!("Added {}", crate::ui::isolate_urdu(one)),
+                            _ => format!("{} documents added", added.len()),
                         };
                         toast_success(window, cx, message);
                         if let Some(first) = added.first() {
@@ -548,8 +775,15 @@ impl WorkspaceScreen {
 
     pub fn open_add_templates(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.add_open = true;
+        self.add_highlight = None;
         self.add_search
             .update(cx, |input, cx| input.focus(window, cx));
+        cx.notify();
+    }
+
+    fn close_add_templates(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.add_open = false;
+        window.focus(&self.focus, cx);
         cx.notify();
     }
 
@@ -565,36 +799,11 @@ impl WorkspaceScreen {
     }
 
     pub fn edit_details(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(values) = &self.values {
-            open_edit_sheet(values.fir.clone(), window, cx);
-        }
+        navigate(Route::EditFir(self.id), window, cx);
     }
 
-    pub fn edit_custom_values(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(values) = &self.values else {
-            return;
-        };
-        let weak = cx.entity().downgrade();
-        open_custom_values(
-            self.id,
-            values.fir.fir.fir_no.clone(),
-            values.overrides.clone(),
-            Rc::new(move |overrides, window, cx| {
-                weak.update(cx, |this, cx| {
-                    if let Some(values) = this.values.as_ref() {
-                        let mut updated = (**values).clone();
-                        updated.overrides = overrides;
-                        this.values = Some(Rc::new(updated));
-                        this.push_fields(cx);
-                        cx.notify();
-                    }
-                    let _ = window;
-                })
-                .ok();
-            }),
-            window,
-            cx,
-        );
+    pub fn print(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        navigate(Route::Print(PrintTarget::Fir(self.id)), window, cx);
     }
 
     fn request_delete(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -603,11 +812,17 @@ impl WorkspaceScreen {
         };
         let id = self.id;
         let weak = cx.entity().downgrade();
+        let count = self.documents.len();
+        let body = match count {
+            0 => "This can't be undone.".to_owned(),
+            1 => "Its document is deleted too. This can't be undone.".to_owned(),
+            n => format!("Its {n} documents are deleted too. This can't be undone."),
+        };
         confirm_delete(
             window,
             cx,
             format!("Delete FIR {}?", values.fir.fir.fir_no),
-            "This removes the FIR and every document created for it. This can't be undone.",
+            body,
             "Delete FIR",
             move |window, cx| {
                 weak.update(cx, |this, cx| this.delete_fir(id, window, cx))
@@ -680,284 +895,307 @@ impl WorkspaceScreen {
         open_print_preview(request, window, cx);
     }
 
-    fn included_count(&self) -> usize {
-        self.documents
-            .iter()
-            .filter(|document| !self.excluded.contains(&document.id))
-            .count()
+    fn cycle_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let panel_focus = self.panel.read(cx).focus_handle().clone();
+        let editor_focused = self.editor.editor_entity().is_some_and(|editor| {
+            editor
+                .read(cx)
+                .focus_handle_ref()
+                .contains_focused(window, cx)
+        });
+        if self.rail_focus.is_focused(window) {
+            self.editor.focus(window, cx);
+        } else if editor_focused {
+            if self.is_panel_open(window) {
+                window.focus(&panel_focus, cx);
+            } else {
+                window.focus(&self.focus, cx);
+            }
+        } else if panel_focus.contains_focused(window, cx) {
+            window.focus(&self.focus, cx);
+        } else {
+            window.focus(&self.rail_focus, cx);
+        }
+        cx.notify();
     }
 
-    fn details(&self, palette: &Palette, values: &FirValues, cx: &mut Context<Self>) -> AnyElement {
-        let fir = &values.fir.fir;
-        let palette = *palette;
-        let field = |title: &'static str, body: AnyElement| {
-            v_flex()
-                .gap_0p5()
-                .child(
-                    div()
-                        .w_full()
-                        .text_size(px(12.))
-                        .text_color(palette.ink_muted)
-                        .child(label(title).rtl().w_full()),
-                )
-                .child(div().w_full().text_size(px(15.)).child(body))
+    fn document_menu(&self, id: FirDocumentId, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        let count = self.documents.len();
+        let first = index == 0;
+        let last = index + 1 == count;
+        let can_remove = !(self.active == Some(id) && self.is_dirty(cx));
+        let close = |this: &mut Self, cx: &mut Context<Self>| {
+            this.menu = None;
+            cx.notify();
         };
-        let text = |value: &str| label(value.to_owned()).rtl().w_full().into_any_element();
-        let dated = |value: &str| {
-            let shown = if value.trim().is_empty() {
-                "—".to_owned()
-            } else {
-                format_date(value)
-            };
-            label(shown).rtl().w_full().into_any_element()
-        };
-        let list = |items: &[String]| {
-            v_flex()
-                .gap_1()
-                .children(items.iter().enumerate().map(|(index, item)| {
-                    h_flex()
-                        .flex_row_reverse()
-                        .items_start()
-                        .gap_2()
-                        .child(
-                            div()
-                                .w(px(18.))
-                                .flex_shrink_0()
-                                .text_size(px(12.))
-                                .text_color(palette.ink_muted)
-                                .text_right()
-                                .child((index + 1).to_string()),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .child(label(item.clone()).rtl().w_full()),
-                        )
-                }))
-                .into_any_element()
-        };
-        let optional = |title: &'static str, value: &str| {
-            (!value.trim().is_empty()).then(|| field(title, text(value)).into_any_element())
-        };
-        let mut items: Vec<AnyElement> = vec![
-            field(
-                "حالت",
-                h_flex()
-                    .flex_row_reverse()
-                    .items_center()
-                    .gap_2()
-                    .child(status_dot(&palette, fir.status))
-                    .child(label(fir.status.label()).rtl())
-                    .into_any_element(),
+        menu_panel(Palette::get(cx))
+            .w(px(200.))
+            .child(
+                menu_item(("document-open", index), "Open")
+                    .keys("Enter")
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        close(this, cx);
+                        this.select_document(id, window, cx);
+                    })),
             )
-            .into_any_element(),
-        ];
-        items.extend(optional("مدعی مقدمہ", &fir.complainant));
-        items.push(field("تاریخ ایف آئی آر", dated(&fir.date)).into_any_element());
-        items.push(field("تاریخ وقوعہ", dated(&fir.incident_date)).into_any_element());
-        items.push(field("تاریخ گرفتاری", dated(&fir.arrest_date)).into_any_element());
-        items.push(field("ملزمان", list(&fir.accused)).into_any_element());
-        if !fir.witness.is_empty() {
-            items.push(field("گواہان", list(&fir.witness)).into_any_element());
-        }
-        if !fir.zimni.is_empty() {
-            items.push(field("ضمنی", list(&fir.zimni)).into_any_element());
-        }
-        items.extend(optional("تفتیشی افسر", &fir.investigation_officer));
-        items.extend(optional("تحریر کنندہ", &fir.writer));
-        items.extend(optional("برآمدگی", &fir.recovery));
-        items.extend(optional("متن", &fir.body));
-        items.extend(optional("ایمی نمبر 1", &fir.imei_1));
-        items.extend(optional("ایمی نمبر 2", &fir.imei_2));
-        items.extend(optional("سم نمبر 1", &fir.sim_1));
-        items.extend(optional("سم نمبر 2", &fir.sim_2));
-        let _ = cx;
-        v_flex()
-            .gap_3()
-            .px_4()
-            .pb_3()
-            .children(items)
+            .child(menu_separator(Palette::get(cx)))
+            .child(
+                menu_item(("document-up", index), "Move up")
+                    .icon(IconName::ArrowUp)
+                    .keys("Alt+Shift+Up")
+                    .disabled(first)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        close(this, cx);
+                        this.move_document(id, -1, window, cx);
+                    })),
+            )
+            .child(
+                menu_item(("document-down", index), "Move down")
+                    .icon(IconName::ArrowDown)
+                    .keys("Alt+Shift+Down")
+                    .disabled(last)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        close(this, cx);
+                        this.move_document(id, 1, window, cx);
+                    })),
+            )
+            .child(menu_separator(Palette::get(cx)))
+            .child(
+                menu_item(("document-remove", index), "Remove from FIR")
+                    .icon(IconName::Trash)
+                    .danger()
+                    .disabled(!can_remove)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        close(this, cx);
+                        this.remove_document(id, window, cx);
+                    })),
+            )
             .into_any_element()
     }
 
-    fn custom_section(
+    fn documents_rail(
         &self,
         palette: &Palette,
-        values: &FirValues,
+        window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let palette = *palette;
-        let catalog = self.models.catalog.read(cx);
-        let customs: Vec<_> = catalog.custom_fields().collect();
-        if customs.is_empty() {
-            return None;
-        }
-        let filled: Vec<(String, String)> = customs
-            .iter()
-            .filter_map(|field| {
-                values
-                    .overrides
-                    .iter()
-                    .find(|value| value.placeholder_id == field.id && !value.value.is_empty())
-                    .map(|value| (field.label.clone(), value.value.clone()))
-            })
-            .collect();
-        let total = customs.len();
-        Some(
-            v_flex()
-                .child(
-                    rail_header(&palette, "Custom fields").child(
-                        kit_icon_button("edit-custom-values", IconName::Pencil)
-                            .tooltip("Edit custom field values")
-                            .on_click(cx.listener(|this, _, window, cx| this.edit_custom_values(window, cx))),
-                    ),
-                )
-                .child(
-                    v_flex()
-                        .gap_3()
-                        .px_4()
-                        .pb_3()
-                        .children(filled.iter().map(|(name, value)| {
-                            v_flex()
-                                .gap_0p5()
-                                .child(div().w_full().text_size(px(12.)).text_color(palette.ink_muted).child(label(name.clone()).rtl().w_full()))
-                                .child(div().w_full().text_size(px(15.)).child(label(value.clone()).rtl().w_full()))
-                        }))
-                        .when(filled.is_empty(), |this| {
-                            this.child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(palette.ink_muted)
-                                    .child(format!("No values yet. {total} custom fields can be filled for this FIR.")),
-                            )
-                        }),
-                )
-                .into_any_element(),
-        )
-    }
-
-    fn documents_rail(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    ) -> AnyElement {
         let palette = *palette;
         let count = self.documents.len();
-        let multiple = count > 1;
         let weak: WeakEntity<Self> = cx.entity().downgrade();
-        let screen = cx.entity();
         let active_dirty = self.is_dirty(cx);
-        let rows = self.documents.iter().enumerate().map(|(index, document)| {
-            let id = document.id;
-            let active = self.active == Some(id);
-            let included = !self.excluded.contains(&id);
-            let title = document.title.clone();
-            let first = index == 0;
-            let last = index + 1 == count;
-            let can_remove = !(active && active_dirty);
-            let menu = {
-                let weak = weak.clone();
-                move |menu: PopupMenu| {
-                    let (select, up, down, include, remove) = (
-                        weak.clone(),
-                        weak.clone(),
-                        weak.clone(),
-                        weak.clone(),
-                        weak.clone(),
-                    );
-                    menu.item(PopupMenuItem::new("Open").on_click(move |_, window, cx| {
-                        select
-                            .update(cx, |this, cx| this.select_document(id, window, cx))
-                            .ok();
-                    }))
-                    .item(
-                        PopupMenuItem::new("Include when printing")
-                            .checked(included)
-                            .on_click(move |_, _, cx| {
-                                include
-                                    .update(cx, |this, cx| this.toggle_included(id, cx))
+        let rail_focused = self.rail_focus.is_focused(window);
+        let rows: Vec<AnyElement> = self
+            .documents
+            .iter()
+            .enumerate()
+            .map(|(index, document)| {
+                let id = document.id;
+                let active = self.active == Some(id);
+                let title = document.title.clone();
+                let menu_open = self.menu == Some(Menu::Document(id));
+                let context = {
+                    let weak = weak.clone();
+                    let first = index == 0;
+                    let last = index + 1 == count;
+                    move |menu: PopupMenu| {
+                        let (select, up, down, remove) =
+                            (weak.clone(), weak.clone(), weak.clone(), weak.clone());
+                        menu.item(PopupMenuItem::new("Open").on_click(move |_, window, cx| {
+                            select
+                                .update(cx, |this, cx| this.select_document(id, window, cx))
+                                .ok();
+                        }))
+                        .item(PopupMenuItem::separator())
+                        .item(PopupMenuItem::new("Move up").disabled(first).on_click(
+                            move |_, window, cx| {
+                                up.update(cx, |this, cx| this.move_document(id, -1, window, cx))
                                     .ok();
-                            }),
-                    )
-                    .item(PopupMenuItem::separator())
-                    .item(PopupMenuItem::new("Move up").disabled(first).on_click(
-                        move |_, window, cx| {
-                            up.update(cx, |this, cx| this.move_document(id, -1, window, cx))
-                                .ok();
-                        },
-                    ))
-                    .item(PopupMenuItem::new("Move down").disabled(last).on_click(
-                        move |_, window, cx| {
-                            down.update(cx, |this, cx| this.move_document(id, 1, window, cx))
-                                .ok();
-                        },
-                    ))
-                    .item(PopupMenuItem::separator())
-                    .item(
-                        PopupMenuItem::new("Remove from FIR")
-                            .disabled(!can_remove)
-                            .on_click(move |_, window, cx| {
+                            },
+                        ))
+                        .item(PopupMenuItem::new("Move down").disabled(last).on_click(
+                            move |_, window, cx| {
+                                down.update(cx, |this, cx| this.move_document(id, 1, window, cx))
+                                    .ok();
+                            },
+                        ))
+                        .item(PopupMenuItem::separator())
+                        .item(
+                            PopupMenuItem::new("Remove from FIR").on_click(move |_, window, cx| {
                                 remove
                                     .update(cx, |this, cx| this.remove_document(id, window, cx))
                                     .ok();
                             }),
-                    )
-                }
-            };
-            let dropdown_menu = menu.clone();
-            h_flex()
-                .id(("document-row", index))
-                .test_support()
-                .group("document-row")
-                .flex_row_reverse()
-                .h(px(40.))
-                .mx_2()
-                .px_2()
-                .gap_2()
-                .items_center()
-                .rounded(px(7.))
-                .cursor_pointer()
-                .when(active, |this| this.bg(palette.hover))
-                .hover(move |style| style.bg(palette.hover))
-                .on_click(
-                    cx.listener(move |this, _, window, cx| this.select_document(id, window, cx)),
-                )
-                .children(multiple.then(|| {
-                    div()
-                        .flex_shrink_0()
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .child(
-                            Checkbox::new(("include", index))
-                                .checked(included)
-                                .accessibility_label("Include when printing")
-                                .on_click(
-                                    cx.listener(move |this, _, _, cx| this.toggle_included(id, cx)),
-                                ),
                         )
-                }))
-                .child(
-                    div()
+                    }
+                };
+                let menu_screen = cx.entity();
+                let more = Popover::new(("document-menu", index))
+                    .appearance(false)
+                    .anchor(gpui_kit::Anchor::TopLeft)
+                    .trigger(Trigger {
+                        button: icon_button(
+                            ("document-actions", index),
+                            IconName::Ellipsis,
+                            "More actions",
+                        )
+                        .dense(),
+                        open: menu_open,
+                    })
+                    .open(menu_open)
+                    .on_open_change({
+                        let weak = weak.clone();
+                        move |open, _, cx| {
+                            let open = *open;
+                            weak.update(cx, |this, cx| {
+                                this.menu = open.then_some(Menu::Document(id));
+                                cx.notify();
+                            })
+                            .ok();
+                        }
+                    })
+                    .content(move |_, _, cx| {
+                        menu_screen.update(cx, |this, cx| this.document_menu(id, index, cx))
+                    });
+                let hover = palette.hover;
+                h_flex()
+                    .id(("document-row", index))
+                    .test_support()
+                    .group("document-row")
+                    .flex_row_reverse()
+                    .h(px(40.))
+                    .mx(px(8.))
+                    .px(px(10.))
+                    .gap(px(8.))
+                    .items_center()
+                    .rounded(px(6.))
+                    .cursor_pointer()
+                    .when(active, |this| this.bg(palette.accent_wash))
+                    .when(!active, |this| this.hover(move |style| style.bg(hover)))
+                    .when(active && rail_focused, |this| {
+                        this.border_r_2().border_color(palette.accent)
+                    })
+                    .role(gpui_kit::accesskit::Role::ListItem)
+                    .aria_label(SharedString::from(title.clone()))
+                    .on_click(
+                        cx.listener(move |this, _, window, cx| {
+                            this.select_document(id, window, cx)
+                        }),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(px(14.))
+                            .pt(px(2.))
+                            .text_size(px(12.))
+                            .line_height(px(16.))
+                            .text_color(palette.ink_faint)
+                            .text_right()
+                            .child((index + 1).to_string()),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .text_color(palette.ink)
+                            .child(ur_label(title, UrRole::Body).truncate()),
+                    )
+                    .children((active && active_dirty).then(|| {
+                        div()
+                            .flex_none()
+                            .size(px(24.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .group_hover("document-row", |style| style.invisible())
+                            .child(dirty_dot(&palette, true))
+                    }))
+                    .child(
+                        div()
+                            .flex_none()
+                            .when(!menu_open, |this| {
+                                this.invisible()
+                                    .group_hover("document-row", |style| style.visible())
+                            })
+                            .when(active && active_dirty, |this| this.absolute().left(px(8.)))
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .child(more),
+                    )
+                    .context_menu(move |popup, _, _| context(popup))
+                    .into_any_element()
+            })
+            .collect();
+        let add = self.add_popover(&palette, cx);
+        v_flex()
+            .id("workspace-rail")
+            .key_context("DocumentRail")
+            .track_focus(&self.rail_focus)
+            .w(px(RAIL_WIDTH))
+            .flex_none()
+            .h_full()
+            .border_r_1()
+            .border_color(palette.line)
+            .bg(palette.surface)
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if !this.rail_focus.is_focused(window) {
+                    return;
+                }
+                match event.keystroke.key.as_str() {
+                    "down" => this.step_document(1, window, cx),
+                    "up" => this.step_document(-1, window, cx),
+                    "enter" => this.editor.focus(window, cx),
+                    _ => return,
+                }
+                cx.stop_propagation();
+            }))
+            .child(
+                h_flex()
+                    .flex_none()
+                    .h(px(40.))
+                    .pl(px(16.))
+                    .pr(px(8.))
+                    .gap(px(6.))
+                    .items_center()
+                    .child(section_label(&palette, "Documents"))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .line_height(px(16.))
+                            .text_color(palette.ink_faint)
+                            .child(count.to_string()),
+                    ),
+            )
+            .when(self.state == WorkspaceState::Loading, |this| {
+                this.when(self.slow, |this| {
+                    this.child(
+                        v_flex()
+                            .px(px(18.))
+                            .gap(px(26.))
+                            .pt(px(14.))
+                            .items_end()
+                            .child(skeleton_bar(&palette, 160., 12.))
+                            .child(skeleton_bar(&palette, 132., 12.))
+                            .child(skeleton_bar(&palette, 148., 12.)),
+                    )
+                })
+            })
+            .when(self.state == WorkspaceState::Ready, |this| {
+                this.child(
+                    v_flex()
+                        .id("workspace-rail-scroll")
                         .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .text_size(px(15.))
-                        .child(label(title).rtl().truncate()),
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .child(v_flex().gap(px(2.)).children(rows))
+                        .child(add),
                 )
-                .child(
-                    div()
-                        .flex_shrink_0()
-                        .invisible()
-                        .group_hover("document-row", |style| style.visible())
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .child(
-                            Button::new(("document-actions", index))
-                                .ghost()
-                                .xsmall()
-                                .icon(IconName::Ellipsis)
-                                .dropdown_menu(move |menu, _, _| dropdown_menu(menu)),
-                        ),
-                )
-                .context_menu(move |popup, _, _| menu(popup))
-                .into_any_element()
-        });
-        let rows: Vec<AnyElement> = rows.collect();
+            })
+            .into_any_element()
+    }
+
+    fn add_popover(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let palette = *palette;
+        let weak: WeakEntity<Self> = cx.entity().downgrade();
+        let screen = cx.entity();
         let templates = self.models.templates.read(cx);
         let attached: HashSet<TemplateId> = self
             .documents
@@ -968,7 +1206,7 @@ impl WorkspaceScreen {
             .split_whitespace()
             .map(str::to_owned)
             .collect();
-        let available: Vec<_> = templates
+        let available: Vec<(TemplateId, String, bool)> = templates
             .items
             .iter()
             .filter(|item| {
@@ -978,12 +1216,15 @@ impl WorkspaceScreen {
             .map(|item| (item.id, item.name.clone(), attached.contains(&item.id)))
             .collect();
         let no_templates = templates.items.is_empty();
-        let add = Popover::new("add-templates")
-            .trigger(
-                kit_icon_button("add-templates-trigger", IconName::Plus)
-                    .tooltip("Add templates (A)"),
-            )
-            .anchor(gpui_kit::Anchor::TopRight)
+        let search = self.add_search.clone();
+        let highlight = self.add_highlight;
+        Popover::new("add-templates")
+            .appearance(false)
+            .trigger(AddRow {
+                open: self.add_open,
+            })
+            .trigger_style(gpui_kit::StyleRefinement::default().w_full())
+            .anchor(gpui_kit::Anchor::TopLeft)
             .open(self.add_open)
             .on_open_change({
                 let weak = weak.clone();
@@ -993,49 +1234,122 @@ impl WorkspaceScreen {
                         if open {
                             this.open_add_templates(window, cx);
                         } else {
-                            this.add_open = false;
-                            cx.notify();
+                            this.close_add_templates(window, cx);
                         }
                     })
                     .ok();
                 }
             })
-            .p_0()
-            .content({
-                let search = self.add_search.clone();
-                move |_, _, cx| {
-                    let state = screen.read(cx);
-                    let selected = state.add_selected.clone();
-                    let selected_count = selected.len();
-                    let screen = screen.clone();
-                    v_flex()
-                        .w(px(320.))
-                        .on_action({
-                            let screen = screen.clone();
-                            cx.listener(move |_, _: &ConfirmSelection, window, cx| {
-                                screen.update(cx, |this, cx| this.add_templates(window, cx));
-                            })
+            .content(move |_, _, cx| {
+                let state = screen.read(cx);
+                let selected = state.add_selected.clone();
+                let selected_count = selected.len();
+                let screen = screen.clone();
+                let selectable: Vec<usize> = available
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, (_, _, added))| !added)
+                    .map(|(index, _)| index)
+                    .collect();
+                let keys_screen = screen.clone();
+                let ids: Vec<(TemplateId, bool)> = available
+                    .iter()
+                    .map(|(id, _, added)| (*id, *added))
+                    .collect();
+                v_flex()
+                    .id("add-document-card")
+                    .w(px(360.))
+                    .bg(palette.raised)
+                    .rounded(px(8.))
+                    .shadow(palette.shadow_md())
+                    .text_color(palette.ink)
+                    .font_family(missal_text::UI_FAMILY)
+                    .on_action({
+                        let screen = screen.clone();
+                        cx.listener(move |_, _: &ConfirmSelection, window, cx| {
+                            screen.update(cx, |this, cx| this.add_templates(window, cx));
                         })
-                        .child(div().p_2().child(search.clone()))
-                        .child(
-                            v_flex()
-                                .id("add-template-list")
-                                .max_h(px(280.))
-                                .overflow_y_scroll()
-                                .p_1()
-                                .children(available.iter().map(|(id, name, added)| {
+                    })
+                    .capture_key_down(move |event: &KeyDownEvent, window, cx| {
+                        let key = event.keystroke.key.as_str();
+                        let modified = event.keystroke.modifiers.modified();
+                        match key {
+                            "down" | "up" if !modified => {
+                                keys_screen.update(cx, |this, cx| {
+                                    if selectable.is_empty() {
+                                        return;
+                                    }
+                                    let current = this
+                                        .add_highlight
+                                        .and_then(|row| selectable.iter().position(|i| *i == row));
+                                    let next = match (current, key) {
+                                        (None, "down") => 0,
+                                        (None, _) => selectable.len() - 1,
+                                        (Some(p), "down") => (p + 1).min(selectable.len() - 1),
+                                        (Some(p), _) => p.saturating_sub(1),
+                                    };
+                                    this.add_highlight = Some(selectable[next]);
+                                    cx.notify();
+                                });
+                                cx.stop_propagation();
+                            }
+                            "space" if !modified => {
+                                let toggled = keys_screen.update(cx, |this, cx| {
+                                    let Some(row) = this.add_highlight else {
+                                        return false;
+                                    };
+                                    if let Some((id, false)) = ids.get(row).copied() {
+                                        this.toggle_template(id, cx);
+                                        return true;
+                                    }
+                                    false
+                                });
+                                if toggled {
+                                    cx.stop_propagation();
+                                }
+                            }
+                            "escape" => {
+                                keys_screen
+                                    .update(cx, |this, cx| this.close_add_templates(window, cx));
+                                cx.stop_propagation();
+                            }
+                            _ => {}
+                        }
+                    })
+                    .child(
+                        h_flex()
+                            .h(px(48.))
+                            .px(px(14.))
+                            .gap(px(8.))
+                            .items_center()
+                            .border_b_1()
+                            .border_color(palette.line)
+                            .child(keycap(&palette, "Esc"))
+                            .child(div().flex_1().min_w_0().mt(px(-1.)).child(search.clone()))
+                            .child(sized_icon(IconName::Search, ICON_SM, palette.ink_faint)),
+                    )
+                    .child(
+                        v_flex()
+                            .id("add-template-list")
+                            .max_h(px(280.))
+                            .overflow_y_scroll()
+                            .p(px(4.))
+                            .children(available.iter().enumerate().map(
+                                |(row, (id, name, added))| {
                                     let (id, added) = (*id, *added);
                                     let checked = selected.contains(&id);
                                     let screen = screen.clone();
+                                    let highlighted = highlight == Some(row);
                                     h_flex()
                                         .id(("add-template", id.get() as usize))
                                         .test_support()
                                         .flex_row_reverse()
-                                        .h(px(38.))
-                                        .px_2()
-                                        .gap_2()
+                                        .h(px(40.))
+                                        .px(px(10.))
+                                        .gap(px(10.))
                                         .items_center()
                                         .rounded(px(6.))
+                                        .when(highlighted, |this| this.bg(palette.hover))
                                         .when(!added, |this| {
                                             this.cursor_pointer()
                                                 .hover(move |style| style.bg(palette.hover))
@@ -1043,151 +1357,203 @@ impl WorkspaceScreen {
                                                     screen.update(cx, |this, cx| {
                                                         this.toggle_template(id, cx)
                                                     });
-                                                    cx.notify();
                                                 }))
                                         })
-                                        .when(added, |this| this.opacity(0.55))
-                                        .child(small_icon(
-                                            if checked {
-                                                IconName::SquareCheck
-                                            } else {
-                                                IconName::Square
-                                            },
-                                            if checked {
-                                                palette.accent
-                                            } else {
-                                                palette.ink_muted
-                                            },
-                                        ))
+                                        .child(if added {
+                                            checkbox(
+                                                &palette,
+                                                ("add-check", id.get() as usize),
+                                                true,
+                                            )
+                                            .opacity(0.5)
+                                            .into_any_element()
+                                        } else {
+                                            checkbox(
+                                                &palette,
+                                                ("add-check", id.get() as usize),
+                                                checked,
+                                            )
+                                            .into_any_element()
+                                        })
                                         .child(
                                             div()
                                                 .flex_1()
                                                 .min_w_0()
-                                                .overflow_hidden()
-                                                .text_size(px(15.))
-                                                .child(label(name.clone()).rtl().truncate()),
+                                                .text_color(if added {
+                                                    palette.ink_muted
+                                                } else {
+                                                    palette.ink
+                                                })
+                                                .child(
+                                                    ur_label(name.clone(), UrRole::Body).truncate(),
+                                                ),
                                         )
                                         .children(added.then(|| {
                                             div()
+                                                .flex_none()
                                                 .text_size(px(12.))
-                                                .text_color(palette.ink_muted)
+                                                .line_height(px(16.))
+                                                .text_color(palette.ink_faint)
                                                 .child("Added")
                                         }))
-                                })),
-                        )
-                        .child(
-                            h_flex()
-                                .h(px(44.))
-                                .px_3()
-                                .gap_2()
-                                .items_center()
-                                .border_t_1()
-                                .border_color(palette.line)
-                                .child(
+                                },
+                            ))
+                            .when(available.is_empty(), |this| {
+                                this.child(
                                     div()
-                                        .flex_1()
-                                        .text_size(px(12.))
+                                        .px(px(12.))
+                                        .py(px(10.))
+                                        .text_size(px(13.))
                                         .text_color(palette.ink_muted)
                                         .child(if no_templates {
-                                            "No templates exist yet".to_owned()
-                                        } else if selected_count == 0 {
-                                            "Select templates to add".to_owned()
+                                            "No templates exist yet."
                                         } else {
-                                            format!("{selected_count} selected")
+                                            "No templates match."
                                         }),
                                 )
-                                .child(
-                                    Button::new("add-templates-confirm")
-                                        .primary()
-                                        .xsmall()
-                                        .label("Add")
-                                        .disabled(selected_count == 0)
-                                        .on_click({
-                                            let screen = screen.clone();
-                                            move |_, window, cx| {
-                                                screen.update(cx, |this, cx| {
-                                                    this.add_templates(window, cx)
-                                                });
-                                            }
-                                        }),
-                                ),
-                        )
-                }
-            });
-        v_flex()
-            .child(
-                rail_header(&palette, "Documents")
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.ink_muted)
-                            .child(count.to_string()),
+                            }),
                     )
-                    .child(add),
-            )
-            .child(v_flex().gap_0p5().children(rows))
-            .children((count == 0).then(|| {
-                div()
-                    .px_4()
-                    .py_2()
-                    .text_size(px(12.))
-                    .text_color(palette.ink_muted)
-                    .child("No documents yet.")
-            }))
+                    .child(
+                        h_flex()
+                            .h(px(48.))
+                            .px(px(12.))
+                            .gap(px(8.))
+                            .items_center()
+                            .border_t_1()
+                            .border_color(palette.line)
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .text_size(px(12.))
+                                    .line_height(px(16.))
+                                    .text_color(palette.ink_muted)
+                                    .child(format!("{selected_count} selected")),
+                            )
+                            .child(
+                                button(
+                                    "add-templates-confirm",
+                                    match selected_count {
+                                        1 => "Add 1 document".to_owned(),
+                                        n => format!("Add {n} documents"),
+                                    },
+                                )
+                                .primary()
+                                .sm()
+                                .keys("Mod+Enter")
+                                .disabled(selected_count == 0)
+                                .on_click({
+                                    let screen = screen.clone();
+                                    move |_, window, cx| {
+                                        screen
+                                            .update(cx, |this, cx| this.add_templates(window, cx));
+                                    }
+                                }),
+                            ),
+                    )
+            })
             .into_any_element()
     }
 
-    fn main_panel(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    fn canvas(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let palette = *palette;
-        if self.documents.is_empty() {
-            return empty_state(
-                &palette,
-                IconName::FileText,
-                "No documents yet",
-                Some("Add a template to write this FIR's first document.".into()),
-                Some(
-                    Button::new("empty-add-templates")
-                        .primary()
-                        .icon(IconName::Plus)
-                        .label("Add templates")
-                        .on_click(
-                            cx.listener(|this, _, window, cx| this.open_add_templates(window, cx)),
-                        )
-                        .into_any_element(),
-                ),
-            )
-            .into_any_element();
+        if self.state == WorkspaceState::Loading {
+            return div().size_full().bg(palette.sunken).into_any_element();
         }
-        match &self.document_state {
-            DocumentState::Loading => div()
+        if self.documents.is_empty() {
+            return div()
                 .size_full()
                 .bg(palette.sunken)
-                .p_6()
-                .child(
-                    div()
-                        .h_full()
-                        .rounded(px(8.))
-                        .bg(palette.hover.opacity(0.6)),
-                )
+                .child(empty_state(
+                    &palette,
+                    IconName::FileText,
+                    "No documents yet",
+                    Some("Add a template to start writing for this FIR.".into()),
+                    Some(
+                        button("empty-add-templates", "Add document")
+                            .primary()
+                            .icon(IconName::Plus)
+                            .keys("A")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_add_templates(window, cx)
+                            }))
+                            .into_any_element(),
+                    ),
+                ))
+                .into_any_element();
+        }
+        match &self.document_state {
+            DocumentState::Loading => div().size_full().bg(palette.sunken).into_any_element(),
+            DocumentState::Failed(message) => div()
+                .size_full()
+                .bg(palette.sunken)
+                .child(empty_state(
+                    &palette,
+                    IconName::TriangleAlert,
+                    "Couldn't open this document",
+                    Some(message.clone().into()),
+                    Some(
+                        button("document-retry", "Try again")
+                            .outline()
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if let Some(active) = this.active {
+                                    this.open_document(active, window, cx);
+                                }
+                            }))
+                            .into_any_element(),
+                    ),
+                ))
                 .into_any_element(),
-            DocumentState::Failed(message) => empty_state(
-                &palette,
-                IconName::TriangleAlert,
-                "Could not load this document",
-                Some(message.clone().into()),
-                None,
-            )
-            .into_any_element(),
             DocumentState::Idle => div()
                 .size_full()
                 .child(self.editor.view())
                 .into_any_element(),
         }
     }
+
+    fn more_menu(&self, cx: &mut Context<Self>) -> AnyElement {
+        let palette = *Palette::get(cx);
+        let names = self.mode == DisplayMode::Labels;
+        let close = |this: &mut Self, cx: &mut Context<Self>| {
+            this.menu = None;
+            cx.notify();
+        };
+        menu_panel(&palette)
+            .w(px(232.))
+            .child(
+                menu_item("more-names", "Show field names")
+                    .check(names)
+                    .keys("Mod+Shift+L")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        close(this, cx);
+                        this.toggle_field_names(cx);
+                    })),
+            )
+            .child(
+                menu_item("more-case-details", "Case details")
+                    .icon(IconName::PanelRight)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        close(this, cx);
+                        this.panel_choice = Some(true);
+                        this.panel
+                            .update(cx, |panel, cx| panel.set_tab(FieldsTab::Details, cx));
+                    })),
+            )
+            .child(menu_separator(&palette))
+            .child(
+                menu_item("more-delete", "Delete FIR")
+                    .icon(IconName::Trash)
+                    .danger()
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        close(this, cx);
+                        this.request_delete(window, cx);
+                    })),
+            )
+            .into_any_element()
+    }
 }
 
 impl Render for WorkspaceScreen {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
         match &self.state {
             WorkspaceState::NotFound => {
@@ -1196,7 +1562,12 @@ impl Render for WorkspaceScreen {
                     IconName::Folder,
                     "FIR not found",
                     Some("This FIR doesn't exist or was deleted.".into()),
-                    None,
+                    Some(
+                        button("back-to-firs", "Back to FIRs")
+                            .outline()
+                            .on_click(|_, window, cx| navigate(Route::Firs, window, cx))
+                            .into_any_element(),
+                    ),
                 )
                 .into_any_element();
             }
@@ -1204,15 +1575,11 @@ impl Render for WorkspaceScreen {
                 return empty_state(
                     &palette,
                     IconName::TriangleAlert,
-                    "Could not load this FIR",
+                    "Couldn't open this FIR",
+                    Some(format!("Your saved documents are safe. ({message})").into()),
                     Some(
-                        format!("Your saved documents are safe. Reload to try again. ({message})")
-                            .into(),
-                    ),
-                    Some(
-                        Button::new("reload-workspace")
+                        button("reload-workspace", "Try again")
                             .outline()
-                            .label("Reload")
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.state = WorkspaceState::Loading;
                                 this.load_workspace(window, cx);
@@ -1225,157 +1592,9 @@ impl Render for WorkspaceScreen {
             }
             _ => {}
         }
-        let values = self.values.clone();
-        let offence = values
-            .as_ref()
-            .map(|values| values.fir.fir.offence.clone())
-            .unwrap_or_default();
-        let dirty = self.is_dirty(cx);
-        let saving = self.saving;
-        let has_active = self.active.is_some() && self.document_state == DocumentState::Idle;
-        let included = self.included_count();
-        let total = self.documents.len();
-        let printable = included > 0;
-        let names_shown = self.mode == DisplayMode::Labels;
-        let weak = cx.entity().downgrade();
-        let header =
-            pane_header(&palette)
-                .flex_row_reverse()
-                .pl_2()
-                .pr_4()
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .text_size(px(18.))
-                        .font_medium()
-                        .child(label(offence).rtl().truncate().w_full()),
-                )
-                .child(
-                    h_flex()
-                        .items_center()
-                        .gap_1()
-                        .child(
-                            Button::new("workspace-more")
-                                .ghost()
-                                .small()
-                                .icon(IconName::Ellipsis)
-                                .tooltip("More actions")
-                                .dropdown_menu({
-                                    let weak = weak.clone();
-                                    move |menu, _, _| {
-                                        let (toggle, delete) = (weak.clone(), weak.clone());
-                                        menu.item(
-                                            PopupMenuItem::new("Show field names")
-                                                .checked(names_shown)
-                                                .on_click(move |_, _, cx| {
-                                                    toggle
-                                                        .update(cx, |this, cx| {
-                                                            this.toggle_field_names(cx)
-                                                        })
-                                                        .ok();
-                                                }),
-                                        )
-                                        .item(PopupMenuItem::separator())
-                                        .item(
-                                            PopupMenuItem::new("Delete FIR")
-                                                .icon(IconName::Trash)
-                                                .on_click(move |_, window, cx| {
-                                                    delete
-                                                        .update(cx, |this, cx| {
-                                                            this.request_delete(window, cx)
-                                                        })
-                                                        .ok();
-                                                }),
-                                        )
-                                    }
-                                }),
-                        )
-                        .children(has_active.then(|| {
-                            Button::new("workspace-save")
-                                .small()
-                                .loading(saving)
-                                .disabled(!dirty || saving)
-                                .when(dirty, |this| this.primary())
-                                .when(!dirty, |this| this.outline())
-                                .label(if saving {
-                                    "Saving…"
-                                } else if dirty {
-                                    "Save"
-                                } else {
-                                    "Saved"
-                                })
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.save_active(window, cx, None)
-                                }))
-                        }))
-                        .child(
-                            kit_icon_button("custom-values-button", IconName::Braces)
-                                .tooltip("Custom field values")
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.edit_custom_values(window, cx)
-                                })),
-                        )
-                        .child(
-                            kit_icon_button("workspace-print", IconName::Printer)
-                                .tooltip("Print preview")
-                                .disabled(!printable)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.open_print_preview(window, cx)
-                                })),
-                        ),
-                );
-        let rail =
-            v_flex()
-                .id("workspace-rail")
-                .w(px(DETAILS_RAIL_WIDTH))
-                .flex_shrink_0()
-                .h_full()
-                .border_l_1()
-                .border_color(palette.line)
-                .child(
-                    v_flex()
-                        .id("workspace-rail-scroll")
-                        .flex_1()
-                        .min_h_0()
-                        .overflow_y_scroll()
-                        .child(self.documents_rail(&palette, cx))
-                        .child(div().h(px(1.)).mx_4().my_1().bg(palette.line))
-                        .child(
-                            rail_header(&palette, "Details").child(
-                                kit_icon_button("edit-details", IconName::Pencil)
-                                    .tooltip("Edit details (E)")
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.edit_details(window, cx)
-                                    })),
-                            ),
-                        )
-                        .children(
-                            values
-                                .as_ref()
-                                .map(|values| self.details(&palette, values, cx)),
-                        )
-                        .children(
-                            values
-                                .as_ref()
-                                .and_then(|values| self.custom_section(&palette, values, cx)),
-                        ),
-                )
-                .children((total > 1).then(|| {
-                    status_bar(&palette)
-                        .child(small_icon(IconName::Printer, palette.ink_muted))
-                        .child(if included == total {
-                            "All will print".to_owned()
-                        } else {
-                            format!("{included} of {total} will print")
-                        })
-                }));
-        let body: AnyElement = if self.state == WorkspaceState::Loading {
-            div().flex_1().into_any_element()
-        } else {
-            self.main_panel(&palette, cx)
-        };
+        let panel_open = self.is_panel_open(window) && self.state == WorkspaceState::Ready;
+        let rail = self.documents_rail(&palette, window, cx);
+        let canvas = self.canvas(&palette, cx);
         h_flex()
             .id("workspace")
             .key_context(WORKSPACE)
@@ -1395,6 +1614,11 @@ impl Render for WorkspaceScreen {
                 this.step_document(-1, window, cx)
             }))
             .on_action(cx.listener(|this, _: &ToggleFieldNames, _, cx| this.toggle_field_names(cx)))
+            .on_action(
+                cx.listener(|this, _: &ToggleFieldsPanel, window, cx| {
+                    this.toggle_panel(window, cx)
+                }),
+            )
             .on_action(cx.listener(|this, _: &MoveDocumentUp, window, cx| {
                 if let Some(active) = this.active() {
                     this.move_document(active, -1, window, cx);
@@ -1405,15 +1629,22 @@ impl Render for WorkspaceScreen {
                     this.move_document(active, 1, window, cx);
                 }
             }))
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key == "f6" && !event.keystroke.modifiers.modified() {
+                    this.cycle_focus(window, cx);
+                    cx.stop_propagation();
+                }
+            }))
+            .child(rail)
             .child(
                 v_flex()
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .child(header)
-                    .child(div().flex_1().min_h_0().child(body)),
+                    .bg(palette.sunken)
+                    .child(canvas),
             )
-            .child(rail)
+            .when(panel_open, |this| this.child(self.panel.clone()))
             .into_any_element()
     }
 }
@@ -1421,15 +1652,24 @@ impl Render for WorkspaceScreen {
 impl crate::ui::titlebar::HeaderSource for WorkspaceScreen {
     fn header(
         &mut self,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> crate::ui::titlebar::HeaderContent {
         let palette = *Palette::get(cx);
         let row = self.models.firs.read(cx).get(self.id).cloned();
-        let number = row
+        let fir = self.values.as_ref().map(|values| values.fir.fir.clone());
+        let number = fir
             .as_ref()
-            .map(|row| format!("FIR {}", row.no))
-            .unwrap_or_else(|| "FIR".to_owned());
+            .map(|fir| fir.fir_no.clone())
+            .or_else(|| row.as_ref().map(|row| row.no.to_string()));
+        let status = fir
+            .as_ref()
+            .map(|fir| fir.status)
+            .or_else(|| row.as_ref().map(|row| row.status));
+        let offence = fir
+            .as_ref()
+            .map(|fir| fir.offence.clone())
+            .or_else(|| row.as_ref().map(|row| row.offence.to_string()));
         let title = h_flex()
             .items_center()
             .gap(px(10.))
@@ -1437,47 +1677,72 @@ impl crate::ui::titlebar::HeaderSource for WorkspaceScreen {
                 div()
                     .flex_none()
                     .text_size(px(15.))
-                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                    .child(label(number).ltr()),
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(
+                        missal_text::label(match number {
+                            Some(number) => format!("FIR {number}"),
+                            None => "FIR".to_owned(),
+                        })
+                        .ltr(),
+                    ),
             )
-            .children(
-                row.as_ref()
-                    .map(|row| crate::ui::status::status_pill(&palette, row.status)),
-            );
-        let dirty = self.is_dirty(cx);
+            .children(status.map(|status| crate::ui::status::status_pill(&palette, status)));
         let mut content = crate::ui::titlebar::HeaderContent::element(title);
-        if let Some(row) = row.as_ref() {
+        if let Some(offence) = offence {
             content = content.meta_element(
                 div()
                     .min_w_0()
                     .mt(px(-2.))
                     .text_color(palette.ink_muted)
-                    .child(
-                        crate::ui::ur_inline(row.offence.clone(), crate::ui::UrRole::Title)
-                            .truncate(),
-                    ),
+                    .child(crate::ui::ur_inline(offence, UrRole::Title).truncate()),
             );
         }
+        let state = if self.saving {
+            SaveState::Saving
+        } else if self.is_dirty(cx) {
+            SaveState::Unsaved
+        } else {
+            SaveState::Saved
+        };
+        let panel_open = self.is_panel_open(window);
+        let more_open = self.menu == Some(Menu::More);
+        let more_screen = cx.entity();
+        let weak = cx.entity().downgrade();
+        let more = Popover::new("workspace-more")
+            .appearance(false)
+            .anchor(gpui_kit::Anchor::TopRight)
+            .trigger(Trigger {
+                button: icon_button("header-more", IconName::Ellipsis, "More actions"),
+                open: more_open,
+            })
+            .open(more_open)
+            .on_open_change(move |open, _, cx| {
+                let open = *open;
+                weak.update(cx, |this, cx| {
+                    this.menu = open.then_some(Menu::More);
+                    cx.notify();
+                })
+                .ok();
+            })
+            .content(move |_, _, cx| more_screen.update(cx, |this, cx| this.more_menu(cx)));
         content
-            .action(crate::ui::save_state(
-                &palette,
-                if dirty {
-                    crate::ui::SaveState::Unsaved
-                } else {
-                    crate::ui::SaveState::Saved
-                },
-            ))
+            .action(div().mr(px(6.)).child(save_state(&palette, state)))
             .action(
-                crate::ui::icon_button("header-edit-details", IconName::Pencil, "Edit details")
+                icon_button("header-edit-details", IconName::Pencil, "Edit details")
                     .keys("E")
                     .on_click(cx.listener(|this, _, window, cx| this.edit_details(window, cx))),
             )
             .action(
-                crate::ui::icon_button("header-print", IconName::Printer, "Print")
+                icon_button("header-print", IconName::Printer, "Print")
                     .keys("Mod+P")
-                    .on_click(
-                        cx.listener(|this, _, window, cx| this.open_print_preview(window, cx)),
-                    ),
+                    .on_click(cx.listener(|this, _, window, cx| this.print(window, cx))),
             )
+            .action(
+                icon_button("header-fields-panel", IconName::PanelRight, "Fields panel")
+                    .keys("Mod+.")
+                    .toggled(panel_open)
+                    .on_click(cx.listener(|this, _, window, cx| this.toggle_panel(window, cx))),
+            )
+            .action(more)
     }
 }

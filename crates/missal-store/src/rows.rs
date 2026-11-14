@@ -119,7 +119,7 @@ impl FirRow {
 }
 
 pub(crate) const FIR_SUMMARY_COLUMNS: &str =
-    "id, fir_no, date, offence, incident_date, arrest_date, status";
+    "id, fir_no, date, offence, incident_date, arrest_date, status, accused";
 
 pub(crate) fn fir_summary(row: &Row<'_>) -> rusqlite::Result<Result<FirSummary>> {
     let decode = Decode {
@@ -127,8 +127,15 @@ pub(crate) fn fir_summary(row: &Row<'_>) -> rusqlite::Result<Result<FirSummary>>
     };
     let id: i64 = row.get(0)?;
     let text = |index: usize| row.get::<_, String>(index);
-    let (fir_no, date, offence, incident_date, arrest_date, status) =
-        (text(1)?, text(2)?, text(3)?, text(4)?, text(5)?, text(6)?);
+    let (fir_no, date, offence, incident_date, arrest_date, status, accused) = (
+        text(1)?,
+        text(2)?,
+        text(3)?,
+        text(4)?,
+        text(5)?,
+        text(6)?,
+        text(7)?,
+    );
     Ok((|| {
         Ok(FirSummary {
             id: decode.id(id, FirId::new)?,
@@ -138,6 +145,7 @@ pub(crate) fn fir_summary(row: &Row<'_>) -> rusqlite::Result<Result<FirSummary>>
             incident_date: decode.required(&incident_date)?,
             arrest_date: js_trim(&arrest_date).to_owned(),
             status: decode.status(&status)?,
+            accused: decode.strings(&accused)?,
         })
     })())
 }

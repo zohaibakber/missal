@@ -9,7 +9,6 @@ use gpui_kit::{
 
 use crate::screens::fir_form::NewFirScreen;
 use crate::screens::fir_list::FirListScreen;
-use crate::screens::placeholder::PlaceholderScreen;
 use crate::screens::settings::SettingsScreen;
 use crate::screens::templates::TemplatesScreen;
 use crate::screens::workspace::WorkspaceScreen;
@@ -21,7 +20,7 @@ use crate::ui::cheatsheet;
 use crate::ui::components::ComponentsScreen;
 use crate::ui::nav_menu::{self, NavMenu};
 use crate::ui::palette::CommandPalette;
-use crate::ui::print_preview::{PreviewClosed, PrintPreview, PrintRequest};
+use crate::ui::print_preview::{PrintEvent, PrintPreview, PrintRequest, PrintSource};
 use crate::ui::titlebar::{Header, HeaderContent, HeaderSource};
 use crate::ui::toast::{ToastHost, ToastHostHandle};
 
@@ -49,8 +48,8 @@ enum Screen {
     Workspace(Entity<WorkspaceScreen>),
     Settings(Entity<SettingsScreen>),
     Templates(Entity<TemplatesScreen>),
-    Placeholder(Entity<PlaceholderScreen>),
     Components(Entity<ComponentsScreen>),
+    Print(Entity<PrintPreview>),
 }
 
 fn header_of<V: HeaderSource + Render>(
@@ -69,8 +68,8 @@ impl Screen {
             Screen::Workspace(view) => view.clone().into(),
             Screen::Settings(view) => view.clone().into(),
             Screen::Templates(view) => view.clone().into(),
-            Screen::Placeholder(view) => view.clone().into(),
             Screen::Components(view) => view.clone().into(),
+            Screen::Print(view) => view.clone().into(),
         }
     }
 
@@ -81,8 +80,8 @@ impl Screen {
             Screen::Workspace(view) => header_of(view, window, cx),
             Screen::Settings(view) => header_of(view, window, cx),
             Screen::Templates(view) => header_of(view, window, cx),
-            Screen::Placeholder(view) => header_of(view, window, cx),
             Screen::Components(view) => header_of(view, window, cx),
+            Screen::Print(view) => header_of(view, window, cx),
         }
     }
 
@@ -93,14 +92,14 @@ impl Screen {
             Screen::Workspace(view) => cx.observe(view, |_, _, cx| cx.notify()),
             Screen::Settings(view) => cx.observe(view, |_, _, cx| cx.notify()),
             Screen::Templates(view) => cx.observe(view, |_, _, cx| cx.notify()),
-            Screen::Placeholder(view) => cx.observe(view, |_, _, cx| cx.notify()),
             Screen::Components(view) => cx.observe(view, |_, _, cx| cx.notify()),
+            Screen::Print(view) => cx.observe(view, |_, _, cx| cx.notify()),
         }
     }
 
     fn guard(&self) -> crate::state::nav::Guard {
         match self {
-            Screen::Firs(_) | Screen::Placeholder(_) | Screen::Components(_) => Rc::new(|_| false),
+            Screen::Firs(_) | Screen::Components(_) | Screen::Print(_) => Rc::new(|_| false),
             Screen::NewFir(view) => {
                 let view = view.clone();
                 Rc::new(move |cx| view.read(cx).is_dirty(cx))
@@ -127,8 +126,8 @@ impl Screen {
             Screen::Workspace(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
             Screen::Settings(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
             Screen::Templates(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
-            Screen::Placeholder(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
             Screen::Components(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
+            Screen::Print(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
         }
     }
 }
@@ -140,7 +139,8 @@ pub struct AppShell {
     route: Route,
     palette: Option<Entity<CommandPalette>>,
     nav_menu: Option<Entity<NavMenu>>,
-    print_preview: Option<Entity<PrintPreview>>,
+    parked: Option<(Route, Screen)>,
+    print_subscription: Option<Subscription>,
     toasts: Entity<ToastHost>,
     pending_import: bool,
     screen_subscription: Subscription,
@@ -181,12 +181,14 @@ impl AppShell {
             route,
             palette: None,
             nav_menu: None,
-            print_preview: None,
+            parked: None,
+            print_subscription: None,
             toasts,
             pending_import: false,
             screen_subscription,
             _subscriptions: subscriptions,
         };
+        shell.wire_print(window, cx);
         shell.record_recent(route, cx);
         shell.activate(window, cx);
         shell
@@ -258,7 +260,10 @@ impl AppShell {
     }
 
     pub fn print_preview(&self) -> Option<Entity<PrintPreview>> {
-        self.print_preview.clone()
+        match &self.screen {
+            Screen::Print(view) => Some(view.clone()),
+            _ => None,
+        }
     }
 
     pub fn show_print_preview(
@@ -267,33 +272,118 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.print_preview.is_some() {
+        if matches!(self.screen, Screen::Print(_)) {
             return;
         }
         self.palette = None;
         self.nav_menu = None;
-        let preview = cx.new(|cx| PrintPreview::new(request, window, cx));
-        cx.subscribe_in(
-            &preview,
-            window,
-            |this, _, _: &PreviewClosed, window, cx| {
-                this.print_preview = None;
-                this.screen.focus(window, cx);
-                cx.notify();
-            },
-        )
-        .detach();
-        preview.update(cx, |preview, cx| preview.focus(window, cx));
-        self.print_preview = Some(preview);
+        let target = match (&request.values, self.route) {
+            (Some(values), _) => Some(crate::state::PrintTarget::Fir(values.fir.id)),
+            (None, Route::Template(id)) => Some(crate::state::PrintTarget::Template(id)),
+            _ => None,
+        };
+        let live = match &self.screen {
+            Screen::Workspace(view) => view.read(cx).active(),
+            _ => None,
+        };
+        let preview = cx.new(|cx| {
+            PrintPreview::from_source(
+                PrintSource::Request {
+                    request: Box::new(request),
+                    target,
+                    live,
+                },
+                window,
+                cx,
+            )
+        });
+        let previous = std::mem::replace(&mut self.screen, Screen::Print(preview));
+        self.parked = Some((self.route, previous));
+        self.screen_subscription = self.screen.observe(cx);
+        self.wire_print(window, cx);
+        match target {
+            Some(target) => self.models.nav.update(cx, |nav, cx| {
+                nav.commit(crate::state::nav::Request::Push(Route::Print(target)), cx)
+            }),
+            None => self.activate(window, cx),
+        }
         cx.notify();
     }
 
-    fn print_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(preview) = self.print_preview.clone() {
-            preview.update(cx, |preview, cx| preview.print(window, cx));
+    fn wire_print(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.print_subscription = match &self.screen {
+            Screen::Print(view) => Some(cx.subscribe_in(
+                view,
+                window,
+                |this, _, event: &PrintEvent, window, cx| match event {
+                    PrintEvent::Close => this.leave_print(window, cx),
+                    PrintEvent::FillIn(fir) => {
+                        let back = this
+                            .parked
+                            .as_ref()
+                            .is_some_and(|(route, _)| *route == Route::Fir(*fir));
+                        if back {
+                            this.leave_print(window, cx);
+                        } else {
+                            navigate(Route::Fir(*fir), window, cx);
+                        }
+                    }
+                },
+            )),
+            _ => None,
+        };
+    }
+
+    fn print_guard(&self) -> Option<crate::state::nav::Guard> {
+        match (&self.screen, &self.parked) {
+            (Screen::Print(_), Some((_, parked))) => Some(parked.guard()),
+            _ => None,
+        }
+    }
+
+    fn leave_print(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !matches!(self.screen, Screen::Print(_)) {
             return;
         }
+        let parked_route = self.parked.as_ref().map(|(route, _)| *route);
+        if matches!(self.route, Route::Print(_)) {
+            let previous = {
+                let nav = self.models.nav.read(cx);
+                let (entries, index) = nav.history();
+                index.checked_sub(1).map(|index| entries[index])
+            };
+            if previous.is_some() && previous == parked_route {
+                self.models.nav.update(cx, |nav, cx| {
+                    nav.commit(crate::state::nav::Request::Back, cx)
+                });
+            } else if previous.is_some() {
+                self.models.nav.update(cx, |nav, cx| nav.back(window, cx));
+            } else {
+                navigate(Route::Firs, window, cx);
+            }
+            return;
+        }
+        if let Some((_, screen)) = self.parked.take() {
+            self.screen = screen;
+            self.screen_subscription = self.screen.observe(cx);
+            self.print_subscription = None;
+            self.activate(window, cx);
+            cx.notify();
+        }
+    }
+
+    pub fn back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(self.screen, Screen::Print(_)) {
+            self.leave_print(window, cx);
+        } else {
+            self.models.nav.update(cx, |nav, cx| nav.back(window, cx));
+        }
+    }
+
+    fn print_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match &self.screen {
+            Screen::Print(view) => view.update(cx, |preview, cx| preview.print(window, cx)),
+            Screen::Firs(view) => view.update(cx, |list, cx| list.print_focused(window, cx)),
             Screen::Workspace(view) => {
                 view.update(cx, |screen, cx| screen.open_print_preview(window, cx))
             }
@@ -307,15 +397,12 @@ impl AppShell {
     }
 
     fn save_pdf_action(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(preview) = self.print_preview.clone() {
+        if let Screen::Print(preview) = &self.screen {
             preview.update(cx, |preview, cx| preview.export_pdf(window, cx));
         }
     }
 
     pub fn import_word(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.print_preview.is_some() {
-            return;
-        }
         self.nav_menu = None;
         self.palette = None;
         if let Screen::Templates(view) = &self.screen
@@ -370,9 +457,12 @@ impl AppShell {
             Route::Fir(id) => {
                 Screen::Workspace(cx.new(|cx| WorkspaceScreen::new(models.clone(), id, window, cx)))
             }
-            Route::EditFir(_) | Route::Print(_) => {
-                Screen::Placeholder(cx.new(|cx| PlaceholderScreen::new(models.clone(), route, cx)))
+            Route::EditFir(id) => {
+                Screen::NewFir(cx.new(|cx| NewFirScreen::edit(models.clone(), id, window, cx)))
             }
+            Route::Print(target) => Screen::Print(
+                cx.new(|cx| PrintPreview::from_source(PrintSource::Target(target), window, cx)),
+            ),
             Route::Settings => {
                 Screen::Settings(cx.new(|cx| SettingsScreen::new(models.clone(), window, cx)))
             }
@@ -384,7 +474,7 @@ impl AppShell {
     }
 
     fn activate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let guard = self.screen.guard();
+        let guard = self.print_guard().unwrap_or_else(|| self.screen.guard());
         self.models
             .nav
             .update(cx, |nav, _| nav.set_guard(Some(guard)));
@@ -407,7 +497,31 @@ impl AppShell {
         }
         self.palette = None;
         self.nav_menu = None;
-        self.print_preview = None;
+        let entering_print = matches!(
+            (&self.screen, route),
+            (Screen::Print(view), Route::Print(target)) if view.read(cx).target() == Some(target)
+        );
+        let restoring = self
+            .parked
+            .as_ref()
+            .is_some_and(|(parked, _)| *parked == route);
+        if restoring && let Some((_, screen)) = self.parked.take() {
+            self.screen = screen;
+            self.screen_subscription = self.screen.observe(cx);
+            self.print_subscription = None;
+            self.route = route;
+            self.record_recent(route, cx);
+            self.activate(window, cx);
+            cx.notify();
+            return;
+        }
+        if entering_print {
+            self.route = route;
+            self.activate(window, cx);
+            cx.notify();
+            return;
+        }
+        self.parked = None;
         let stays_in_templates = matches!(
             (&self.screen, route),
             (
@@ -422,6 +536,7 @@ impl AppShell {
         } else {
             self.screen = Self::build_screen(&self.models, route, window, cx);
             self.screen_subscription = self.screen.observe(cx);
+            self.wire_print(window, cx);
         }
         self.route = route;
         self.record_recent(route, cx);
@@ -520,9 +635,8 @@ pub fn navigate_replace(route: Route, cx: &mut App) {
 }
 
 pub fn navigate_back(window: &mut Window, cx: &mut App) {
-    let nav = Models::get(cx).nav;
     window.defer(cx, move |window, cx| {
-        nav.update(cx, |nav, cx| nav.back(window, cx))
+        with_shell(window, cx, |shell, window, cx| shell.back(window, cx));
     });
 }
 
@@ -586,9 +700,7 @@ pub fn show_about(window: &mut Window, cx: &mut App) {
 }
 
 pub fn check_for_updates(window: &mut Window, cx: &mut App) {
-    let handle = window.window_handle();
-    crate::update::controller::start(handle, cx);
-    crate::state::toast_info(window, cx, "Checking for updates…");
+    crate::update::controller::check_now(window, cx);
 }
 
 pub fn set_theme(choice: crate::prefs::ThemeChoice, window: &mut Window, cx: &mut App) {
@@ -637,12 +749,7 @@ impl Render for AppShell {
             .on_action(cx.listener(|_, _: &NewTemplate, window, cx| {
                 navigate(Route::NewTemplate, window, cx)
             }))
-            .on_action({
-                let nav = nav.clone();
-                cx.listener(move |_, _: &HistoryBack, window, cx| {
-                    nav.update(cx, |nav, cx| nav.back(window, cx))
-                })
-            })
+            .on_action(cx.listener(|this, _: &HistoryBack, window, cx| this.back(window, cx)))
             .on_action({
                 let nav = nav.clone();
                 cx.listener(move |_, _: &HistoryForward, window, cx| {
@@ -650,9 +757,7 @@ impl Render for AppShell {
                 })
             })
             .on_action(cx.listener(|this, _: &BlurFocus, window, cx| {
-                if let Some(preview) = this.print_preview.clone() {
-                    preview.update(cx, |preview, cx| preview.focus(window, cx));
-                } else if this.palette.is_some() {
+                if this.palette.is_some() {
                     this.close_palette(window, cx);
                 } else if this.nav_menu.take().is_some() {
                     this.screen.focus(window, cx);
@@ -681,11 +786,6 @@ impl Render for AppShell {
                 self.palette
                     .clone()
                     .map(|palette| palette.into_any_element()),
-            )
-            .children(
-                self.print_preview
-                    .clone()
-                    .map(|preview| preview.into_any_element()),
             )
             .child(self.toasts.clone())
     }

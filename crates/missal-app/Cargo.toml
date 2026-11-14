@@ -28,6 +28,18 @@ required-features = ["headless"]
 name = "editor_shots"
 required-features = ["headless"]
 
+[[example]]
+name = "wp2_shots"
+required-features = ["headless"]
+
+[[example]]
+name = "wp3_shots"
+required-features = ["headless"]
+
+[[example]]
+name = "list_print_shots"
+required-features = ["headless"]
+
 [dependencies]
 missal-core.workspace = true
 missal-docx.workspace = true

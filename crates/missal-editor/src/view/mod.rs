@@ -1,12 +1,12 @@
 mod element;
 pub mod keys;
+mod theme;
 mod toolbar;
 
 use std::ops::Range;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use gpui_kit::component::ActiveTheme;
 use gpui_kit::{
     App, AppContext, Bounds, ClipboardEntry, ClipboardItem, Context, Entity, EntityInputHandler,
     EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, MouseDownEvent,
@@ -30,9 +30,11 @@ use crate::model::{Change, EditorCore, Fragment, Selection, clip};
 
 pub use element::PagesElement;
 pub use keys::KEY_CONTEXT;
+pub use theme::EditorTheme;
 
 pub const PAGE_GAP: f32 = 24.0;
 pub const CANVAS_PAD: f32 = 24.0;
+pub const CANVAS_TOP: f32 = 20.0;
 pub const MIN_ZOOM: f32 = 0.25;
 pub const MAX_FIT_ZOOM: f32 = 1.0;
 pub const MAX_ZOOM: f32 = 3.0;
@@ -73,7 +75,13 @@ impl Default for EditorFields {
 pub enum EditorEvent {
     DirtyChanged(bool),
     SaveRequested,
+    ModeRequested(DisplayMode),
 }
+
+#[derive(Clone, Copy, Debug, Default)]
+struct SessionZoom(Option<f32>);
+
+impl gpui_kit::Global for SessionZoom {}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Timings {
@@ -134,6 +142,7 @@ pub struct Editor {
     packet: Packet,
     key: String,
     read_only: bool,
+    mode_toggle: bool,
     zoom_override: Option<f32>,
     pub(crate) scroll: PagePoint,
     pub(crate) viewport: Option<Bounds<Pixels>>,
@@ -184,12 +193,17 @@ fn byte_to_utf16(text: &str, offset: usize) -> usize {
 impl Editor {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Editor {
         let focus = cx.focus_handle();
+        let theme = EditorTheme::get(cx);
         let field_search = cx.new(|cx| {
             TextInput::new(window, cx)
-                .placeholder("Search fields")
-                .direction(missal_text::Direction::Auto)
-                .text_size(14.0)
+                .bare()
+                .placeholder("تلاش")
+                .placeholder_color(theme.ink_faint)
+                .direction(missal_text::Direction::Rtl)
+                .align(missal_text::Align::Right)
+                .text_size(16.0)
         });
+        let zoom_override = cx.try_global::<SessionZoom>().and_then(|zoom| zoom.0);
         let subscriptions = vec![
             cx.on_focus(&focus, window, |this, _, cx| {
                 this.restart_blink(cx);
@@ -246,7 +260,8 @@ impl Editor {
             packet,
             key: String::new(),
             read_only: false,
-            zoom_override: None,
+            mode_toggle: false,
+            zoom_override,
             scroll: PagePoint::default(),
             viewport: None,
             placement: Placement::default(),
@@ -350,6 +365,67 @@ impl Editor {
     pub fn set_read_only(&mut self, read_only: bool, cx: &mut Context<Self>) {
         self.read_only = read_only;
         cx.notify();
+    }
+
+    pub fn set_mode_toggle(&mut self, shown: bool, cx: &mut Context<Self>) {
+        self.mode_toggle = shown;
+        cx.notify();
+    }
+
+    pub fn has_mode_toggle(&self) -> bool {
+        self.mode_toggle
+    }
+
+    pub fn request_mode(&mut self, mode: DisplayMode, cx: &mut Context<Self>) {
+        if self.fields.mode != mode {
+            cx.emit(EditorEvent::ModeRequested(mode));
+        }
+    }
+
+    pub fn is_fit_zoom(&self) -> bool {
+        self.zoom_override.is_none()
+    }
+
+    pub fn field_positions(&self, reference: &FieldReference) -> Vec<Position> {
+        let document = self.core.document();
+        let mut found = Vec::new();
+        for path in crate::model::tree::all_text_paths(document) {
+            let Some(inlines) = crate::model::tree::inlines(document, &path) else {
+                continue;
+            };
+            let mut offset = 0;
+            for inline in inlines.iter() {
+                if let missal_core::document::Inline::Field(field) = inline
+                    && field.reference == *reference
+                {
+                    found.push(pos(path.clone(), offset));
+                }
+                offset += crate::model::inline::inline_len(inline);
+            }
+        }
+        found
+    }
+
+    pub fn reveal_reference(
+        &mut self,
+        reference: &FieldReference,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(first) = self.field_positions(reference).into_iter().next() else {
+            return false;
+        };
+        self.select(Selection::caret(first), window, cx);
+        if let Some(bounds) = self.viewport
+            && let Some(rect) = self.caret_canvas_rect(&self.core.selection().head)
+        {
+            self.autoscroll = false;
+            self.scroll.y = rect.y - f32::from(bounds.size.height) / 3.0;
+            self.clamp_scroll();
+        }
+        window.focus(&self.focus, cx);
+        cx.notify();
+        true
     }
 
     pub fn set_fields(&mut self, fields: EditorFields, cx: &mut Context<Self>) {
@@ -533,7 +609,7 @@ impl Editor {
             .map(|p| p.size.width * zoom)
             .fold(0.0f32, f32::max);
         let content_width = width.max(widest + 2.0 * CANVAS_PAD);
-        let mut y = CANVAS_PAD;
+        let mut y = CANVAS_TOP;
         for page in self.packet.pages() {
             let w = page.size.width * zoom;
             let h = page.size.height * zoom;
@@ -686,6 +762,7 @@ impl Editor {
             0.0
         };
         self.zoom_override = zoom.map(|z| z.clamp(MIN_ZOOM, MAX_ZOOM));
+        cx.set_global(SessionZoom(self.zoom_override));
         if let Some(bounds) = self.viewport {
             self.layout_frame(bounds);
             self.scroll.y = fraction * self.placement.height - anchor;
@@ -1499,7 +1576,7 @@ impl EntityInputHandler for Editor {
 impl Render for Editor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.entity();
-        let canvas = cx.theme().sidebar;
+        let canvas = EditorTheme::get(cx).canvas;
         let root = div()
             .id("missal-editor")
             .key_context("MissalEditor MissalTextInput")

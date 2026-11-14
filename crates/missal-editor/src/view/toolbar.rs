@@ -1,16 +1,24 @@
+use std::rc::Rc;
+use std::time::Duration;
+
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants};
 use gpui_kit::component::popover::Popover;
-use gpui_kit::component::{ActiveTheme, Disableable, Selectable, Sizable, h_flex, v_flex};
+use gpui_kit::component::{Icon, Selectable, h_flex, v_flex};
+use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, Context, InteractiveElement, IntoElement, ParentElement,
+    AnyElement, AnyView, App, AppContext, ClickEvent, Context, ElementId, FontWeight,
+    InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Render, RenderOnce, SharedString,
     StatefulInteractiveElement, Styled, Window, div, px,
 };
+use missal_core::DisplayMode;
 use missal_core::document::{Align, ListType, TextFormat};
 use missal_text::label;
 
 use super::Editor;
+use super::theme::EditorTheme;
+
+pub const TOOLTIP_DELAY: Duration = Duration::from_millis(400);
 
 fn modifier() -> &'static str {
     if cfg!(target_os = "macos") {
@@ -20,60 +28,216 @@ fn modifier() -> &'static str {
     }
 }
 
-fn hint(text: &str, keys: Option<&str>) -> String {
-    match keys {
-        Some(keys) => format!("{text}  ({})", keys.replace("Mod", modifier())),
-        None => text.to_owned(),
+fn caps(keys: &str) -> Vec<String> {
+    keys.split('+')
+        .map(|key| match key {
+            "Mod" => modifier().to_owned(),
+            other => other.to_owned(),
+        })
+        .collect()
+}
+
+pub struct ToolTip {
+    label: SharedString,
+    keys: Option<SharedString>,
+}
+
+impl Render for ToolTip {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let theme = EditorTheme::get(cx);
+        div().pl(px(4.)).pt(px(4.)).child(
+            h_flex()
+                .items_center()
+                .gap(px(8.))
+                .py(px(4.))
+                .px(px(8.))
+                .rounded(px(6.))
+                .bg(theme.ink)
+                .text_color(theme.surface)
+                .font_family(missal_text::UI_FAMILY)
+                .text_size(px(12.))
+                .line_height(px(18.))
+                .child(self.label.clone())
+                .children(self.keys.as_ref().map(|keys| {
+                    h_flex()
+                        .gap(px(3.))
+                        .children(caps(keys).into_iter().map(|cap| {
+                            div()
+                                .h(px(18.))
+                                .min_w(px(18.))
+                                .px(px(4.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(4.))
+                                .border_1()
+                                .border_color(theme.surface.opacity(0.35))
+                                .text_size(px(11.))
+                                .line_height(px(16.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .child(cap)
+                        }))
+                })),
+        )
     }
 }
 
-fn separator(cx: &Context<Editor>) -> AnyElement {
+pub fn tooltip(
+    label: impl Into<SharedString>,
+    keys: Option<&str>,
+) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
+    let label: SharedString = label.into();
+    let keys: Option<SharedString> = keys.map(|keys| SharedString::from(keys.to_owned()));
+    move |_, cx| {
+        cx.new(|_| ToolTip {
+            label: label.clone(),
+            keys: keys.clone(),
+        })
+        .into()
+    }
+}
+
+type Handler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
+#[derive(IntoElement)]
+pub struct ToolButton {
+    id: ElementId,
+    icon: IconName,
+    label: SharedString,
+    keys: Option<SharedString>,
+    dense: bool,
+    toggled: bool,
+    disabled: bool,
+    on_click: Option<Handler>,
+}
+
+pub fn tool(
+    id: impl Into<ElementId>,
+    icon: IconName,
+    label: impl Into<SharedString>,
+) -> ToolButton {
+    ToolButton {
+        id: id.into(),
+        icon,
+        label: label.into(),
+        keys: None,
+        dense: false,
+        toggled: false,
+        disabled: false,
+        on_click: None,
+    }
+}
+
+impl ToolButton {
+    pub fn keys(mut self, keys: impl Into<SharedString>) -> Self {
+        self.keys = Some(keys.into());
+        self
+    }
+
+    pub fn dense(mut self) -> Self {
+        self.dense = true;
+        self
+    }
+
+    pub fn toggled(mut self, toggled: bool) -> Self {
+        self.toggled = toggled;
+        self
+    }
+
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    pub fn on_click(
+        mut self,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_click = Some(Rc::new(handler));
+        self
+    }
+}
+
+impl Selectable for ToolButton {
+    fn selected(mut self, selected: bool) -> Self {
+        self.toggled = selected;
+        self
+    }
+
+    fn is_selected(&self) -> bool {
+        self.toggled
+    }
+}
+
+impl RenderOnce for ToolButton {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = EditorTheme::get(cx);
+        let size = if self.dense { 24. } else { 28. };
+        let glyph = if self.dense { 14. } else { 16. };
+        let color = if self.toggled {
+            theme.ink
+        } else {
+            theme.ink_muted
+        };
+        let disabled = self.disabled;
+        let ink = theme.ink;
+        let hover = theme.hover;
+        div()
+            .id(self.id)
+            .flex_none()
+            .size(px(size))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(6.))
+            .text_color(color)
+            .when(self.toggled, |this| this.bg(theme.pressed))
+            .when(disabled, |this| this.opacity(0.4))
+            .when(!disabled && !self.toggled, |this| {
+                this.hover(move |s| s.bg(hover).text_color(ink))
+            })
+            .role(gpui_kit::accesskit::Role::Button)
+            .aria_label(self.label.clone())
+            .when(self.toggled, |this| {
+                this.aria_toggled(gpui_kit::accesskit::Toggled::True)
+            })
+            .tooltip(tooltip(self.label.clone(), self.keys.as_deref()))
+            .tooltip_show_delay(TOOLTIP_DELAY)
+            .when_some(self.on_click.filter(|_| !disabled), |this, handler| {
+                this.on_click(move |event, window, cx| {
+                    cx.stop_propagation();
+                    handler(event, window, cx)
+                })
+            })
+            .child(Icon::new(self.icon).size(px(glyph)).text_color(color))
+            .test_support()
+    }
+}
+
+fn separator(theme: &EditorTheme) -> AnyElement {
     div()
-        .mx_1()
+        .flex_none()
+        .mx(px(6.))
         .w(px(1.))
-        .h(px(16.))
-        .bg(cx.theme().border)
+        .h(px(20.))
+        .bg(theme.line)
         .into_any_element()
 }
 
 impl Editor {
-    pub(crate) fn render_toolbar(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn field_menu(&self, theme: EditorTheme, cx: &mut Context<Self>) -> AnyElement {
         let entity = cx.entity();
-        let core = &self.core;
-        let bold = core.flag_state(TextFormat::BOLD);
-        let italic = core.flag_state(TextFormat::ITALIC);
-        let underline = core.flag_state(TextFormat::UNDERLINE);
-        let align = core.align();
-        let list = core.list_state();
-        let can_undo = core.can_undo();
-        let can_redo = core.can_redo();
-        let button = |id: &'static str, icon: IconName, tip: String| {
-            Button::new(id).icon(icon).ghost().small().tooltip(tip)
-        };
-        let act = |f: fn(&mut Editor, &mut Window, &mut Context<Editor>)| {
-            let entity = entity.clone();
-            move |_: &gpui_kit::ClickEvent, window: &mut Window, cx: &mut gpui_kit::App| {
-                entity.update(cx, |editor, cx| f(editor, window, cx));
-            }
-        };
-        let field_button = Button::new("insert-field-trigger")
-            .icon(IconName::Braces)
-            .label("Insert field")
-            .ghost()
-            .small()
-            .tooltip(format!(
-                "Or type {}name{}",
-                self.fields.markers.open(),
-                self.fields.markers.close()
-            ));
+        let tip = format!(
+            "Insert field (or type {}name{})",
+            self.fields.markers.open(),
+            self.fields.markers.close()
+        );
+        let trigger = tool("insert-field-trigger", IconName::Braces, tip).keys("Mod+Shift+F");
         let menu_entity = entity.clone();
         let search = self.field_search.clone();
-        let popover = Popover::new("insert-field")
-            .trigger(field_button)
+        let query_empty = self.field_query.is_empty();
+        Popover::new("insert-field")
+            .trigger(trigger)
             .open(self.field_menu_open)
             .on_open_change({
                 let entity = entity.clone();
@@ -86,32 +250,32 @@ impl Editor {
             .content(move |_, _, cx| {
                 let editor = menu_entity.read(cx);
                 let groups = editor.field_choices();
-                let muted = cx.theme().muted_foreground;
-                let accent = cx.theme().accent;
                 let entity = menu_entity.clone();
                 let mut index = 0usize;
                 let mut list = v_flex()
                     .id("field-choices")
                     .max_h(px(320.))
                     .overflow_y_scroll()
-                    .p_1();
+                    .p(px(4.));
                 if groups.is_empty() {
                     list = list.child(
                         div()
-                            .p_3()
-                            .text_size(px(12.))
-                            .text_color(muted)
+                            .p(px(12.))
+                            .text_size(px(13.))
+                            .text_color(theme.ink_muted)
                             .child("No fields found"),
                     );
                 }
                 for (heading, items) in groups {
                     list = list.child(
                         div()
-                            .px_2()
-                            .pt_2()
-                            .pb_1()
-                            .text_size(px(11.))
-                            .text_color(muted)
+                            .px(px(8.))
+                            .pt(px(8.))
+                            .pb(px(4.))
+                            .text_size(px(12.))
+                            .line_height(px(16.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme.ink_muted)
                             .child(heading),
                     );
                     for (name, reference) in items {
@@ -120,11 +284,11 @@ impl Editor {
                             h_flex()
                                 .id(("field-choice", index))
                                 .test_support()
-                                .h(px(34.))
-                                .px_2()
-                                .rounded(px(6.))
+                                .h(px(32.))
+                                .px(px(8.))
+                                .rounded(px(4.))
                                 .cursor_pointer()
-                                .hover(move |style| style.bg(accent))
+                                .hover(move |style| style.bg(theme.hover))
                                 .on_click(move |_, window, cx| {
                                     let reference = reference.clone();
                                     entity.update(cx, |editor, cx| {
@@ -132,160 +296,284 @@ impl Editor {
                                     });
                                 })
                                 .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .text_size(px(15.))
-                                        .child(label(name).rtl().truncate()),
+                                    div().flex_1().min_w_0().text_size(px(16.)).child(
+                                        label(name)
+                                            .rtl()
+                                            .leading(missal_text::LineHeight::Px(30.))
+                                            .truncate(),
+                                    ),
                                 ),
                         );
                         index += 1;
                     }
                 }
+                let clear = {
+                    let entity = menu_entity.clone();
+                    (!query_empty).then(|| {
+                        tool("field-search-clear", IconName::X, "Clear search")
+                            .dense()
+                            .on_click(move |_, window, cx| {
+                                entity.update(cx, |editor, cx| {
+                                    editor.field_search.update(cx, |input, cx| {
+                                        input.set_text("", cx);
+                                        input.focus(window, cx);
+                                    })
+                                });
+                            })
+                    })
+                };
+                let close = menu_entity.clone();
                 v_flex()
                     .w(px(288.))
-                    .child(div().p_2().child(search.clone()))
+                    .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                        if event.keystroke.key == "escape" {
+                            cx.stop_propagation();
+                            close
+                                .update(cx, |editor, cx| editor.open_field_menu(false, window, cx));
+                        }
+                    })
+                    .child(
+                        div().p(px(8.)).child(
+                            h_flex()
+                                .h(px(36.))
+                                .px(px(10.))
+                                .gap(px(8.))
+                                .items_center()
+                                .rounded(px(6.))
+                                .border_1()
+                                .border_color(theme.accent)
+                                .bg(theme.surface)
+                                .children(clear)
+                                .child(div().flex_1().min_w_0().mt(px(-1.)).child(search.clone()))
+                                .child(
+                                    Icon::new(IconName::Search)
+                                        .size(px(14.))
+                                        .text_color(theme.ink_faint),
+                                ),
+                        ),
+                    )
+                    .child(div().h(px(1.)).bg(theme.line))
                     .child(list)
-            });
+            })
+            .into_any_element()
+    }
+
+    fn mode_toggle(&self, theme: EditorTheme, cx: &mut Context<Self>) -> AnyElement {
+        let entity = cx.entity();
+        let current = self.fields.mode;
+        let item = |id: &'static str, text: &'static str, mode: DisplayMode| {
+            let on = current == mode;
+            let entity = entity.clone();
+            let ink = theme.ink;
+            div()
+                .id(id)
+                .h(px(24.))
+                .px(px(8.))
+                .flex()
+                .items_center()
+                .rounded(px(5.))
+                .text_size(px(12.))
+                .line_height(px(16.))
+                .font_weight(FontWeight::MEDIUM)
+                .cursor_pointer()
+                .role(gpui_kit::accesskit::Role::RadioButton)
+                .when(on, |this| {
+                    this.bg(theme.surface)
+                        .text_color(theme.ink)
+                        .shadow(vec![theme.control_shadow()])
+                        .aria_toggled(gpui_kit::accesskit::Toggled::True)
+                })
+                .when(!on, |this| {
+                    this.text_color(theme.ink_muted)
+                        .hover(move |s| s.text_color(ink))
+                })
+                .tooltip(tooltip(
+                    if mode == DisplayMode::Values {
+                        "Show values"
+                    } else {
+                        "Show field names"
+                    },
+                    Some("Mod+Shift+L"),
+                ))
+                .tooltip_show_delay(TOOLTIP_DELAY)
+                .on_click(move |_, _, cx| {
+                    entity.update(cx, |editor, cx| editor.request_mode(mode, cx));
+                })
+                .child(text)
+                .test_support()
+        };
+        h_flex()
+            .flex_none()
+            .p(px(2.))
+            .gap(px(2.))
+            .rounded(px(7.))
+            .bg(theme.hover)
+            .child(item("editor-mode-values", "Values", DisplayMode::Values))
+            .child(item("editor-mode-names", "Names", DisplayMode::Labels))
+            .into_any_element()
+    }
+
+    pub(crate) fn render_toolbar(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let theme = EditorTheme::get(cx);
+        let entity = cx.entity();
+        let core = &self.core;
+        let bold = core.flag_state(TextFormat::BOLD);
+        let italic = core.flag_state(TextFormat::ITALIC);
+        let underline = core.flag_state(TextFormat::UNDERLINE);
+        let align = core.align();
+        let list = core.list_state();
+        let can_undo = core.can_undo();
+        let can_redo = core.can_redo();
+        let act = |f: fn(&mut Editor, &mut Window, &mut Context<Editor>)| {
+            let entity = entity.clone();
+            move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                entity.update(cx, |editor, cx| f(editor, window, cx));
+            }
+        };
+        let zoom = self.placement.zoom;
+        let fit = self.is_fit_zoom();
         h_flex()
             .id("editor-toolbar")
             .flex_shrink_0()
             .h(px(40.))
-            .px_2()
-            .gap_0p5()
+            .px(px(8.))
+            .gap(px(2.))
             .items_center()
             .border_b_1()
-            .border_color(cx.theme().border)
-            .bg(cx.theme().background)
+            .border_color(theme.line)
+            .bg(theme.surface)
+            .font_family(missal_text::UI_FAMILY)
             .child(
-                button("editor-undo", IconName::Undo2, hint("Undo", Some("Mod+Z")))
+                tool("editor-undo", IconName::Undo2, "Undo")
+                    .keys("Mod+Z")
                     .disabled(!can_undo)
                     .on_click(act(Editor::undo)),
             )
             .child(
-                button(
-                    "editor-redo",
-                    IconName::Redo2,
-                    hint("Redo", Some("Mod+Shift+Z")),
-                )
-                .disabled(!can_redo)
-                .on_click(act(Editor::redo)),
+                tool("editor-redo", IconName::Redo2, "Redo")
+                    .keys("Mod+Y")
+                    .disabled(!can_redo)
+                    .on_click(act(Editor::redo)),
             )
-            .child(separator(cx))
+            .child(separator(&theme))
             .child(
-                button("editor-bold", IconName::Bold, hint("Bold", Some("Mod+B")))
-                    .selected(bold)
+                tool("editor-bold", IconName::Bold, "Bold")
+                    .keys("Mod+B")
+                    .toggled(bold)
                     .on_click(act(|e, w, cx| e.toggle_format(TextFormat::BOLD, w, cx))),
             )
             .child(
-                button(
-                    "editor-italic",
-                    IconName::Italic,
-                    hint("Italic", Some("Mod+I")),
-                )
-                .selected(italic)
-                .on_click(act(|e, w, cx| e.toggle_format(TextFormat::ITALIC, w, cx))),
+                tool("editor-italic", IconName::Italic, "Italic")
+                    .keys("Mod+I")
+                    .toggled(italic)
+                    .on_click(act(|e, w, cx| e.toggle_format(TextFormat::ITALIC, w, cx))),
             )
             .child(
-                button(
-                    "editor-underline",
-                    IconName::Underline,
-                    hint("Underline", Some("Mod+U")),
-                )
-                .selected(underline)
-                .on_click(act(|e, w, cx| {
-                    e.toggle_format(TextFormat::UNDERLINE, w, cx)
-                })),
+                tool("editor-underline", IconName::Underline, "Underline")
+                    .keys("Mod+U")
+                    .toggled(underline)
+                    .on_click(act(|e, w, cx| {
+                        e.toggle_format(TextFormat::UNDERLINE, w, cx)
+                    })),
             )
-            .child(separator(cx))
+            .child(separator(&theme))
             .child(
-                button(
-                    "editor-align-left",
-                    IconName::TextAlignStart,
-                    hint("Align left", Some("Mod+L")),
-                )
-                .selected(align == Align::Left)
-                .on_click(act(|e, w, cx| e.align(Align::Left, w, cx))),
+                tool("editor-align-left", IconName::TextAlignStart, "Align left")
+                    .keys("Mod+L")
+                    .toggled(align == Align::Left)
+                    .on_click(act(|e, w, cx| e.align(Align::Left, w, cx))),
             )
             .child(
-                button(
-                    "editor-align-center",
-                    IconName::TextAlignCenter,
-                    hint("Align center", Some("Mod+E")),
-                )
-                .selected(align == Align::Center)
-                .on_click(act(|e, w, cx| e.align(Align::Center, w, cx))),
+                tool("editor-align-center", IconName::TextAlignCenter, "Center")
+                    .keys("Mod+E")
+                    .toggled(align == Align::Center)
+                    .on_click(act(|e, w, cx| e.align(Align::Center, w, cx))),
             )
             .child(
-                button(
-                    "editor-align-right",
-                    IconName::TextAlignEnd,
-                    hint("Align right", Some("Mod+R")),
-                )
-                .selected(align == Align::Right)
-                .on_click(act(|e, w, cx| e.align(Align::Right, w, cx))),
+                tool("editor-align-right", IconName::TextAlignEnd, "Align right")
+                    .keys("Mod+R")
+                    .toggled(align == Align::Right)
+                    .on_click(act(|e, w, cx| e.align(Align::Right, w, cx))),
             )
             .child(
-                button(
+                tool(
                     "editor-align-justify",
                     IconName::TextAlignJustify,
-                    hint("Justify", Some("Mod+J")),
+                    "Justify",
                 )
-                .selected(align == Align::Justify)
+                .keys("Mod+J")
+                .toggled(align == Align::Justify)
                 .on_click(act(|e, w, cx| e.align(Align::Justify, w, cx))),
             )
-            .child(separator(cx))
+            .child(separator(&theme))
             .child(
-                button(
-                    "editor-bullets",
-                    IconName::List,
-                    hint("Bulleted list", Some("Mod+Shift+8")),
-                )
-                .selected(list == Some(ListType::Bullet))
-                .on_click(act(|e, w, cx| e.list(ListType::Bullet, w, cx))),
+                tool("editor-bullets", IconName::List, "Bulleted list")
+                    .toggled(list == Some(ListType::Bullet))
+                    .on_click(act(|e, w, cx| e.list(ListType::Bullet, w, cx))),
             )
             .child(
-                button(
-                    "editor-numbers",
-                    IconName::ListOrdered,
-                    hint("Numbered list", Some("Mod+Shift+7")),
-                )
-                .selected(list == Some(ListType::Number))
-                .on_click(act(|e, w, cx| e.list(ListType::Number, w, cx))),
+                tool("editor-numbers", IconName::ListOrdered, "Numbered list")
+                    .toggled(list == Some(ListType::Number))
+                    .on_click(act(|e, w, cx| e.list(ListType::Number, w, cx))),
             )
-            .child(separator(cx))
-            .child(popover)
+            .child(separator(&theme))
+            .child(self.field_menu(theme, cx))
             .child(div().flex_1())
+            .when(self.mode_toggle, |this| {
+                this.child(self.mode_toggle(theme, cx))
+                    .child(separator(&theme))
+            })
             .child(
-                button(
-                    "editor-zoom-out",
-                    IconName::ZoomOut,
-                    hint("Zoom out", Some("Mod+-")),
-                )
-                .on_click(act(|e, _, cx| {
-                    let z = e.placement.zoom / 1.1;
-                    e.set_zoom(Some(z), cx)
-                })),
+                tool("editor-zoom-out", IconName::Minus, "Zoom out")
+                    .keys("Mod+-")
+                    .dense()
+                    .on_click(act(|e, _, cx| {
+                        let z = e.placement.zoom / 1.1;
+                        e.set_zoom(Some(z), cx)
+                    })),
             )
             .child(
                 div()
-                    .w(px(44.))
-                    .text_size(px(12.))
-                    .text_color(cx.theme().muted_foreground)
+                    .id("editor-zoom-fit")
+                    .flex_none()
+                    .w(px(36.))
+                    .h(px(24.))
                     .flex()
+                    .items_center()
                     .justify_center()
-                    .child(format!("{:.0}%", self.placement.zoom * 100.0)),
+                    .rounded(px(6.))
+                    .text_size(px(12.))
+                    .line_height(px(16.))
+                    .text_color(theme.ink_muted)
+                    .cursor_pointer()
+                    .hover(move |s| s.bg(theme.hover).text_color(theme.ink))
+                    .role(gpui_kit::accesskit::Role::Button)
+                    .aria_label("Fit width")
+                    .tooltip(tooltip(
+                        if fit {
+                            "Fit width"
+                        } else {
+                            "Reset to fit width"
+                        },
+                        Some("Mod+0"),
+                    ))
+                    .tooltip_show_delay(TOOLTIP_DELAY)
+                    .on_click(act(|e, _, cx| e.set_zoom(None, cx)))
+                    .child(format!("{:.0}%", zoom * 100.0))
+                    .test_support(),
             )
             .child(
-                button(
-                    "editor-zoom-in",
-                    IconName::ZoomIn,
-                    hint("Zoom in", Some("Mod+=")),
-                )
-                .on_click(act(|e, _, cx| {
-                    let z = e.placement.zoom * 1.1;
-                    e.set_zoom(Some(z), cx)
-                })),
+                tool("editor-zoom-in", IconName::Plus, "Zoom in")
+                    .keys("Mod+=")
+                    .dense()
+                    .on_click(act(|e, _, cx| {
+                        let z = e.placement.zoom * 1.1;
+                        e.set_zoom(Some(z), cx)
+                    })),
             )
             .into_any_element()
     }

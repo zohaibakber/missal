@@ -262,6 +262,7 @@ pub struct FirSummary {
     pub incident_date: String,
     pub arrest_date: String,
     pub status: FirStatus,
+    pub accused: Vec<String>,
 }
 
 #[cfg(test)]

@@ -1,4 +1,3 @@
-use gpui_kit::component::ActiveTheme;
 use gpui_kit::{
     App, Bounds, ContentMask, CursorStyle, DispatchPhase, Element, ElementId, ElementInputHandler,
     Entity, GlobalElementId, Hitbox, HitboxBehavior, Hsla, InspectorElementId, IntoElement,
@@ -206,32 +205,30 @@ impl Element for PagesElement {
         window.set_cursor_style(CursorStyle::IBeam, &frame.hitbox);
         let caret_on = self.editor.read(cx).caret_shown(window);
         let scene = scene(self.editor.read(cx), bounds, caret_on);
-        let theme = cx.theme();
-        let selection_color = theme.selection;
-        let caret_color: Hsla = gpui_kit::black();
-        let field = theme.primary;
-        let border = theme.border;
-        let shadow = gpui_kit::black().opacity(0.08);
-        let paper = missal_text::to_hsla(missal_text::Rgba::rgb(0xffffff));
+        let theme = super::theme::EditorTheme::get(cx);
+        let names = self.editor.read(cx).fields.mode == missal_core::DisplayMode::Labels
+            || self.editor.read(cx).fields.values.is_none();
+        let caret_color: Hsla = theme.ink;
         let options = PagePaint {
             zoom: scene.zoom,
             paper: None,
             show_fields: true,
-            field_text: Some(field),
-            field_background: Some(field.opacity(0.1)),
-            unresolved_underline: Some(field.opacity(0.55)),
+            field_text: Some(if names { theme.accent } else { theme.ink }),
+            field_background: Some(theme.field_wash),
+            unresolved_underline: Some(theme.notice),
+            field_radius: 3.0,
+            empty_text: Some(theme.notice_text),
+            empty_background: Some(theme.notice_wash),
+            empty_underline: Some(theme.notice),
+            ink: Some(theme.ink),
         };
+        let selection_color = theme.selection;
+        let paper_shadows = theme.paper_shadows();
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             for (_, page_bounds) in &scene.pages {
-                let mut halo = *page_bounds;
-                halo.origin.y += px(2.);
-                window.paint_quad(fill(halo, shadow));
-                window.paint_quad(fill(*page_bounds, paper));
-                window.paint_quad(gpui_kit::outline(
-                    *page_bounds,
-                    border,
-                    gpui_kit::BorderStyle::Solid,
-                ));
+                let radius = gpui_kit::Corners::all(px(2.));
+                window.paint_drop_shadows(*page_bounds, radius, &paper_shadows);
+                window.paint_quad(fill(*page_bounds, theme.paper).corner_radii(radius));
             }
             for rect in scene.cells.iter().chain(&scene.selection) {
                 window.paint_quad(fill(*rect, selection_color));

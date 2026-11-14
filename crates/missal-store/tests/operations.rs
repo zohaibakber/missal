@@ -80,6 +80,18 @@ fn firs_are_validated_trimmed_and_round_trip() {
 }
 
 #[test]
+fn fir_summaries_carry_every_accused_name_in_order() {
+    let scratch = Scratch::new();
+    let mut store = store(&scratch);
+    let mut draft = fir("5/26");
+    draft.accused = vec![" زاہد حسین ".into(), "طارق جاوید".into()];
+    let created = store.create_fir(&draft).unwrap();
+    let summary = store.firs().unwrap().remove(0);
+    assert_eq!(summary.id, created.id);
+    assert_eq!(summary.accused, ["زاہد حسین", "طارق جاوید"]);
+}
+
+#[test]
 fn template_saves_are_revision_checked() {
     let scratch = Scratch::new();
     let mut store = store(&scratch);

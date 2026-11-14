@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
 
 use gpui_kit::SharedString;
-use missal_core::{FirId, FirRecord, FirStatus, FirSummary, format_date, parse_date};
+use missal_core::text::js_trim;
+use missal_core::{FirId, FirRecord, FirStatus, FirSummary, parse_date};
 
 use crate::prefs::{Column, Sort};
 
@@ -17,6 +18,8 @@ pub struct FirRow {
     pub incident: SharedString,
     pub arrest: SharedString,
     pub status: FirStatus,
+    pub accused: SharedString,
+    pub accused_more: u32,
     no_key: Box<str>,
     fir_key: Option<(u64, u64)>,
     date_keys: [i32; 3],
@@ -34,13 +37,46 @@ pub fn digit_value(c: char) -> Option<u32> {
 
 pub fn fold_for_search(text: &str) -> String {
     let mut folded = String::with_capacity(text.len());
-    for c in text.chars() {
-        match digit_value(c) {
-            Some(value) => folded.push(char::from_digit(value, 10).unwrap_or(c)),
-            None => folded.extend(c.to_lowercase()),
+    fold_into(&mut folded, text);
+    folded
+}
+
+fn fold_into(folded: &mut String, text: &str) {
+    let bytes = text.as_bytes();
+    let mut start = 0;
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        let next = bytes.get(index + 1).copied().unwrap_or(0);
+        if byte < 0x80 {
+            if byte.is_ascii_uppercase() {
+                folded.push_str(&text[start..index]);
+                folded.push(char::from(byte.to_ascii_lowercase()));
+                start = index + 1;
+            }
+            index += 1;
+        } else if (byte == 0xD9 && (0xA0..=0xA9).contains(&next))
+            || (byte == 0xDB && (0xB0..=0xB9).contains(&next))
+        {
+            folded.push_str(&text[start..index]);
+            folded.push(char::from(b'0' + (next & 0x0F)));
+            index += 2;
+            start = index;
+        } else if (0xD8..=0xDB).contains(&byte) {
+            index += 2;
+        } else {
+            let c = text[index..].chars().next().unwrap_or_default();
+            let width = c.len_utf8().max(1);
+            let mut lower = c.to_lowercase();
+            if lower.len() != 1 || lower.next() != Some(c) {
+                folded.push_str(&text[start..index]);
+                folded.extend(c.to_lowercase());
+                start = index + width;
+            }
+            index += width;
         }
     }
-    folded
+    folded.push_str(&text[start..]);
 }
 
 pub fn fir_number_key(text: &str) -> Option<(u64, u64)> {
@@ -86,66 +122,107 @@ pub fn natural_key(text: &str) -> String {
     key
 }
 
-fn date_key(value: &str) -> i32 {
-    parse_date(value).map_or(MISSING_DATE, |date| {
-        (date.year() as i32) * 10_000 + i32::from(date.month()) * 100 + i32::from(date.day())
-    })
+fn date_parts(value: &str) -> (String, i32) {
+    match parse_date(value) {
+        Some(date) => (
+            date.to_string(),
+            (date.year() as i32) * 10_000 + i32::from(date.month()) * 100 + i32::from(date.day()),
+        ),
+        None => (js_trim(value).to_owned(), MISSING_DATE),
+    }
+}
+
+pub struct RowFields<'a> {
+    pub no: &'a str,
+    pub date: &'a str,
+    pub offence: &'a str,
+    pub incident: &'a str,
+    pub arrest: &'a str,
+    pub status: FirStatus,
+    pub accused: &'a [String],
 }
 
 impl FirRow {
-    pub fn new(
-        id: FirId,
-        no: &str,
-        date: &str,
-        offence: &str,
-        incident: &str,
-        arrest: &str,
-        status: FirStatus,
-    ) -> FirRow {
-        let date_text = format_date(date);
-        let incident_text = format_date(incident);
-        let arrest_text = format_date(arrest);
-        let haystack = fold_for_search(&format!(
-            "{no} {offence} {} {} {date_text} {incident_text} {arrest_text}",
+    pub fn new(id: FirId, fields: RowFields<'_>) -> FirRow {
+        let RowFields {
+            no,
+            date,
+            offence,
+            incident,
+            arrest,
+            status,
+            accused,
+        } = fields;
+        let (date_text, date_key) = date_parts(date);
+        let (incident_text, incident_key) = date_parts(incident);
+        let (arrest_text, arrest_key) = date_parts(arrest);
+        let parts = [
+            no,
+            offence,
             status.label(),
             status.as_str(),
-        ));
+            &date_text,
+            &incident_text,
+            &arrest_text,
+        ];
+        let length = parts.iter().map(|part| part.len() + 1).sum::<usize>()
+            + accused.iter().map(|name| name.len() + 1).sum::<usize>();
+        let fir_key = fir_number_key(no);
+        let mut haystack = String::with_capacity(length);
+        for part in parts.into_iter().chain(accused.iter().map(String::as_str)) {
+            if !haystack.is_empty() {
+                haystack.push(' ');
+            }
+            fold_into(&mut haystack, part);
+        }
         FirRow {
             id,
             no: no.to_owned().into(),
-            date_keys: [date_key(date), date_key(incident), date_key(arrest)],
-            no_key: natural_key(no).into(),
-            fir_key: fir_number_key(no),
+            date_keys: [date_key, incident_key, arrest_key],
+            no_key: if fir_key.is_some() {
+                Box::default()
+            } else {
+                natural_key(no).into()
+            },
+            fir_key,
             haystack: haystack.into(),
             date: date_text.into(),
             offence: offence.to_owned().into(),
             incident: incident_text.into(),
             arrest: arrest_text.into(),
             status,
+            accused: accused.first().cloned().unwrap_or_default().into(),
+            accused_more: accused.len().saturating_sub(1) as u32,
         }
     }
 
     pub fn from_summary(summary: &FirSummary) -> FirRow {
         FirRow::new(
             summary.id,
-            &summary.fir_no,
-            &summary.date,
-            &summary.offence,
-            &summary.incident_date,
-            &summary.arrest_date,
-            summary.status,
+            RowFields {
+                no: &summary.fir_no,
+                date: &summary.date,
+                offence: &summary.offence,
+                incident: &summary.incident_date,
+                arrest: &summary.arrest_date,
+                status: summary.status,
+                accused: &summary.accused,
+            },
         )
     }
 
     pub fn from_record(record: &FirRecord) -> FirRow {
         FirRow::new(
             record.id,
-            &record.fir.fir_no,
-            &record.fir.date,
-            &record.fir.offence,
-            &record.fir.incident_date,
-            &record.fir.arrest_date,
-            record.fir.status,
+            RowFields {
+                no: &record.fir.fir_no,
+                date: &record.fir.date,
+                offence: &record.fir.offence,
+                incident: &record.fir.incident_date,
+                arrest: &record.fir.arrest_date,
+                status: record.fir.status,
+                accused: &record.fir.accused,
+            },
         )
     }
 
@@ -167,6 +244,7 @@ fn compare(a: &FirRow, b: &FirRow, sort: Sort) -> Ordering {
     let ordering = match sort.column {
         Column::FirNo => return compare_numbers(a, b, sort),
         Column::Offence => a.offence.cmp(&b.offence),
+        Column::Accused => a.accused.cmp(&b.accused),
         Column::Status => status_rank(a.status).cmp(&status_rank(b.status)),
         Column::Date => return compare_dates(a.date_keys[0], b.date_keys[0], a, b, sort),
         Column::IncidentDate => return compare_dates(a.date_keys[1], b.date_keys[1], a, b, sort),
@@ -223,18 +301,15 @@ fn status_rank(status: FirStatus) -> u8 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Applied {
-    words: Vec<String>,
-    statuses: Vec<FirStatus>,
-}
-
 #[derive(Debug, Default)]
 pub struct ListIndex {
     sorted: Vec<u32>,
     sorted_for: Option<(u64, Sort)>,
+    matched: Vec<u32>,
+    matched_for: Option<Vec<String>>,
+    counts: [usize; 4],
     shown: Vec<u32>,
-    shown_for: Option<Applied>,
+    shown_for: Option<Vec<FirStatus>>,
 }
 
 impl ListIndex {
@@ -252,34 +327,60 @@ impl ListIndex {
             self.sorted
                 .sort_unstable_by(|&a, &b| compare(&rows[a as usize], &rows[b as usize], sort));
             self.sorted_for = Some((version, sort));
+            self.matched_for = None;
+        }
+        let words = search_words(query);
+        if self.matched_for.as_ref() != Some(&words) {
+            let narrowing = self.matched_for.as_ref().is_some_and(|previous| {
+                previous
+                    .iter()
+                    .all(|old| words.iter().any(|word| word.contains(old.as_str())))
+            });
+            let source = if narrowing {
+                std::mem::take(&mut self.matched)
+            } else {
+                self.sorted.clone()
+            };
+            let mut counts = [0usize; 4];
+            let next: Vec<u32> = source
+                .into_iter()
+                .filter(|&index| {
+                    let row = &rows[index as usize];
+                    let keep = row.matches(&words);
+                    if keep {
+                        counts[status_rank(row.status) as usize] += 1;
+                    }
+                    keep
+                })
+                .collect();
+            self.matched = next;
+            self.counts = counts;
+            self.matched_for = Some(words);
             self.shown_for = None;
         }
-        let applied = Applied {
-            words: search_words(query),
-            statuses: statuses.to_vec(),
-        };
-        if self.shown_for.as_ref() == Some(&applied) {
-            return &self.shown;
+        if self.shown_for.as_deref() != Some(statuses) {
+            self.shown.clear();
+            if statuses.is_empty() {
+                self.shown.extend_from_slice(&self.matched);
+            } else {
+                self.shown.extend(
+                    self.matched
+                        .iter()
+                        .copied()
+                        .filter(|&index| statuses.contains(&rows[index as usize].status)),
+                );
+            }
+            self.shown_for = Some(statuses.to_vec());
         }
-        let narrowing = self.shown_for.as_ref().is_some_and(|previous| {
-            previous.statuses == applied.statuses
-                && previous
-                    .words
-                    .iter()
-                    .all(|old| applied.words.iter().any(|word| word.contains(old.as_str())))
-        });
-        let matches = |row: &FirRow| {
-            (statuses.is_empty() || statuses.contains(&row.status)) && row.matches(&applied.words)
-        };
-        let source = if narrowing { &self.shown } else { &self.sorted };
-        let next: Vec<u32> = source
-            .iter()
-            .copied()
-            .filter(|&index| matches(&rows[index as usize]))
-            .collect();
-        self.shown = next;
-        self.shown_for = Some(applied);
         &self.shown
+    }
+
+    pub fn matched_count(&self) -> usize {
+        self.matched.len()
+    }
+
+    pub fn status_count(&self, status: FirStatus) -> usize {
+        self.counts[status_rank(status) as usize]
     }
 }
 
@@ -296,12 +397,15 @@ mod tests {
     fn row(id: i64, no: &str, status: FirStatus, date: &str) -> FirRow {
         FirRow::new(
             FirId::new(id).unwrap(),
-            no,
-            date,
-            "چوری ۳۷۹",
-            date,
-            "",
-            status,
+            RowFields {
+                no,
+                date,
+                offence: "چوری ۳۷۹",
+                incident: date,
+                arrest: "",
+                status,
+                accused: &["زاہد حسین ولد حسین بخش".to_owned(), "طارق جاوید".to_owned()],
+            },
         )
     }
 
@@ -528,5 +632,40 @@ mod tests {
             derive(&rows, "", &[FirStatus::Open], Sort::default()),
             vec![1]
         );
+    }
+
+    #[test]
+    fn accused_names_are_searchable_and_counts_follow_the_search() {
+        let mut rows = vec![
+            row(1, "1/2026", FirStatus::Closed, "01-01-2026"),
+            row(2, "2/2026", FirStatus::Open, "01-01-2026"),
+            row(3, "3/2026", FirStatus::Open, "01-01-2026"),
+        ];
+        rows.push(FirRow::new(
+            FirId::new(4).unwrap(),
+            RowFields {
+                no: "4/2026",
+                date: "01-01-2026",
+                offence: "ڈکیتی",
+                incident: "01-01-2026",
+                arrest: "",
+                status: FirStatus::Open,
+                accused: &["ندیم عباس".to_owned()],
+            },
+        ));
+        assert_eq!(rows[0].accused.as_ref(), "زاہد حسین ولد حسین بخش");
+        assert_eq!(rows[0].accused_more, 1);
+        assert_eq!(rows[3].accused_more, 0);
+        assert_eq!(derive(&rows, "ندیم", &[], Sort::default()), vec![3]);
+        assert_eq!(derive(&rows, "طارق", &[], Sort::default()).len(), 3);
+        let mut index = ListIndex::default();
+        let shown = index
+            .update(&rows, 1, "طارق", &[FirStatus::Open], Sort::default())
+            .len();
+        assert_eq!(shown, 2);
+        assert_eq!(index.matched_count(), 3);
+        assert_eq!(index.status_count(FirStatus::Open), 2);
+        assert_eq!(index.status_count(FirStatus::Closed), 1);
+        assert_eq!(index.status_count(FirStatus::ChallanSubmitted), 0);
     }
 }

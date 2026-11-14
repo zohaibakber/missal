@@ -156,6 +156,7 @@ pub struct Field {
     input: Entity<TextInput>,
     kind: Kind,
     width: Option<Pixels>,
+    height: Option<f32>,
     error: bool,
     show_focus: bool,
     search_icon: bool,
@@ -171,6 +172,7 @@ pub fn field(id: impl Into<ElementId>, input: &Entity<TextInput>, kind: Kind) ->
         input: input.clone(),
         kind,
         width: None,
+        height: None,
         error: false,
         show_focus: false,
         search_icon: false,
@@ -191,6 +193,11 @@ pub fn search_field(id: impl Into<ElementId>, input: &Entity<TextInput>, kind: K
 impl Field {
     pub fn width(mut self, width: impl Into<Pixels>) -> Self {
         self.width = Some(width.into());
+        self
+    }
+
+    pub fn height(mut self, height: f32) -> Self {
+        self.height = Some(height);
         self
     }
 
@@ -286,7 +293,7 @@ impl RenderOnce for Field {
         } else {
             palette.line_strong
         };
-        let height = self.kind.height();
+        let height = self.height.unwrap_or(self.kind.height());
         let focus_target = self.input.clone();
         let mut start: Vec<gpui_kit::AnyElement> = Vec::new();
         let mut end: Vec<gpui_kit::AnyElement> = Vec::new();

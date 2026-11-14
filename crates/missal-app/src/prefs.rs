@@ -45,12 +45,14 @@ pub enum Column {
     Date,
     IncidentDate,
     ArrestDate,
+    Accused,
 }
 
 impl Column {
-    pub const ALL: [Column; 6] = [
+    pub const ALL: [Column; 7] = [
         Column::FirNo,
         Column::Offence,
+        Column::Accused,
         Column::Status,
         Column::Date,
         Column::IncidentDate,
@@ -65,6 +67,7 @@ impl Column {
             Column::Date => "date",
             Column::IncidentDate => "incident_date",
             Column::ArrestDate => "arrest_date",
+            Column::Accused => "accused",
         }
     }
 
@@ -76,6 +79,7 @@ impl Column {
             Column::Date => "تاریخ ایف آئی آر",
             Column::IncidentDate => "تاریخ وقوعہ",
             Column::ArrestDate => "تاریخ گرفتاری",
+            Column::Accused => "ملزمان",
         }
     }
 
@@ -99,11 +103,21 @@ impl Default for Sort {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TablePrefs {
     pub sort: Sort,
     pub statuses: Vec<FirStatus>,
     pub hidden: Vec<Column>,
+}
+
+impl Default for TablePrefs {
+    fn default() -> TablePrefs {
+        TablePrefs {
+            sort: Sort::default(),
+            statuses: Vec::new(),
+            hidden: vec![Column::IncidentDate, Column::ArrestDate],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
