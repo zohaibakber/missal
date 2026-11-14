@@ -5,7 +5,7 @@ binary="${1:?usage: smoke.sh <missal binary> [seconds]}"
 seconds="${2:-8}"
 scratch="$(mktemp -d)"
 pid=""
-trap '[ -n "$pid" ] && kill "$pid" 2>/dev/null; pkill -f "$scratch/bin/missal" 2>/dev/null; rm -rf "$scratch"' EXIT
+trap '[ -n "$pid" ] && kill "$pid" 2>/dev/null; pkill -f -- "--data-dir $scratch/data" 2>/dev/null; rm -rf "$scratch"' EXIT
 
 mkdir -p "$scratch/bin" "$scratch/data"
 cp "$binary" "$scratch/bin/missal"
