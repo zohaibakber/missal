@@ -37,6 +37,7 @@ pub fn window_options(preferences: &Preferences, cx: &App) -> WindowOptions {
     };
     WindowOptions {
         window_bounds: Some(bounds),
+        app_id: Some(crate::platform::APP_ID.to_owned()),
         window_min_size: Some(Size {
             width: px(MIN_WINDOW.0),
             height: px(MIN_WINDOW.1),

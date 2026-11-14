@@ -41,6 +41,11 @@ rusqlite.workspace = true
 gpui-pre-wgpu = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 chrono.workspace = true
+velopack.workspace = true
+semver.workspace = true
+
+[target.'cfg(windows)'.build-dependencies]
+winresource.workspace = true
 
 [dev-dependencies]
 gpui-kit = { workspace = true, features = ["test-support"] }

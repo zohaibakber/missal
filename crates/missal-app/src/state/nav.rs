@@ -77,7 +77,7 @@ impl Navigator {
         self.guard = guard;
     }
 
-    fn is_dirty(&self, cx: &App) -> bool {
+    pub fn has_unsaved_changes(&self, cx: &App) -> bool {
         self.guard.as_ref().is_some_and(|guard| guard(cx))
     }
 
@@ -96,7 +96,7 @@ impl Navigator {
         if target == self.current() && !matches!(request, Request::Replace(_)) {
             return;
         }
-        if !self.is_dirty(cx) {
+        if !self.has_unsaved_changes(cx) {
             self.commit(request, cx);
             return;
         }

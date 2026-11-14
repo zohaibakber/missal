@@ -1,3 +1,5 @@
+#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
+
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -37,6 +39,7 @@ fn parse_args() -> Result<Args, String> {
 }
 
 fn main() -> ExitCode {
+    missal_app::update::installer::run_hooks();
     let args = match parse_args() {
         Ok(args) => args,
         Err(message) => {
@@ -65,6 +68,7 @@ fn main() -> ExitCode {
             }
         };
     }
+    let check_updates = missal_app::update::controller::enabled(!paths.is_default);
     let preferences = Preferences::load(&paths.preferences);
     gpui_kit::application()
         .with_assets(gpui_kit::assets::AllAssets)
@@ -80,9 +84,16 @@ fn main() -> ExitCode {
             })
             .detach();
             let options = window_options(&preferences, cx);
-            if let Err(error) = open_shell(&models, options, cx) {
-                eprintln!("missal: could not open the window: {error:#}");
-                cx.quit();
+            match open_shell(&models, options, cx) {
+                Ok((window, _)) => {
+                    if check_updates {
+                        missal_app::update::controller::start(window, cx);
+                    }
+                }
+                Err(error) => {
+                    eprintln!("missal: could not open the window: {error:#}");
+                    cx.quit();
+                }
             }
             cx.activate(true);
         });

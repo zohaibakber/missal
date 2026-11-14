@@ -13,4 +13,5 @@ pub mod shortcuts;
 pub mod state;
 pub mod theme;
 pub mod ui;
+pub mod update;
 pub mod screens;

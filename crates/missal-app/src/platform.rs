@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 pub const PRODUCT_NAME: &str = "Missal";
+pub const APP_ID: &str = "com.zohaibakber.missal";
 
 #[cfg(target_os = "windows")]
 pub fn app_data_root() -> Option<PathBuf> {
