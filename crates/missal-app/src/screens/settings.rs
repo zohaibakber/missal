@@ -421,7 +421,7 @@ impl SettingsScreen {
             .gap_8()
             .py_6()
             .border_b_1()
-            .border_color(palette.border)
+            .border_color(palette.line)
             .child(
                 v_flex()
                     .w(px(220.))
@@ -431,7 +431,7 @@ impl SettingsScreen {
                     .child(
                         div()
                             .text_size(px(13.))
-                            .text_color(palette.muted_foreground)
+                            .text_color(palette.ink_muted)
                             .child(description),
                     ),
             )
@@ -498,9 +498,9 @@ impl SettingsScreen {
                     .overflow_hidden()
                     .border_2()
                     .border_color(if selected {
-                        palette.primary
+                        palette.accent
                     } else {
-                        palette.border
+                        palette.line
                     })
                     .child(face),
             )
@@ -509,9 +509,9 @@ impl SettingsScreen {
                     .text_size(px(13.))
                     .when(selected, |this| this.font_medium())
                     .text_color(if selected {
-                        palette.foreground
+                        palette.ink
                     } else {
-                        palette.muted_foreground
+                        palette.ink_muted
                     })
                     .child(choice.title()),
             )
@@ -602,15 +602,15 @@ impl Render for SettingsScreen {
                                 .items_center()
                                 .gap_2()
                                 .text_size(px(13.))
-                                .text_color(palette.muted_foreground)
+                                .text_color(palette.ink_muted)
                                 .child("Example")
                                 .child(
                                     div()
                                         .px_2()
                                         .rounded(px(5.))
-                                        .bg(palette.muted)
+                                        .bg(palette.hover)
                                         .text_size(px(15.))
-                                        .text_color(palette.field)
+                                        .text_color(palette.accent)
                                         .child(label(markers_preview.token("جرم")).rtl()),
                                 ),
                         ),
@@ -618,7 +618,7 @@ impl Render for SettingsScreen {
                 .children(self.marker_error.then(|| {
                     div()
                         .text_size(px(12.))
-                        .text_color(palette.destructive)
+                        .text_color(palette.danger_text)
                         .child("Use 1–3 symbols, no letters or numbers.")
                 }))
                 .children(self.section_actions(
@@ -640,7 +640,7 @@ impl Render for SettingsScreen {
                         .id(("global-skeleton", index))
                         .h(px(36.))
                         .rounded(px(7.))
-                        .bg(palette.muted)
+                        .bg(palette.hover)
                 }))
                 .into_any_element(),
             Load::Failed(message) => v_flex()
@@ -653,7 +653,7 @@ impl Render for SettingsScreen {
                 .child(
                     div()
                         .text_size(px(12.))
-                        .text_color(palette.muted_foreground)
+                        .text_color(palette.ink_muted)
                         .child(message.clone()),
                 )
                 .child(
@@ -730,16 +730,16 @@ impl Render for SettingsScreen {
                     div()
                         .px_2()
                         .rounded(px(6.))
-                        .bg(palette.muted)
+                        .bg(palette.hover)
                         .text_size(px(14.))
-                        .text_color(palette.field)
+                        .text_color(palette.accent)
                         .child(label(chips_markers.token(field.label)).rtl())
                 })),
             )
             .child(
                 div()
                     .text_size(px(12.))
-                    .text_color(palette.muted_foreground)
+                    .text_color(palette.ink_muted)
                     .child("Filled from each FIR. Add a custom field below; renaming keeps templates linked."),
             )
             .child(
@@ -825,5 +825,15 @@ impl Render for SettingsScreen {
                             .child(div().h(px(32.))),
                     ),
             )
+    }
+}
+
+impl crate::ui::titlebar::HeaderSource for SettingsScreen {
+    fn header(
+        &mut self,
+        _: &mut Window,
+        _: &mut Context<Self>,
+    ) -> crate::ui::titlebar::HeaderContent {
+        crate::ui::titlebar::HeaderContent::new("Settings")
     }
 }

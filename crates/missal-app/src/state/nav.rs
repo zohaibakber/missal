@@ -6,22 +6,33 @@ use missal_core::{FirId, TemplateId};
 use crate::ui::dialogs::confirm_discard;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PrintTarget {
+    Fir(FirId),
+    Template(TemplateId),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Route {
     Firs,
     NewFir,
     Fir(FirId),
+    EditFir(FirId),
+    Print(PrintTarget),
     Settings,
     Templates,
     NewTemplate,
     Template(TemplateId),
+    Components,
 }
 
 impl Route {
     pub fn section(&self) -> &'static str {
         match self {
-            Route::Firs | Route::NewFir | Route::Fir(_) => "FIRs",
+            Route::Firs | Route::NewFir | Route::Fir(_) | Route::EditFir(_) => "FIRs",
+            Route::Print(_) => "Print",
             Route::Settings => "Settings",
             Route::Templates | Route::NewTemplate | Route::Template(_) => "Templates",
+            Route::Components => "Components",
         }
     }
 }

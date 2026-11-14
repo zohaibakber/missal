@@ -46,7 +46,7 @@ impl CustomValues {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> CustomValues {
-        let search = text_input(window, cx, Kind::Auto, "Search custom fields", "");
+        let search = text_input(window, cx, Kind::UrduAuto, "Search custom fields", "");
         let mut subscriptions =
             vec![
                 cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
@@ -188,7 +188,7 @@ impl Render for CustomValues {
             .child(
                 div()
                     .text_size(px(13.))
-                    .text_color(palette.muted_foreground)
+                    .text_color(palette.ink_muted)
                     .child("Values for custom fields in this FIR. Documents show them in place of the field name."),
             )
             .child(self.search.clone())
@@ -224,7 +224,7 @@ impl Render for CustomValues {
                     div()
                         .py_4()
                         .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
+                        .text_color(palette.ink_muted)
                         .child("No matching custom fields."),
                 )
             })
@@ -251,7 +251,7 @@ impl Render for CustomValuesFooter {
                     .items_center()
                     .gap_1p5()
                     .text_size(px(12.))
-                    .text_color(palette.muted_foreground)
+                    .text_color(palette.ink_muted)
                     .child(dirty_dot(&palette, dirty))
                     .child(if dirty {
                         "Unsaved changes"

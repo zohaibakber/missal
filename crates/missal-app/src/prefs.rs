@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use missal_core::FirStatus;
+use missal_core::{FirId, FirStatus};
 use serde_json::{Map, Value, json};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -115,24 +115,31 @@ pub struct WindowPrefs {
     pub maximized: bool,
 }
 
-pub const MIN_WINDOW: (f32, f32) = (800.0, 600.0);
+pub const MIN_WINDOW: (f32, f32) = (1024.0, 700.0);
+pub const RECENT_FIRS: usize = 10;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecentFir {
+    pub id: FirId,
+    pub opened_at: i64,
+}
 pub const DEFAULT_WINDOW: (f32, f32) = (1280.0, 800.0);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Preferences {
     pub theme: ThemeChoice,
-    pub sidebar_open: bool,
     pub window: Option<WindowPrefs>,
     pub table: TablePrefs,
+    pub recent_firs: Vec<RecentFir>,
 }
 
 impl Default for Preferences {
     fn default() -> Preferences {
         Preferences {
             theme: ThemeChoice::System,
-            sidebar_open: true,
             window: None,
             table: TablePrefs::default(),
+            recent_firs: Vec::new(),
         }
     }
 }
@@ -155,8 +162,16 @@ impl Preferences {
         {
             preferences.theme = theme;
         }
-        if let Some(open) = value.get("sidebarOpen").and_then(Value::as_bool) {
-            preferences.sidebar_open = open;
+        if let Some(recent) = value.get("recentFirs").and_then(Value::as_array) {
+            preferences.recent_firs = recent
+                .iter()
+                .filter_map(|entry| {
+                    let id = FirId::new(entry.get("id")?.as_i64()?)?;
+                    let opened_at = entry.get("openedAt")?.as_i64()?;
+                    Some(RecentFir { id, opened_at })
+                })
+                .take(RECENT_FIRS)
+                .collect();
         }
         if let Some(window) = value.get("window")
             && let (Some(x), Some(y), Some(width), Some(height)) = (
@@ -211,7 +226,16 @@ impl Preferences {
 
     pub fn merge_into(&self, object: &mut Map<String, Value>) {
         object.insert("theme".into(), json!(self.theme.as_str()));
-        object.insert("sidebarOpen".into(), json!(self.sidebar_open));
+        object.remove("sidebarOpen");
+        object.insert(
+            "recentFirs".into(),
+            json!(
+                self.recent_firs
+                    .iter()
+                    .map(|recent| json!({"id": recent.id.get(), "openedAt": recent.opened_at}))
+                    .collect::<Vec<_>>()
+            ),
+        );
         match self.window {
             Some(window) => {
                 object.insert(
@@ -238,6 +262,16 @@ impl Preferences {
                 "hiddenColumns": self.table.hidden.iter().map(|column| column.key()).collect::<Vec<_>>(),
             }),
         );
+    }
+
+    pub fn record_recent(&mut self, id: FirId, opened_at: i64) {
+        self.recent_firs.retain(|recent| recent.id != id);
+        self.recent_firs.insert(0, RecentFir { id, opened_at });
+        self.recent_firs.truncate(RECENT_FIRS);
+    }
+
+    pub fn forget_recent(&mut self, ids: &[FirId]) {
+        self.recent_firs.retain(|recent| !ids.contains(&recent.id));
     }
 
     pub fn load(path: &Path) -> Preferences {
@@ -274,7 +308,6 @@ mod tests {
     fn reads_the_electron_preferences_file() {
         let preferences = Preferences::from_json(&json!({"theme": "dark"}));
         assert_eq!(preferences.theme, ThemeChoice::Dark);
-        assert!(preferences.sidebar_open);
         assert_eq!(preferences.table, TablePrefs::default());
     }
 
@@ -282,10 +315,20 @@ mod tests {
     fn round_trips_and_keeps_unknown_keys() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("preferences.json");
-        std::fs::write(&path, r#"{"theme":"light","other":1}"#).unwrap();
+        std::fs::write(&path, r#"{"theme":"light","other":1,"sidebarOpen":false}"#).unwrap();
         let mut preferences = Preferences::load(&path);
         preferences.theme = ThemeChoice::Dark;
-        preferences.sidebar_open = false;
+        preferences.record_recent(FirId::new(4).unwrap(), 100);
+        preferences.record_recent(FirId::new(9).unwrap(), 200);
+        preferences.record_recent(FirId::new(4).unwrap(), 300);
+        assert_eq!(
+            preferences
+                .recent_firs
+                .iter()
+                .map(|recent| recent.id.get())
+                .collect::<Vec<_>>(),
+            [4, 9]
+        );
         preferences.table.sort = Sort {
             column: Column::Date,
             descending: false,
@@ -295,8 +338,8 @@ mod tests {
         preferences.window = Some(WindowPrefs {
             x: 10.0,
             y: 20.0,
-            width: 1000.0,
-            height: 700.0,
+            width: 1100.0,
+            height: 720.0,
             maximized: true,
         });
         preferences.save(&path).unwrap();
@@ -304,6 +347,17 @@ mod tests {
         let value: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(value["other"], 1);
         assert_eq!(value["theme"], "dark");
+        assert!(value.get("sidebarOpen").is_none());
+    }
+
+    #[test]
+    fn recent_firs_are_capped() {
+        let mut preferences = Preferences::default();
+        for id in 1..=15 {
+            preferences.record_recent(FirId::new(id).unwrap(), id);
+        }
+        assert_eq!(preferences.recent_firs.len(), RECENT_FIRS);
+        assert_eq!(preferences.recent_firs[0].id.get(), 15);
     }
 
     #[test]

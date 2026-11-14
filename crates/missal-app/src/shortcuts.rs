@@ -9,7 +9,7 @@ actions!(
     [
         ToggleCommandPalette,
         ShowShortcuts,
-        ToggleSidebar,
+        ToggleNavMenu,
         FocusSearch,
         Save,
         BlurFocus,
@@ -25,13 +25,19 @@ actions!(
         ToggleRow,
         OpenRow,
         EditFir,
+        DeleteSelection,
         Print,
+        SavePdf,
         NextDocument,
         PreviousDocument,
+        MoveDocumentUp,
+        MoveDocumentDown,
         AddTemplates,
         ToggleFieldNames,
+        ToggleFieldsPanel,
         NewTemplate,
         ImportWord,
+        RenameTemplate,
         NextTemplate,
         PreviousTemplate,
         PreviewNextPage,
@@ -50,7 +56,7 @@ pub const TEMPLATES: &str = "Templates";
 pub const TEXT_INPUT: &str = "MissalTextInput";
 pub const PRINT_PREVIEW: &str = "PrintPreview";
 pub const PRINT_PREVIEW_CONTEXT: &str = "PrintPreview MissalTextInput";
-pub const NOT_TYPING: &str = "Missal && !MissalTextInput";
+pub const NOT_TYPING: &str = "Missal && !MissalTextInput && !NavMenu";
 const FIR_LIST_NOT_TYPING: &str = "FirList && !MissalTextInput";
 const WORKSPACE_NOT_TYPING: &str = "Workspace && !MissalTextInput";
 const TEMPLATES_NOT_TYPING: &str = "Templates && !MissalTextInput";
@@ -58,28 +64,31 @@ const TEMPLATES_NOT_TYPING: &str = "Templates && !MissalTextInput";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Group {
     General,
-    Navigation,
-    Firs,
-    Documents,
+    FirList,
+    Workspace,
+    Editor,
     Templates,
+    Print,
 }
 
 impl Group {
-    pub const ALL: [Group; 5] = [
+    pub const ALL: [Group; 6] = [
         Group::General,
-        Group::Navigation,
-        Group::Firs,
-        Group::Documents,
+        Group::FirList,
+        Group::Workspace,
+        Group::Editor,
         Group::Templates,
+        Group::Print,
     ];
 
     pub const fn title(self) -> &'static str {
         match self {
             Group::General => "General",
-            Group::Navigation => "Navigation",
-            Group::Firs => "FIRs",
-            Group::Documents => "Documents",
+            Group::FirList => "FIR list",
+            Group::Workspace => "FIR workspace",
+            Group::Editor => "Editor",
             Group::Templates => "Templates",
+            Group::Print => "Print",
         }
     }
 }
@@ -91,167 +100,64 @@ pub struct Shortcut {
     pub group: Group,
 }
 
+const fn shortcut(keys: &'static str, label: &'static str, group: Group) -> Shortcut {
+    Shortcut { keys, label, group }
+}
+
 pub const SHORTCUTS: &[Shortcut] = &[
-    Shortcut {
-        keys: "Mod+K",
-        label: "Open command menu",
-        group: Group::General,
-    },
-    Shortcut {
-        keys: "?",
-        label: "Show keyboard shortcuts",
-        group: Group::General,
-    },
-    Shortcut {
-        keys: "Mod+B",
-        label: "Toggle sidebar",
-        group: Group::General,
-    },
-    Shortcut {
-        keys: "/",
-        label: "Search this page",
-        group: Group::General,
-    },
-    Shortcut {
-        keys: "Mod+S",
-        label: "Save",
-        group: Group::General,
-    },
-    Shortcut {
-        keys: "Escape",
-        label: "Leave the field",
-        group: Group::General,
-    },
-    Shortcut {
-        keys: "Mod+Enter",
-        label: "Confirm a selection",
-        group: Group::General,
-    },
-    Shortcut {
-        keys: "G then H",
-        label: "Go to FIRs",
-        group: Group::Navigation,
-    },
-    Shortcut {
-        keys: "G then T",
-        label: "Go to templates",
-        group: Group::Navigation,
-    },
-    Shortcut {
-        keys: "G then S",
-        label: "Go to settings",
-        group: Group::Navigation,
-    },
-    Shortcut {
-        keys: "Alt+Left",
-        label: "Back",
-        group: Group::Navigation,
-    },
-    Shortcut {
-        keys: "Alt+Right",
-        label: "Forward",
-        group: Group::Navigation,
-    },
-    Shortcut {
-        keys: "N",
-        label: "New FIR",
-        group: Group::Firs,
-    },
-    Shortcut {
-        keys: "J",
-        label: "Next row",
-        group: Group::Firs,
-    },
-    Shortcut {
-        keys: "K",
-        label: "Previous row",
-        group: Group::Firs,
-    },
-    Shortcut {
-        keys: "X",
-        label: "Select row",
-        group: Group::Firs,
-    },
-    Shortcut {
-        keys: "Enter",
-        label: "Open FIR",
-        group: Group::Firs,
-    },
-    Shortcut {
-        keys: "E",
-        label: "Edit FIR details",
-        group: Group::Firs,
-    },
-    Shortcut {
-        keys: "Mod+P",
-        label: "Print preview",
-        group: Group::Documents,
-    },
-    Shortcut {
-        keys: "Alt+Down",
-        label: "Next document",
-        group: Group::Documents,
-    },
-    Shortcut {
-        keys: "Alt+Up",
-        label: "Previous document",
-        group: Group::Documents,
-    },
-    Shortcut {
-        keys: "A",
-        label: "Add templates to FIR",
-        group: Group::Documents,
-    },
-    Shortcut {
-        keys: "Mod+Shift+L",
-        label: "Show field names",
-        group: Group::Documents,
-    },
-    Shortcut {
-        keys: "PageDown",
-        label: "Next page in print preview",
-        group: Group::Documents,
-    },
-    Shortcut {
-        keys: "PageUp",
-        label: "Previous page in print preview",
-        group: Group::Documents,
-    },
-    Shortcut {
-        keys: "Mod+=",
-        label: "Zoom in print preview",
-        group: Group::Documents,
-    },
-    Shortcut {
-        keys: "Mod+-",
-        label: "Zoom out print preview",
-        group: Group::Documents,
-    },
-    Shortcut {
-        keys: "Mod+0",
-        label: "Fit width in print preview",
-        group: Group::Documents,
-    },
-    Shortcut {
-        keys: "Shift+N",
-        label: "New template",
-        group: Group::Templates,
-    },
-    Shortcut {
-        keys: "Mod+O",
-        label: "Upload Word",
-        group: Group::Templates,
-    },
-    Shortcut {
-        keys: "Alt+Down",
-        label: "Next template",
-        group: Group::Templates,
-    },
-    Shortcut {
-        keys: "Alt+Up",
-        label: "Previous template",
-        group: Group::Templates,
-    },
+    shortcut("Mod+K", "Search and commands", Group::General),
+    shortcut("F10", "Open the menu", Group::General),
+    shortcut("?", "Keyboard shortcuts", Group::General),
+    shortcut("G then H", "Go to FIRs", Group::General),
+    shortcut("G then T", "Go to templates", Group::General),
+    shortcut("G then S", "Go to settings", Group::General),
+    shortcut("Alt+Left", "Back", Group::General),
+    shortcut("Alt+Right", "Forward", Group::General),
+    shortcut("N", "New FIR", Group::General),
+    shortcut("Mod+O", "Import Word file", Group::General),
+    shortcut("Mod+S", "Save", Group::General),
+    shortcut("Escape", "Leave the field or close", Group::General),
+    shortcut("/", "Search this page", Group::FirList),
+    shortcut("J", "Next row", Group::FirList),
+    shortcut("K", "Previous row", Group::FirList),
+    shortcut("Enter", "Open FIR", Group::FirList),
+    shortcut("X", "Select row", Group::FirList),
+    shortcut("Mod+A", "Select all visible", Group::FirList),
+    shortcut("E", "Edit details", Group::FirList),
+    shortcut("Delete", "Delete FIRs", Group::FirList),
+    shortcut("Shift+F10", "Row actions", Group::FirList),
+    shortcut("Alt+Down", "Next document", Group::Workspace),
+    shortcut("Alt+Up", "Previous document", Group::Workspace),
+    shortcut("Alt+Shift+Up", "Move document up", Group::Workspace),
+    shortcut("Alt+Shift+Down", "Move document down", Group::Workspace),
+    shortcut("A", "Add document", Group::Workspace),
+    shortcut("E", "Edit details", Group::Workspace),
+    shortcut("Mod+.", "Fields panel", Group::Workspace),
+    shortcut("Mod+Shift+L", "Show field names", Group::Workspace),
+    shortcut("Mod+P", "Print", Group::Workspace),
+    shortcut("Mod+Z", "Undo", Group::Editor),
+    shortcut("Mod+Y", "Redo", Group::Editor),
+    shortcut("Mod+B", "Bold", Group::Editor),
+    shortcut("Mod+I", "Italic", Group::Editor),
+    shortcut("Mod+U", "Underline", Group::Editor),
+    shortcut("Mod+L", "Align left", Group::Editor),
+    shortcut("Mod+E", "Center", Group::Editor),
+    shortcut("Mod+R", "Align right", Group::Editor),
+    shortcut("Mod+J", "Justify", Group::Editor),
+    shortcut("Mod+Shift+F", "Insert field", Group::Editor),
+    shortcut("Shift+N", "New template", Group::Templates),
+    shortcut("F2", "Rename template", Group::Templates),
+    shortcut("Alt+Down", "Next template", Group::Templates),
+    shortcut("Alt+Up", "Previous template", Group::Templates),
+    shortcut("Mod+P", "Preview", Group::Templates),
+    shortcut("Mod+P", "Print", Group::Print),
+    shortcut("Mod+Shift+S", "Save as PDF", Group::Print),
+    shortcut("PageDown", "Next page", Group::Print),
+    shortcut("PageUp", "Previous page", Group::Print),
+    shortcut("Mod+=", "Zoom in", Group::Print),
+    shortcut("Mod+-", "Zoom out", Group::Print),
+    shortcut("Mod+0", "Fit page", Group::Print),
+    shortcut("Escape", "Back", Group::Print),
 ];
 
 pub fn key_caps(keys: &str) -> Vec<Vec<String>> {
@@ -275,7 +181,7 @@ pub fn bind_keys(cx: &mut App) {
         binding(cx, "secondary-k", ToggleCommandPalette, Some(SHELL)),
         binding(cx, "?", ShowShortcuts, Some(NOT_TYPING)),
         binding(cx, "shift-/", ShowShortcuts, Some(NOT_TYPING)),
-        binding(cx, "secondary-b", ToggleSidebar, Some(NOT_TYPING)),
+        binding(cx, "f10", ToggleNavMenu, Some(SHELL)),
         binding(cx, "/", FocusSearch, Some(NOT_TYPING)),
         binding(cx, "secondary-s", Save, None),
         binding(cx, "escape", BlurFocus, Some(SHELL)),
@@ -286,6 +192,7 @@ pub fn bind_keys(cx: &mut App) {
         binding(cx, "alt-left", HistoryBack, Some(SHELL)),
         binding(cx, "alt-right", HistoryForward, Some(SHELL)),
         binding(cx, "n", NewFir, Some(NOT_TYPING)),
+        binding(cx, "secondary-o", ImportWord, Some(SHELL)),
         binding(cx, "j", NextRow, Some(FIR_LIST_NOT_TYPING)),
         binding(cx, "down", NextRow, Some(FIR_LIST_NOT_TYPING)),
         binding(cx, "k", PreviousRow, Some(FIR_LIST_NOT_TYPING)),
@@ -293,14 +200,19 @@ pub fn bind_keys(cx: &mut App) {
         binding(cx, "x", ToggleRow, Some(FIR_LIST_NOT_TYPING)),
         binding(cx, "space", ToggleRow, Some(FIR_LIST_NOT_TYPING)),
         binding(cx, "enter", OpenRow, Some(FIR_LIST_NOT_TYPING)),
+        binding(cx, "delete", DeleteSelection, Some(FIR_LIST_NOT_TYPING)),
         binding(cx, "e", EditFir, Some(NOT_TYPING)),
         binding(cx, "secondary-p", Print, Some(SHELL)),
+        binding(cx, "secondary-shift-s", SavePdf, Some(SHELL)),
         binding(cx, "alt-down", NextDocument, Some(WORKSPACE)),
         binding(cx, "alt-up", PreviousDocument, Some(WORKSPACE)),
+        binding(cx, "alt-shift-up", MoveDocumentUp, Some(WORKSPACE)),
+        binding(cx, "alt-shift-down", MoveDocumentDown, Some(WORKSPACE)),
         binding(cx, "a", AddTemplates, Some(WORKSPACE_NOT_TYPING)),
         binding(cx, "secondary-shift-l", ToggleFieldNames, Some(WORKSPACE)),
+        binding(cx, "secondary-.", ToggleFieldsPanel, Some(WORKSPACE)),
         binding(cx, "shift-n", NewTemplate, Some(NOT_TYPING)),
-        binding(cx, "secondary-o", ImportWord, Some(TEMPLATES)),
+        binding(cx, "f2", RenameTemplate, Some(TEMPLATES)),
         binding(cx, "alt-down", NextTemplate, Some(TEMPLATES)),
         binding(cx, "alt-up", PreviousTemplate, Some(TEMPLATES)),
         binding(cx, "pagedown", PreviewNextPage, Some(PRINT_PREVIEW)),

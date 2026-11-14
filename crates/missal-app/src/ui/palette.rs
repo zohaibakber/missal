@@ -1,49 +1,93 @@
+use gpui_kit::AnimationExt;
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::{StyledExt, h_flex, v_flex};
+use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    App, Context, Entity, EventEmitter, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
-    ParentElement, Render, ScrollHandle, SharedString, StatefulInteractiveElement, Styled,
-    Subscription, Window, div, px,
+    AnyElement, App, Context, Entity, EventEmitter, FontWeight, HighlightStyle, InteractiveElement,
+    IntoElement, KeyDownEvent, MouseButton, ParentElement, Render, ScrollHandle, SharedString,
+    StatefulInteractiveElement, Styled, StyledText, Subscription, Window, div, px,
 };
-use missal_core::{FirId, TemplateId};
-use missal_text::{TextInput, TextInputEvent, label};
+use missal_core::FirStatus;
+use missal_text::{TextInput, TextInputEvent};
 
-use crate::app::{navigate, set_theme, show_shortcuts, toggle_sidebar};
+use crate::app::{import_word_file, navigate, set_theme, show_shortcuts};
 use crate::prefs::ThemeChoice;
 use crate::state::rows::{fold_for_search, search_words};
 use crate::state::{Models, Route};
-use crate::theme::Palette;
-use crate::ui::input::{Kind, text_input};
-use crate::ui::status::status_icon;
-use crate::ui::{key_hint, small_icon};
+use crate::theme::{ICON, PALETTE_TOP, PALETTE_WIDTH, Palette, RADIUS, RADIUS_XL, motion_base};
+use crate::ui::input::{Kind, field_input};
+use crate::ui::status::status_dot;
+use crate::ui::{KeyTone, UrRole, keycap, keycaps_toned, sized_icon, ur_inline};
 
 pub struct Dismissed;
 
-#[derive(Clone)]
+pub const RECENT_LIMIT: usize = 6;
+const FIR_LIMIT: usize = 20;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Group {
+    Recent,
+    Actions,
+    Firs,
+    Templates,
+    Commands,
+    Theme,
+}
+
+impl Group {
+    pub const fn title(self) -> &'static str {
+        match self {
+            Group::Recent => "Recent FIRs",
+            Group::Actions => "Actions",
+            Group::Firs => "FIRs",
+            Group::Templates => "Templates",
+            Group::Commands => "Commands",
+            Group::Theme => "Theme",
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Command {
     Go(Route),
-    Theme(ThemeChoice),
-    ToggleSidebar,
+    ImportWord,
     Shortcuts,
+    ThemeStep,
+    Theme(ThemeChoice),
 }
 
 #[derive(Clone)]
-enum Lead {
-    Icon(IconName),
-    Status(missal_core::FirStatus),
+enum Kind2 {
+    Fir {
+        no: SharedString,
+        offence: SharedString,
+        status: FirStatus,
+    },
+    Template(SharedString),
+    Command {
+        title: SharedString,
+        icon: IconName,
+        keys: Option<&'static str>,
+        checked: bool,
+    },
 }
 
 #[derive(Clone)]
 struct Entry {
-    group: &'static str,
-    title: SharedString,
-    subtitle: Option<SharedString>,
-    lead: Lead,
-    keys: Option<&'static str>,
+    group: Group,
+    kind: Kind2,
     command: Command,
-    checked: bool,
+}
+
+impl Entry {
+    fn title(&self) -> String {
+        match &self.kind {
+            Kind2::Fir { no, .. } => format!("FIR {no}"),
+            Kind2::Template(name) => name.to_string(),
+            Kind2::Command { title, .. } => title.to_string(),
+        }
+    }
 }
 
 pub struct CommandPalette {
@@ -51,21 +95,86 @@ pub struct CommandPalette {
     input: Entity<TextInput>,
     results: Vec<Entry>,
     selected: usize,
+    theme_step: bool,
     scroll: ScrollHandle,
     _subscriptions: Vec<Subscription>,
 }
 
 impl EventEmitter<Dismissed> for CommandPalette {}
 
-const LIMIT: usize = 20;
+fn command(
+    title: &'static str,
+    icon: IconName,
+    keys: Option<&'static str>,
+    command: Command,
+) -> Entry {
+    Entry {
+        group: Group::Actions,
+        kind: Kind2::Command {
+            title: title.into(),
+            icon,
+            keys,
+            checked: false,
+        },
+        command,
+    }
+}
+
+fn actions() -> Vec<Entry> {
+    vec![
+        command(
+            "New FIR",
+            IconName::Plus,
+            Some("N"),
+            Command::Go(Route::NewFir),
+        ),
+        command(
+            "New template",
+            IconName::Plus,
+            Some("Shift+N"),
+            Command::Go(Route::NewTemplate),
+        ),
+        command(
+            "Import Word file",
+            IconName::FileUp,
+            Some("Mod+O"),
+            Command::ImportWord,
+        ),
+        command(
+            "Keyboard shortcuts",
+            IconName::Keyboard,
+            Some("?"),
+            Command::Shortcuts,
+        ),
+        command("Theme…", IconName::SunMoon, None, Command::ThemeStep),
+        command(
+            "Go to FIRs",
+            IconName::Folder,
+            Some("G then H"),
+            Command::Go(Route::Firs),
+        ),
+        command(
+            "Go to Templates",
+            IconName::FileText,
+            Some("G then T"),
+            Command::Go(Route::Templates),
+        ),
+        command(
+            "Go to Settings",
+            IconName::Settings,
+            Some("G then S"),
+            Command::Go(Route::Settings),
+        ),
+    ]
+}
 
 impl CommandPalette {
     pub fn new(models: Models, window: &mut Window, cx: &mut Context<Self>) -> CommandPalette {
-        let input = text_input(
+        let input = field_input(
             window,
             cx,
-            Kind::Auto,
-            "Search FIRs, templates and commands…",
+            Kind::Search,
+            "Search FIRs, templates, commands",
             "",
         );
         let subscription = cx.subscribe_in(
@@ -82,6 +191,7 @@ impl CommandPalette {
             input,
             results: Vec::new(),
             selected: 0,
+            theme_step: false,
             scroll: ScrollHandle::new(),
             _subscriptions: vec![subscription],
         };
@@ -93,130 +203,121 @@ impl CommandPalette {
         self.input.update(cx, |input, cx| input.focus(window, cx));
     }
 
+    pub fn input(&self) -> &Entity<TextInput> {
+        &self.input
+    }
+
     pub fn query(&self, cx: &App) -> String {
         self.input.read(cx).text().to_owned()
     }
 
     pub fn result_titles(&self) -> Vec<String> {
-        self.results
-            .iter()
-            .map(|entry| entry.title.to_string())
-            .collect()
+        self.results.iter().map(Entry::title).collect()
     }
 
-    fn commands(&self, cx: &App) -> Vec<Entry> {
-        let current_theme = self.models.prefs.read(cx).read().theme;
-        let go = |title: &'static str, route: Route, keys: &'static str, icon: IconName| Entry {
-            group: "Go to",
-            title: title.into(),
-            subtitle: None,
-            lead: Lead::Icon(icon),
-            keys: Some(keys),
-            command: Command::Go(route),
-            checked: false,
-        };
-        let create = |title: &'static str, route: Route, keys: &'static str| Entry {
-            group: "Create",
-            title: title.into(),
-            subtitle: None,
-            lead: Lead::Icon(IconName::Plus),
-            keys: Some(keys),
-            command: Command::Go(route),
-            checked: false,
-        };
-        let theme = |choice: ThemeChoice, icon: IconName| Entry {
-            group: "Preferences",
-            title: format!("{} theme", choice.title()).into(),
-            subtitle: None,
-            lead: Lead::Icon(icon),
-            keys: None,
-            command: Command::Theme(choice),
-            checked: current_theme == choice,
-        };
-        vec![
-            go("FIRs", Route::Firs, "G then H", IconName::Folder),
-            go(
-                "Templates",
-                Route::Templates,
-                "G then T",
-                IconName::FileText,
-            ),
-            go("Settings", Route::Settings, "G then S", IconName::Settings),
-            create("New FIR", Route::NewFir, "N"),
-            create("New template", Route::NewTemplate, "Shift+N"),
-            theme(ThemeChoice::Light, IconName::Sun),
-            theme(ThemeChoice::Dark, IconName::Moon),
-            theme(ThemeChoice::System, IconName::Monitor),
-            Entry {
-                group: "Preferences",
-                title: "Toggle sidebar".into(),
-                subtitle: None,
-                lead: Lead::Icon(IconName::PanelLeft),
-                keys: Some("Mod+B"),
-                command: Command::ToggleSidebar,
-                checked: false,
-            },
-            Entry {
-                group: "Preferences",
-                title: "Keyboard shortcuts".into(),
-                subtitle: None,
-                lead: Lead::Icon(IconName::Keyboard),
-                keys: Some("?"),
-                command: Command::Shortcuts,
-                checked: false,
-            },
-        ]
+    pub fn result_groups(&self) -> Vec<Group> {
+        self.results.iter().map(|entry| entry.group).collect()
+    }
+
+    pub fn selected_index(&self) -> usize {
+        self.selected
     }
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
         let query = self.input.read(cx).text().to_owned();
         let words = search_words(&query);
-        let mut results: Vec<Entry> = self
-            .commands(cx)
-            .into_iter()
-            .filter(|entry| {
-                let haystack = fold_for_search(&format!("{} {}", entry.group, entry.title));
-                words.iter().all(|word| haystack.contains(word.as_str()))
-            })
-            .collect();
-        let firs = self.models.firs.read(cx);
-        results.extend(
-            firs.rows
-                .iter()
-                .filter(|row| words.is_empty() || row.matches(&words))
-                .take(LIMIT)
-                .map(|row| Entry {
-                    group: "FIRs",
-                    title: format!("FIR {}", row.no).into(),
-                    subtitle: Some(row.offence.clone()),
-                    lead: Lead::Status(row.status),
+        let mut results = Vec::new();
+        if self.theme_step {
+            let current = self.models.prefs.read(cx).read().theme;
+            results.extend(ThemeChoice::ALL.into_iter().map(|choice| Entry {
+                group: Group::Theme,
+                kind: Kind2::Command {
+                    title: choice.title().into(),
+                    icon: match choice {
+                        ThemeChoice::System => IconName::Monitor,
+                        ThemeChoice::Light => IconName::Sun,
+                        ThemeChoice::Dark => IconName::Moon,
+                    },
                     keys: None,
-                    command: Command::Go(Route::Fir(row.id)),
-                    checked: false,
-                }),
-        );
-        let templates = self.models.templates.read(cx);
-        results.extend(
-            templates
-                .items
-                .iter()
-                .filter(|item| {
-                    let haystack = fold_for_search(&format!("template {}", item.name));
-                    words.iter().all(|word| haystack.contains(word.as_str()))
-                })
-                .take(LIMIT)
-                .map(|item| Entry {
-                    group: "Templates",
-                    title: item.name.clone().into(),
-                    subtitle: None,
-                    lead: Lead::Icon(IconName::FileText),
-                    keys: None,
-                    command: Command::Go(Route::Template(item.id)),
-                    checked: false,
-                }),
-        );
+                    checked: choice == current,
+                },
+                command: Command::Theme(choice),
+            }));
+        } else if words.is_empty() {
+            let recent = self.models.prefs.read(cx).read().recent_firs.clone();
+            let firs = self.models.firs.read(cx);
+            results.extend(
+                recent
+                    .iter()
+                    .filter_map(|entry| firs.get(entry.id))
+                    .take(RECENT_LIMIT)
+                    .map(|row| Entry {
+                        group: Group::Recent,
+                        kind: Kind2::Fir {
+                            no: row.no.clone(),
+                            offence: row.offence.clone(),
+                            status: row.status,
+                        },
+                        command: Command::Go(Route::Fir(row.id)),
+                    }),
+            );
+            results.extend(actions());
+        } else {
+            let firs = self.models.firs.read(cx);
+            results.extend(
+                firs.rows
+                    .iter()
+                    .filter(|row| row.matches(&words))
+                    .take(FIR_LIMIT)
+                    .map(|row| Entry {
+                        group: Group::Firs,
+                        kind: Kind2::Fir {
+                            no: row.no.clone(),
+                            offence: row.offence.clone(),
+                            status: row.status,
+                        },
+                        command: Command::Go(Route::Fir(row.id)),
+                    }),
+            );
+            let templates = self.models.templates.read(cx);
+            results.extend(
+                templates
+                    .items
+                    .iter()
+                    .filter(|item| {
+                        let haystack = fold_for_search(&item.name);
+                        words.iter().all(|word| haystack.contains(word.as_str()))
+                    })
+                    .take(FIR_LIMIT)
+                    .map(|item| Entry {
+                        group: Group::Templates,
+                        kind: Kind2::Template(item.name.clone().into()),
+                        command: Command::Go(Route::Template(item.id)),
+                    }),
+            );
+            results.extend(
+                actions()
+                    .into_iter()
+                    .filter(|entry| {
+                        let haystack = fold_for_search(&entry.title());
+                        words.iter().all(|word| haystack.contains(word.as_str()))
+                    })
+                    .map(|entry| Entry {
+                        group: Group::Commands,
+                        ..entry
+                    }),
+            );
+        }
         self.results = results;
-        self.selected = 0;
+        self.selected = if self.theme_step {
+            self.results
+                .iter()
+                .position(|entry| matches!(entry.kind, Kind2::Command { checked: true, .. }))
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        self.scroll.scroll_to_item(self.selected);
         cx.notify();
     }
 
@@ -230,100 +331,231 @@ impl CommandPalette {
         cx.notify();
     }
 
-    fn run(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+    fn escape(&mut self, cx: &mut Context<Self>) {
+        if self.theme_step {
+            self.theme_step = false;
+            self.refresh(cx);
+        } else if !self.input.read(cx).text().is_empty() {
+            self.input.update(cx, |input, cx| input.set_text("", cx));
+        } else {
+            cx.emit(Dismissed);
+        }
+    }
+
+    pub fn run(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         let Some(entry) = self.results.get(index).cloned() else {
             return;
         };
+        if entry.command == Command::ThemeStep {
+            self.theme_step = true;
+            self.input.update(cx, |input, cx| input.set_text("", cx));
+            self.refresh(cx);
+            return;
+        }
         cx.emit(Dismissed);
         match entry.command {
             Command::Go(route) => navigate(route, window, cx),
-            Command::Theme(choice) => set_theme(choice, window, cx),
-            Command::ToggleSidebar => toggle_sidebar(window, cx),
+            Command::ImportWord => import_word_file(window, cx),
             Command::Shortcuts => show_shortcuts(window, cx),
+            Command::Theme(choice) => set_theme(choice, window, cx),
+            Command::ThemeStep => {}
         }
+    }
+
+    fn render_row(
+        &self,
+        palette: &Palette,
+        index: usize,
+        entry: &Entry,
+        query: &str,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let selected = index == self.selected;
+        let lead: AnyElement;
+        let body: AnyElement;
+        let mut trail: Option<AnyElement> = None;
+        match &entry.kind {
+            Kind2::Fir {
+                no,
+                offence,
+                status,
+            } => {
+                lead = status_dot(palette, *status).into_any_element();
+                body = h_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .items_center()
+                    .gap(px(10.))
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(px(92.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_size(px(14.))
+                            .text_color(palette.ink)
+                            .child(highlight_number(palette, no, query)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .mt(px(-2.))
+                            .text_color(palette.ink)
+                            .child(ur_inline(offence.clone(), UrRole::Body).truncate()),
+                    )
+                    .into_any_element();
+            }
+            Kind2::Template(name) => {
+                lead = sized_icon(IconName::FileText, ICON, palette.ink_muted).into_any_element();
+                body = div()
+                    .flex_1()
+                    .min_w_0()
+                    .mt(px(-2.))
+                    .text_color(palette.ink)
+                    .child(ur_inline(name.clone(), UrRole::Body).truncate())
+                    .into_any_element();
+            }
+            Kind2::Command {
+                title,
+                icon,
+                keys,
+                checked,
+            } => {
+                lead = sized_icon(*icon, ICON, palette.ink_muted).into_any_element();
+                body = div()
+                    .flex_1()
+                    .min_w_0()
+                    .text_size(px(14.))
+                    .text_color(palette.ink)
+                    .child(title.clone())
+                    .into_any_element();
+                if *checked {
+                    trail = Some(sized_icon(IconName::Check, ICON, palette.ink).into_any_element());
+                } else if let Some(keys) = keys
+                    && !selected
+                {
+                    trail = Some(keycaps_toned(palette, keys, KeyTone::Bare).into_any_element());
+                }
+            }
+        }
+        if selected && trail.is_none() {
+            trail = Some(
+                h_flex()
+                    .flex_none()
+                    .items_center()
+                    .gap(px(6.))
+                    .text_size(px(12.))
+                    .text_color(palette.ink_muted)
+                    .child(if entry.command == Command::ThemeStep {
+                        "Choose"
+                    } else {
+                        "Open"
+                    })
+                    .child(keycap(palette, "↵"))
+                    .into_any_element(),
+            );
+        }
+        h_flex()
+            .id(("palette-item", index))
+            .flex_none()
+            .h(px(40.))
+            .mx(px(6.))
+            .px(px(10.))
+            .gap(px(10.))
+            .items_center()
+            .rounded(px(RADIUS))
+            .cursor_pointer()
+            .when(selected, |this| this.bg(palette.hover))
+            .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                if this.selected != index {
+                    this.selected = index;
+                    cx.notify();
+                }
+            }))
+            .on_click(cx.listener(move |this, _, window, cx| this.run(index, window, cx)))
+            .child(lead)
+            .child(body)
+            .children(trail)
+            .test_support()
+            .into_any_element()
     }
 }
 
-pub fn fir_route(id: FirId) -> Route {
-    Route::Fir(id)
-}
-
-pub fn template_route(id: TemplateId) -> Route {
-    Route::Template(id)
+fn highlight_number(palette: &Palette, no: &SharedString, query: &str) -> AnyElement {
+    let needle = fold_for_search(query.trim());
+    let haystack = fold_for_search(no);
+    let range = (!needle.is_empty() && haystack.len() == no.len())
+        .then(|| {
+            haystack
+                .find(needle.as_str())
+                .map(|start| start..start + needle.len())
+        })
+        .flatten();
+    match range {
+        Some(range) => StyledText::new(no.clone())
+            .with_highlights([(
+                range,
+                HighlightStyle {
+                    color: Some(palette.accent),
+                    font_weight: Some(FontWeight::SEMIBOLD),
+                    ..Default::default()
+                },
+            )])
+            .into_any_element(),
+        None => div().child(no.clone()).into_any_element(),
+    }
 }
 
 impl Render for CommandPalette {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
-        let selected = self.selected;
-        let mut rows = Vec::new();
-        let mut last_group = "";
-        for (index, entry) in self.results.iter().enumerate() {
-            if entry.group != last_group {
-                last_group = entry.group;
+        let query = self.input.read(cx).text().to_owned();
+        let mut rows: Vec<AnyElement> = Vec::new();
+        let mut last_group = None;
+        let results = self.results.clone();
+        for (index, entry) in results.iter().enumerate() {
+            if last_group != Some(entry.group) {
+                last_group = Some(entry.group);
                 rows.push(
                     div()
                         .id(("palette-group", index))
-                        .px_3()
-                        .pt_2()
-                        .pb_1()
+                        .flex_none()
+                        .pt(px(10.))
+                        .pb(px(4.))
+                        .px(px(16.))
                         .text_size(px(12.))
-                        .font_medium()
-                        .text_color(palette.muted_foreground)
-                        .child(entry.group)
+                        .line_height(px(20.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(palette.ink_muted)
+                        .child(entry.group.title())
                         .into_any_element(),
                 );
             }
-            let lead = match &entry.lead {
-                Lead::Icon(name) => small_icon(*name, palette.muted_foreground).into_any_element(),
-                Lead::Status(status) => {
-                    status_icon(*status, palette.status(*status), px(14.)).into_any_element()
-                }
-            };
-            rows.push(
-                h_flex()
-                    .id(("palette-item", index))
-                    .test_support()
-                    .h(px(38.))
-                    .mx_1()
-                    .px_2()
-                    .gap_2()
-                    .items_center()
-                    .rounded(px(7.))
-                    .cursor_pointer()
-                    .when(index == selected, |this| this.bg(palette.accent))
-                    .on_mouse_move(cx.listener(move |this, _, _, cx| {
-                        if this.selected != index {
-                            this.selected = index;
-                            cx.notify();
-                        }
-                    }))
-                    .on_click(cx.listener(move |this, _, window, cx| this.run(index, window, cx)))
-                    .child(lead)
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .text_size(px(14.))
-                            .child(label(entry.title.clone()).ltr()),
-                    )
-                    .children(entry.subtitle.clone().map(|subtitle| {
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .text_size(px(14.))
-                            .text_color(palette.muted_foreground)
-                            .child(label(subtitle).rtl().truncate())
-                    }))
-                    .when(entry.subtitle.is_none(), |this| this.child(div().flex_1()))
-                    .when(entry.checked, |this| {
-                        this.child(small_icon(IconName::Check, palette.foreground))
-                    })
-                    .children(entry.keys.map(|keys| key_hint(&palette, keys)))
-                    .into_any_element(),
-            );
+            rows.push(self.render_row(&palette, index, entry, &query, cx));
         }
         let empty = self.results.is_empty();
+        let count = if query.trim().is_empty() || self.theme_step {
+            None
+        } else {
+            let firs = self
+                .results
+                .iter()
+                .filter(|entry| entry.group == Group::Firs)
+                .count();
+            Some(if firs == self.results.len() {
+                format!("{firs} {}", if firs == 1 { "FIR" } else { "FIRs" })
+            } else {
+                let total = self.results.len();
+                format!("{total} {}", if total == 1 { "result" } else { "results" })
+            })
+        };
+        let hint = |keys: Vec<&'static str>, text: &'static str| {
+            h_flex()
+                .items_center()
+                .gap(px(5.))
+                .children(keys.into_iter().map(|key| keycap(&palette, key)))
+                .child(text)
+        };
         div()
             .id("command-palette")
             .absolute()
@@ -331,13 +563,13 @@ impl Render for CommandPalette {
             .flex()
             .flex_col()
             .items_center()
-            .bg(palette.background.opacity(0.0))
+            .font_family(missal_text::UI_FAMILY)
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 match event.keystroke.key.as_str() {
                     "down" => this.move_selection(1, cx),
                     "up" => this.move_selection(-1, cx),
                     "enter" => this.run(this.selected, window, cx),
-                    "escape" => cx.emit(Dismissed),
+                    "escape" => this.escape(cx),
                     _ => return,
                 }
                 cx.stop_propagation();
@@ -347,36 +579,45 @@ impl Render for CommandPalette {
                 cx.listener(|_, _, _, cx| cx.emit(Dismissed)),
             )
             .child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .bg(palette.scrim)
+                    .with_animation("palette-scrim", motion_base(), |this, delta| {
+                        this.opacity(delta)
+                    }),
+            )
+            .child(
                 v_flex()
                     .id("palette-panel")
                     .occlude()
-                    .mt(px(72.))
-                    .w(px(576.))
+                    .mt(px(PALETTE_TOP))
+                    .w(px(PALETTE_WIDTH))
                     .max_w_full()
-                    .rounded(px(12.))
-                    .border_1()
-                    .border_color(palette.input)
-                    .bg(palette.popover)
-                    .overflow_hidden()
+                    .rounded(px(RADIUS_XL))
+                    .bg(palette.raised)
+                    .shadow(palette.shadow_lg())
+                    .text_color(palette.ink)
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         h_flex()
-                            .h(px(48.))
-                            .px_3()
-                            .gap_2()
+                            .h(px(52.))
+                            .pl(px(16.))
+                            .pr(px(14.))
+                            .gap(px(10.))
                             .items_center()
                             .border_b_1()
-                            .border_color(palette.border)
-                            .child(small_icon(IconName::Search, palette.muted_foreground))
-                            .child(div().flex_1().child(self.input.clone())),
+                            .border_color(palette.line)
+                            .child(sized_icon(IconName::Search, ICON, palette.ink))
+                            .child(div().flex_1().min_w_0().child(self.input.clone()))
+                            .child(keycap(&palette, "Esc")),
                     )
                     .child(
                         v_flex()
                             .id("palette-list")
-                            .max_h(px(380.))
+                            .max_h(px(520.))
                             .overflow_y_scroll()
                             .track_scroll(&self.scroll)
-                            .py_1()
                             .children(rows)
                             .when(empty, |this| {
                                 this.child(
@@ -384,11 +625,31 @@ impl Render for CommandPalette {
                                         .py_6()
                                         .text_center()
                                         .text_size(px(13.))
-                                        .text_color(palette.muted_foreground)
-                                        .child("No results found."),
+                                        .text_color(palette.ink_muted)
+                                        .child("Nothing matches. Try a FIR number, an offence or a name."),
                                 )
                             }),
-                    ),
+                    )
+                    .child(
+                        h_flex()
+                            .h(px(36.))
+                            .mt(px(6.))
+                            .px(px(16.))
+                            .gap(px(14.))
+                            .items_center()
+                            .border_t_1()
+                            .border_color(palette.line)
+                            .text_size(px(12.))
+                            .text_color(palette.ink_muted)
+                            .child(hint(vec!["↑", "↓"], "Move"))
+                            .child(hint(vec!["↵"], "Open"))
+                            .child(hint(vec!["Esc"], "Close"))
+                            .child(div().flex_1())
+                            .children(count),
+                    )
+                    .with_animation("palette-enter", motion_base(), |this, delta| {
+                        this.opacity(delta)
+                    }),
             )
     }
 }

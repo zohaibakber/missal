@@ -180,6 +180,10 @@ pub struct TextInput {
     font_size: Option<f32>,
     direction: Direction,
     align: Align,
+    bare: bool,
+    line_height: Option<LineHeight>,
+    placeholder_direction: Option<Direction>,
+    placeholder_color: Option<gpui_kit::Hsla>,
     history: History,
     sticky_x: Option<f32>,
     caret_visible: bool,
@@ -232,6 +236,10 @@ impl TextInput {
             font_size: None,
             direction: Direction::Auto,
             align: Align::Start,
+            bare: false,
+            line_height: None,
+            placeholder_direction: None,
+            placeholder_color: None,
             history: History::default(),
             sticky_x: None,
             caret_visible: true,
@@ -285,6 +293,47 @@ impl TextInput {
     pub fn align(mut self, align: Align) -> Self {
         self.align = align;
         self
+    }
+
+    pub fn bare(mut self) -> Self {
+        self.bare = true;
+        self
+    }
+
+    pub fn line_height(mut self, line_height: LineHeight) -> Self {
+        self.line_height = Some(line_height);
+        self
+    }
+
+    pub fn placeholder_direction(mut self, direction: Direction) -> Self {
+        self.placeholder_direction = Some(direction);
+        self
+    }
+
+    pub fn placeholder_color(mut self, color: gpui_kit::Hsla) -> Self {
+        self.placeholder_color = Some(color);
+        self
+    }
+
+    pub fn is_bare(&self) -> bool {
+        self.bare
+    }
+
+    pub fn resolved_direction(&self) -> Direction {
+        resolve_direction(
+            self.direction,
+            &self.text,
+            &self.placeholder,
+            self.placeholder_direction,
+        )
+    }
+
+    pub fn placeholder_resolved_direction(&self) -> Direction {
+        resolve_placeholder_direction(
+            self.direction,
+            &self.placeholder,
+            self.placeholder_direction,
+        )
     }
 
     pub fn disabled(mut self, disabled: bool) -> Self {
@@ -407,6 +456,11 @@ impl TextInput {
 
     pub(crate) fn row_height(&self, cx: &mut App) -> f32 {
         let size = self.font_size(cx);
+        match self.line_height {
+            Some(LineHeight::Px(height)) => return height,
+            Some(LineHeight::Relative(factor)) => return size * factor,
+            _ => {}
+        }
         let probe = AttributedText::new("Aب", TextStyle::new(self.family.clone(), size));
         TextSystem::layout(cx, &probe, &ParagraphStyle::default(), None).height()
     }
@@ -441,15 +495,38 @@ impl TextInput {
             ..TextStyle::new(self.family.clone(), self.font_size(cx))
         };
         let mut paragraph = self.paragraph(row_height);
-        if text.is_empty() && self.direction == Direction::Auto && !self.placeholder.is_empty() {
-            paragraph.direction =
-                if crate::layout::first_strong_is_rtl(&self.placeholder).unwrap_or(true) {
-                    Direction::Rtl
-                } else {
-                    Direction::Ltr
-                };
+        if text.is_empty() {
+            paragraph.direction = resolve_direction(
+                self.direction,
+                text,
+                &self.placeholder,
+                self.placeholder_direction,
+            );
         }
         TextSystem::layout(cx, &AttributedText::new(text, style), &paragraph, width)
+    }
+
+    pub(crate) fn build_placeholder_layout(
+        &self,
+        width: Option<f32>,
+        cx: &mut App,
+    ) -> Arc<TextLayout> {
+        let row_height = self.row_height(cx);
+        let color = self
+            .placeholder_color
+            .unwrap_or_else(|| cx.theme().muted_foreground);
+        let style = TextStyle {
+            color: to_rgba(color),
+            ..TextStyle::new(self.family.clone(), self.font_size(cx))
+        };
+        let mut paragraph = self.paragraph(row_height);
+        paragraph.direction = self.placeholder_resolved_direction();
+        TextSystem::layout(
+            cx,
+            &AttributedText::new(self.placeholder.to_string(), style),
+            &paragraph,
+            width,
+        )
     }
 
     pub(crate) fn layout(&self, cx: &mut App) -> Arc<TextLayout> {
@@ -1172,14 +1249,16 @@ impl Render for TextInput {
             .when(!self.disabled, |this| this.track_focus(&self.focus_handle))
             .cursor_text()
             .w_full()
-            .px(px(10.))
-            .py(px(6.))
-            .bg(background)
-            .border_1()
-            .border_color(border)
-            .rounded(radius)
-            .when(focused, |this| {
-                this.border_color(ring).focus_ring_style(window, cx)
+            .when(!self.bare, |this| {
+                this.px(px(10.))
+                    .py(px(6.))
+                    .bg(background)
+                    .border_1()
+                    .border_color(border)
+                    .rounded(radius)
+                    .when(focused, |this| {
+                        this.border_color(ring).focus_ring_style(window, cx)
+                    })
             })
             .on_action(cx.listener(Self::on_action_move_left))
             .on_action(cx.listener(Self::on_action_move_right))
@@ -1215,5 +1294,45 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::on_action_insert_newline))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .child(TextInputElement::new(entity))
+    }
+}
+
+pub fn resolve_direction(
+    direction: Direction,
+    text: &str,
+    placeholder: &str,
+    placeholder_direction: Option<Direction>,
+) -> Direction {
+    let strong = |value: &str, empty_rtl: bool| {
+        if crate::layout::first_strong_is_rtl(value).unwrap_or(empty_rtl) {
+            Direction::Rtl
+        } else {
+            Direction::Ltr
+        }
+    };
+    match direction {
+        Direction::Ltr | Direction::Rtl => direction,
+        Direction::Auto if text.is_empty() => {
+            if placeholder_direction.is_none() && !placeholder.is_empty() {
+                strong(placeholder, true)
+            } else {
+                Direction::Rtl
+            }
+        }
+        Direction::Auto => strong(text, true),
+        Direction::AutoLtr => strong(text, false),
+    }
+}
+
+pub fn resolve_placeholder_direction(
+    direction: Direction,
+    placeholder: &str,
+    placeholder_direction: Option<Direction>,
+) -> Direction {
+    match placeholder_direction {
+        Some(Direction::Auto) => resolve_direction(Direction::Auto, placeholder, "", None),
+        Some(Direction::AutoLtr) => resolve_direction(Direction::AutoLtr, placeholder, "", None),
+        Some(fixed) => fixed,
+        None => resolve_direction(direction, placeholder, "", None),
     }
 }

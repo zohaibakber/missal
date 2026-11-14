@@ -9,8 +9,6 @@ use std::cell::RefCell;
 use std::future::Future;
 use std::rc::Rc;
 
-use gpui_kit::component::WindowExt;
-use gpui_kit::component::notification::Notification;
 use gpui_kit::{App, AppContext, Context, Entity, Global, Task, Window};
 use missal_core::RepositoryError;
 use missal_store::Store;
@@ -21,7 +19,7 @@ use crate::prefs::Preferences;
 
 pub use catalog::Catalog;
 pub use firs::Firs;
-pub use nav::{Navigator, Route};
+pub use nav::{Navigator, PrintTarget, Route};
 pub use prefs_model::PrefsModel;
 pub use templates::Templates;
 
@@ -159,17 +157,19 @@ fn push_toast(
             message: message.to_string(),
         });
     }
-    let notification = match kind {
-        ToastKind::Info => Notification::info(message),
-        ToastKind::Success => Notification::success(message),
-        ToastKind::Warning => Notification::warning(message),
-        ToastKind::Error => Notification::error(message),
-    };
-    let notification = match title {
-        Some(title) => notification.title(title),
-        None => notification,
-    };
-    window.push_notification(notification, cx);
+    let mut spec = crate::ui::toast::ToastSpec::new(kind, message);
+    if let Some(title) = title {
+        spec = spec.title(title);
+    }
+    show_toast(window, cx, spec);
+}
+
+pub fn show_toast(_: &mut Window, cx: &mut App, spec: crate::ui::toast::ToastSpec) {
+    if let Some(host) = crate::ui::toast::ToastHost::get(cx) {
+        host.update(cx, |host, cx| {
+            host.push(spec, cx);
+        });
+    }
 }
 
 pub fn toast_detailed(

@@ -132,11 +132,7 @@ impl Element for TextInputElement {
             input.frame.scroll = scroll;
             input.frame.layout = Some(layout.clone());
             let placeholder = (input.text().is_empty() && !input.placeholder_text().is_empty())
-                .then(|| {
-                    let text = input.placeholder_text().to_string();
-                    let color = cx.theme().muted_foreground;
-                    input.build_layout(&text, color, Some(width), cx)
-                });
+                .then(|| input.build_placeholder_layout(Some(width), cx));
             (layout, placeholder, scroll)
         });
         let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);

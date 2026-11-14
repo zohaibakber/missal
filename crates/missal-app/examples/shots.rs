@@ -6,18 +6,22 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, Bounds, HeadlessAppContext, Size, WindowBounds, WindowOptions, point, px, size,
 };
-use missal_app::app::{navigate, show_shortcuts};
+use missal_app::app::{AppShell, ShellHandle, navigate, show_shortcuts, toggle_nav_menu};
 use missal_app::db::Db;
 use missal_app::launch::{init_app, open_shell};
 use missal_app::prefs::{Preferences, ThemeChoice};
 use missal_app::screens::edit_sheet::open_edit_sheet;
 use missal_app::seed::seed_firs;
 use missal_app::state::{Models, Route};
+use missal_app::state::{ToastKind, show_toast};
+use missal_app::ui::dialogs::confirm_delete;
+use missal_app::ui::toast::ToastSpec;
+use missal_app::ui::window_controls::{ControlsStyle, ForceControls};
 use missal_core::{FirId, TemplateId};
 use missal_store::Store;
 
 const DEFAULT_OUT: &str =
-    "/tmp/claude-0/-home-user-missal/da28de75-7983-5932-bdf9-e2e3d5312f4e/scratchpad/app-shots";
+    "/tmp/claude-0/-home-user-missal/da28de75-7983-5932-bdf9-e2e3d5312f4e/scratchpad/wp0";
 
 struct Harness {
     cx: HeadlessAppContext,
@@ -123,6 +127,8 @@ fn build(dark: bool, out: &Path, width: f32, height: f32) -> (Harness, tempfile:
     };
     let (handle, models) = cx.update(|cx| {
         let models = init_app(cx, Db::inline(store), None, preferences);
+        cx.set_reduce_motion(true);
+        cx.set_global(ForceControls(ControlsStyle::Windows));
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds {
                 origin: point(px(0.), px(0.)),
@@ -145,24 +151,86 @@ fn build(dark: bool, out: &Path, width: f32, height: f32) -> (Harness, tempfile:
     (harness, directory)
 }
 
-fn run(dark: bool, out: &Path) {
-    let (mut h, _directory) = build(dark, out, 1280.0, 800.0);
-    h.shot("01-fir-list");
+fn shell(cx: &gpui_kit::App) -> gpui_kit::Entity<AppShell> {
+    ShellHandle::get(cx).expect("shell")
+}
 
+fn run_wp0(h: &mut Harness) {
+    h.go(Route::Components);
+    h.shot("00-components");
+    h.go(Route::Firs);
+    h.shot("01-fir-list");
+    h.with_window(toggle_nav_menu);
+    h.shot("25-nav-menu");
+    h.press("up");
+    h.press("up");
+    h.press("right");
+    h.shot("25b-nav-menu-theme");
+    h.press("escape");
+    h.press("escape");
+    h.with_window(show_shortcuts);
+    h.shot("16-shortcuts");
+    h.reset();
+    for id in [11, 7, 3] {
+        h.go(Route::Fir(FirId::new(id).expect("id")));
+    }
+    h.shot("28-workspace-header");
+    h.go(Route::Firs);
+    h.press("secondary-k");
+    h.shot("17b-palette-recents");
+    h.with_window(|window, cx| window.input("11/20", cx));
+    h.shot("17-command-palette");
+    h.press("escape");
+    h.press("escape");
     h.with_window(|window, cx| {
-        let nav_models = Models::get(cx);
-        nav_models
-            .prefs
-            .update(cx, |prefs, cx| prefs.update(cx, |p| p.sidebar_open = false));
-        let _ = window;
+        confirm_delete(
+            window,
+            cx,
+            "Delete FIR 9/2026?",
+            "Its 3 documents are deleted too. This can't be undone.",
+            "Delete FIR",
+            |_, _| {},
+        )
     });
-    h.shot("02-sidebar-collapsed");
+    h.shot("26-dialog");
+    h.reset();
+    h.with_window(|window, cx| {
+        show_toast(
+            window,
+            cx,
+            ToastSpec::new(
+                ToastKind::Success,
+                format!(
+                    "Added {}",
+                    missal_app::ui::isolate_urdu("ضمنی حصول ریمانڈ جسمانی")
+                ),
+            )
+            .action("Undo", |_, _| {}),
+        );
+        show_toast(
+            window,
+            cx,
+            ToastSpec::new(ToastKind::Error, "Couldn't save. The disk is full.")
+                .action("Retry", |_, _| {}),
+        );
+    });
+    h.shot("27-toasts");
     h.with_window(|_, cx| {
-        let models = Models::get(cx);
-        models
-            .prefs
-            .update(cx, |prefs, cx| prefs.update(cx, |p| p.sidebar_open = true));
+        let toasts = shell(cx).read(cx).toasts().clone();
+        toasts.update(cx, |toasts, cx| toasts.clear(cx));
     });
+    let template = h.models_template_id();
+    h.go(Route::Template(template));
+    h.shot("29-template-header");
+    h.go(Route::Firs);
+}
+
+fn run(dark: bool, out: &Path, only_wp0: bool) {
+    let (mut h, _directory) = build(dark, out, 1280.0, 800.0);
+    run_wp0(&mut h);
+    if only_wp0 {
+        return;
+    }
 
     h.click("select-all");
     h.shot("03-selection");
@@ -229,12 +297,12 @@ fn run(dark: bool, out: &Path) {
     h.shot("15-settings");
 
     h.with_window(show_shortcuts);
-    h.shot("16-shortcuts");
+    h.shot("16b-shortcuts-legacy-path");
     h.reset();
 
     h.go(Route::Firs);
     h.press("secondary-k");
-    h.shot("17-command-palette");
+    h.shot("18-command-palette-empty");
     h.press("escape");
     h.shot("18-fir-list-after");
 
@@ -329,11 +397,12 @@ fn main() {
         .iter()
         .position(|argument| argument == "--theme")
         .map(|index| args[index + 1].clone());
+    let only_wp0 = args.iter().any(|argument| argument == "--wp0");
     for dark in [false, true] {
         if only.as_deref().is_some_and(|only| (only == "dark") != dark) {
             continue;
         }
-        run(dark, &out);
+        run(dark, &out, only_wp0);
     }
     let _ = Size::<gpui_kit::Pixels>::default;
 }

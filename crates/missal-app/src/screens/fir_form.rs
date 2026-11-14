@@ -21,7 +21,7 @@ use crate::state::rows::FirRow;
 use crate::state::{Models, Route, run_db_in, toast_error, toast_success, toast_warning};
 use crate::theme::Palette;
 use crate::ui::input::{Kind, text_area, text_input};
-use crate::ui::status::status_icon;
+use crate::ui::status::status_dot;
 use crate::ui::{pane_header, save_status, small_icon};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -123,7 +123,7 @@ impl FirForm {
         };
         let numeric =
             |window: &mut Window, cx: &mut Context<Self>, placeholder: &str, text: &str| {
-                text_input(window, cx, Kind::Numeric, placeholder, text)
+                text_input(window, cx, Kind::LatinNumeric, placeholder, text)
             };
         let fir_no = urdu(window, cx, "412/2026", &initial.fir_no);
         let complainant = urdu(window, cx, "", &initial.complainant);
@@ -512,9 +512,9 @@ impl FirForm {
             .justify_start()
             .gap_1()
             .text_size(px(16.))
-            .text_color(palette.foreground)
+            .text_color(palette.ink)
             .child(label(title).rtl())
-            .children(required.then(|| div().text_color(palette.destructive).child("*")))
+            .children(required.then(|| div().text_color(palette.danger_text).child("*")))
     }
 
     fn field(
@@ -534,7 +534,7 @@ impl FirForm {
             .children(self.errors.get(key).map(|message| {
                 div()
                     .text_size(px(12.))
-                    .text_color(palette.destructive)
+                    .text_color(palette.danger_text)
                     .text_right()
                     .child(*message)
             }))
@@ -556,7 +556,7 @@ impl FirForm {
                 .gap_3()
                 .py_5()
                 .border_b_1()
-                .border_color(palette.border)
+                .border_color(palette.line)
                 .child(heading)
                 .child(v_flex().gap_4().child(body))
                 .into_any_element()
@@ -567,7 +567,7 @@ impl FirForm {
                 .gap_8()
                 .py_6()
                 .border_b_1()
-                .border_color(palette.border)
+                .border_color(palette.line)
                 .child(div().w(px(150.)).child(heading))
                 .child(v_flex().flex_1().min_w_0().gap_4().child(body))
                 .into_any_element()
@@ -603,17 +603,14 @@ impl FirForm {
                 .flex_row_reverse()
                 .items_center()
                 .gap_2()
-                .child(status_icon(status, palette.status(status), px(14.)))
+                .child(status_dot(&palette, status))
                 .child(
                     div()
                         .flex_1()
                         .text_size(px(15.))
                         .child(label(status.label()).rtl()),
                 )
-                .child(small_icon(
-                    IconName::ChevronsUpDown,
-                    palette.muted_foreground,
-                )),
+                .child(small_icon(IconName::ChevronsUpDown, palette.ink_muted)),
         );
         Popover::new("status-select-popover")
             .trigger(trigger)
@@ -647,12 +644,12 @@ impl FirForm {
                             .items_center()
                             .rounded(px(6.))
                             .cursor_pointer()
-                            .hover(move |style| style.bg(palette.accent))
+                            .hover(move |style| style.bg(palette.hover))
                             .on_click(cx.listener(move |_, _, window, cx| {
                                 weak.update(cx, |this, cx| this.set_status(status, cx)).ok();
                                 let _ = window;
                             }))
-                            .child(status_icon(status, palette.status(status), px(14.)))
+                            .child(status_dot(&palette, status))
                             .child(div().text_size(px(15.)).child(label(status.label()).rtl()))
                     }))
             })
@@ -751,7 +748,7 @@ impl FirForm {
                             .w(px(22.))
                             .flex_shrink_0()
                             .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
+                            .text_color(palette.ink_muted)
                             .text_center()
                             .child((position + 1).to_string()),
                     )
@@ -778,7 +775,7 @@ impl FirForm {
             .children(self.errors.get(kind.field()).map(|message| {
                 div()
                     .text_size(px(12.))
-                    .text_color(palette.destructive)
+                    .text_color(palette.danger_text)
                     .text_right()
                     .child(*message)
             }))
@@ -1008,5 +1005,21 @@ impl Render for NewFirScreen {
                     .overflow_y_scroll()
                     .child(div().max_w(px(768.)).mx_auto().px_4().child(form)),
             )
+    }
+}
+
+impl crate::ui::titlebar::HeaderSource for NewFirScreen {
+    fn header(
+        &mut self,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> crate::ui::titlebar::HeaderContent {
+        let palette = *Palette::get(cx);
+        crate::ui::titlebar::HeaderContent::new("New FIR").meta_element(
+            div()
+                .text_size(px(12.))
+                .text_color(palette.ink_faint)
+                .child("Fields marked * are required"),
+        )
     }
 }

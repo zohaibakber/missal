@@ -377,7 +377,7 @@ fn command_palette_opens_filters_and_navigates(cx: &mut TestAppContext) {
     assert!(titles.iter().any(|title| title == "New FIR"));
     fixture.type_text(cx, "settings");
     let titles = cx.update(|cx| palette.read(cx).result_titles());
-    assert_eq!(titles, ["Settings"]);
+    assert_eq!(titles, ["Go to Settings"]);
     fixture.press(cx, "enter");
     assert_eq!(fixture.route(cx), Route::Settings);
     assert!(
@@ -549,4 +549,95 @@ fn question_mark_opens_the_cheatsheet(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn fir_defaults_are_a_valid_draft(_: &mut TestAppContext) {
     assert!(Fir::empty_draft().validated().is_err());
+}
+
+#[gpui_kit::test]
+fn the_menu_dropdown_navigates_with_the_mouse_and_the_keyboard(cx: &mut TestAppContext) {
+    let fixture = boot(cx, 2);
+    fixture.click(cx, "nav-menu");
+    let menu = cx
+        .update(|cx| fixture.shell.read(cx).nav_menu())
+        .expect("menu open");
+    assert_eq!(
+        cx.update(|cx| menu.read(cx).highlighted()),
+        missal_app::ui::nav_menu::NavEntry::Firs
+    );
+    fixture.click(cx, "nav-templates");
+    assert_eq!(fixture.route(cx), Route::Templates);
+    assert!(cx.update(|cx| fixture.shell.read(cx).nav_menu()).is_none());
+
+    fixture.press(cx, "f10");
+    assert!(cx.update(|cx| fixture.shell.read(cx).nav_menu()).is_some());
+    fixture.press(cx, "down");
+    fixture.press(cx, "enter");
+    assert_eq!(fixture.route(cx), Route::Settings);
+
+    fixture.press(cx, "f10");
+    fixture.press(cx, "escape");
+    assert!(cx.update(|cx| fixture.shell.read(cx).nav_menu()).is_none());
+    assert_eq!(fixture.route(cx), Route::Settings);
+
+    fixture.press(cx, "f10");
+    fixture.press(cx, "t");
+    assert_eq!(
+        cx.update(|cx| fixture
+            .shell
+            .read(cx)
+            .nav_menu()
+            .unwrap()
+            .read(cx)
+            .highlighted()),
+        missal_app::ui::nav_menu::NavEntry::Theme
+    );
+    fixture.press(cx, "right");
+    fixture.click(cx, "nav-theme-dark");
+    assert_eq!(
+        cx.update(|cx| fixture.models.prefs.read(cx).read().theme),
+        missal_app::prefs::ThemeChoice::Dark
+    );
+
+    fixture.click(cx, "nav-menu");
+    fixture.click(cx, "nav-new-fir");
+    assert_eq!(fixture.route(cx), Route::NewFir);
+}
+
+#[gpui_kit::test]
+fn the_palette_lists_recently_opened_firs_first(cx: &mut TestAppContext) {
+    let fixture = boot(cx, 6);
+    let first = FirId::new(2).unwrap();
+    let second = FirId::new(5).unwrap();
+    fixture.go(cx, Route::Fir(first));
+    fixture.go(cx, Route::Fir(second));
+    fixture.go(cx, Route::Fir(first));
+    fixture.go(cx, Route::Firs);
+    fixture.click(cx, "header-search");
+    let palette = cx
+        .update(|cx| fixture.shell.read(cx).palette_entity())
+        .expect("palette");
+    let (groups, titles) = cx.update(|cx| {
+        let palette = palette.read(cx);
+        (palette.result_groups(), palette.result_titles())
+    });
+    use missal_app::ui::palette::Group;
+    assert_eq!(&groups[..2], &[Group::Recent, Group::Recent]);
+    assert_eq!(groups[2], Group::Actions);
+    let number = |id: FirId| {
+        cx.update(|cx| format!("FIR {}", fixture.models.firs.read(cx).get(id).unwrap().no))
+    };
+    let (first_no, second_no) = (number(first), number(second));
+    assert_eq!(&titles[..2], &[first_no, second_no]);
+    fixture.press(cx, "enter");
+    assert_eq!(fixture.route(cx), Route::Fir(first));
+    let recent = cx.update(|cx| {
+        fixture
+            .models
+            .prefs
+            .read(cx)
+            .read()
+            .recent_firs
+            .iter()
+            .map(|recent| recent.id)
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(recent, [first, second]);
 }

@@ -27,7 +27,7 @@ use crate::shortcuts::*;
 use crate::state::{db, toast_error, toast_info, toast_success};
 use crate::theme::Palette;
 use crate::ui::input::{Kind, text_input};
-use crate::ui::{icon_button, small_icon};
+use crate::ui::{kit_icon_button, small_icon};
 
 const PAD_X: f32 = 48.0;
 const PAD_Y: f32 = 36.0;
@@ -112,7 +112,7 @@ pub struct PrintPreview {
 
 impl PrintPreview {
     pub fn new(request: PrintRequest, window: &mut Window, cx: &mut Context<Self>) -> PrintPreview {
-        let page_input = text_input(window, cx, Kind::Numeric, "", "1");
+        let page_input = text_input(window, cx, Kind::LatinNumeric, "", "1");
         let subscriptions = vec![cx.subscribe_in(
             &page_input,
             window,
@@ -632,7 +632,7 @@ impl PrintPreview {
             .pl_4()
             .pr_2()
             .border_b_1()
-            .border_color(palette.border)
+            .border_color(palette.line)
             .child(
                 h_flex()
                     .flex_1()
@@ -652,7 +652,7 @@ impl PrintPreview {
                             .min_w_0()
                             .overflow_hidden()
                             .text_size(px(13.))
-                            .text_color(palette.muted_foreground)
+                            .text_color(palette.ink_muted)
                             .child(div().min_w_0().child(label(lead).truncate()))
                             .children(rest.map(|rest| div().flex_shrink_0().child(rest))),
                     ),
@@ -703,7 +703,7 @@ impl PrintPreview {
                 .justify_center()
                 .gap_2()
                 .text_size(px(13.))
-                .text_color(palette.muted_foreground)
+                .text_color(palette.ink_muted)
                 .child(Spinner::new())
                 .child("Laying out pages…")
                 .into_any_element(),
@@ -712,10 +712,7 @@ impl PrintPreview {
                 .items_center()
                 .justify_center()
                 .gap_3()
-                .child(small_icon(
-                    IconName::TriangleAlert,
-                    palette.muted_foreground,
-                ))
+                .child(small_icon(IconName::TriangleAlert, palette.ink_muted))
                 .child(
                     div()
                         .text_size(px(14.))
@@ -726,7 +723,7 @@ impl PrintPreview {
                     div()
                         .max_w(px(420.))
                         .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
+                        .text_color(palette.ink_muted)
                         .child(label(message.clone()).align(missal_text::Align::Center)),
                 )
                 .child(
@@ -751,7 +748,7 @@ impl PrintPreview {
                         .h(px(height))
                         .bg(gpui_kit::white())
                         .border_1()
-                        .border_color(palette.border)
+                        .border_color(palette.line)
                         .shadow_md()
                         .child(
                             canvas(
@@ -814,11 +811,11 @@ impl PrintPreview {
             .gap_1()
             .px_2()
             .border_t_1()
-            .border_color(palette.border)
+            .border_color(palette.line)
             .text_size(px(12.))
-            .text_color(palette.muted_foreground)
+            .text_color(palette.ink_muted)
             .child(
-                icon_button("preview-previous", IconName::ChevronLeft)
+                kit_icon_button("preview-previous", IconName::ChevronLeft)
                     .tooltip("Previous page")
                     .disabled(!ready || current <= 1)
                     .on_click(cx.listener(|this, _, _, cx| this.step_page(-1, cx))),
@@ -845,14 +842,14 @@ impl PrintPreview {
                     )),
             )
             .child(
-                icon_button("preview-next", IconName::ChevronRight)
+                kit_icon_button("preview-next", IconName::ChevronRight)
                     .tooltip("Next page")
                     .disabled(!ready || current >= count)
                     .on_click(cx.listener(|this, _, _, cx| this.step_page(1, cx))),
             )
             .child(div().flex_1())
             .child(
-                icon_button("preview-zoom-out", IconName::Minus)
+                kit_icon_button("preview-zoom-out", IconName::Minus)
                     .tooltip("Zoom out")
                     .disabled(!ready)
                     .on_click(cx.listener(|this, _, _, cx| this.step_zoom(-1, cx))),
@@ -885,7 +882,7 @@ impl PrintPreview {
                     }),
             )
             .child(
-                icon_button("preview-zoom-in", IconName::Plus)
+                kit_icon_button("preview-zoom-in", IconName::Plus)
                     .tooltip("Zoom in")
                     .disabled(!ready)
                     .on_click(cx.listener(|this, _, _, cx| this.step_zoom(1, cx))),
@@ -966,8 +963,8 @@ impl Render for PrintPreview {
                     .overflow_hidden()
                     .rounded(px(12.))
                     .border_1()
-                    .border_color(palette.input)
-                    .bg(palette.background)
+                    .border_color(palette.line_strong)
+                    .bg(palette.surface)
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(header)
                     .child(
@@ -976,7 +973,7 @@ impl Render for PrintPreview {
                             .flex_1()
                             .min_h_0()
                             .relative()
-                            .bg(palette.canvas)
+                            .bg(palette.sunken)
                             .child(probe)
                             .child(area),
                     )

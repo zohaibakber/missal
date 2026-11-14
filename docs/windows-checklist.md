@@ -36,6 +36,15 @@ Test machine matrix, at minimum: one single-monitor 100% display, one 125% or 15
 - [ ] Theme follows Windows light and dark live while the app runs, with the preference set to system.
 - [ ] Shortcuts work under the Urdu keyboard layouts and the English layout: `?` for the cheat sheet, `/` for search, g-chords (g then the next key), Alt+Left and Alt+Right for back and forward, the command palette, Ctrl+P.
 - [ ] Shortcuts do not fire while composing with an IME.
+- [ ] Header chrome (UI redesign WP0): there is no native caption bar; the 44 px header reaches the top edge of the window and the window buttons sit at its right edge, 46 px wide each, flush with the top and the right edge, with no rounded corners.
+- [ ] Caption glyphs are the system's own Segoe Fluent Icons (Windows 11) or Segoe MDL2 Assets (Windows 10) at 10 px. If neither font is installed the Lucide fallback icons show instead; note which one appeared.
+- [ ] Hovering maximise shows the Windows 11 Snap Layouts flyout. Clicking a layout snaps the window; Win+Z also opens it.
+- [ ] Maximise turns into Restore Down when maximised and back; the header does not lose its top 1–8 px when maximised (no clipped icons).
+- [ ] Hover is a faint grey on minimise and maximise (black at about 4% in light, white at about 6% in dark), close turns `#c42b1c` with a white glyph, pressed states are slightly lighter. The glyphs follow the app theme (light, dark, and System following Windows) and dim when the window is inactive.
+- [ ] Every empty part of the header drags the window, double-click on it maximises and restores, right-click on it shows the system window menu (Alt+Space too). The menu, back, forward, title actions and search buttons do not drag, and clicking them never starts a drag.
+- [ ] The top resize edge still works along the header: the cursor changes to a resize arrow within a few pixels of the top edge, except over the caption buttons.
+- [ ] F10 opens the navigation menu (Windows may deliver F10 as a system key; if it does not arrive, record it here so Alt+M can be added as a fallback).
+- [ ] With "Animation effects" off in Settings, Accessibility, Visual effects, menus, the palette and dialogs appear without fading. Toggling the setting while Missal runs takes effect the next time the window is activated.
 
 ## Editor
 

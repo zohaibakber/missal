@@ -363,3 +363,73 @@ fn mouse_click_double_click_and_drag(cx: &mut TestAppContext) {
     click(cx, right, 3, false);
     assert_eq!(selection(&input, cx), 0..value.len());
 }
+
+#[gpui_kit::test]
+fn boxed_input_is_inset_by_its_padding(cx: &mut TestAppContext) {
+    let (_, input, cx) = setup(cx, |i| i.text_size(16.));
+    let bounds = input.read_with(cx, |input, _| input.frame_bounds().unwrap());
+    assert_eq!(bounds.origin.x, px(21.));
+}
+
+#[gpui_kit::test]
+fn bare_input_draws_no_box_and_takes_the_line_height(cx: &mut TestAppContext) {
+    let (_, input, cx) = setup(cx, |i| {
+        i.bare()
+            .text_size(16.)
+            .line_height(missal_text::LineHeight::Px(30.))
+    });
+    let bounds = input.read_with(cx, |input, _| input.frame_bounds().unwrap());
+    assert!(input.read_with(cx, |input, _| input.is_bare()));
+    assert_eq!(bounds.origin.x, px(10.));
+    assert_eq!(bounds.size.width, px(380.));
+    assert_eq!(bounds.size.height, px(30.));
+}
+
+#[gpui_kit::test]
+fn an_english_placeholder_decides_an_empty_auto_field(cx: &mut TestAppContext) {
+    use missal_text::Direction;
+    let (_, input, cx) = setup(cx, |i| i.direction(Direction::Auto).placeholder("Empty"));
+    assert_eq!(
+        input.read_with(cx, |input, _| input.resolved_direction()),
+        Direction::Ltr
+    );
+}
+
+#[gpui_kit::test]
+fn placeholder_direction_does_not_flip_the_field(cx: &mut TestAppContext) {
+    use missal_text::Direction;
+    let (_, input, cx) = setup(cx, |i| {
+        i.direction(Direction::Auto)
+            .placeholder("Empty")
+            .placeholder_direction(Direction::Ltr)
+    });
+    let read = |input: &Entity<TextInput>, cx: &mut VisualTestContext| {
+        input.read_with(cx, |input, _| {
+            (
+                input.resolved_direction(),
+                input.placeholder_resolved_direction(),
+            )
+        })
+    };
+    assert_eq!(read(&input, cx), (Direction::Rtl, Direction::Ltr));
+    cx.simulate_input("بینک");
+    assert_eq!(read(&input, cx).0, Direction::Rtl);
+    cx.update(|_, cx| input.update(cx, |input, cx| input.set_text("Bank", cx)));
+    assert_eq!(read(&input, cx).0, Direction::Ltr);
+}
+
+#[test]
+fn direction_resolution_rules() {
+    use missal_text::Direction::*;
+    use missal_text::input::{resolve_direction, resolve_placeholder_direction};
+    assert_eq!(resolve_direction(AutoLtr, "", "تلاش", None), Ltr);
+    assert_eq!(resolve_direction(AutoLtr, "ڈکیتی", "", None), Rtl);
+    assert_eq!(resolve_direction(AutoLtr, "11/20", "", None), Ltr);
+    assert_eq!(resolve_direction(Auto, "", "", None), Rtl);
+    assert_eq!(resolve_direction(Auto, "", "Search", None), Ltr);
+    assert_eq!(resolve_direction(Auto, "", "Search", Some(Ltr)), Rtl);
+    assert_eq!(resolve_direction(Rtl, "abc", "", None), Rtl);
+    assert_eq!(resolve_placeholder_direction(Rtl, "Empty", Some(Ltr)), Ltr);
+    assert_eq!(resolve_placeholder_direction(Rtl, "Empty", None), Rtl);
+    assert_eq!(resolve_placeholder_direction(Rtl, "تلاش", Some(Auto)), Rtl);
+}

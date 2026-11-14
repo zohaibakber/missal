@@ -908,3 +908,75 @@ Package ordering: **WP0 first, alone and short.** WP1, WP2 and WP3 can then run 
 - Latin and Urdu baselines must match within 1 px in rows.
 - Mockups use Chrome's text engine, so Nastaleeq word spacing and kerning will differ slightly from parley's; judge layout, not glyph shapes.
 - The Electron app, `ci.yml`, `electron-builder.yml` and `package.json` are untouched, as `AGENTS.md` requires.
+
+## WP0 component API
+
+What WP0 shipped, for WP1–WP3. Everything lives in `crates/missal-app/src/ui/` unless a path says otherwise. All builders are `RenderOnce` elements that read `Palette::get(cx)` themselves and register with the test harness (`window.click(id)` works on them).
+
+### Tokens (`theme.rs`)
+
+- `Palette::get(cx)` returns the token set from 1.1: `surface`, `raised`, `sunken`, `paper`, `ink`, `ink_muted`, `ink_faint`, `line`, `line_strong`, `hover`, `pressed`, `action`, `action_hover`, `on_action`, `accent`, `accent_wash`, `field_wash`, `danger`, `danger_text`, `danger_wash`, `notice`, `notice_text`, `notice_wash`, `st_open`, `st_investigating`, `st_challan`, `st_closed`, `scrim`, plus `dark` and `status(FirStatus)`.
+- Shadows: `palette.shadow_sm()`, `shadow_md()`, `shadow_lg()`, `paper_shadow()`, `focus_ring()` (2 px ring, 2 px `surface` gap) and `input_focus_ring()` (3 px `accent` halo at 22%). Pass them to `.shadow(..)`.
+- Sizes: `HEADER_HEIGHT`, `ICON_BUTTON`, `ICON_BUTTON_DENSE`, `BUTTON_SM`, `BUTTON_MD`, `INPUT_LATIN`, `INPUT_URDU`, `CHECKBOX`, `SEGMENTED_TRACK`, `SEGMENTED_ITEM`, `TAB_HEIGHT`, `FILTER_ITEM`, `TABLE_HEAD`, `TABLE_ROW`, `LIST_ITEM`, `LIST_ITEM_META`, `MENU_ITEM`, `KEYCAP`, `ICON`, `ICON_SM`, `ICON_XS`, `RAIL_WIDTH` (248), `DETAILS_RAIL_WIDTH` (296), `NAV_MENU_WIDTH`, `PALETTE_WIDTH`, `DIALOG_WIDTH`, `CHEATSHEET_WIDTH`, `TOAST_MAX_WIDTH`, `CAPTION_RESERVE`.
+- Radii: `RADIUS_CHIP` 3, `RADIUS_SM` 4, `RADIUS` 6, `RADIUS_LG` 8, `RADIUS_XL` 12, `RADIUS_PAPER` 2, `RADIUS_PILL` 12. Spacing: `SPACE`, `GAP_IN_GROUP`, `GAP_BETWEEN_GROUPS`, `PANEL_PADDING`, `PAGE_GUTTER`.
+- Motion: `motion_fast()`, `motion_base()`, `motion_exit()` return gpui `Animation`s (with `MOTION_FAST`/`MOTION_BASE`/`MOTION_EXIT` durations and `ease_out_cubic`); use them with `.with_animation(id, motion_fast(), |el, t| ..)`. `TOOLTIP_DELAY` is 400 ms. gpui renders end states under reduced motion, which the shell keeps in sync with the OS.
+- `apply_palette` maps the tokens onto gpui-kit, so kit components (popovers, selects, checkboxes, tabs) pick them up without extra work. `theme.shadow` is on.
+
+### Text
+
+- `ur_label(text, UrRole)` and `ur_inline(text, UrRole)` (`ui/mod.rs`): Urdu at the size and line height from 1.2. `UrRole::{Label, Body, InputLabel, Title, Display}`. `ur_label` is RTL with start alignment (right); `ur_inline` is RTL but left-aligned, for Urdu inside LTR chrome (menus, header, palette). Add `.truncate()` for horizontal truncation. Do not set a weight. Nudge Urdu in 28–36 px controls with `mt(px(-2.))`.
+- `isolate_urdu(name)` wraps an Urdu name in RLI…PDI for English sentences ("Added ‹…›", "Delete «…»?").
+- Latin text through `missal_text::label` ignores the parent's `line_height`; pass `.leading(LineHeight::Px(..))` when the box height matters.
+
+### Controls
+
+- `button(id, label)` → `ActionButton`. Kinds: `.primary()`, `.outline()`, `.ghost()`, `.danger()`, `.kind(ButtonKind::GhostMuted | DangerOutline)`. Sizes: `.sm()` (28) or `.md()` (32, default). Extras: `.icon(IconName)`, `.keys("Mod+S")` (keycaps inside the button), `.tooltip(label, Some(keys))`, `.disabled(bool)`, `.track_focus(&handle)` (draws the keyboard focus ring), `.on_click(..)`. Presets: `primary_sm(id, label)`, `ghost_sm(id, label)`, `danger_outline(id, label)`.
+- `icon_button(id, IconName, "Tooltip and accessible name")` → `IconButton`: 28 px (`.dense()` for 24), idle `ink_muted`, hover fill, `.toggled(bool)` (pressed fill, `aria-toggled`), `.disabled(bool)` (40%), `.keys("Mod+P")` for the tooltip, `.color(..)`, `.track_focus(..)`, `.on_click(..)`. It occludes, so it is never part of the window drag region, and it stops propagation on click.
+- `kit_icon_button(id, IconName)` is the old gpui-kit ghost button, kept only for legacy screen code and popover triggers that need a kit `Button`. Do not use it in new code.
+- `tooltip(label, Some("Mod+P"))` builds the spec tooltip (ink fill, `surface` text, keycaps). Use it with `.tooltip(..)` and `.tooltip_show_delay(TOOLTIP_DELAY)` on any stateful div.
+- Keycaps: `keycap(palette, "Esc")`, `keycaps(palette, "Mod+Shift+L")`, `keycaps_toned(palette, keys, KeyTone::{Plain, Bare, OnAction, OnTooltip})`, `keycaps_chord(palette, "G then H")` (chevron between steps). `Mod` becomes Ctrl or Cmd; `Enter`, arrows, `Escape` and `Delete` become ↵, ↑↓←→, Esc and Del.
+- `checkbox(palette, id, checked)`, `segmented(palette, Vec<SegmentItem>, selected)` (`SegmentItem::new(id, label, on_select)`), `count_badge(palette, n)`, `warn_box(palette, content)`, `pill(palette)`, `hairline(palette)`, `vertical_rule(palette)`, `section_label(palette, text)` (12/500 `ink_muted`), `caption(palette, text)`, `skeleton_bar(palette, w, h)`.
+- `empty_state(palette, icon, title, description, action)` fills its parent and centres; `empty_state_body(..)` is the same block without the full-size wrapper.
+- `save_state(palette, SaveState::{Saved, Unsaved, Saving})` is the header save text.
+- Status (`ui/status.rs`): `status_dot(palette, status)` (8 px), `status_label(palette, status)` (dot plus Urdu in `ink`), `status_pill(palette, status)` (24 px header pill).
+
+### Inputs (`ui/input.rs`)
+
+- `Kind::{Search, SearchRtl, Urdu, UrduAuto, LatinNumeric, Date, Latin}` encodes the direction table in 3.4: direction, explicit alignment, text size (Urdu 16, Latin 14, palette 15), box height (36 for anything that can hold Urdu, 32 otherwise), placeholder direction, and `ink_faint` placeholders.
+- `field_input(window, cx, kind, placeholder, text)` creates a bare `TextInput` for a wrapper. `text_input(..)` creates the old self-boxed input (legacy screens); `text_area(..)` is the multiline Urdu body at line height 30.
+- `field(id, &input, kind)` draws the box (border `line_strong`, `shadow_sm`, accent border plus halo on focus) and clicks anywhere in it focus the input. `search_field(id, &input, kind)` adds the search icon and a clear `x` (shown when there is text; on the left for `SearchRtl`). Options: `.width(px)`, `.error(bool)`, `.hint(Hint::Slash | Hint::Escape)`, `.on_clear(..)`, `.on_calendar(..)` (the `calendar` button inside the box for dates), `.clearable(bool)`.
+- missal-text additions: `TextInput::bare()`, `.line_height(LineHeight)`, `.placeholder_direction(Direction)` and `.placeholder_color(Hsla)`, plus `resolved_direction()` / `placeholder_resolved_direction()` and the pure `missal_text::input::resolve_direction(..)`.
+
+### Header (`ui/titlebar.rs`)
+
+- Every routed screen implements `HeaderSource`: `fn header(&mut self, window, cx) -> HeaderContent`. The shell calls it on every render, and re-renders whenever the screen notifies.
+- `HeaderContent::new("FIRs")`, `::urdu(name)` (`ur_title`) or `::element(el)` for a composite title (the workspace uses "FIR 1/2021" plus `status_pill`). Then `.meta("4 of 90")` or `.meta_element(el)`, and `.action(el)` per action, left to right (icon buttons, `save_state`, at most one `primary_sm`).
+- The shell draws menu, back, forward, title, meta, actions and search; WP1–3 never draw them. Header ids: `nav-menu`, `history-back`, `history-forward`, `header-search`.
+- Window chrome (`ui/window_controls.rs`): the window has no native title bar on any platform. On Windows the caption buttons are drawn by Missal and hit-tested by Windows through `WindowControlArea::{Min, Max, Close}`, and the empty header is `WindowControlArea::Drag`. On macOS the native traffic lights sit at (14, 14) and the header starts 80 px in. On Linux Missal requests client-side decorations and draws round controls only when the compositor grants them. Anything interactive placed in the header must occlude (the shared buttons do) or it becomes draggable on Windows.
+
+### Overlays
+
+- Navigation menu (`ui/nav_menu.rs`): `toggle_nav_menu(window, cx)` in `app.rs`, F10, or the `nav-menu` button. Item ids are `nav-firs`, `nav-templates`, `nav-settings`, `nav-new-fir`, `nav-import-word`, `nav-shortcuts`, `nav-theme` (then `nav-theme-system|light|dark`) and `nav-about`.
+- Menus (`ui/menu.rs`): `menu_panel(palette)` (raised, radius 8, `shadow_md`, 4 px padding), `menu_separator(palette)`, and `menu_item(id, text)` / `menu_item_element(id, el)` with `.icon(..)`, `.check(bool)`, `.lead(el)`, `.keys(..)`, `.trailing_text(..)`, `.submenu()`, `.highlighted(bool)`, `.danger()`, `.disabled(bool)`, `.on_click(..)` and `.on_hover(..)`. Use these to restyle gpui-kit `PopupMenu` content, or for custom popovers.
+- Command palette (`ui/palette.rs`): `open_palette(window, cx)`. The empty state shows `Recent FIRs` from `prefs.recent_firs`, recorded by the shell on every `Route::Fir` visit (10 kept, 6 shown). `result_titles()` and `result_groups()` are for tests.
+- Dialogs (`ui/dialogs.rs`): `open_choice(window, cx, title, body, Vec<Choice>)` with `Choice::new(id, label, Tone::{Neutral, Primary, Danger, Ghost}, action)`. Ghost choices sit at the left. Initial focus goes to the first `Neutral` choice. Presets: `confirm_delete(..)` (ids `cancel` and `confirm`), `confirm_discard(..)` (`keep`, `discard`) and `confirm_unsaved(window, cx, name, on_save, on_discard)` (`dont-save`, `cancel`, `save`). For custom dialogs: `dialog_surface(dialog, palette, width)`, `dialog_title(text)`, `dialog_body(palette, text)` and `choice_row(..)`.
+- Toasts (`ui/toast.rs`): `state::toast_success|toast_error|toast_warning|toast_info(window, cx, msg)` as before, or `state::show_toast(window, cx, ToastSpec::new(kind, msg).title(..).action("Undo", |w, cx| ..))`. Bottom right, 4 s (8 s with an action), hover pauses, at most 4 at once. `ToastLog` still records every toast for tests.
+- Cheatsheet (`ui/cheatsheet.rs`): `show_shortcuts(window, cx)`. Its rows come from `shortcuts::SHORTCUTS`. Add a row there when you add a binding; the groups are `General`, `FirList`, `Workspace`, `Editor`, `Templates` and `Print`.
+
+### Shell, routes and shortcuts
+
+- New routes `Route::EditFir(FirId)` and `Route::Print(PrintTarget::{Fir(id), Template(id)})` render `screens/placeholder.rs` until WP2 and WP1 replace the placeholder in `AppShell::build_screen`. A screen you add must also implement `HeaderSource`, `focus(window, cx)` and (for a guard) `is_dirty(cx)`, then be listed in `Screen` in `app.rs`.
+- `Route::Components` is the shared-component sheet (`ui/components.rs`), reachable only programmatically, for the screenshot harness.
+- App functions: `navigate`, `navigate_replace`, `navigate_back`, `navigate_forward`, `open_palette`, `toggle_nav_menu`, `import_word_file` (Ctrl+O: imports into the open template, otherwise opens New template with the picker), `show_shortcuts`, `show_about`, `check_for_updates`, `set_theme` and `open_print_preview`.
+- New actions, bound but for WP1–3 to handle: `DeleteSelection` (Delete, FIR list; already wired to the existing delete confirm), `ToggleFieldsPanel` (Ctrl+., workspace), `MoveDocumentUp/Down` (Alt+Shift+Up/Down; already wired to `move_document`), `SavePdf` (Ctrl+Shift+S; wired to the preview's export), `RenameTemplate` (F2, templates), `ToggleNavMenu` (F10). `ToggleSidebar` is gone, so Ctrl+B belongs to the editor's Bold. Single-key bindings use `NOT_TYPING`, which now also excludes the open navigation menu.
+- `prefs.sidebar_open` is removed and the `sidebarOpen` key is deleted from `preferences.json` on save. `prefs.recent_firs` (`recentFirs`) is new. `MIN_WINDOW` is 1024x700.
+
+### What WP0 changed against the spec above
+
+- `Route::Print` carries a `PrintTarget` (FIR or template id), not the `PrintRequest`: routes must be `Copy + Eq + Hash` for history. WP1 builds the request from the target.
+- `TextInput` gained a fourth option, `placeholder_color`, because the kit theme has no slot for `ink_faint`.
+- Dialogs use gpui-kit `Dialog` (focus trap, Esc, scrim, stacking) restyled to 1.1. Its shadow is the kit's own two-layer shadow, close to `shadow_lg`; the 8% ring is drawn as the border.
+- Menus, the palette, dialogs and toasts use `raised` as the token table says. The light mockups draw them on `surface`; the difference is 1–2 levels of lightness.
+- Reduced motion: gpui-base already reads the OS setting at startup (Windows `SPI_GETCLIENTAREAANIMATION`, macOS, and Linux through the XDG desktop portal, live). WP0 re-reads it whenever the window is activated, instead of shelling out to `gsettings`.
+- The update toast in `update/controller.rs` (owned by WP3 for About) still uses the gpui-kit notification. Move it to `show_toast` with an action when WP3 touches it.
+- `?` opens the cheatsheet; Esc closes it. `?` does not close it, because focus is inside the dialog, outside the shell's key context.

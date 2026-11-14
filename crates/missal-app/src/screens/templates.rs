@@ -30,7 +30,7 @@ use crate::theme::{Palette, RAIL_WIDTH};
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
 use crate::ui::input::{Kind, text_input};
 use crate::ui::print_preview::{PreviewDocument, PrintRequest};
-use crate::ui::{empty_state, icon_button, pane_header, rail_header};
+use crate::ui::{empty_state, kit_icon_button, pane_header, rail_header};
 use crate::word::{WordImport, is_docx};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -568,7 +568,7 @@ impl Render for TemplatePage {
                             .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
                     )
                     .child(
-                        icon_button("template-print", IconName::Printer)
+                        kit_icon_button("template-print", IconName::Printer)
                             .tooltip("Print preview")
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.open_print_preview(window, cx)
@@ -620,7 +620,7 @@ impl TemplatesScreen {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> TemplatesScreen {
-        let search = text_input(window, cx, Kind::Auto, "Search templates", "");
+        let search = text_input(window, cx, Kind::UrduAuto, "Search templates", "");
         let subscriptions = vec![
             cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
                 if *event == TextInputEvent::Change {
@@ -764,7 +764,7 @@ impl TemplatesScreen {
                         .id(("template-skeleton", index))
                         .h(px(48.))
                         .rounded(px(7.))
-                        .bg(palette.muted)
+                        .bg(palette.hover)
                 }))
                 .into_any_element(),
             Load::Failed(message) => empty_state(
@@ -807,8 +807,8 @@ impl TemplatesScreen {
                                         .justify_center()
                                         .rounded(px(7.))
                                         .cursor_pointer()
-                                        .when(is_active, |this| this.bg(palette.accent))
-                                        .hover(move |style| style.bg(palette.accent))
+                                        .when(is_active, |this| this.bg(palette.hover))
+                                        .hover(move |style| style.bg(palette.hover))
                                         .on_click(move |_, window, cx| {
                                             navigate(Route::Template(id), window, cx)
                                         })
@@ -823,7 +823,7 @@ impl TemplatesScreen {
                                             div()
                                                 .overflow_hidden()
                                                 .text_size(px(12.))
-                                                .text_color(palette.muted_foreground)
+                                                .text_color(palette.ink_muted)
                                                 .child(
                                                     label(if item.preview_text.is_empty() {
                                                         "خالی".to_owned()
@@ -851,10 +851,10 @@ impl TemplatesScreen {
             .flex_shrink_0()
             .h_full()
             .border_l_1()
-            .border_color(palette.border)
+            .border_color(palette.line)
             .child(
                 rail_header(&palette, "Templates").child(
-                    icon_button("new-template", IconName::Plus)
+                    kit_icon_button("new-template", IconName::Plus)
                         .tooltip("New template")
                         .on_click(|_, window, cx| {
                             navigate(Route::NewTemplate, window, cx);
@@ -939,5 +939,23 @@ impl Render for TemplatesScreen {
             }))
             .child(div().flex_1().min_w_0().h_full().child(main))
             .child(rail)
+    }
+}
+
+impl crate::ui::titlebar::HeaderSource for TemplatesScreen {
+    fn header(
+        &mut self,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> crate::ui::titlebar::HeaderContent {
+        use crate::ui::titlebar::HeaderContent;
+        match self.route {
+            Route::NewTemplate => HeaderContent::new("New template"),
+            Route::Template(id) => match self.models.templates.read(cx).get(id) {
+                Some(item) => HeaderContent::urdu(item.name.clone()),
+                None => HeaderContent::new("Template"),
+            },
+            _ => HeaderContent::new("Templates"),
+        }
     }
 }

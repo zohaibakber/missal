@@ -1,7 +1,7 @@
 use gpui_kit::component::TitleBar;
 use gpui_kit::{
-    AnyWindowHandle, App, AppContext, Bounds, Entity, Size, WindowBounds, WindowOptions, point, px,
-    size,
+    AnyWindowHandle, App, AppContext, Bounds, Entity, Size, TitlebarOptions, WindowBounds,
+    WindowDecorations, WindowOptions, point, px, size,
 };
 use missal_text::TextSystem;
 
@@ -12,6 +12,7 @@ use crate::prefs::{DEFAULT_WINDOW, MIN_WINDOW, Preferences};
 use crate::shortcuts;
 use crate::state::Models;
 use crate::theme;
+use crate::ui::window_controls::MAC_TRAFFIC_LIGHT_POSITION;
 
 pub fn init_app(cx: &mut App, db: Db, paths: Option<&Paths>, preferences: Preferences) -> Models {
     gpui_kit::init(cx);
@@ -25,6 +26,12 @@ pub fn init_app(cx: &mut App, db: Db, paths: Option<&Paths>, preferences: Prefer
         theme::resolve_dark(preferences.theme, cx.window_appearance()),
         cx,
     );
+    if let Some(paths) = paths {
+        cx.set_global(crate::app::AppPaths {
+            directory: paths.directory.clone(),
+            is_default: paths.is_default,
+        });
+    }
     Models::install(db, paths, preferences, cx)
 }
 
@@ -54,6 +61,20 @@ pub fn window_options(preferences: &Preferences, cx: &App) -> WindowOptions {
             width: px(MIN_WINDOW.0),
             height: px(MIN_WINDOW.1),
         }),
+        ..chrome_options()
+    }
+}
+
+pub fn chrome_options() -> WindowOptions {
+    let (x, y) = MAC_TRAFFIC_LIGHT_POSITION;
+    WindowOptions {
+        titlebar: Some(TitlebarOptions {
+            title: Some(crate::platform::PRODUCT_NAME.into()),
+            appears_transparent: true,
+            traffic_light_position: Some(point(px(x), px(y))),
+        }),
+        app_owns_titlebar_drag: true,
+        window_decorations: Some(WindowDecorations::Client),
         ..TitleBar::window_options()
     }
 }

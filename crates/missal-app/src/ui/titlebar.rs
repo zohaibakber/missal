@@ -1,206 +1,258 @@
-use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::Disableable as _;
-use gpui_kit::component::Sizable as _;
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{StyledExt, TitleBar, h_flex};
+use gpui_kit::component::{InteractiveElementExt as _, h_flex};
 use gpui_kit::prelude::*;
-
 use gpui_kit::{
-    AnyElement, Context, InteractiveElement, IntoElement, ParentElement, Render, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Window, div, px,
+    AnyElement, App, Context, FontWeight, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, Render, RenderOnce, SharedString, Styled, Window, WindowControlArea, div, px,
 };
-use missal_text::label;
 
-use crate::app::{navigate, open_palette, toggle_sidebar};
-use crate::state::{Models, Route};
-use crate::theme::{Palette, TITLE_BAR_HEIGHT};
-use crate::ui::{key_hint, small_icon, tooltip_with_keys};
+use crate::app::{navigate_back, navigate_forward, open_palette, toggle_nav_menu};
+use crate::theme::{HEADER_HEIGHT, Palette};
+use crate::ui::{UrRole, icon_button, ur_inline, window_controls};
 
-pub struct TitleBarView {
-    models: Models,
-    _subscriptions: Vec<Subscription>,
+pub enum HeaderTitle {
+    Latin(SharedString),
+    Urdu(SharedString),
+    Element(AnyElement),
 }
 
-struct Crumb {
-    text: SharedString,
-    route: Option<Route>,
+pub struct HeaderContent {
+    pub title: HeaderTitle,
+    pub meta: Option<AnyElement>,
+    pub actions: Vec<AnyElement>,
 }
 
-impl TitleBarView {
-    pub fn new(models: Models, cx: &mut Context<Self>) -> TitleBarView {
-        let subscriptions = vec![
-            cx.observe(&models.nav, |_, _, cx| cx.notify()),
-            cx.observe(&models.firs, |_, _, cx| cx.notify()),
-            cx.observe(&models.templates, |_, _, cx| cx.notify()),
-        ];
-        TitleBarView {
-            models,
-            _subscriptions: subscriptions,
+impl HeaderContent {
+    pub fn new(title: impl Into<SharedString>) -> HeaderContent {
+        HeaderContent {
+            title: HeaderTitle::Latin(title.into()),
+            meta: None,
+            actions: Vec::new(),
         }
     }
 
-    fn crumbs(&self, route: Route, cx: &gpui_kit::App) -> Vec<Crumb> {
-        let section = |text: &'static str, route: Route| Crumb {
-            text: text.into(),
-            route: Some(route),
-        };
-        let leaf = |text: SharedString| Crumb { text, route: None };
-        match route {
-            Route::Firs => vec![leaf("FIRs".into())],
-            Route::NewFir => vec![section("FIRs", Route::Firs), leaf("New FIR".into())],
-            Route::Fir(id) => {
-                let no = self
-                    .models
-                    .firs
-                    .read(cx)
-                    .get(id)
-                    .map_or_else(|| SharedString::from("FIR"), |row| row.no.clone());
-                vec![section("FIRs", Route::Firs), leaf(no)]
-            }
-            Route::Settings => vec![leaf("Settings".into())],
-            Route::Templates => vec![leaf("Templates".into())],
-            Route::NewTemplate => vec![
-                section("Templates", Route::Templates),
-                leaf("New template".into()),
-            ],
-            Route::Template(id) => {
-                let name = self.models.templates.read(cx).get(id).map_or_else(
-                    || SharedString::from("Template"),
-                    |item| item.name.clone().into(),
-                );
-                vec![section("Templates", Route::Templates), leaf(name)]
-            }
+    pub fn urdu(title: impl Into<SharedString>) -> HeaderContent {
+        HeaderContent {
+            title: HeaderTitle::Urdu(title.into()),
+            meta: None,
+            actions: Vec::new(),
+        }
+    }
+
+    pub fn element(title: impl IntoElement) -> HeaderContent {
+        HeaderContent {
+            title: HeaderTitle::Element(title.into_any_element()),
+            meta: None,
+            actions: Vec::new(),
+        }
+    }
+
+    pub fn meta(mut self, text: impl Into<SharedString>) -> HeaderContent {
+        let text: SharedString = text.into();
+        self.meta = Some(div().child(text).into_any_element());
+        self
+    }
+
+    pub fn meta_element(mut self, element: impl IntoElement) -> HeaderContent {
+        self.meta = Some(element.into_any_element());
+        self
+    }
+
+    pub fn action(mut self, element: impl IntoElement) -> HeaderContent {
+        self.actions.push(element.into_any_element());
+        self
+    }
+
+    pub fn actions(mut self, elements: impl IntoIterator<Item = AnyElement>) -> HeaderContent {
+        self.actions.extend(elements);
+        self
+    }
+}
+
+pub trait HeaderSource: Sized + 'static {
+    fn header(&mut self, window: &mut Window, cx: &mut Context<Self>) -> HeaderContent;
+}
+
+#[derive(IntoElement)]
+pub struct Header {
+    content: HeaderContent,
+    can_back: bool,
+    can_forward: bool,
+    menu_open: bool,
+}
+
+impl Header {
+    pub fn new(content: HeaderContent, can_back: bool, can_forward: bool, menu_open: bool) -> Self {
+        Header {
+            content,
+            can_back,
+            can_forward,
+            menu_open,
         }
     }
 }
 
-impl Render for TitleBarView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+struct DragState {
+    should_move: bool,
+}
+
+impl Render for DragState {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+    }
+}
+
+pub fn title_element(palette: &Palette, title: HeaderTitle) -> AnyElement {
+    match title {
+        HeaderTitle::Latin(text) => div()
+            .flex_none()
+            .text_size(px(15.))
+            .line_height(px(20.))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(palette.ink)
+            .whitespace_nowrap()
+            .child(text)
+            .into_any_element(),
+        HeaderTitle::Urdu(text) => div()
+            .min_w_0()
+            .mt(px(-2.))
+            .text_color(palette.ink)
+            .child(ur_inline(text, UrRole::Title).truncate())
+            .into_any_element(),
+        HeaderTitle::Element(element) => element,
+    }
+}
+
+impl RenderOnce for Header {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let palette = *Palette::get(cx);
-        let nav = self.models.nav.read(cx);
-        let route = nav.current();
-        let (can_back, can_forward) = (nav.can_go_back(), nav.can_go_forward());
-        let crumbs = self.crumbs(route, cx);
-        let count = crumbs.len();
-        let nav_entity = self.models.nav.clone();
-        let forward_entity = self.models.nav.clone();
-        TitleBar::new()
-            .h(px(TITLE_BAR_HEIGHT))
-            .bg(palette.sidebar)
-            .border_color(palette.sidebar_border)
-            .pl_2()
+        let state = window.use_state(cx, |_, _| DragState { should_move: false });
+        let linux = cfg!(target_os = "linux");
+        let macos = cfg!(target_os = "macos");
+        let client_decorated = matches!(
+            window.window_decorations(),
+            gpui_kit::Decorations::Client { .. }
+        );
+        let inset = window_controls::leading_inset(window, cx);
+        let controls = window_controls::render(window, cx);
+        let HeaderContent {
+            title,
+            meta,
+            actions,
+        } = self.content;
+        let content = h_flex()
+            .id("header-drag")
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .items_center()
+            .gap(px(2.))
+            .pl(inset)
+            .window_control_area(WindowControlArea::Drag)
+            .when(linux, |this| {
+                this.on_double_click(|_, window, _| window.zoom_window())
+            })
+            .when(macos, |this| {
+                this.on_double_click(|_, window, _| window.titlebar_double_click())
+            })
+            .when(linux && client_decorated, |this| {
+                this.on_mouse_down(MouseButton::Right, |event, window, _| {
+                    window.show_window_menu(event.position)
+                })
+            })
+            .on_mouse_down_out(window.listener_for(&state, |state, _, _, _| {
+                state.should_move = false;
+            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                window.listener_for(&state, |state, _, _, _| {
+                    state.should_move = true;
+                }),
+            )
+            .on_mouse_up(
+                MouseButton::Left,
+                window.listener_for(&state, |state, _, _, _| {
+                    state.should_move = false;
+                }),
+            )
+            .on_mouse_move(window.listener_for(&state, |state, _, window, _| {
+                if state.should_move {
+                    state.should_move = false;
+                    if !cfg!(target_os = "windows") {
+                        window.start_window_move();
+                    }
+                }
+            }))
+            .child(
+                icon_button("nav-menu", IconName::Menu, "Menu")
+                    .keys("F10")
+                    .toggled(self.menu_open)
+                    .on_click(|_, window, cx| toggle_nav_menu(window, cx)),
+            )
+            .child(
+                icon_button("history-back", IconName::ArrowLeft, "Back")
+                    .keys("Alt+Left")
+                    .disabled(!self.can_back)
+                    .on_click(|_, window, cx| navigate_back(window, cx)),
+            )
+            .child(
+                icon_button("history-forward", IconName::ArrowRight, "Forward")
+                    .keys("Alt+Right")
+                    .disabled(!self.can_forward)
+                    .on_click(|_, window, cx| navigate_forward(window, cx)),
+            )
             .child(
                 h_flex()
-                    .flex_1()
+                    .id("header-title")
+                    .ml(px(8.))
                     .min_w_0()
+                    .flex_shrink(1.)
                     .items_center()
-                    .gap_1()
-                    .child(
-                        Button::new("toggle-sidebar")
-                            .ghost()
-                            .small()
-                            .icon(IconName::PanelLeft)
-                            .tooltip("Toggle sidebar")
-                            .on_click(|_, window, cx| toggle_sidebar(window, cx)),
-                    )
-                    .child(
-                        Button::new("history-back")
-                            .ghost()
-                            .small()
-                            .icon(IconName::ArrowLeft)
-                            .disabled(!can_back)
-                            .tooltip("Back")
-                            .on_click(move |_, window, cx| {
-                                nav_entity.update(cx, |nav, cx| nav.back(window, cx));
-                            }),
-                    )
-                    .child(
-                        Button::new("history-forward")
-                            .ghost()
-                            .small()
-                            .icon(IconName::ArrowRight)
-                            .disabled(!can_forward)
-                            .tooltip("Forward")
-                            .on_click(move |_, window, cx| {
-                                forward_entity.update(cx, |nav, cx| nav.forward(window, cx));
-                            }),
-                    )
-                    .child(
-                        h_flex()
-                            .id("breadcrumbs")
-                            .ml_2()
-                            .min_w_0()
-                            .items_center()
-                            .gap_1p5()
-                            .text_size(px(13.))
-                            .children(crumbs.into_iter().enumerate().flat_map(|(index, crumb)| {
-                                let last = index + 1 == count;
-                                let mut items: Vec<AnyElement> = Vec::new();
-                                if index > 0 {
-                                    items.push(
-                                        small_icon(
-                                            IconName::ChevronRight,
-                                            palette.muted_foreground,
-                                        )
-                                        .into_any_element(),
-                                    );
-                                }
-                                let text = div()
-                                    .id(("crumb", index))
-                                    .max_w(px(260.))
-                                    .py_1()
-                                    .overflow_hidden()
-                                    .text_color(if last {
-                                        palette.foreground
-                                    } else {
-                                        palette.muted_foreground
-                                    })
-                                    .when(last, |this| this.font_medium())
-                                    .child(label(crumb.text).truncate());
-                                items.push(match crumb.route {
-                                    Some(target) if !last => text
-                                        .cursor_pointer()
-                                        .hover(move |style| style.text_color(palette.foreground))
-                                        .on_click(move |_, window, cx| navigate(target, window, cx))
-                                        .into_any_element(),
-                                    _ => text.into_any_element(),
-                                });
-                                items
-                            })),
-                    ),
+                    .gap(px(10.))
+                    .child(title_element(&palette, title)),
+            )
+            .children(meta.map(|meta| {
+                h_flex()
+                    .ml(px(8.))
+                    .min_w_0()
+                    .flex_shrink(1.)
+                    .items_center()
+                    .gap(px(8.))
+                    .text_size(px(13.))
+                    .line_height(px(20.))
+                    .text_color(palette.ink_muted)
+                    .whitespace_nowrap()
+                    .child(meta)
+            }))
+            .child(div().flex_1().min_w(px(16.)).h_full())
+            .child(
+                h_flex()
+                    .id("header-actions")
+                    .flex_none()
+                    .items_center()
+                    .gap(px(4.))
+                    .mr(px(4.))
+                    .children(actions),
             )
             .child(
-                div().w(px(448.)).flex_shrink(1.).min_w(px(180.)).child(
-                    h_flex()
-                        .id("palette-trigger")
-                        .test_support()
-                        .h(px(30.))
-                        .w_full()
-                        .px_3()
-                        .gap_2()
-                        .items_center()
-                        .rounded(px(8.))
-                        .border_1()
-                        .border_color(palette.input)
-                        .bg(palette.background)
-                        .cursor_pointer()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .hover(move |style| style.bg(palette.accent))
-                        .tooltip(tooltip_with_keys("Command menu", Some("Mod+K")))
-                        .on_click(|_, window, cx| open_palette(window, cx))
-                        .child(small_icon(IconName::Search, palette.muted_foreground))
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .truncate()
-                                .child("Search FIRs, templates and commands"),
-                        )
-                        .child(key_hint(&palette, "Mod+K")),
-                ),
+                icon_button("header-search", IconName::Search, "Search")
+                    .keys("Mod+K")
+                    .on_click(|_, window, cx| open_palette(window, cx)),
             )
-            .child(div().flex_1().min_w_0())
+            .when(controls.is_none(), |this| this.pr(px(8.)));
+        h_flex()
+            .id("header")
+            .flex_none()
+            .w_full()
+            .h(px(HEADER_HEIGHT))
+            .items_center()
+            .bg(palette.surface)
+            .border_b_1()
+            .border_color(palette.line)
+            .font_family(missal_text::UI_FAMILY)
+            .child(content)
+            .when_some(controls, |this, controls| {
+                this.child(div().flex_none().ml(px(8.)).child(controls))
+            })
     }
 }

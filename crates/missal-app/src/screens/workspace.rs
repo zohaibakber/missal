@@ -36,8 +36,8 @@ use crate::theme::{DETAILS_RAIL_WIDTH, Palette};
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
 use crate::ui::input::{Kind, text_input};
 use crate::ui::print_preview::{PreviewDocument, PrintRequest};
-use crate::ui::status::status_icon;
-use crate::ui::{empty_state, icon_button, pane_header, rail_header, small_icon, status_bar};
+use crate::ui::status::status_dot;
+use crate::ui::{empty_state, kit_icon_button, pane_header, rail_header, small_icon, status_bar};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum WorkspaceState {
@@ -101,7 +101,7 @@ impl WorkspaceScreen {
                 .ok();
             })
         });
-        let add_search = text_input(window, cx, Kind::Auto, "Search templates", "");
+        let add_search = text_input(window, cx, Kind::UrduAuto, "Search templates", "");
         let subscriptions = vec![
             editor_subscription,
             cx.subscribe(&add_search, |this, input, event: &TextInputEvent, cx| {
@@ -697,7 +697,7 @@ impl WorkspaceScreen {
                     div()
                         .w_full()
                         .text_size(px(12.))
-                        .text_color(palette.muted_foreground)
+                        .text_color(palette.ink_muted)
                         .child(label(title).rtl().w_full()),
                 )
                 .child(div().w_full().text_size(px(15.)).child(body))
@@ -724,7 +724,7 @@ impl WorkspaceScreen {
                                 .w(px(18.))
                                 .flex_shrink_0()
                                 .text_size(px(12.))
-                                .text_color(palette.muted_foreground)
+                                .text_color(palette.ink_muted)
                                 .text_right()
                                 .child((index + 1).to_string()),
                         )
@@ -747,7 +747,7 @@ impl WorkspaceScreen {
                     .flex_row_reverse()
                     .items_center()
                     .gap_2()
-                    .child(status_icon(fir.status, palette.status(fir.status), px(14.)))
+                    .child(status_dot(&palette, fir.status))
                     .child(label(fir.status.label()).rtl())
                     .into_any_element(),
             )
@@ -808,7 +808,7 @@ impl WorkspaceScreen {
             v_flex()
                 .child(
                     rail_header(&palette, "Custom fields").child(
-                        icon_button("edit-custom-values", IconName::Pencil)
+                        kit_icon_button("edit-custom-values", IconName::Pencil)
                             .tooltip("Edit custom field values")
                             .on_click(cx.listener(|this, _, window, cx| this.edit_custom_values(window, cx))),
                     ),
@@ -821,14 +821,14 @@ impl WorkspaceScreen {
                         .children(filled.iter().map(|(name, value)| {
                             v_flex()
                                 .gap_0p5()
-                                .child(div().w_full().text_size(px(12.)).text_color(palette.muted_foreground).child(label(name.clone()).rtl().w_full()))
+                                .child(div().w_full().text_size(px(12.)).text_color(palette.ink_muted).child(label(name.clone()).rtl().w_full()))
                                 .child(div().w_full().text_size(px(15.)).child(label(value.clone()).rtl().w_full()))
                         }))
                         .when(filled.is_empty(), |this| {
                             this.child(
                                 div()
                                     .text_size(px(12.))
-                                    .text_color(palette.muted_foreground)
+                                    .text_color(palette.ink_muted)
                                     .child(format!("No values yet. {total} custom fields can be filled for this FIR.")),
                             )
                         }),
@@ -914,8 +914,8 @@ impl WorkspaceScreen {
                 .items_center()
                 .rounded(px(7.))
                 .cursor_pointer()
-                .when(active, |this| this.bg(palette.accent))
-                .hover(move |style| style.bg(palette.accent))
+                .when(active, |this| this.bg(palette.hover))
+                .hover(move |style| style.bg(palette.hover))
                 .on_click(
                     cx.listener(move |this, _, window, cx| this.select_document(id, window, cx)),
                 )
@@ -980,7 +980,8 @@ impl WorkspaceScreen {
         let no_templates = templates.items.is_empty();
         let add = Popover::new("add-templates")
             .trigger(
-                icon_button("add-templates-trigger", IconName::Plus).tooltip("Add templates (A)"),
+                kit_icon_button("add-templates-trigger", IconName::Plus)
+                    .tooltip("Add templates (A)"),
             )
             .anchor(gpui_kit::Anchor::TopRight)
             .open(self.add_open)
@@ -1037,7 +1038,7 @@ impl WorkspaceScreen {
                                         .rounded(px(6.))
                                         .when(!added, |this| {
                                             this.cursor_pointer()
-                                                .hover(move |style| style.bg(palette.accent))
+                                                .hover(move |style| style.bg(palette.hover))
                                                 .on_click(cx.listener(move |_, _, _, cx| {
                                                     screen.update(cx, |this, cx| {
                                                         this.toggle_template(id, cx)
@@ -1053,9 +1054,9 @@ impl WorkspaceScreen {
                                                 IconName::Square
                                             },
                                             if checked {
-                                                palette.primary
+                                                palette.accent
                                             } else {
-                                                palette.muted_foreground
+                                                palette.ink_muted
                                             },
                                         ))
                                         .child(
@@ -1069,7 +1070,7 @@ impl WorkspaceScreen {
                                         .children(added.then(|| {
                                             div()
                                                 .text_size(px(12.))
-                                                .text_color(palette.muted_foreground)
+                                                .text_color(palette.ink_muted)
                                                 .child("Added")
                                         }))
                                 })),
@@ -1081,12 +1082,12 @@ impl WorkspaceScreen {
                                 .gap_2()
                                 .items_center()
                                 .border_t_1()
-                                .border_color(palette.border)
+                                .border_color(palette.line)
                                 .child(
                                     div()
                                         .flex_1()
                                         .text_size(px(12.))
-                                        .text_color(palette.muted_foreground)
+                                        .text_color(palette.ink_muted)
                                         .child(if no_templates {
                                             "No templates exist yet".to_owned()
                                         } else if selected_count == 0 {
@@ -1119,7 +1120,7 @@ impl WorkspaceScreen {
                     .child(
                         div()
                             .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
+                            .text_color(palette.ink_muted)
                             .child(count.to_string()),
                     )
                     .child(add),
@@ -1130,7 +1131,7 @@ impl WorkspaceScreen {
                     .px_4()
                     .py_2()
                     .text_size(px(12.))
-                    .text_color(palette.muted_foreground)
+                    .text_color(palette.ink_muted)
                     .child("No documents yet.")
             }))
             .into_any_element()
@@ -1160,13 +1161,13 @@ impl WorkspaceScreen {
         match &self.document_state {
             DocumentState::Loading => div()
                 .size_full()
-                .bg(palette.canvas)
+                .bg(palette.sunken)
                 .p_6()
                 .child(
                     div()
                         .h_full()
                         .rounded(px(8.))
-                        .bg(palette.muted.opacity(0.6)),
+                        .bg(palette.hover.opacity(0.6)),
                 )
                 .into_any_element(),
             DocumentState::Failed(message) => empty_state(
@@ -1310,14 +1311,14 @@ impl Render for WorkspaceScreen {
                                 }))
                         }))
                         .child(
-                            icon_button("custom-values-button", IconName::Braces)
+                            kit_icon_button("custom-values-button", IconName::Braces)
                                 .tooltip("Custom field values")
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.edit_custom_values(window, cx)
                                 })),
                         )
                         .child(
-                            icon_button("workspace-print", IconName::Printer)
+                            kit_icon_button("workspace-print", IconName::Printer)
                                 .tooltip("Print preview")
                                 .disabled(!printable)
                                 .on_click(cx.listener(|this, _, window, cx| {
@@ -1332,7 +1333,7 @@ impl Render for WorkspaceScreen {
                 .flex_shrink_0()
                 .h_full()
                 .border_l_1()
-                .border_color(palette.border)
+                .border_color(palette.line)
                 .child(
                     v_flex()
                         .id("workspace-rail-scroll")
@@ -1340,10 +1341,10 @@ impl Render for WorkspaceScreen {
                         .min_h_0()
                         .overflow_y_scroll()
                         .child(self.documents_rail(&palette, cx))
-                        .child(div().h(px(1.)).mx_4().my_1().bg(palette.border))
+                        .child(div().h(px(1.)).mx_4().my_1().bg(palette.line))
                         .child(
                             rail_header(&palette, "Details").child(
-                                icon_button("edit-details", IconName::Pencil)
+                                kit_icon_button("edit-details", IconName::Pencil)
                                     .tooltip("Edit details (E)")
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.edit_details(window, cx)
@@ -1363,7 +1364,7 @@ impl Render for WorkspaceScreen {
                 )
                 .children((total > 1).then(|| {
                     status_bar(&palette)
-                        .child(small_icon(IconName::Printer, palette.muted_foreground))
+                        .child(small_icon(IconName::Printer, palette.ink_muted))
                         .child(if included == total {
                             "All will print".to_owned()
                         } else {
@@ -1394,6 +1395,16 @@ impl Render for WorkspaceScreen {
                 this.step_document(-1, window, cx)
             }))
             .on_action(cx.listener(|this, _: &ToggleFieldNames, _, cx| this.toggle_field_names(cx)))
+            .on_action(cx.listener(|this, _: &MoveDocumentUp, window, cx| {
+                if let Some(active) = this.active() {
+                    this.move_document(active, -1, window, cx);
+                }
+            }))
+            .on_action(cx.listener(|this, _: &MoveDocumentDown, window, cx| {
+                if let Some(active) = this.active() {
+                    this.move_document(active, 1, window, cx);
+                }
+            }))
             .child(
                 v_flex()
                     .flex_1()
@@ -1404,5 +1415,69 @@ impl Render for WorkspaceScreen {
             )
             .child(rail)
             .into_any_element()
+    }
+}
+
+impl crate::ui::titlebar::HeaderSource for WorkspaceScreen {
+    fn header(
+        &mut self,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> crate::ui::titlebar::HeaderContent {
+        let palette = *Palette::get(cx);
+        let row = self.models.firs.read(cx).get(self.id).cloned();
+        let number = row
+            .as_ref()
+            .map(|row| format!("FIR {}", row.no))
+            .unwrap_or_else(|| "FIR".to_owned());
+        let title = h_flex()
+            .items_center()
+            .gap(px(10.))
+            .child(
+                div()
+                    .flex_none()
+                    .text_size(px(15.))
+                    .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                    .child(label(number).ltr()),
+            )
+            .children(
+                row.as_ref()
+                    .map(|row| crate::ui::status::status_pill(&palette, row.status)),
+            );
+        let dirty = self.is_dirty(cx);
+        let mut content = crate::ui::titlebar::HeaderContent::element(title);
+        if let Some(row) = row.as_ref() {
+            content = content.meta_element(
+                div()
+                    .min_w_0()
+                    .mt(px(-2.))
+                    .text_color(palette.ink_muted)
+                    .child(
+                        crate::ui::ur_inline(row.offence.clone(), crate::ui::UrRole::Title)
+                            .truncate(),
+                    ),
+            );
+        }
+        content
+            .action(crate::ui::save_state(
+                &palette,
+                if dirty {
+                    crate::ui::SaveState::Unsaved
+                } else {
+                    crate::ui::SaveState::Saved
+                },
+            ))
+            .action(
+                crate::ui::icon_button("header-edit-details", IconName::Pencil, "Edit details")
+                    .keys("E")
+                    .on_click(cx.listener(|this, _, window, cx| this.edit_details(window, cx))),
+            )
+            .action(
+                crate::ui::icon_button("header-print", IconName::Printer, "Print")
+                    .keys("Mod+P")
+                    .on_click(
+                        cx.listener(|this, _, window, cx| this.open_print_preview(window, cx)),
+                    ),
+            )
     }
 }

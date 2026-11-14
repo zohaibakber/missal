@@ -1,5 +1,10 @@
+use std::time::Duration;
+
 use gpui_kit::component::{ActiveTheme, Colorize, Theme, ThemeMode};
-use gpui_kit::{App, Global, Hsla, Rgba, SharedString, Window, WindowAppearance, px};
+use gpui_kit::{
+    Animation, App, BoxShadow, Global, Hsla, Rgba, SharedString, Window, WindowAppearance, point,
+    px, rgb,
+};
 use missal_core::FirStatus;
 
 use crate::prefs::ThemeChoice;
@@ -33,233 +38,373 @@ pub fn oklch(lightness: f32, chroma: f32, hue_degrees: f32, alpha: f32) -> Hsla 
     .into()
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Palette {
     pub dark: bool,
-    pub background: Hsla,
-    pub foreground: Hsla,
-    pub card: Hsla,
-    pub popover: Hsla,
-    pub primary: Hsla,
-    pub primary_foreground: Hsla,
-    pub secondary: Hsla,
-    pub muted: Hsla,
-    pub muted_foreground: Hsla,
-    pub placeholder: Hsla,
-    pub accent: Hsla,
-    pub destructive: Hsla,
-    pub border: Hsla,
-    pub input: Hsla,
-    pub ring: Hsla,
-    pub sidebar: Hsla,
-    pub sidebar_foreground: Hsla,
-    pub sidebar_accent: Hsla,
-    pub sidebar_border: Hsla,
-    pub canvas: Hsla,
+    pub surface: Hsla,
+    pub raised: Hsla,
+    pub sunken: Hsla,
     pub paper: Hsla,
-    pub paper_foreground: Hsla,
-    pub field: Hsla,
-    pub status_open: Hsla,
-    pub status_investigating: Hsla,
-    pub status_challan: Hsla,
-    pub status_closed: Hsla,
+    pub ink: Hsla,
+    pub ink_muted: Hsla,
+    pub ink_faint: Hsla,
+    pub line: Hsla,
+    pub line_strong: Hsla,
+    pub hover: Hsla,
+    pub pressed: Hsla,
+    pub action: Hsla,
+    pub action_hover: Hsla,
+    pub on_action: Hsla,
+    pub accent: Hsla,
+    pub accent_wash: Hsla,
+    pub field_wash: Hsla,
+    pub danger: Hsla,
+    pub danger_text: Hsla,
+    pub danger_wash: Hsla,
+    pub notice: Hsla,
+    pub notice_text: Hsla,
+    pub notice_wash: Hsla,
+    pub st_open: Hsla,
+    pub st_investigating: Hsla,
+    pub st_challan: Hsla,
+    pub st_closed: Hsla,
+    pub scrim: Hsla,
 }
 
 impl Global for Palette {}
 
+pub fn hex(value: u32) -> Hsla {
+    rgb(value).into()
+}
+
+pub fn hex_alpha(value: u32, alpha: f32) -> Hsla {
+    hex(value).opacity(alpha)
+}
+
 impl Palette {
     pub fn light() -> Palette {
-        let n = |l: f32, c: f32| oklch(l, c, 264.0, 1.0);
         Palette {
             dark: false,
-            background: n(0.995, 0.001),
-            foreground: n(0.21, 0.012),
-            card: oklch(1.0, 0.0, 0.0, 1.0),
-            popover: oklch(1.0, 0.0, 0.0, 1.0),
-            primary: oklch(0.52, 0.19, 272.0, 1.0),
-            primary_foreground: oklch(0.99, 0.004, 272.0, 1.0),
-            secondary: n(0.955, 0.005),
-            muted: n(0.962, 0.004),
-            muted_foreground: n(0.5, 0.014),
-            placeholder: n(0.66, 0.01),
-            accent: n(0.952, 0.005),
-            destructive: oklch(0.56, 0.21, 25.0, 1.0),
-            border: n(0.918, 0.005),
-            input: n(0.885, 0.007),
-            ring: oklch(0.6, 0.16, 272.0, 1.0),
-            sidebar: n(0.968, 0.004),
-            sidebar_foreground: n(0.36, 0.014),
-            sidebar_accent: n(0.928, 0.006),
-            sidebar_border: n(0.905, 0.006),
-            canvas: n(0.955, 0.004),
-            paper: oklch(1.0, 0.0, 0.0, 1.0),
-            paper_foreground: n(0.2, 0.01),
-            field: oklch(0.5, 0.19, 272.0, 1.0),
-            status_open: oklch(0.68, 0.16, 60.0, 1.0),
-            status_investigating: oklch(0.6, 0.17, 250.0, 1.0),
-            status_challan: oklch(0.56, 0.2, 300.0, 1.0),
-            status_closed: oklch(0.6, 0.14, 155.0, 1.0),
+            surface: hex(0xfefdfc),
+            raised: hex(0xffffff),
+            sunken: hex(0xf0efec),
+            paper: hex(0xfefdf8),
+            ink: hex(0x1e1b18),
+            ink_muted: hex(0x5f5a55),
+            ink_faint: hex(0x77726d),
+            line: hex(0xe7e7e5),
+            line_strong: hex(0x959391),
+            hover: hex(0xf4f3f2),
+            pressed: hex(0xecebea),
+            action: hex(0x1e1b18),
+            action_hover: hex(0x36322e),
+            on_action: hex(0xfbfaf8),
+            accent: hex(0x2b5bb7),
+            accent_wash: hex(0xe9edf5),
+            field_wash: hex(0xeceff3),
+            danger: hex(0xc32a28),
+            danger_text: hex(0xb32322),
+            danger_wash: hex(0xf9eceb),
+            notice: hex(0xc47a1c),
+            notice_text: hex(0x88520c),
+            notice_wash: hex(0xfff2d6),
+            st_open: hex(0xd37812),
+            st_investigating: hex(0x0077bd),
+            st_challan: hex(0x732679),
+            st_closed: hex(0x888682),
+            scrim: hex_alpha(0x14110e, 0.28),
         }
     }
 
     pub fn dark() -> Palette {
-        let n = |l: f32, c: f32| oklch(l, c, 264.0, 1.0);
-        let white = |alpha: f32| oklch(1.0, 0.0, 0.0, alpha);
         Palette {
             dark: true,
-            background: n(0.2, 0.006),
-            foreground: n(0.95, 0.003),
-            card: n(0.225, 0.007),
-            popover: n(0.235, 0.008),
-            primary: oklch(0.58, 0.17, 274.0, 1.0),
-            primary_foreground: oklch(0.99, 0.004, 274.0, 1.0),
-            secondary: n(0.26, 0.008),
-            muted: n(0.25, 0.008),
-            muted_foreground: n(0.69, 0.012),
-            placeholder: n(0.52, 0.012),
-            accent: n(0.265, 0.009),
-            destructive: oklch(0.68, 0.19, 22.0, 1.0),
-            border: white(0.08),
-            input: white(0.11),
-            ring: oklch(0.64, 0.15, 274.0, 1.0),
-            sidebar: n(0.165, 0.005),
-            sidebar_foreground: n(0.78, 0.008),
-            sidebar_accent: white(0.07),
-            sidebar_border: white(0.07),
-            canvas: n(0.172, 0.005),
-            paper: n(0.225, 0.007),
-            paper_foreground: n(0.93, 0.004),
-            field: oklch(0.74, 0.13, 274.0, 1.0),
-            status_open: oklch(0.78, 0.15, 70.0, 1.0),
-            status_investigating: oklch(0.7, 0.14, 250.0, 1.0),
-            status_challan: oklch(0.7, 0.15, 300.0, 1.0),
-            status_closed: oklch(0.73, 0.13, 155.0, 1.0),
+            surface: hex(0x161513),
+            raised: hex(0x201e1c),
+            sunken: hex(0x0d0c0a),
+            paper: hex(0x201e1b),
+            ink: hex(0xedebe7),
+            ink_muted: hex(0xaeaaa5),
+            ink_faint: hex(0x8c8884),
+            line: hex(0x2a2927),
+            line_strong: hex(0x666564),
+            hover: hex(0x22201f),
+            pressed: hex(0x2b2a28),
+            action: hex(0xedebe7),
+            action_hover: hex(0xd3d1cd),
+            on_action: hex(0x181613),
+            accent: hex(0x80a3f0),
+            accent_wash: hex(0x242b3d),
+            field_wash: hex(0x2f333d),
+            danger: hex(0xc44039),
+            danger_text: hex(0xf47b74),
+            danger_wash: hex(0x351d1a),
+            notice: hex(0xeba941),
+            notice_text: hex(0xedbb64),
+            notice_wash: hex(0x382c1a),
+            st_open: hex(0xf2a635),
+            st_investigating: hex(0x3883d1),
+            st_challan: hex(0xf5a0c5),
+            st_closed: hex(0x6e6b68),
+            scrim: hex_alpha(0x000000, 0.55),
         }
     }
 
     pub fn status(&self, status: FirStatus) -> Hsla {
         match status {
-            FirStatus::Open => self.status_open,
-            FirStatus::UnderInvestigation => self.status_investigating,
-            FirStatus::ChallanSubmitted => self.status_challan,
-            FirStatus::Closed => self.status_closed,
+            FirStatus::Open => self.st_open,
+            FirStatus::UnderInvestigation => self.st_investigating,
+            FirStatus::ChallanSubmitted => self.st_challan,
+            FirStatus::Closed => self.st_closed,
         }
     }
 
     pub fn get(cx: &App) -> &Palette {
         cx.global::<Palette>()
     }
+
+    fn shadow_tint(&self) -> Hsla {
+        if self.dark {
+            hex(0x000000)
+        } else {
+            hex(0x14110e)
+        }
+    }
+
+    fn ring(&self) -> BoxShadow {
+        let color = if self.dark {
+            hex_alpha(0xffffff, 0.08)
+        } else {
+            hex_alpha(0x14110e, 0.08)
+        };
+        shadow(color, 0., 0., 1.)
+    }
+
+    pub fn shadow_sm(&self) -> Vec<BoxShadow> {
+        let alpha = if self.dark { 0.35 } else { 0.05 };
+        vec![shadow_offset(self.shadow_tint().opacity(alpha), 1., 2.)]
+    }
+
+    pub fn shadow_md(&self) -> Vec<BoxShadow> {
+        let alpha = if self.dark { 0.45 } else { 0.10 };
+        vec![
+            self.ring(),
+            shadow_offset(self.shadow_tint().opacity(alpha), 8., 24.),
+        ]
+    }
+
+    pub fn shadow_lg(&self) -> Vec<BoxShadow> {
+        let alpha = if self.dark { 0.55 } else { 0.14 };
+        vec![
+            self.ring(),
+            shadow_offset(self.shadow_tint().opacity(alpha), 16., 48.),
+        ]
+    }
+
+    pub fn paper_shadow(&self) -> Vec<BoxShadow> {
+        let mut shadows = vec![shadow(self.line, 0., 0., 1.)];
+        shadows.extend(self.shadow_sm());
+        shadows
+    }
+
+    pub fn focus_ring(&self) -> Vec<BoxShadow> {
+        vec![
+            shadow(self.accent, 0., 0., 4.),
+            shadow(self.surface, 0., 0., 2.),
+        ]
+    }
+
+    pub fn input_focus_ring(&self) -> Vec<BoxShadow> {
+        vec![shadow(self.accent.opacity(0.22), 0., 0., 3.)]
+    }
 }
 
-pub const RADIUS: f32 = 8.0;
+fn shadow(color: Hsla, y: f32, blur: f32, spread: f32) -> BoxShadow {
+    BoxShadow {
+        color,
+        offset: point(px(0.), px(y)),
+        blur_radius: px(blur),
+        spread_radius: px(spread),
+        inset: false,
+    }
+}
+
+fn shadow_offset(color: Hsla, y: f32, blur: f32) -> BoxShadow {
+    shadow(color, y, blur, 0.)
+}
+
 pub const FONT_SIZE: f32 = 14.0;
-pub const TITLE_BAR_HEIGHT: f32 = 44.0;
-pub const SIDEBAR_WIDTH: f32 = 224.0;
-pub const SIDEBAR_ICON_WIDTH: f32 = 48.0;
-pub const RAIL_WIDTH: f32 = 288.0;
-pub const DETAILS_RAIL_WIDTH: f32 = 288.0;
+
+pub const HEADER_HEIGHT: f32 = 44.0;
+pub const TITLE_BAR_HEIGHT: f32 = HEADER_HEIGHT;
+pub const ICON_BUTTON: f32 = 28.0;
+pub const ICON_BUTTON_DENSE: f32 = 24.0;
+pub const BUTTON_SM: f32 = 28.0;
+pub const BUTTON_MD: f32 = 32.0;
+pub const INPUT_LATIN: f32 = 32.0;
+pub const INPUT_URDU: f32 = 36.0;
+pub const CHECKBOX: f32 = 16.0;
+pub const SEGMENTED_TRACK: f32 = 28.0;
+pub const SEGMENTED_ITEM: f32 = 24.0;
+pub const TAB_HEIGHT: f32 = 40.0;
+pub const FILTER_ITEM: f32 = 28.0;
+pub const TABLE_HEAD: f32 = 36.0;
+pub const TABLE_ROW: f32 = 44.0;
+pub const ROW_HEIGHT: f32 = TABLE_ROW;
+pub const LIST_ITEM: f32 = 40.0;
+pub const LIST_ITEM_META: f32 = 44.0;
+pub const MENU_ITEM: f32 = 32.0;
+pub const KEYCAP: f32 = 18.0;
+
+pub const ICON: f32 = 16.0;
+pub const ICON_SM: f32 = 14.0;
+pub const ICON_XS: f32 = 12.0;
+
+pub const RADIUS_CHIP: f32 = 3.0;
+pub const RADIUS_SM: f32 = 4.0;
+pub const RADIUS: f32 = 6.0;
+pub const RADIUS_LG: f32 = 8.0;
+pub const RADIUS_XL: f32 = 12.0;
+pub const RADIUS_PAPER: f32 = 2.0;
+pub const RADIUS_PILL: f32 = 12.0;
+
+pub const SPACE: [f32; 10] = [2.0, 4.0, 6.0, 8.0, 12.0, 16.0, 20.0, 24.0, 32.0, 40.0];
+pub const GAP_IN_GROUP: f32 = 4.0;
+pub const GAP_BETWEEN_GROUPS: f32 = 12.0;
+pub const PANEL_PADDING: f32 = 16.0;
+pub const PAGE_GUTTER: f32 = 24.0;
+
+pub const NAV_MENU_WIDTH: f32 = 248.0;
+pub const PALETTE_WIDTH: f32 = 600.0;
+pub const PALETTE_TOP: f32 = 88.0;
+pub const DIALOG_WIDTH: f32 = 420.0;
+pub const CHEATSHEET_WIDTH: f32 = 640.0;
+pub const TOAST_MAX_WIDTH: f32 = 360.0;
+pub const CAPTION_RESERVE: f32 = 138.0;
+
+pub const RAIL_WIDTH: f32 = 248.0;
+pub const DETAILS_RAIL_WIDTH: f32 = 296.0;
 pub const PANE_HEADER_HEIGHT: f32 = 48.0;
 pub const RAIL_HEADER_HEIGHT: f32 = 40.0;
 pub const STATUS_BAR_HEIGHT: f32 = 32.0;
-pub const ROW_HEIGHT: f32 = 44.0;
+
+pub const MOTION_FAST: Duration = Duration::from_millis(120);
+pub const MOTION_BASE: Duration = Duration::from_millis(180);
+pub const MOTION_EXIT: Duration = Duration::from_millis(100);
+pub const TOOLTIP_DELAY: Duration = Duration::from_millis(400);
+
+pub fn ease_out_cubic(t: f32) -> f32 {
+    1.0 - (1.0 - t).powi(3)
+}
+
+pub fn motion_fast() -> Animation {
+    Animation::new(MOTION_FAST).with_easing(ease_out_cubic)
+}
+
+pub fn motion_base() -> Animation {
+    Animation::new(MOTION_BASE).with_easing(ease_out_cubic)
+}
+
+pub fn motion_exit() -> Animation {
+    Animation::new(MOTION_EXIT)
+}
 
 fn apply_palette(theme: &mut Theme, palette: &Palette) {
     let transparent = theme.transparent;
-    let hover = |base: Hsla, toward: Hsla| base.mix_oklab(toward, 0.12);
-    let active = |base: Hsla, toward: Hsla| base.mix_oklab(toward, 0.22);
-    let toward_ink = palette.foreground;
     let colors = &mut theme.colors;
-    colors.background = palette.background;
-    colors.foreground = palette.foreground;
-    colors.border = palette.border;
-    colors.input = palette.input;
-    colors.ring = palette.ring;
-    colors.caret = palette.foreground;
+    colors.background = palette.surface;
+    colors.table = palette.surface;
+    colors.table_even = palette.surface;
+    colors.table_head = palette.surface;
+    colors.list = palette.surface;
+    colors.list_even = palette.surface;
+    colors.list_head = palette.surface;
+    colors.title_bar = palette.surface;
+    colors.status_bar = palette.surface;
+    colors.tab_active = palette.surface;
+    colors.sidebar = palette.surface;
+    colors.popover = palette.raised;
+    colors.foreground = palette.ink;
+    colors.popover_foreground = palette.ink;
+    colors.accent_foreground = palette.ink;
+    colors.secondary_foreground = palette.ink;
+    colors.caret = palette.ink;
+    colors.sidebar_foreground = palette.ink;
+    colors.sidebar_accent_foreground = palette.ink;
+    colors.tab_active_foreground = palette.ink;
+    colors.muted_foreground = palette.ink_muted;
+    colors.table_head_foreground = palette.ink_muted;
+    colors.tab_foreground = palette.ink_muted;
+    colors.border = palette.line;
+    colors.table_row_border = palette.line;
+    colors.title_bar_border = palette.line;
+    colors.window_border = palette.line;
+    colors.status_bar_border = palette.line;
+    colors.sidebar_border = palette.line;
+    colors.input = palette.line_strong;
+    colors.accent = palette.hover;
+    colors.list_hover = palette.hover;
+    colors.table_hover = palette.hover;
+    colors.secondary = palette.hover;
+    colors.secondary_hover = palette.hover;
+    colors.muted = palette.hover;
+    colors.skeleton = palette.hover;
+    colors.tab_bar = palette.hover;
+    colors.group_box = palette.hover;
+    colors.sidebar_accent = palette.hover;
+    colors.secondary_active = palette.pressed;
+    colors.list_active = palette.pressed;
+    colors.table_active = palette.pressed;
+    colors.primary = palette.action;
+    colors.button_primary = palette.action;
+    colors.switch = palette.action;
+    colors.primary_hover = palette.action_hover;
+    colors.button_primary_hover = palette.action_hover;
+    colors.primary_active = palette.action_hover;
+    colors.button_primary_active = palette.action_hover;
+    colors.primary_foreground = palette.on_action;
+    colors.button_primary_foreground = palette.on_action;
+    colors.sidebar_primary = palette.action;
+    colors.sidebar_primary_foreground = palette.on_action;
+    colors.button_secondary = palette.hover;
+    colors.button_secondary_hover = palette.pressed;
+    colors.button_secondary_active = palette.pressed;
+    colors.button_secondary_foreground = palette.ink;
+    colors.ring = palette.accent;
+    colors.link = palette.accent;
+    colors.drag_border = palette.accent;
+    colors.list_active_border = palette.accent;
+    colors.table_active_border = palette.accent;
     colors.selection = palette
-        .primary
-        .opacity(if palette.dark { 0.4 } else { 0.28 });
-    colors.muted = palette.muted;
-    colors.muted_foreground = palette.muted_foreground;
-    colors.accent = palette.accent;
-    colors.accent_foreground = palette.foreground;
-    colors.popover = palette.popover;
-    colors.popover_foreground = palette.foreground;
-    colors.primary = palette.primary;
-    colors.primary_hover = hover(palette.primary, palette.primary_foreground);
-    colors.primary_active = active(palette.primary, palette.primary_foreground);
-    colors.primary_foreground = palette.primary_foreground;
-    colors.secondary = palette.secondary;
-    colors.secondary_hover = hover(palette.secondary, toward_ink);
-    colors.secondary_active = active(palette.secondary, toward_ink);
-    colors.secondary_foreground = palette.foreground;
-    colors.danger = palette.destructive;
-    colors.danger_hover = hover(palette.destructive, palette.primary_foreground);
-    colors.danger_active = active(palette.destructive, palette.primary_foreground);
-    colors.danger_foreground = palette.primary_foreground;
-    colors.button_primary = colors.primary;
-    colors.button_primary_hover = colors.primary_hover;
-    colors.button_primary_active = colors.primary_active;
-    colors.button_primary_foreground = colors.primary_foreground;
-    colors.button_secondary = colors.secondary;
-    colors.button_secondary_hover = colors.secondary_hover;
-    colors.button_secondary_active = colors.secondary_active;
-    colors.button_secondary_foreground = colors.secondary_foreground;
-    colors.button_danger = colors.danger;
+        .accent
+        .opacity(if palette.dark { 0.40 } else { 0.28 });
+    colors.drop_target = palette.accent_wash;
+    colors.danger = palette.danger;
+    colors.button_danger = palette.danger;
+    colors.danger_hover = palette.danger.mix_oklab(palette.ink, 0.88);
+    colors.danger_active = palette.danger.mix_oklab(palette.ink, 0.78);
     colors.button_danger_hover = colors.danger_hover;
     colors.button_danger_active = colors.danger_active;
-    colors.button_danger_foreground = colors.danger_foreground;
-    colors.warning = palette.status_open;
-    colors.success = palette.status_closed;
-    colors.info = palette.status_investigating;
-    colors.link = palette.primary;
-    colors.sidebar = palette.sidebar;
-    colors.sidebar_foreground = palette.sidebar_foreground;
-    colors.sidebar_accent = palette.sidebar_accent;
-    colors.sidebar_accent_foreground = palette.foreground;
-    colors.sidebar_border = palette.sidebar_border;
-    colors.sidebar_primary = palette.primary;
-    colors.sidebar_primary_foreground = palette.primary_foreground;
-    colors.title_bar = palette.sidebar;
-    colors.title_bar_border = palette.sidebar_border;
-    colors.status_bar = palette.background;
-    colors.status_bar_border = palette.border;
-    colors.list = palette.background;
-    colors.list_even = palette.background;
-    colors.list_head = palette.muted;
-    colors.list_hover = palette.accent;
-    colors.list_active = palette.accent;
-    colors.list_active_border = palette.primary;
-    colors.table = palette.background;
-    colors.table_even = palette.background;
-    colors.table_head = palette.background;
-    colors.table_head_foreground = palette.muted_foreground;
-    colors.table_hover = palette.accent;
-    colors.table_active = palette.accent;
-    colors.table_active_border = palette.primary;
-    colors.table_row_border = palette.border;
-    colors.skeleton = palette.muted;
-    colors.switch = palette.input;
-    colors.switch_thumb = palette.background;
-    colors.slider_bar = palette.primary;
-    colors.slider_thumb = palette.background;
-    colors.progress_bar = palette.primary;
-    colors.tab_bar = palette.muted;
-    colors.tab_active = palette.background;
-    colors.tab_active_foreground = palette.foreground;
-    colors.tab_foreground = palette.muted_foreground;
+    colors.danger_foreground = hex(0xffffff);
+    colors.button_danger_foreground = hex(0xffffff);
+    colors.warning = palette.notice;
+    colors.info = palette.st_investigating;
+    colors.success = Palette::light().st_closed;
+    colors.overlay = palette.scrim;
     colors.scrollbar = transparent;
-    colors.scrollbar_thumb = palette.muted_foreground.opacity(0.35);
-    colors.scrollbar_thumb_hover = palette.muted_foreground.opacity(0.6);
-    colors.overlay = oklch(0.0, 0.0, 0.0, if palette.dark { 0.6 } else { 0.4 });
-    colors.group_box = palette.muted;
-    colors.window_border = palette.border;
-    colors.drag_border = palette.ring;
-    colors.drop_target = palette.accent;
+    colors.scrollbar_thumb = palette.ink_muted.opacity(0.4);
+    colors.scrollbar_thumb_hover = palette.ink_muted.opacity(0.7);
+    colors.switch_thumb = palette.surface;
+    colors.slider_thumb = palette.surface;
+    colors.progress_bar = palette.action;
+    colors.slider_bar = palette.action;
     theme.radius = px(RADIUS);
-    theme.radius_lg = px(RADIUS + 3.0);
+    theme.radius_lg = px(RADIUS_LG);
     theme.font_size = px(FONT_SIZE);
     theme.font_family = SharedString::from(missal_text::UI_FAMILY);
-    theme.shadow = false;
+    theme.shadow = true;
+    theme.motion.duration_fast = MOTION_FAST;
+    theme.motion.duration_normal = MOTION_BASE;
 }
 
 pub fn resolve_dark(choice: ThemeChoice, appearance: WindowAppearance) -> bool {

@@ -46,7 +46,7 @@ impl Render for EditFooter {
                     .items_center()
                     .gap_1p5()
                     .text_size(px(12.))
-                    .text_color(palette.muted_foreground)
+                    .text_color(palette.ink_muted)
                     .child(dirty_dot(&palette, dirty))
                     .child(if dirty {
                         "Unsaved changes"
@@ -109,7 +109,7 @@ pub fn open_edit_sheet(record: FirRecord, window: &mut Window, cx: &mut App) {
                 div()
                     .px_4()
                     .pb_4()
-                    .text_color(palette.foreground)
+                    .text_color(palette.ink)
                     .child(form.clone()),
             )
             .footer(footer.clone())

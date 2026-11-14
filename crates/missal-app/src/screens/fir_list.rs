@@ -29,8 +29,8 @@ use crate::state::{Load, Models, Route, run_db_in, toast_error, toast_success};
 use crate::theme::{Palette, ROW_HEIGHT};
 use crate::ui::dialogs::confirm_delete;
 use crate::ui::input::{Kind, text_input};
-use crate::ui::status::status_icon;
-use crate::ui::{empty_state, icon_button, key_cap, pane_header, small_icon, status_bar};
+use crate::ui::status::status_dot;
+use crate::ui::{empty_state, key_cap, kit_icon_button, pane_header, small_icon, status_bar};
 
 const SELECT_WIDTH: f32 = 44.0;
 const ACTIONS_WIDTH: f32 = 48.0;
@@ -64,7 +64,7 @@ pub struct FirListScreen {
 impl FirListScreen {
     pub fn new(models: Models, window: &mut Window, cx: &mut Context<Self>) -> FirListScreen {
         let prefs = models.prefs.read(cx).read().table.clone();
-        let search = text_input(window, cx, Kind::Auto, "Search FIRs", "");
+        let search = text_input(window, cx, Kind::UrduAuto, "Search FIRs", "");
         let subscriptions = vec![
             cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
                 if *event == TextInputEvent::Change {
@@ -458,7 +458,7 @@ impl FirListScreen {
                     }))
                     .child(div().flex_1().min_w_0().child(self.search.clone()))
                     .child(if has_query {
-                        icon_button("clear-search", IconName::X)
+                        kit_icon_button("clear-search", IconName::X)
                             .tooltip("Clear search")
                             .on_click(cx.listener(|this, _, _, cx| this.set_search("", cx)))
                             .into_any_element()
@@ -532,11 +532,11 @@ impl FirListScreen {
             .when(active, |this| this.secondary())
             .when(!active, |this| this.outline())
             .child(
-                h_flex().items_center().gap_1().child("Status").children(
-                    selected
-                        .iter()
-                        .map(|status| status_icon(*status, palette.status(*status), px(12.))),
-                ),
+                h_flex()
+                    .items_center()
+                    .gap_1()
+                    .child("Status")
+                    .children(selected.iter().map(|status| status_dot(&palette, *status))),
             );
         Popover::new("status-filter-popover")
             .trigger(trigger)
@@ -561,15 +561,15 @@ impl FirListScreen {
                             .items_center()
                             .rounded(px(6.))
                             .cursor_pointer()
-                            .hover(move |style| style.bg(palette.accent))
+                            .hover(move |style| style.bg(palette.hover))
                             .on_click(cx.listener(move |_, _, _, cx| {
                                 screen.update(cx, |this, cx| this.toggle_status(status, cx));
                                 cx.notify();
                             }))
                             .child(div().w(px(16.)).children(
-                                checked.then(|| small_icon(IconName::Check, palette.foreground)),
+                                checked.then(|| small_icon(IconName::Check, palette.ink)),
                             ))
-                            .child(status_icon(status, palette.status(status), px(14.)))
+                            .child(status_dot(&palette, status))
                             .child(div().text_size(px(14.)).child(label(status.label()).rtl()))
                     }))
                     .when(!selected.is_empty(), |this| {
@@ -584,8 +584,8 @@ impl FirListScreen {
                                 .rounded(px(6.))
                                 .cursor_pointer()
                                 .text_size(px(13.))
-                                .text_color(palette.muted_foreground)
-                                .hover(move |style| style.bg(palette.accent))
+                                .text_color(palette.ink_muted)
+                                .hover(move |style| style.bg(palette.hover))
                                 .on_click(cx.listener(move |_, _, _, cx| {
                                     screen.update(cx, |this, cx| this.clear_status_filter(cx));
                                     cx.notify();
@@ -611,9 +611,9 @@ impl FirListScreen {
             .h(px(40.))
             .items_center()
             .border_b_1()
-            .border_color(palette.border)
+            .border_color(palette.line)
             .text_size(px(12.))
-            .text_color(palette.muted_foreground)
+            .text_color(palette.ink_muted)
             .child(
                 div()
                     .w(px(SELECT_WIDTH))
@@ -651,9 +651,9 @@ impl FirListScreen {
                             .gap_1p5()
                             .items_center()
                             .cursor_pointer()
-                            .when(sorted, |this| this.text_color(palette.foreground))
+                            .when(sorted, |this| this.text_color(palette.ink))
                             .hover({
-                                let foreground = palette.foreground;
+                                let foreground = palette.ink;
                                 move |style| style.text_color(foreground)
                             })
                             .on_click(
@@ -668,9 +668,9 @@ impl FirListScreen {
                             .child(small_icon(
                                 icon,
                                 if sorted {
-                                    palette.foreground
+                                    palette.ink
                                 } else {
-                                    palette.muted_foreground.opacity(0.7)
+                                    palette.ink_muted.opacity(0.7)
                                 },
                             ));
                         match column_width(column) {
@@ -705,15 +705,15 @@ impl FirListScreen {
             .h(px(ROW_HEIGHT))
             .items_center()
             .border_b_1()
-            .border_color(palette.border)
+            .border_color(palette.line)
             .cursor_pointer()
-            .when(selected, |this| this.bg(palette.muted))
+            .when(selected, |this| this.bg(palette.hover))
             .when(focused, |this| {
-                this.bg(palette.accent)
+                this.bg(palette.hover)
                     .border_l_2()
-                    .border_color(palette.primary)
+                    .border_color(palette.accent)
             })
-            .hover(move |style| style.bg(palette.accent.opacity(0.7)))
+            .hover(move |style| style.bg(palette.hover.opacity(0.7)))
             .on_click(cx.listener(move |this, _, window, cx| this.open_row(index, window, cx)))
             .child(
                 div()
@@ -766,27 +766,26 @@ impl FirListScreen {
                                 .flex_row_reverse()
                                 .justify_start()
                                 .text_size(px(16.))
-                                .child(status_icon(row.status, palette.status(row.status), px(14.)))
+                                .child(status_dot(&palette, row.status))
                                 .child(label(row.status.label()).rtl()),
                             Column::Date => cell
                                 .text_size(px(13.))
-                                .text_color(palette.muted_foreground)
+                                .text_color(palette.ink_muted)
                                 .child(label(row.date.clone()).rtl()),
                             Column::IncidentDate => cell
                                 .text_size(px(13.))
-                                .text_color(palette.muted_foreground)
+                                .text_color(palette.ink_muted)
                                 .child(label(row.incident.clone()).rtl()),
-                            Column::ArrestDate => cell
-                                .text_size(px(13.))
-                                .text_color(palette.muted_foreground)
-                                .child(
+                            Column::ArrestDate => {
+                                cell.text_size(px(13.)).text_color(palette.ink_muted).child(
                                     label(if row.arrest.is_empty() {
                                         SharedString::from("—")
                                     } else {
                                         row.arrest.clone()
                                     })
                                     .rtl(),
-                                ),
+                                )
+                            }
                         }
                     }),
             )
@@ -838,7 +837,7 @@ impl FirListScreen {
                         .gap_4()
                         .items_center()
                         .border_b_1()
-                        .border_color(palette.border)
+                        .border_color(palette.line)
                         .child(crate::ui::skeleton_bar(&palette, 90., 12.))
                         .child(crate::ui::skeleton_bar(&palette, 220., 12.))
                         .child(crate::ui::skeleton_bar(&palette, 120., 12.))
@@ -1027,11 +1026,48 @@ impl Render for FirListScreen {
                 }
             }))
             .on_action(cx.listener(|this, _: &EditFir, window, cx| this.edit_focused(window, cx)))
+            .on_action(cx.listener(|this, _: &DeleteSelection, window, cx| {
+                let ids: Vec<FirId> = if this.selected.is_empty() {
+                    this.focused
+                        .and_then(|index| this.row_at(index, cx))
+                        .map(|row| vec![row.id])
+                        .unwrap_or_default()
+                } else {
+                    this.selected.iter().copied().collect()
+                };
+                if !ids.is_empty() {
+                    this.request_delete(ids, window, cx);
+                }
+            }))
             .on_action(
                 cx.listener(|this, _: &FocusSearch, window, cx| this.focus_search(window, cx)),
             )
             .child(self.header(window, cx))
             .child(div().flex_1().min_h_0().child(body))
             .children(footer)
+    }
+}
+
+impl crate::ui::titlebar::HeaderSource for FirListScreen {
+    fn header(
+        &mut self,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> crate::ui::titlebar::HeaderContent {
+        let total = self.models.firs.read(cx).rows.len();
+        let visible = self.visible_count();
+        let meta = if visible == total {
+            total.to_string()
+        } else {
+            format!("{visible} of {total}")
+        };
+        crate::ui::titlebar::HeaderContent::new("FIRs")
+            .meta(meta)
+            .action(
+                crate::ui::primary_sm("header-new-fir", "New FIR")
+                    .icon(IconName::Plus)
+                    .keys("N")
+                    .on_click(|_, window, cx| navigate(Route::NewFir, window, cx)),
+            )
     }
 }
