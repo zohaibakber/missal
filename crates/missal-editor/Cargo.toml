@@ -1,0 +1,33 @@
+[package]
+name = "missal-editor"
+description = "Missal document editor: transactional editing core over the document tree and a paged GPUI editing surface"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+missal-core.workspace = true
+missal-page.workspace = true
+missal-text.workspace = true
+gpui-kit.workspace = true
+serde_json.workspace = true
+unicode-segmentation.workspace = true
+gpui-pre-wgpu = { workspace = true, optional = true }
+image = { workspace = true, optional = true }
+
+[dev-dependencies]
+gpui-kit = { workspace = true, features = ["test-support"] }
+missal-text = { workspace = true, features = ["test-support"] }
+flate2.workspace = true
+
+[features]
+headless = ["gpui-kit/test-support", "missal-page/headless", "dep:gpui-pre-wgpu", "dep:image"]
+
+[lints]
+workspace = true
+
+[[example]]
+name = "editor_perf"
+required-features = ["headless"]

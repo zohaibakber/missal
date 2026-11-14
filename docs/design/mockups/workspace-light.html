@@ -1,0 +1,108 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="missal.css"><script src="chrome.js"></script>
+<style>
+.wh { height: 52px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 20px; border-bottom: 1px solid var(--border); }
+.pill { font-weight: 400; height: 24px; padding: 0 8px 0 9px; border-radius: 12px; border: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
+.pill .ur { font-size: 14px; line-height: 24px; margin-top: -3px; }
+.body { flex: 1; min-height: 0; display: flex; }
+.rail { width: 248px; flex: none; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.rail-h { height: 40px; display: flex; align-items: center; padding: 0 8px 0 16px; gap: 6px; }
+.lbl { font-size: 12px; font-weight: 500; color: var(--muted); }
+.doc { height: 40px; margin: 0 8px; border-radius: 6px; display: flex; flex-direction: row-reverse; align-items: center; padding: 0 10px; gap: 8px; }
+.doc.on { background: var(--accent-sub); }
+.doc .ur { font-size: 16px; line-height: 30px; }
+.doc .idx { font-size: 12px; color: var(--subtle); width: 14px; text-align: right; }
+.add { height: 32px; margin: 4px 8px; border-radius: 6px; display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--muted); font-size: 13px; font-weight: 500; }
+.center { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--canvas); }
+.etb { height: 40px; flex: none; background: var(--bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 8px; gap: 2px; }
+.etb .vr { margin: 10px 6px; }
+.segc { display: flex; padding: 2px; border-radius: 7px; background: var(--hover); gap: 2px; }
+.segc span { white-space: nowrap; height: 24px; padding: 0 8px; border-radius: 5px; font-size: 12px; font-weight: 500; color: var(--muted); display: grid; place-items: center; }
+.segc span.on { background: var(--bg); color: var(--fg); box-shadow: var(--shadow-sm); }
+.dark .segc span.on { background: var(--pressed); }
+.cv { flex: 1; overflow: hidden; padding: 20px 24px 0; }
+.page { width: 640px; margin: 0 auto; background: var(--paper); color: var(--ink); border-radius: 2px; box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); padding: 40px 52px; min-height: 900px; direction: rtl; font-family: "Nastaleeq"; font-size: 16px; line-height: 32px; word-spacing: 0.14em; }
+.f { background: var(--field-fill); border-radius: 3px; padding: 0 2px; }
+.miss { color: var(--warn); background: var(--warn-sub); border-bottom: 1.5px dashed var(--warn-line); border-radius: 3px 3px 0 0; padding: 0 2px; }
+.rule { border-top: 1px solid var(--ink); margin: 2px 0; }
+.dline { display: flex; justify-content: space-between; }
+.title { text-align: center; font-size: 22px; line-height: 44px; margin: 22px 0 10px; }
+.title span { border-bottom: 1.5px solid var(--ink); padding-bottom: 2px; }
+.insp { width: 296px; flex: none; border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+.tabs2 { height: 40px; display: flex; align-items: flex-end; gap: 16px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.tabs2 > span { height: 40px; display: flex; align-items: center; font-size: 13px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; gap: 6px; }
+.tabs2 > span.on { color: var(--fg); border-color: var(--fg); }
+.badge { align-self: center; display: inline-grid; height: 18px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--warn-sub); color: var(--warn); font-size: 11px; font-weight: 600; display: grid; place-items: center; }
+.sec { padding: 12px 16px 4px; display: flex; align-items: center; gap: 8px; }
+.fi { padding: 6px 16px; display: flex; flex-direction: column; gap: 6px; }
+.fi .top { display: flex; flex-direction: row-reverse; align-items: center; gap: 8px; }
+.tag { font-size: 11px; color: var(--subtle); font-weight: 500; }
+.kv { display: flex; flex-direction: row-reverse; align-items: baseline; gap: 12px; padding: 2px 16px; }
+.kv .k { width: 92px; flex: none; text-align: right; }
+.kv .v { flex: 1; min-width: 0; text-align: right; }
+.jump { color: var(--subtle); }
+.foot { margin-top: auto; height: 40px; border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 8px; }
+</style></head>
+<body data-themes="both"><div class="app" id="app"></div>
+<script>
+const docs = ["ضمنی حصول ریمانڈ جسمانی", "مسل مقدمہ میرے سپرد ہوئی", "گینگ انویسٹی گیشن ڈسچارج"];
+document.getElementById('app').innerHTML = `
+${titlebar({ title: `<span class="ltr num">FIR 1/2021</span><span class="pill"><span class="dot d-inv"></span><span class="ur">زیر تفتیش</span></span>`, meta: `<span class="ur ur18 trunc" style="margin-top:-4px">راہزنی ۳۹۴ ت پ</span>`, actions: `<span class="row s t12" style="gap:6px;margin-right:6px">${ICON('check', 'i12')}Saved</span><div class="ib" title="Edit details (E)">${ICON('pencil')}</div><div class="ib" title="Print (Ctrl P)">${ICON('printer')}</div><div class="ib on" title="Fields panel (Ctrl .)">${ICON('panel-right')}</div><div class="ib" title="More">${ICON('ellipsis')}</div><div class="vr"></div>` })}
+<div class="body">
+  <div class="rail">
+    <div class="rail-h"><span class="lbl">Documents</span><span class="s t12 num">3</span><div class="grow"></div></div>
+    ${docs.map((d, i) => `<div class="doc${i === 0 ? ' on' : ''}"><span class="idx num ltr">${i + 1}</span><span class="ur trunc grow">${d}</span>${i === 0 ? '' : ''}</div>`).join('')}
+    <div class="add">${ICON('plus', 'i14')}Add document<div class="grow"></div><span class="kbd">A</span></div>
+  </div>
+  <div class="center">
+    <div class="etb">
+      <div class="ib">${ICON('undo-2')}</div><div class="ib dis">${ICON('redo-2')}</div>
+      <div class="vr"></div>
+      <div class="ib">${ICON('bold')}</div><div class="ib">${ICON('italic')}</div><div class="ib">${ICON('underline')}</div>
+      <div class="vr"></div>
+      <div class="ib">${ICON('text-align-start')}</div><div class="ib">${ICON('text-align-center')}</div><div class="ib on">${ICON('text-align-end')}</div><div class="ib">${ICON('text-align-justify')}</div>
+      <div class="vr"></div>
+      <div class="ib">${ICON('list')}</div><div class="ib">${ICON('list-ordered')}</div>
+      <div class="vr"></div>
+      <div class="ib" title="Insert field («»)">${ICON('braces')}</div>
+      <div class="grow"></div>
+      <div class="segc"><span class="on">Values</span><span>Names</span></div>
+      <div class="vr"></div>
+      <div class="ib sm">${ICON('minus', 'i14')}</div><div class="t12 m num" style="width:36px;text-align:center">86%</div><div class="ib sm">${ICON('plus', 'i14')}</div>
+    </div>
+    <div class="cv"><div class="page">
+      <div class="dline"><span class="miss">تھانہ نام</span><span class="miss" style="margin-left:150px">ضلع نام</span></div>
+      <div>سرکاربذریعہ &nbsp;<span class="f">محمد اسلم ولد اکرم سکنہ چک ۴۵</span></div>
+      <div class="rule"></div>
+      <div class="dline"><span>مقدمہ نمبر : <span class="f ltr" style="font-family:Inter;font-size:15px">1/2021</span></span><span>مورخہ: <span class="f ltr" style="font-family:Inter;font-size:15px">14-11-2021</span></span><span>جرم: <span class="f">راہزنی ۳۹۴ ت پ</span></span><span class="miss">تھانہ نام</span></div>
+      <div class="rule"></div>
+      <div>بنام: <span class="f">زاہد حسین ولد حسین بخش سکنہ ساہیوال</span></div>
+      <div style="padding-right:38px"><span class="f">طارق جاوید ولد جاوید اقبال سکنہ فیصل آباد</span></div>
+      <div class="rule"></div>
+      <div class="title"><span>درخواست برائے حصول ریمانڈ حوالات جوڈیشل ۱۴ یوم</span></div>
+      <div style="text-align:justify">جناب عالی! گزارش ہے کہ ملزم <span class="f">زاہد حسین ولد حسین بخش سکنہ ساہیوال</span>، <span class="f">طارق جاوید ولد جاوید اقبال سکنہ فیصل آباد</span> کو مقدمہ عنوانِ بالا میں حسبِ ضابطہ گرفتار کیا گیا ہے۔ ملزم نے مقدمہ ہذا میں جزوی برآمدگی کروا دی ہے۔ مزید کی توقع نہ ہے۔ ملزم کی حراست اختیاری پولیس امروز اختتام پذیر ہے۔ تکمیل تفتیش ہو چکی ہے جبکہ تکمیل کاغذات چالان بقایا ہے، ملزم کو پیش عدالت کیا جا رہا ہے، لہذا بذریعہ درخواست استدعا ہے کہ ملزم کا ریمانڈ حوالات جوڈیشل ۱۴ یوم منظور فرما کر حوالات جوڈیشل میں رکھے جانے اور آئندہ پیش کیے جانے کا حکم فرمایا جائے۔</div>
+      <div style="margin-top:40px;padding-right:300px"><span class="f">انسپکٹر ملک ارشد</span></div>
+      <div style="padding-right:300px;margin-top:8px"><span class="miss">تاریخ ڈسچارج</span></div>
+    </div></div>
+  </div>
+  <div class="insp">
+    <div class="tabs2"><span class="on">Fields <span class="badge">3</span></span><span>Case details</span></div>
+    <div class="sec"><span class="lbl">Empty in this document</span></div>
+    <div class="fi">
+      <div class="top"><span class="ur ur16">تھانہ نام</span><div class="grow"></div><span class="tag">Global</span></div>
+      <div class="field ur-in focus" style="flex-direction:row-reverse"><span class="ur ur16">تھانہ صدر</span><span class="caret" style="margin-right:-6px"></span><div class="grow"></div></div>
+      <div class="t12 s">Used by every FIR. Press Enter to save.</div>
+    </div>
+    <div class="fi"><div class="top"><span class="ur ur16">ضلع نام</span><div class="grow"></div><span class="tag">Global</span></div>
+      <div class="field ur-in" style="flex-direction:row-reverse"><span class="ph t13">Empty</span></div></div>
+    <div class="fi"><div class="top"><span class="ur ur16">تاریخ ڈسچارج</span><div class="grow"></div><span class="tag">This FIR</span></div>
+      <div class="field ur-in" style="flex-direction:row-reverse"><span class="ph t13">Empty</span></div></div>
+    <div class="sec" style="padding-top:16px"><span class="lbl">Filled</span><span class="s t12 num">6</span></div>
+    <div class="kv"><span class="k ur ur14 m">مقدمہ نمبر</span><span class="v t13 ltr num" style="text-align:right">1/2021</span></div>
+    <div class="kv"><span class="k ur ur14 m">مدعی مقدمہ</span><span class="v ur ur16 trunc">محمد اسلم ولد اکرم سکنہ چک ۴۵</span></div>
+    <div class="kv"><span class="k ur ur14 m">جرم</span><span class="v ur ur16 trunc">راہزنی ۳۹۴ ت پ</span></div>
+    <div class="kv"><span class="k ur ur14 m">نام ملزم</span><span class="v ur ur16 trunc">زاہد حسین ولد حسین بخش سکنہ ساہیوال</span></div>
+    <div class="kv"><span class="k ur ur14 m">تفتیشی</span><span class="v ur ur16 trunc">انسپکٹر ملک ارشد</span></div>
+  </div>
+</div>`;
+</script></body></html>

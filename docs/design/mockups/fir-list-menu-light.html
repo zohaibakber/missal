@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="missal.css"><script src="chrome.js"></script>
+<style>
+.toolbar { height: 52px; padding-top: 4px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 24px; }
+.search { width: 300px; }
+.seg { display: flex; align-items: center; gap: 2px; }
+.seg .s-item { height: 28px; padding: 0 10px; border-radius: 6px; display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; font-weight: 500; }
+.seg .s-item.on { background: var(--pressed); color: var(--fg); }
+.seg .s-item .n { color: var(--subtle); font-weight: 400; }
+.seg .s-item.on .n { color: var(--muted); }
+.seg .ur { font-size: 15px; line-height: 26px; margin-top: -3px; }
+
+.table { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 24px; }
+.tr { display: flex; flex-direction: row-reverse; align-items: center; height: 44px; border-bottom: 1px solid var(--border); position: relative; }
+.th { height: 36px; color: var(--muted); }
+.th .c { gap: 4px; }
+.th .ur { font-size: 14px; line-height: 26px; margin-top: -2px; }
+.c { display: flex; flex-direction: row-reverse; align-items: center; padding: 0 8px; min-width: 0; height: 100%; }
+.c-sel { width: 36px; justify-content: center; padding: 0; }
+.c-no { width: 108px; }
+.c-off { flex: 1.1; }
+.c-acc { flex: 1; }
+.c-st { width: 132px; gap: 8px; }
+.c-dt { width: 112px; }
+.c-act { width: 36px; justify-content: center; padding: 0; }
+.tr .no { font-weight: 500; font-size: 14px; }
+.tr .dt { font-size: 13px; color: var(--muted); }
+.tr.hov { background: var(--hover); }
+.tr.foc { background: var(--hover); }
+.tr.foc::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+.tr.sel { background: var(--accent-sub); }
+.hide { visibility: hidden; }
+.sortic { color: var(--fg); }
+</style></head>
+<body><div class="app" id="app"></div>
+<script>
+const rows = [
+  ["11/2026", 11, 8, "challan", "14-05-2026"],
+  ["10/2026", 4, 2, "inv", "17-10-2026"],
+  ["9/2026", 9, 6, "open", "03-03-2026"],
+  ["8/2026", 1, 9, "challan", "13-12-2026"],
+  ["7/2026", 1, 0, "challan", "01-10-2026"],
+  ["6/2026", 2, 4, "inv", "23-04-2026"],
+  ["5/2026", 3, 7, "open", "20-06-2026"],
+  ["4/2026", 9, 3, "inv", "27-05-2026"],
+  ["3/2026", 10, 5, "closed", "06-07-2026"],
+  ["2/2026", 6, 1, "open", "02-11-2026"],
+  ["1/2026", 5, 8, "open", "16-08-2026"],
+  ["11/2025", 7, 2, "challan", "24-01-2025"],
+  ["10/2025", 5, 9, "open", "19-11-2025"],
+];
+const row = (r, i) => {
+  const cls = i === 2 ? ' foc' : i === 5 ? ' hov' : '';
+  const showSel = i === 5;
+  return `<div class="tr${cls}">
+    <div class="c c-sel"><div class="chk${showSel ? '' : ' hide'}"></div></div>
+    <div class="c c-no"><span class="no ltr num">${r[0]}</span></div>
+    <div class="c c-off"><span class="ur ur16 trunc">${OFFENCES[r[1]]}</span></div>
+    <div class="c c-acc"><span class="ur ur16 m trunc">${NAMES[r[2]]}${r[2] % 3 === 0 ? ' <span class="s t13 ltr" style="font-family:Inter;margin-right:6px">+1</span>' : ''}</span></div>
+    <div class="c c-st"><span class="dot ${STATUS[r[3]][1]}"></span><span class="ur ur16">${STATUS[r[3]][0]}</span></div>
+    <div class="c c-dt"><span class="dt ltr num">${r[4]}</span></div>
+    <div class="c c-act">${showSel ? `<div class="ib sm">${ICON('ellipsis', 'i14')}</div>` : ''}</div>
+  </div>`;
+};
+document.getElementById('app').innerHTML = `
+  ${titlebar({ menuOpen: true, title: 'FIRs', meta: '<span class="num">90</span>', actions: `<div class="btn primary sm">${ICON('plus', 'i14')}New FIR<span class="kbd">N</span></div>` })}
+  <div class="toolbar">  
+    <div class="field search">${ICON('search', 'i14')}<span class="ph grow t13">FIR no., offence or name</span><span class="kbd">/</span></div>
+    <div class="seg">
+      <div class="s-item on">All <span class="n num">90</span></div>
+      <div class="s-item"><span class="dot d-open"></span><span class="ur">زیر التوا</span><span class="n num">36</span></div>
+      <div class="s-item"><span class="dot d-inv"></span><span class="ur">زیر تفتیش</span><span class="n num">27</span></div>
+      <div class="s-item"><span class="dot d-challan"></span><span class="ur">چالان جمع</span><span class="n num">18</span></div>
+      <div class="s-item"><span class="dot d-closed"></span><span class="ur">بند</span><span class="n num">9</span></div>
+    </div>
+    <div class="grow"></div>
+    <div class="ib" title="Columns">${ICON('columns-3')}</div>
+  </div>
+  <div class="table">
+    <div class="tr th">
+      <div class="c c-sel"><div class="chk"></div></div>
+      <div class="c c-no"><span class="ur">ایف آئی آر نمبر</span><span class="sortic">${ICON('arrow-down', 'i12')}</span></div>
+      <div class="c c-off"><span class="ur">جرم</span></div>
+      <div class="c c-acc"><span class="ur">ملزمان</span></div>
+      <div class="c c-st"><span class="ur">حالت</span></div>
+      <div class="c c-dt"><span class="ur">تاریخ ایف آئی آر</span></div>
+      <div class="c c-act"></div>
+    </div>
+    ${rows.map(row).join('')}
+  </div>${navmenu()}`;
+</script></body></html>

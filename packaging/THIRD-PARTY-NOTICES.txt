@@ -1,0 +1,24 @@
+Missal bundles or invokes the following third-party software.
+
+Inter typeface (assets/fonts/Inter-*.ttf)
+  SIL Open Font License 1.1. The licence text ships as Inter-LICENSE.txt.
+
+Jameel Noori Nastaleeq (assets/fonts/JameelNooriNastaleeq.ttf)
+  Embedded in the Missal executable. Redistribution terms must be confirmed by the
+  project owner before a public release.
+
+SumatraPDF (SumatraPDF.exe, Windows installer only, when bundled)
+  GNU General Public License v3. SumatraPDF is a separate program that Missal starts as a
+  child process to show the print dialog. It is not linked into Missal.
+  Source code: https://github.com/sumatrapdfreader/sumatrapdf
+  Licence text: https://www.gnu.org/licenses/gpl-3.0.txt
+  Missal is not a derivative work of SumatraPDF and is not licensed under the GPL.
+
+GPUI, gpui-kit and gpui-component
+  Apache License 2.0 (see the crates' repositories).
+
+Velopack (installer and updater)
+  MIT License. https://github.com/velopack/velopack
+
+Rust crates
+  The full list with licences can be produced with `cargo metadata` or `cargo about`.

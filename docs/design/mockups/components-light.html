@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="missal.css"><script src="chrome.js"></script>
+<style>
+.sheet { flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
+.cell { padding: 20px 24px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; }
+.cap { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--subtle); margin-bottom: 12px; }
+.line { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.btn.hov.primary { background: var(--action-hover); }
+.btn.hov.outline { background: var(--hover); }
+.btn.dis { opacity: .45; }
+.btn.focusv { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring); }
+.dlg { width: 100%; background: var(--bg); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 20px; }
+.dlg h3 { font-size: 16px; line-height: 24px; font-weight: 600; }
+.dlg p { font-size: 13px; color: var(--muted); margin: 6px 0 18px; line-height: 20px; }
+.toast { background: var(--bg); border-radius: 8px; box-shadow: var(--shadow-md); padding: 10px 12px; display: flex; align-items: center; gap: 10px; font-size: 13px; margin-bottom: 8px; }
+.menu { width: 220px; background: var(--bg); border-radius: 8px; box-shadow: var(--shadow-md); padding: 4px; }
+.mi .kbd { margin-left: auto; }
+.sep { height: 1px; background: var(--border); margin: 4px -4px; }
+.tip { display: inline-flex; align-items: center; gap: 8px; background: var(--fg); color: var(--bg); font-size: 12px; padding: 4px 8px; border-radius: 6px; }
+.tip .kbd { background: transparent; color: inherit; border-color: color-mix(in srgb, var(--bg) 35%, transparent); }
+.addpop { width: 100%; background: var(--bg); border-radius: 8px; box-shadow: var(--shadow-md); overflow: hidden; }
+.addpop .srch { height: 44px; display: flex; flex-direction: row-reverse; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border); }
+.ar { height: 40px; margin: 0 4px; border-radius: 6px; display: flex; flex-direction: row-reverse; align-items: center; gap: 10px; padding: 0 10px; }
+.ar.hl { background: var(--hover); }
+.ar .ur { font-size: 16px; line-height: 30px; }
+.ar .added { font-size: 12px; color: var(--subtle); flex: none; }
+.apf { height: 44px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; margin-top: 4px; }
+.emp { text-align: center; padding: 18px 0 6px; }
+.emp .ic { width: 36px; height: 36px; border-radius: 8px; background: var(--hover); display: inline-grid; place-items: center; color: var(--muted); margin-bottom: 10px; }
+</style></head>
+<body data-themes="both"><div class="app" id="app"></div>
+<script>
+document.getElementById('app').innerHTML = `
+${titlebar({ title: 'Components' })}
+<div class="sheet">
+  <div class="cell">
+    <div class="cap">Buttons · 32 / 28 px</div>
+    <div class="line"><div class="btn primary">Create FIR</div><div class="btn primary hov">Hover</div><div class="btn primary focusv">Focus</div><div class="btn primary dis">Disabled</div></div>
+    <div class="line"><div class="btn outline">Import</div><div class="btn outline hov">Hover</div><div class="btn ghost">Cancel</div><div class="btn danger">Delete FIR</div></div>
+    <div class="line"><div class="btn outline sm">${ICON('file-up', 'i14')}Small</div><div class="btn ghost sm m">${ICON('columns-3', 'i14')}Ghost</div><div class="ib">${ICON('ellipsis')}</div><div class="ib on">${ICON('bold')}</div><div class="ib dis">${ICON('redo-2')}</div></div>
+    <div class="cap" style="margin-top:18px">Inputs · Latin 32, Urdu 36</div>
+    <div class="line"><div class="field" style="width:150px"><span class="ph t13">DD-MM-YYYY</span></div><div class="field focus" style="width:150px;justify-content:flex-end"><span class="num">412/2026</span><span class="caret"></span></div></div>
+    <div class="line"><div class="field ur-in" style="width:150px;flex-direction:row-reverse"><span class="ur ur16" style="margin-top:-2px">انسپکٹر ملک ارشد</span></div><div class="field ur-in err" style="width:150px;flex-direction:row-reverse"></div></div>
+    <div class="t12" style="color:var(--danger);margin-top:-4px">Enter the FIR number, for example 412/2026.</div>
+  </div>
+  <div class="cell">
+    <div class="cap">Confirm dialog · 420 px</div>
+    <div class="dlg">
+      <h3>Delete FIR 9/2026?</h3>
+      <p>Its 3 documents are deleted too. This can't be undone.</p>
+      <div class="row" style="gap:8px;justify-content:flex-end"><div class="btn outline focusv">Cancel</div><div class="btn danger">Delete FIR</div></div>
+    </div>
+    <div class="cap" style="margin-top:22px">Toasts · bottom right, 4 s</div>
+    <div class="toast"><span style="color:var(--closed);display:flex">${ICON('circle-check', 'i14')}</span><span class="grow">Added <span class="ur" style="font-size:15px;line-height:20px">ضمنی حصول ریمانڈ جسمانی</span></span><span class="t12 w5" style="color:var(--accent-text)">Undo</span></div>
+    <div class="toast"><span style="color:var(--danger);display:flex">${ICON('circle-alert', 'i14')}</span><span class="grow">Couldn't save. The disk is full.</span><span class="t12 w5" style="color:var(--accent-text)">Retry</span></div>
+  </div>
+  <div class="cell">
+    <div class="cap">Add document · popover 360 px</div>
+    <div class="addpop">
+      <div class="srch"><span class="s" style="display:flex">${ICON('search', 'i14')}</span><span class="ur ur16" style="margin-top:-2px">ریمانڈ</span><span class="caret" style="margin-right:-6px"></span><div class="grow"></div><span class="kbd">Esc</span></div>
+      <div style="height:4px"></div>
+      <div class="ar hl"><div class="chk on">${ICON('check', 'i12')}</div><span class="ur trunc grow">ضمنی حصول ریمانڈ جسمانی</span><span class="added">Added</span></div>
+      <div class="ar"><div class="chk on">${ICON('check', 'i12')}</div><span class="ur trunc grow">چالان انویسٹی گیشن 401 ملزمان جوڈیشل</span></div>
+      <div class="ar"><div class="chk"></div><span class="ur trunc grow">چالان منشیات ملزم جوڈیشل</span></div>
+      <div class="apf"><span class="t12 m grow">1 selected</span><div class="btn primary sm">Add 1 document<span class="kbd">Ctrl ↵</span></div></div>
+    </div>
+  </div>
+  <div class="cell">
+    <div class="cap">Menu · items 32 px, Urdu left-aligned in LTR menus</div>
+    <div class="menu">
+      <div class="mi">${ICON('folder-open', 'i14')}Open<span class="kbd">↵</span></div>
+      <div class="mi hl">${ICON('pencil', 'i14')}Edit details<span class="kbd">E</span></div>
+      <div class="mi">${ICON('printer', 'i14')}Print…</div>
+      <div class="sep"></div>
+      <div class="mi" style="color:var(--danger)">${ICON('trash', 'i14')}Delete FIR<span class="kbd">Del</span></div>
+    </div>
+  </div>
+  <div class="cell">
+    <div class="cap">Tooltip · 400 ms delay, no animation</div>
+    <div class="tip">Print<span class="kbd">Ctrl</span><span class="kbd">P</span></div>
+    <div class="cap" style="margin-top:22px">Focus ring · 2 px ring, 2 px gap</div>
+    <div class="line"><div class="chk" style="box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ring)"></div><span class="t13">Checkbox</span><div class="ib" style="box-shadow:0 0 0 2px var(--ring)">${ICON('plus')}</div><span class="t13">Icon button</span></div>
+    <div class="cap" style="margin-top:22px">Status</div>
+    <div class="line"><span class="dot d-open"></span><span class="ur ur16">زیر التوا</span><span class="dot d-inv"></span><span class="ur ur16">زیر تفتیش</span><span class="dot d-challan"></span><span class="ur ur16">چالان جمع</span><span class="dot d-closed"></span><span class="ur ur16">بند</span></div>
+  </div>
+  <div class="cell">
+    <div class="cap">Empty state</div>
+    <div class="emp"><div class="ic">${ICON('file-text')}</div><div class="t14 w5">No documents yet</div><div class="t13 m" style="margin:2px 0 12px">Add a template to start writing for this FIR.</div><div class="btn primary sm">${ICON('plus', 'i14')}Add document<span class="kbd">A</span></div></div>
+  </div>
+</div>`;
+</script></body></html>

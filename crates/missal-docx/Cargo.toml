@@ -1,0 +1,21 @@
+[package]
+name = "missal-docx"
+description = "Imports Word (.docx) documents as Missal documents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+missal-core.workspace = true
+zip.workspace = true
+flate2.workspace = true
+roxmltree.workspace = true
+
+[dev-dependencies]
+flate2.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

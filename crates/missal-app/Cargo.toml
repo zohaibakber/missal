@@ -1,0 +1,70 @@
+[package]
+name = "missal-app"
+description = "Missal desktop application shell and screens on GPUI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+default-run = "missal"
+
+[lib]
+name = "missal_app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "missal"
+path = "src/main.rs"
+
+[[example]]
+name = "shots"
+required-features = ["headless"]
+
+[[example]]
+name = "perf"
+required-features = ["headless"]
+
+[[example]]
+name = "editor_shots"
+required-features = ["headless"]
+
+[[example]]
+name = "wp2_shots"
+required-features = ["headless"]
+
+[[example]]
+name = "wp3_shots"
+required-features = ["headless"]
+
+[[example]]
+name = "list_print_shots"
+required-features = ["headless"]
+
+[dependencies]
+missal-core.workspace = true
+missal-docx.workspace = true
+missal-editor.workspace = true
+missal-page.workspace = true
+missal-store.workspace = true
+missal-text.workspace = true
+gpui-kit.workspace = true
+serde_json.workspace = true
+rusqlite.workspace = true
+gpui-pre-wgpu = { workspace = true, optional = true }
+image = { workspace = true, optional = true }
+chrono.workspace = true
+velopack.workspace = true
+semver.workspace = true
+
+[target.'cfg(windows)'.build-dependencies]
+winresource.workspace = true
+
+[dev-dependencies]
+gpui-kit = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true
+
+[features]
+headless = ["gpui-kit/test-support", "dep:gpui-pre-wgpu", "dep:image"]
+
+[lints]
+workspace = true
