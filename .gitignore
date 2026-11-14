@@ -1,12 +1,5 @@
-node_modules
-.DS_Store
-dist
-dist-electron
-.vite
-release
-*.local
-.env
-.tanstack
-__unconfig*
-todos.json
 target/
+dist-native/
+.DS_Store
+.env
+*.local
