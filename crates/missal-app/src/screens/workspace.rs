@@ -15,13 +15,16 @@ use gpui_kit::{
     StatefulInteractiveElement, StyleRefinement, Styled, Subscription, Task, WeakEntity, Window,
     div, px,
 };
-use missal_core::{DisplayMode, FirDocumentId, FirId, FirValues, Revision, TemplateId};
+use missal_core::{
+    DisplayMode, FieldCatalog, FirDocumentId, FirId, FirValues, Revision, TemplateId,
+};
 use missal_editor::{Editor, EditorEvent, EditorFields};
 use missal_store::{FirDocumentSummary, FirWorkspace};
 use missal_text::{TextInput, TextInputEvent};
 
 use crate::app::{navigate, navigate_replace, open_print_preview};
 use crate::editor;
+use crate::packet;
 use crate::screens::fields_panel::{
     AUTO_HIDE_BELOW, FieldsPanel, FieldsPanelEvent, FieldsTab, take_pending_fields,
 };
@@ -161,7 +164,15 @@ pub struct WorkspaceScreen {
     panel: Entity<FieldsPanel>,
     panel_choice: Option<bool>,
     references_task: Option<Task<()>>,
+    prewarm: Option<Prewarm>,
     _subscriptions: Vec<Subscription>,
+}
+
+struct Prewarm {
+    documents: Vec<FirDocumentId>,
+    values: Arc<FirValues>,
+    catalog: Arc<FieldCatalog>,
+    _task: Task<()>,
 }
 
 impl WorkspaceScreen {
@@ -266,6 +277,7 @@ impl WorkspaceScreen {
             panel,
             panel_choice: None,
             references_task: None,
+            prewarm: None,
             _subscriptions: subscriptions,
         };
         screen.load_workspace(window, cx);
@@ -313,6 +325,7 @@ impl WorkspaceScreen {
                         }
                     }
                     this.documents = documents;
+                    this.ensure_prewarmed(cx);
                     cx.notify();
                 }
             },
@@ -394,11 +407,12 @@ impl WorkspaceScreen {
         ))
     }
 
-    fn push_fields(&self, cx: &mut App) {
+    fn push_fields(&mut self, cx: &mut Context<Self>) {
         if let Some(fields) = self.field_context(cx) {
             self.editor
                 .update(cx, |editor, cx| editor.set_fields(fields, cx));
         }
+        self.ensure_prewarmed(cx);
     }
 
     fn set_values(&mut self, values: Arc<FirValues>, cx: &mut Context<Self>) {
@@ -518,12 +532,44 @@ impl WorkspaceScreen {
                         this.editor_dirty = false;
                         this.refresh_references(cx);
                         this.take_pending_fields(window, cx);
+                        this.ensure_prewarmed(cx);
                     }
                     Err(error) => this.document_state = DocumentState::Failed(error.message()),
                 }
                 cx.notify();
             },
         );
+    }
+
+    fn ensure_prewarmed(&mut self, cx: &mut Context<Self>) {
+        let Some(values) = self.values.clone() else {
+            return;
+        };
+        let catalog = self.models.catalog.read(cx).field_catalog();
+        let mut documents: Vec<FirDocumentId> =
+            self.documents.iter().map(|document| document.id).collect();
+        documents.sort_unstable();
+        let current = self.prewarm.as_ref().is_some_and(|prewarm| {
+            prewarm.documents == documents
+                && Arc::ptr_eq(&prewarm.values, &values)
+                && Arc::ptr_eq(&prewarm.catalog, &catalog)
+        });
+        if current {
+            return;
+        }
+        let task = packet::prewarm(
+            documents.clone(),
+            catalog.clone(),
+            values.clone(),
+            self.mode,
+            cx,
+        );
+        self.prewarm = Some(Prewarm {
+            documents,
+            values,
+            catalog,
+            _task: task,
+        });
     }
 
     pub fn select_document(
@@ -642,10 +688,7 @@ impl WorkspaceScreen {
     }
 
     pub fn toggle_field_names(&mut self, cx: &mut Context<Self>) {
-        self.mode = match self.mode {
-            DisplayMode::Values => DisplayMode::Labels,
-            DisplayMode::Labels => DisplayMode::Values,
-        };
+        self.mode = self.mode.toggled();
         self.push_fields(cx);
         cx.notify();
     }
