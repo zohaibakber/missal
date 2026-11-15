@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
@@ -17,9 +18,13 @@ const EMBEDDED: &[u8] = include_bytes!("../bundle/templates.bin");
 #[derive(Debug, Clone)]
 pub struct TemplateBundle {
     version: i64,
+    packed: Cow<'static, [u8]>,
+}
+
+struct Contents {
     global: Vec<String>,
     custom: Vec<String>,
-    templates: Vec<(String, Vec<u8>)>,
+    templates: Vec<(String, Document)>,
 }
 
 fn invalid() -> RepositoryError {
@@ -57,6 +62,16 @@ impl<'a> Cursor<'a> {
     }
 }
 
+fn header(packed: &mut impl Read) -> Result<i64> {
+    let mut header = [0u8; 8];
+    packed.read_exact(&mut header).map_err(|_| invalid())?;
+    let [m0, m1, m2, m3, v0, v1, v2, v3] = header;
+    if [m0, m1, m2, m3] != *MAGIC {
+        return Err(invalid());
+    }
+    Ok(i64::from(u32::from_le_bytes([v0, v1, v2, v3])))
+}
+
 fn put(out: &mut Vec<u8>, bytes: &[u8]) {
     out.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
     out.extend_from_slice(bytes);
@@ -68,24 +83,35 @@ fn put_count(out: &mut Vec<u8>, count: usize) {
 
 impl TemplateBundle {
     pub fn embedded() -> TemplateBundle {
-        TemplateBundle::decode(EMBEDDED).expect("the embedded template bundle is valid")
+        TemplateBundle::read(Cow::Borrowed(EMBEDDED))
+            .expect("the embedded template bundle is valid")
     }
 
-    pub fn decode(compressed: &[u8]) -> Result<TemplateBundle> {
+    pub fn decode(packed: &[u8]) -> Result<TemplateBundle> {
+        TemplateBundle::read(Cow::Owned(packed.to_vec()))
+    }
+
+    fn read(packed: Cow<'static, [u8]>) -> Result<TemplateBundle> {
+        let version = header(&mut DeflateDecoder::new(packed.as_ref()))?;
+        Ok(TemplateBundle { version, packed })
+    }
+
+    fn contents(&self) -> Result<Contents> {
+        let mut decoder = DeflateDecoder::new(self.packed.as_ref());
+        header(&mut decoder)?;
         let mut raw = Vec::new();
-        DeflateDecoder::new(compressed)
-            .read_to_end(&mut raw)
-            .map_err(|_| invalid())?;
-        let body = raw.strip_prefix(MAGIC.as_slice()).ok_or_else(invalid)?;
-        let (version, body) = body.split_first_chunk::<4>().ok_or_else(invalid)?;
-        let mut cursor = Cursor(body);
+        decoder.read_to_end(&mut raw).map_err(|_| invalid())?;
+        let mut cursor = Cursor(&raw);
         let global = cursor.texts()?;
         let custom = cursor.texts()?;
         let templates = (0..cursor.count()?)
-            .map(|_| Ok((cursor.text()?, cursor.bytes()?.to_vec())))
+            .map(|_| {
+                let name = cursor.text()?;
+                let document = Document::decode(cursor.bytes()?).map_err(|_| invalid())?;
+                Ok((name, document))
+            })
             .collect::<Result<Vec<_>>>()?;
-        Ok(TemplateBundle {
-            version: i64::from(u32::from_le_bytes(*version)),
+        Ok(Contents {
             global,
             custom,
             templates,
@@ -122,20 +148,8 @@ impl TemplateBundle {
         self.version
     }
 
-    pub fn labels(&self) -> (&[String], &[String]) {
-        (&self.global, &self.custom)
-    }
-
     pub fn templates(&self) -> Result<Vec<(String, Document)>> {
-        self.templates
-            .iter()
-            .map(|(name, bytes)| {
-                Ok((
-                    name.clone(),
-                    Document::decode(bytes).map_err(|_| invalid())?,
-                ))
-            })
-            .collect()
+        self.contents().map(|contents| contents.templates)
     }
 }
 
@@ -153,17 +167,17 @@ pub(crate) fn install(connection: &mut Connection, bundle: &TemplateBundle) -> R
     if installed >= bundle.version {
         return Ok(());
     }
-    let documents = bundle.templates()?;
+    let contents = bundle.contents()?;
     let transaction = connection.transaction().map_err(failed(operation))?;
     let mut ids: HashMap<String, PlaceholderId> = placeholders::list(&transaction, operation)?
         .into_iter()
         .map(|placeholder| (field_lookup_key(&placeholder.label), placeholder.id))
         .collect();
-    let labels = bundle
+    let labels = contents
         .global
         .iter()
         .map(|label| (label, true))
-        .chain(bundle.custom.iter().map(|label| (label, false)));
+        .chain(contents.custom.iter().map(|label| (label, false)));
     for (label, shared) in labels {
         if let Entry::Vacant(entry) = ids.entry(field_lookup_key(label)) {
             entry.insert(placeholders::insert(
@@ -179,7 +193,7 @@ pub(crate) fn install(connection: &mut Connection, bundle: &TemplateBundle) -> R
         .prepare("SELECT name FROM templates")
         .and_then(|mut statement| statement.query_map([], |row| row.get(0))?.collect())
         .map_err(failed(operation))?;
-    for (name, mut document) in documents {
+    for (name, mut document) in contents.templates {
         if existing.contains(&name) {
             continue;
         }
