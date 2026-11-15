@@ -34,14 +34,10 @@ macro_rules! face {
     };
 }
 
-static FACES: [Face; 7] = [
+static FACES: [Face; 3] = [
     face!(URDU_FAMILY, 400, false, "JameelNooriNastaleeq.ttf"),
     face!(UI_FAMILY, 400, false, "Inter-Regular.ttf"),
     face!(UI_FAMILY, 500, false, "Inter-Medium.ttf"),
-    face!(UI_FAMILY, 600, false, "Inter-SemiBold.ttf"),
-    face!(UI_FAMILY, 700, false, "Inter-Bold.ttf"),
-    face!(UI_FAMILY, 400, true, "Inter-Italic.ttf"),
-    face!(UI_FAMILY, 700, true, "Inter-BoldItalic.ttf"),
 ];
 
 pub fn bundled_faces() -> &'static [Face] {

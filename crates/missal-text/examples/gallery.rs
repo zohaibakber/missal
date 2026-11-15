@@ -200,10 +200,6 @@ fn reference_html() -> String {
     for (file, weight, style) in [
         ("Inter-Regular.ttf", 400, "normal"),
         ("Inter-Medium.ttf", 500, "normal"),
-        ("Inter-SemiBold.ttf", 600, "normal"),
-        ("Inter-Bold.ttf", 700, "normal"),
-        ("Inter-Italic.ttf", 400, "italic"),
-        ("Inter-BoldItalic.ttf", 700, "italic"),
     ] {
         css += &face("XInter", file, weight, style);
     }
