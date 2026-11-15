@@ -1421,8 +1421,43 @@ impl SettingsScreen {
             .as_ref()
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "Unavailable".to_owned());
+        let account = crate::auth::AuthModel::get(cx).map(|auth| {
+            let auth = auth.read(cx);
+            match auth.state() {
+                crate::auth::AuthState::SignedIn { account, online } => {
+                    let status = if *online { "" } else { " (offline)" };
+                    (
+                        format!("{} · {}{status}", account.display_name(), account.email),
+                        true,
+                    )
+                }
+                _ => ("Not signed in".to_owned(), false),
+            }
+        });
         v_flex()
             .gap(px(4.))
+            .children(account.map(|(text, signed_in)| {
+                row(
+                    "Account",
+                    h_flex()
+                        .gap(px(8.))
+                        .items_center()
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_color(palette.ink_muted)
+                                .child(label(text).ltr().truncate()),
+                        )
+                        .when(signed_in, |this| {
+                            this.child(
+                                ghost_sm("sign-out", "Sign out")
+                                    .on_click(|_, window, cx| crate::auth::sign_out(window, cx)),
+                            )
+                        })
+                        .into_any_element(),
+                )
+            }))
             .child(row(
                 "Version",
                 div().child(env!("CARGO_PKG_VERSION")).into_any_element(),

@@ -10,6 +10,7 @@ Crates:
 - `missal-docx`: `.docx` import.
 - `missal-page`: paged layout and PDF output.
 - `missal-editor`: rich-text editor view and model.
+- `missal-auth`: WorkOS AuthKit sign-in (PKCE on `http://127.0.0.1:42155/callback`, which must be in the WorkOS Redirects list; no API key), session cached in the OS keyring, 30 days offline.
 - `missal-app`: the `missal` binary: shell, screens, preferences, printing, updates.
 
 Commands:
@@ -18,7 +19,8 @@ Commands:
 - Check: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`.
 - Screenshots: `cargo run -p missal-app --features headless --example shots -- --out DIR` (also `editor_shots`, `perf`).
 - Regenerate bundled templates from `templates/`: `cargo run -p missal-docx --example bundle` (writes `crates/missal-store/bundle/templates.bin`).
-- Release binary: `cargo build --release -p missal-app`, then `packaging/smoke.sh target/release/missal`.
+- Sign-in: set `WORKOS_CLIENT_ID` (compile time or run time) to gate the app; debug builds without it skip sign-in. Release builds refuse to compile without it.
+- Release binary: `WORKOS_CLIENT_ID=client_… cargo build --release -p missal-app`, then `packaging/smoke.sh target/release/missal`.
 - Set `CARGO_INCREMENTAL=0` and use the shared `target` directory only.
 
 Releases (CI in `.github/workflows/ci.yml`, Velopack `vpk` version pinned there):

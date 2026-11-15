@@ -29,6 +29,7 @@ name = "editor_shots"
 required-features = ["headless"]
 
 [dependencies]
+missal-auth.workspace = true
 missal-core.workspace = true
 missal-docx.workspace = true
 missal-editor.workspace = true

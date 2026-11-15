@@ -8,6 +8,7 @@ use gpui_kit::{
     div, px,
 };
 
+use crate::auth::AuthModel;
 use crate::screens::fir_form::NewFirScreen;
 use crate::screens::fir_list::FirListScreen;
 use crate::screens::settings::SettingsScreen;
@@ -150,7 +151,7 @@ impl AppShell {
         let screen_subscription = screen.observe(cx);
         let toasts = cx.new(|_| ToastHost::new());
         cx.set_global(ToastHostHandle(toasts.downgrade()));
-        let subscriptions = vec![
+        let mut subscriptions = vec![
             cx.subscribe_in(&models.nav, window, |this, _, _: &NavEvent, window, cx| {
                 this.route_changed(window, cx)
             }),
@@ -169,6 +170,9 @@ impl AppShell {
                 cx.notify();
             }),
         ];
+        if let Some(auth) = AuthModel::get(cx) {
+            subscriptions.push(cx.observe(&auth, |_, _, cx| cx.notify()));
+        }
         let mut shell = AppShell {
             models,
             focus,
@@ -706,6 +710,26 @@ pub fn set_theme(choice: crate::prefs::ThemeChoice, window: &mut Window, cx: &mu
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
+        if let Some(auth) = AuthModel::get(cx).filter(|auth| !auth.read(cx).unlocked()) {
+            return v_flex()
+                .id("app-shell")
+                .size_full()
+                .relative()
+                .bg(palette.surface)
+                .text_color(palette.ink)
+                .font_family(missal_text::UI_FAMILY)
+                .text_size(px(14.))
+                .child(Header::locked(HeaderContent::new("Sign in")))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
+                        .child(crate::auth::render_gate(&auth, cx)),
+                )
+                .child(self.toasts.clone())
+                .into_any_element();
+        }
         let nav = self.models.nav.clone();
         let (can_back, can_forward) = {
             let nav = nav.read(cx);
@@ -786,5 +810,6 @@ impl Render for AppShell {
                     .map(|palette| palette.into_any_element()),
             )
             .child(self.toasts.clone())
+            .into_any_element()
     }
 }

@@ -33,6 +33,7 @@ pub fn init_app(cx: &mut App, db: Db, paths: Option<&Paths>, preferences: Prefer
             directory: paths.directory.clone(),
             is_default: paths.is_default,
         });
+        crate::auth::AuthModel::install(Some(&paths.directory), cx);
     }
     Models::install(db, paths, preferences, cx)
 }

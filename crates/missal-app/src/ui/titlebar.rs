@@ -6,7 +6,15 @@ use gpui_kit::{
     ParentElement, Render, RenderOnce, SharedString, Styled, Window, WindowControlArea, div, px,
 };
 
-use crate::app::{navigate_back, navigate_forward, open_palette, toggle_nav_menu};
+use gpui_kit::Anchor;
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::avatar::Avatar;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
+
+use crate::app::{navigate, navigate_back, navigate_forward, open_palette, toggle_nav_menu};
+use crate::auth::AuthModel;
+use crate::state::Route;
 use crate::theme::{HEADER_HEIGHT, Palette};
 use crate::ui::{UrRole, icon_button, ur_inline, window_controls};
 
@@ -79,6 +87,7 @@ pub struct Header {
     can_back: bool,
     can_forward: bool,
     menu_open: bool,
+    navigation: bool,
 }
 
 impl Header {
@@ -88,6 +97,17 @@ impl Header {
             can_back,
             can_forward,
             menu_open,
+            navigation: true,
+        }
+    }
+
+    pub fn locked(content: HeaderContent) -> Self {
+        Header {
+            content,
+            can_back: false,
+            can_forward: false,
+            menu_open: false,
+            navigation: false,
         }
     }
 }
@@ -183,24 +203,31 @@ impl RenderOnce for Header {
                     }
                 }
             }))
-            .child(
-                icon_button("nav-menu", IconName::Menu, "Menu")
-                    .keys("F10")
-                    .toggled(self.menu_open)
-                    .on_click(|_, window, cx| toggle_nav_menu(window, cx)),
-            )
-            .child(
-                icon_button("history-back", IconName::ArrowLeft, "Back")
-                    .keys("Alt+Left")
-                    .disabled(!self.can_back)
-                    .on_click(|_, window, cx| navigate_back(window, cx)),
-            )
-            .child(
-                icon_button("history-forward", IconName::ArrowRight, "Forward")
-                    .keys("Alt+Right")
-                    .disabled(!self.can_forward)
-                    .on_click(|_, window, cx| navigate_forward(window, cx)),
-            )
+            .when(self.navigation, |this| {
+                this.child(
+                    icon_button("nav-menu", IconName::Menu, "Menu")
+                        .keys("F10")
+                        .toggled(self.menu_open)
+                        .on_click(|_, window, cx| toggle_nav_menu(window, cx)),
+                )
+                .child(
+                    icon_button("history-back", IconName::ArrowLeft, "Back")
+                        .keys("Alt+Left")
+                        .disabled(!self.can_back)
+                        .on_click(|_, window, cx| navigate_back(window, cx)),
+                )
+                .child(
+                    icon_button("history-forward", IconName::ArrowRight, "Forward")
+                        .keys("Alt+Right")
+                        .disabled(!self.can_forward)
+                        .on_click(|_, window, cx| navigate_forward(window, cx)),
+                )
+                .child(
+                    icon_button("header-search", IconName::Search, "Search")
+                        .keys("Mod+K")
+                        .on_click(|_, window, cx| open_palette(window, cx)),
+                )
+            })
             .child(
                 h_flex()
                     .id("header-title")
@@ -234,11 +261,7 @@ impl RenderOnce for Header {
                     .mr(px(4.))
                     .children(actions),
             )
-            .child(
-                icon_button("header-search", IconName::Search, "Search")
-                    .keys("Mod+K")
-                    .on_click(|_, window, cx| open_palette(window, cx)),
-            )
+            .when(self.navigation, |this| this.children(account_menu(cx)))
             .when(controls.is_none(), |this| this.pr(px(8.)));
         h_flex()
             .id("header")
@@ -255,4 +278,40 @@ impl RenderOnce for Header {
                 this.child(div().flex_none().ml(px(8.)).child(controls))
             })
     }
+}
+
+fn account_menu(cx: &App) -> Option<AnyElement> {
+    let account = AuthModel::get(cx)?.read(cx).account()?.clone();
+    let name = SharedString::from(account.display_name().to_owned());
+    let email = SharedString::from(account.email.clone());
+    Some(
+        div()
+            .mr(px(4.))
+            .child(
+                Button::new("account-menu")
+                    .ghost()
+                    .compact()
+                    .rounded_full()
+                    .tooltip(name.clone())
+                    .child(Avatar::new().name(name.clone()).small())
+                    .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
+                        menu.item(PopupMenuItem::label(name.clone()))
+                            .item(PopupMenuItem::label(email.clone()))
+                            .item(PopupMenuItem::separator())
+                            .item(
+                                PopupMenuItem::new("Settings")
+                                    .icon(IconName::Settings)
+                                    .on_click(|_, window, cx| {
+                                        navigate(Route::Settings, window, cx)
+                                    }),
+                            )
+                            .item(
+                                PopupMenuItem::new("Sign out")
+                                    .icon(IconName::LogOut)
+                                    .on_click(|_, window, cx| crate::auth::sign_out(window, cx)),
+                            )
+                    }),
+            )
+            .into_any_element(),
+    )
 }
