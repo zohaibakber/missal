@@ -8,10 +8,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::{
-    App, AppContext, Bounds, ClipboardEntry, ClipboardItem, Context, Entity, EntityInputHandler,
-    EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, MouseDownEvent,
-    ParentElement, Pixels, Point, Render, ScrollEvent, Styled, Subscription, Task, UTF16Selection,
-    Window, div, prelude::FluentBuilder, px,
+    AnyView, App, AppContext, Bounds, ClipboardEntry, ClipboardItem, Context, Entity,
+    EntityInputHandler, EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement,
+    MouseDownEvent, ParentElement, Pixels, Point, Render, ScrollEvent, Styled, Subscription, Task,
+    UTF16Selection, Window, div, prelude::FluentBuilder, px,
 };
 use missal_core::document::{Align, ListType, TextFormat};
 use missal_core::{
@@ -148,6 +148,7 @@ pub struct Editor {
     packet: Packet,
     read_only: bool,
     mode_toggle: bool,
+    toolbar_trailing: Option<AnyView>,
     zoom_override: Option<f32>,
     pub(crate) scroll: PagePoint,
     pub(crate) viewport: Option<Bounds<Pixels>>,
@@ -264,6 +265,7 @@ impl Editor {
             packet,
             read_only: false,
             mode_toggle: false,
+            toolbar_trailing: None,
             zoom_override,
             scroll: PagePoint::default(),
             viewport: None,
@@ -312,6 +314,7 @@ impl Editor {
     pub fn reset(&mut self, cx: &mut Context<Self>) {
         self.read_only = false;
         self.mode_toggle = false;
+        self.toolbar_trailing = None;
         self.autoscroll_task = None;
         self.menu_selection = None;
         self.field_query.clear();
@@ -370,6 +373,11 @@ impl Editor {
 
     pub fn set_mode_toggle(&mut self, shown: bool, cx: &mut Context<Self>) {
         self.mode_toggle = shown;
+        cx.notify();
+    }
+
+    pub fn set_toolbar_trailing(&mut self, view: Option<AnyView>, cx: &mut Context<Self>) {
+        self.toolbar_trailing = view;
         cx.notify();
     }
 
@@ -1579,14 +1587,17 @@ impl Render for Editor {
             .bg(canvas);
         let root = self.register_actions(root, cx);
         let toolbar = (!self.read_only).then(|| self.render_toolbar(window, cx));
+        let zoom = (!self.read_only).then(|| self.render_zoom(cx));
         root.children(toolbar).child(
             div()
                 .id("missal-editor-canvas")
+                .relative()
                 .flex_1()
                 .min_h_0()
                 .w_full()
                 .when(self.read_only, |this| this.opacity(1.0))
-                .child(PagesElement::new(entity)),
+                .child(PagesElement::new(entity))
+                .children(zoom),
         )
     }
 }

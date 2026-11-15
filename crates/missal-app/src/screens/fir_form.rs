@@ -728,7 +728,7 @@ impl FirForm {
         v_flex()
             .id(("form-section", index))
             .w_full()
-            .pt(px(20.))
+            .pt(px(32.))
             .child(
                 h_flex()
                     .flex_row_reverse()
@@ -740,8 +740,7 @@ impl FirForm {
                             .flex_none()
                             .text_color(palette.ink)
                             .child(ur_label(title, UrRole::Title)),
-                    )
-                    .child(div().flex_1().h(px(1.)).bg(palette.line)),
+                    ),
             )
             .child(body)
             .into_any_element()
@@ -988,10 +987,11 @@ impl FirForm {
 
     fn body_control(&self, palette: &Palette, window: &Window, cx: &App) -> AnyElement {
         let focused = self.body.focus_handle(cx).is_focused(window);
-        let mut shadows = palette.shadow_sm();
-        if focused {
-            shadows.extend(palette.input_focus_ring());
-        }
+        let shadows = if focused {
+            palette.input_focus_ring()
+        } else {
+            Vec::new()
+        };
         let target = self.body.clone();
         div()
             .id("form-field-body")
@@ -1003,7 +1003,7 @@ impl FirForm {
             .border_color(if focused {
                 palette.accent
             } else {
-                palette.line_strong
+                palette.line_input
             })
             .bg(palette.surface)
             .shadow(shadows)
@@ -1040,10 +1040,11 @@ impl Selectable for StatusTrigger {
 impl RenderOnce for StatusTrigger {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let palette = *Palette::get(cx);
-        let mut shadows = palette.shadow_sm();
-        if self.open {
-            shadows.extend(palette.input_focus_ring());
-        }
+        let shadows = if self.open {
+            palette.input_focus_ring()
+        } else {
+            Vec::new()
+        };
         h_flex()
             .id("status-select")
             .w_full()
@@ -1057,7 +1058,7 @@ impl RenderOnce for StatusTrigger {
             .border_color(if self.open {
                 palette.accent
             } else {
-                palette.line_strong
+                palette.line_input
             })
             .bg(palette.surface)
             .shadow(shadows)
@@ -1393,35 +1394,28 @@ impl NewFirScreen {
             let form = form.read(cx);
             (form.is_dirty(), form.is_saving(), form.is_edit())
         };
-        let hint = match (edit, dirty) {
-            (false, _) => "Not saved yet",
-            (true, false) => "No changes",
-            (true, true) => "Unsaved changes",
-        };
-        let hint_icon = if edit && !dirty {
-            IconName::Check
-        } else {
-            IconName::CircleAlert
-        };
+        let unsaved = edit && dirty;
         h_flex()
             .flex_none()
-            .h(px(56.))
+            .h(px(48.))
             .px(px(24.))
             .gap(px(8.))
             .items_center()
             .border_t_1()
             .border_color(palette.line)
             .bg(palette.surface)
-            .child(
-                h_flex()
-                    .gap(px(6.))
-                    .items_center()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .text_color(palette.ink_muted)
-                    .child(sized_icon(hint_icon, 14., palette.ink_muted))
-                    .child(hint),
-            )
+            .when(unsaved, |this| {
+                this.child(
+                    h_flex()
+                        .gap(px(6.))
+                        .items_center()
+                        .text_size(px(12.))
+                        .line_height(px(16.))
+                        .text_color(palette.ink_muted)
+                        .child(div().size(px(6.)).rounded_full().bg(palette.notice))
+                        .child("Unsaved changes"),
+                )
+            })
             .child(div().flex_1())
             .child(
                 button("cancel-fir", "Cancel")
@@ -1496,7 +1490,6 @@ impl crate::ui::titlebar::HeaderSource for NewFirScreen {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) -> crate::ui::titlebar::HeaderContent {
-        let palette = *Palette::get(cx);
         let title = match (self.edit, self.form.as_ref()) {
             (Some(_), Some(form)) => format!("Edit FIR {}", form.read(cx).initial.fir_no),
             (Some(id), None) => self
@@ -1508,14 +1501,7 @@ impl crate::ui::titlebar::HeaderSource for NewFirScreen {
                 .unwrap_or_else(|| "Edit FIR".to_owned()),
             (None, _) => "New FIR".to_owned(),
         };
-        crate::ui::titlebar::HeaderContent::new(title).meta_element(
-            h_flex()
-                .text_size(px(12.))
-                .text_color(palette.ink_faint)
-                .child("Fields marked ")
-                .child(div().text_color(palette.danger).child("*"))
-                .child(" are required"),
-        )
+        crate::ui::titlebar::HeaderContent::new(title)
     }
 }
 

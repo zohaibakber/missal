@@ -545,13 +545,6 @@ impl Render for CommandPalette {
                 format!("{total} {}", if total == 1 { "result" } else { "results" })
             })
         };
-        let hint = |keys: Vec<&'static str>, text: &'static str| {
-            h_flex()
-                .items_center()
-                .gap(px(5.))
-                .children(keys.into_iter().map(|key| keycap(&palette, key)))
-                .child(text)
-        };
         div()
             .id("command-palette")
             .absolute()
@@ -626,23 +619,16 @@ impl Render for CommandPalette {
                                 )
                             }),
                     )
-                    .child(
+                    .children(count.map(|count| {
                         h_flex()
-                            .h(px(36.))
-                            .mt(px(6.))
+                            .h(px(32.))
                             .px(px(16.))
-                            .gap(px(14.))
                             .items_center()
-                            .border_t_1()
-                            .border_color(palette.line)
+                            .justify_end()
                             .text_size(px(12.))
-                            .text_color(palette.ink_muted)
-                            .child(hint(vec!["↑", "↓"], "Move"))
-                            .child(hint(vec!["↵"], "Open"))
-                            .child(hint(vec!["Esc"], "Close"))
-                            .child(div().flex_1())
-                            .children(count),
-                    )
+                            .text_color(palette.ink_faint)
+                            .child(count)
+                    }))
                     .with_animation("palette-enter", motion_base(), |this, delta| {
                         this.opacity(delta)
                     }),

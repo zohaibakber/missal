@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -9,9 +10,10 @@ use gpui_kit::component::{StyledExt, h_flex, v_flex};
 use gpui_kit::prelude::*;
 
 use gpui_kit::{
-    App, AppContext, Context, Entity, ExternalPaths, FocusHandle, InteractiveElement, IntoElement,
-    KeyDownEvent, ParentElement, Render, ScrollStrategy, StatefulInteractiveElement, Styled,
-    Subscription, UniformListScrollHandle, Window, div, px, uniform_list,
+    Anchor, App, AppContext, Bounds, Context, Entity, ExternalPaths, FocusHandle,
+    InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Pixels, Render, ScrollStrategy,
+    SharedString, StatefulInteractiveElement, Styled, Subscription, UniformListScrollHandle,
+    Window, canvas, div, point, px, uniform_list,
 };
 use missal_core::{DisplayMode, Document, Revision, TemplateId};
 use missal_editor::{Editor, EditorEvent, EditorFields};
@@ -31,6 +33,7 @@ use crate::state::{
 use crate::theme::{Palette, RADIUS};
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
 use crate::ui::input::{Kind, field, field_input, search_field};
+use crate::ui::popup_menu::{Dismissed, Placement, PopupEntry, PopupList, PopupRow};
 use crate::ui::print_preview::{PreviewDocument, PrintRequest};
 use crate::ui::titlebar::HeaderContent;
 use crate::ui::{
@@ -38,6 +41,8 @@ use crate::ui::{
     primary_sm, save_state, warn_box,
 };
 use crate::word::{WordImport, is_docx};
+
+type Continuation = Box<dyn FnOnce(&mut Window, &mut App)>;
 
 const LIST_WIDTH: f32 = 320.0;
 const ROW_HEIGHT: f32 = 44.0;
@@ -465,6 +470,15 @@ impl TemplatePage {
     }
 
     pub fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.save_then(None, window, cx);
+    }
+
+    pub fn save_then(
+        &mut self,
+        then: Option<Continuation>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let name = self.title.read(cx).text().trim().to_owned();
         if self.saving || name.is_empty() || self.state != PageState::Ready {
             return;
@@ -531,9 +545,16 @@ impl TemplatePage {
                         this.review = None;
                     }
                     Ok(_) => {}
-                    Err(error) => toast_error(window, cx, error.message()),
+                    Err(error) => {
+                        toast_error(window, cx, error.message());
+                        cx.notify();
+                        return;
+                    }
                 }
                 cx.notify();
+                if let Some(then) = then {
+                    then(window, cx);
+                }
             },
         );
     }
@@ -592,6 +613,40 @@ impl TemplatePage {
             .into_any_element()
     }
 
+    fn title_strip(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+        let palette = *Palette::get(cx);
+        if self.id.is_none() || self.renaming {
+            return self.title_field(cx);
+        }
+        let name = self.title.read(cx).text().trim().to_owned();
+        let shown = if name.is_empty() {
+            "Untitled template".to_owned()
+        } else {
+            name
+        };
+        div()
+            .id("template-name")
+            .max_w(px(360.))
+            .h(px(28.))
+            .px(px(8.))
+            .flex()
+            .items_center()
+            .rounded(px(6.))
+            .cursor_pointer()
+            .hover(move |style| style.bg(palette.hover))
+            .on_click(cx.listener(|this, _, window, cx| this.begin_rename(window, cx)))
+            .child(
+                label(shown)
+                    .document_font()
+                    .text_size(px(15.))
+                    .text_color(palette.ink)
+                    .rtl()
+                    .leading(missal_text::LineHeight::Px(24.))
+                    .truncate(),
+            )
+            .into_any_element()
+    }
+
     pub fn header(&mut self, cx: &mut Context<Self>) -> HeaderContent {
         let palette = *Palette::get(cx);
         if self.state != PageState::Ready {
@@ -637,13 +692,7 @@ impl TemplatePage {
                     .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
             );
         }
-        let mut content = if is_new || self.renaming {
-            HeaderContent::element(self.title_field(cx))
-        } else if name.is_empty() {
-            HeaderContent::new("Untitled template")
-        } else {
-            HeaderContent::urdu(name.clone())
-        };
+        let mut content = HeaderContent::new(if is_new { "New template" } else { "Template" });
         if is_new {
             let save_enabled = !name.is_empty() && !self.saving && !self.importing;
             content = content
@@ -671,12 +720,6 @@ impl TemplatePage {
         };
         content
             .action(save_state(&palette, state))
-            .action(
-                icon_button("template-rename", IconName::Pencil, "Rename")
-                    .keys("F2")
-                    .toggled(self.renaming)
-                    .on_click(cx.listener(|this, _, window, cx| this.begin_rename(window, cx))),
-            )
             .action(
                 icon_button("template-print", IconName::Printer, "Preview")
                     .keys("Mod+P")
@@ -820,7 +863,53 @@ impl Render for TemplatePage {
     }
 }
 
+struct TemplateTitle {
+    page: Entity<TemplatePage>,
+}
+
+impl Render for TemplateTitle {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let page = self.page.clone();
+        page.update(cx, |page, cx| {
+            if page.state == PageState::Ready {
+                page.title_strip(cx)
+            } else {
+                div().into_any_element()
+            }
+        })
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TemplateSort {
+    Updated,
+    Created,
+    Name,
+    Fields,
+}
+
+impl TemplateSort {
+    const ALL: [TemplateSort; 4] = [
+        TemplateSort::Updated,
+        TemplateSort::Created,
+        TemplateSort::Name,
+        TemplateSort::Fields,
+    ];
+
+    fn title(self) -> &'static str {
+        match self {
+            TemplateSort::Updated => "Recently updated",
+            TemplateSort::Created => "Recently created",
+            TemplateSort::Name => "Name",
+            TemplateSort::Fields => "Most fields",
+        }
+    }
+}
+
 pub struct TemplatesScreen {
+    sort: TemplateSort,
+    menu: Option<Entity<PopupList>>,
+    sort_bounds: Rc<Cell<Bounds<Pixels>>>,
     models: Models,
     focus: FocusHandle,
     search: Entity<TextInput>,
@@ -890,6 +979,9 @@ impl TemplatesScreen {
             }),
         ];
         let mut screen = TemplatesScreen {
+            sort: TemplateSort::Updated,
+            menu: None,
+            sort_bounds: Rc::new(Cell::new(Bounds::default())),
             models,
             focus: cx.focus_handle(),
             search,
@@ -915,6 +1007,15 @@ impl TemplatesScreen {
         };
         if let Some(page) = &self.page {
             cx.observe(page, |_, _, cx| cx.notify()).detach();
+            let page = page.clone();
+            let title = cx.new(|cx| {
+                cx.observe(&page, |_, _, cx| cx.notify()).detach();
+                TemplateTitle { page: page.clone() }
+            });
+            let editor = page.read(cx).editor.clone();
+            editor.update(cx, |editor, cx| {
+                editor.set_toolbar_trailing(Some(title.into()), cx)
+            });
         }
         if let Route::Template(id) = self.route {
             let visible = self.visible(cx);
@@ -947,6 +1048,13 @@ impl TemplatesScreen {
         }
     }
 
+    pub fn save(&mut self, window: &mut Window, then: Continuation, cx: &mut Context<Self>) {
+        match &self.page {
+            Some(page) => page.update(cx, |page, cx| page.save_then(Some(then), window, cx)),
+            None => then(window, cx),
+        }
+    }
+
     pub fn page(&self) -> Option<&Entity<TemplatePage>> {
         self.page.as_ref()
     }
@@ -964,7 +1072,8 @@ impl TemplatesScreen {
 
     pub fn visible(&self, cx: &App) -> Vec<TemplateSummary> {
         let words = self.query_words();
-        self.models
+        let mut items: Vec<TemplateSummary> = self
+            .models
             .templates
             .read(cx)
             .items
@@ -976,7 +1085,14 @@ impl TemplatesScreen {
                 }
             })
             .cloned()
-            .collect()
+            .collect();
+        match self.sort {
+            TemplateSort::Updated => items.sort_by_key(|item| std::cmp::Reverse(item.updated_at)),
+            TemplateSort::Created => items.sort_by_key(|item| std::cmp::Reverse(item.created_at)),
+            TemplateSort::Name => items.sort_by_cached_key(|item| fold_for_search(&item.name)),
+            TemplateSort::Fields => items.sort_by_key(|item| std::cmp::Reverse(item.field_count)),
+        }
+        items
     }
 
     fn step(&mut self, delta: isize, window: &mut Window, cx: &mut Context<Self>) {
@@ -1006,27 +1122,78 @@ impl TemplatesScreen {
         }
     }
 
-    fn list_header(&self, palette: &Palette, total: usize) -> gpui_kit::Div {
+    fn open_sort_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let weak = cx.entity().downgrade();
+        let current = self.sort;
+        let rows = TemplateSort::ALL
+            .into_iter()
+            .map(|sort| {
+                let weak = weak.clone();
+                PopupRow::Entry(
+                    PopupEntry::new(
+                        SharedString::from(format!("sort-{}", sort as usize)),
+                        sort.title(),
+                        move |_, cx| {
+                            weak.update(cx, |this, cx| {
+                                this.sort = sort;
+                                cx.notify();
+                            })
+                            .ok();
+                        },
+                    )
+                    .check(sort == current),
+                )
+            })
+            .collect();
+        let bounds = self.sort_bounds.get();
+        let menu = PopupList::open(
+            "template-sort-menu",
+            rows,
+            Placement {
+                position: point(bounds.left(), bounds.bottom() + px(4.)),
+                anchor: Anchor::TopLeft,
+                width: 200.,
+            },
+            window,
+            cx,
+        );
+        cx.subscribe_in(&menu, window, |this, _, _: &Dismissed, window, cx| {
+            if this.menu.take().is_some() {
+                this.focus(window, cx);
+                cx.notify();
+            }
+        })
+        .detach();
+        self.menu = Some(menu);
+        cx.notify();
+    }
+
+    fn list_header(&self, cx: &mut Context<Self>) -> gpui_kit::Div {
+        let sort_bounds = self.sort_bounds.clone();
+        let open = self.menu.is_some();
         h_flex()
             .flex_shrink_0()
             .h(px(44.))
             .items_center()
             .gap(px(8.))
-            .pl(px(16.))
+            .pl(px(12.))
             .pr(px(12.))
             .child(
                 div()
-                    .text_size(px(13.))
-                    .line_height(px(20.))
-                    .font_medium()
-                    .child("Templates"),
-            )
-            .child(
-                div()
-                    .text_size(px(13.))
-                    .line_height(px(20.))
-                    .text_color(palette.ink_muted)
-                    .child(total.to_string()),
+                    .relative()
+                    .flex_none()
+                    .child(
+                        canvas(move |bounds, _, _| sort_bounds.set(bounds), |_, _, _, _| {})
+                            .absolute()
+                            .size_full(),
+                    )
+                    .child(
+                        icon_button("template-sort", IconName::ArrowUpDown, "Sort")
+                            .toggled(open)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.open_sort_menu(window, cx)),
+                            ),
+                    ),
             )
             .child(div().flex_1())
             .child(
@@ -1067,6 +1234,7 @@ impl TemplatesScreen {
                             div().h(px(ROW_HEIGHT)).px(px(8.)).child(
                                 h_flex()
                                     .id(("template-item", index))
+                                    .group("template-item")
                                     .test_support()
                                     .size_full()
                                     .flex_row_reverse()
@@ -1075,7 +1243,7 @@ impl TemplatesScreen {
                                     .px(px(10.))
                                     .rounded(px(RADIUS))
                                     .cursor_pointer()
-                                    .when(is_active, |this| this.bg(palette.accent_wash))
+                                    .when(is_active, |this| this.bg(palette.hover))
                                     .when(!is_active, |this| {
                                         this.hover(move |style| style.bg(palette.hover))
                                     })
@@ -1092,10 +1260,12 @@ impl TemplatesScreen {
                                             .flex_none()
                                             .text_size(px(12.))
                                             .line_height(px(16.))
-                                            .text_color(if is_active {
-                                                palette.ink_muted
-                                            } else {
-                                                palette.ink_faint
+                                            .text_color(palette.ink_faint)
+                                            .when(!is_active, |this| {
+                                                this.opacity(0.)
+                                                    .group_hover("template-item", |style| {
+                                                        style.opacity(1.)
+                                                    })
                                             })
                                             .child(fields),
                                     ),
@@ -1180,9 +1350,9 @@ impl TemplatesScreen {
             .w(px(LIST_WIDTH))
             .flex_shrink_0()
             .h_full()
-            .border_r_1()
+            .border_l_1()
             .border_color(palette.line)
-            .child(self.list_header(&palette, total))
+            .child(self.list_header(cx))
             .child(
                 div()
                     .id("template-search")
@@ -1276,8 +1446,8 @@ impl Render for TemplatesScreen {
             let list = self.list(cx);
             h_flex()
                 .size_full()
-                .child(list)
                 .child(div().flex_1().min_w_0().h_full().child(main))
+                .child(list)
                 .into_any_element()
         };
         div()
@@ -1314,6 +1484,7 @@ impl Render for TemplatesScreen {
                 }
             }))
             .child(body)
+            .children(self.menu.clone().map(|menu| menu.into_any_element()))
     }
 }
 

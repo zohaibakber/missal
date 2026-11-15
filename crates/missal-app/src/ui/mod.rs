@@ -107,7 +107,6 @@ pub fn isolate_urdu(text: &str) -> String {
 pub enum KeyTone {
     Plain,
     Bare,
-    OnAction,
     OnTooltip,
 }
 
@@ -132,14 +131,9 @@ pub fn keycap(palette: &Palette, text: impl Into<SharedString>) -> Div {
 
 pub fn keycap_toned(palette: &Palette, text: impl Into<SharedString>, tone: KeyTone) -> Div {
     let (fill, border, color) = match tone {
-        KeyTone::Plain => (Some(palette.hover), palette.line, palette.ink_muted),
-        KeyTone::Bare => (None, palette.line, palette.ink_muted),
-        KeyTone::OnAction => (
-            None,
-            palette.on_action.opacity(0.35),
-            palette.on_action.opacity(0.8),
-        ),
-        KeyTone::OnTooltip => (None, palette.surface.opacity(0.35), palette.surface),
+        KeyTone::Plain => (Some(palette.hover), None, palette.ink_muted),
+        KeyTone::Bare => (None, None, palette.ink_faint),
+        KeyTone::OnTooltip => (None, Some(palette.surface.opacity(0.35)), palette.surface),
     };
     div()
         .flex_none()
@@ -150,8 +144,7 @@ pub fn keycap_toned(palette: &Palette, text: impl Into<SharedString>, tone: KeyT
         .items_center()
         .justify_center()
         .rounded(px(RADIUS_SM))
-        .border_1()
-        .border_color(border)
+        .when_some(border, |this, border| this.border_1().border_color(border))
         .when_some(fill, |this, fill| this.bg(fill))
         .text_size(px(11.))
         .line_height(px(16.))
@@ -374,36 +367,32 @@ impl ActionButton {
 impl RenderOnce for ActionButton {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let palette = *Palette::get(cx);
-        let (fill, hover_fill, text, border, shadow) = match self.kind {
+        let (fill, hover_fill, text, border) = match self.kind {
             ButtonKind::Primary => (
                 Some(palette.action),
                 Some(palette.action_hover),
                 palette.on_action,
                 None,
-                true,
             ),
             ButtonKind::Outline => (
                 Some(palette.surface),
                 Some(palette.hover),
                 palette.ink,
                 Some(palette.line_strong.mix_oklab(palette.surface, 0.7)),
-                false,
             ),
-            ButtonKind::Ghost => (None, Some(palette.hover), palette.ink, None, false),
-            ButtonKind::GhostMuted => (None, Some(palette.hover), palette.ink_muted, None, false),
+            ButtonKind::Ghost => (None, Some(palette.hover), palette.ink, None),
+            ButtonKind::GhostMuted => (None, Some(palette.hover), palette.ink_muted, None),
             ButtonKind::Danger => (
                 Some(palette.danger),
                 Some(palette.danger.mix_oklab(palette.ink, 0.88)),
                 crate::theme::hex(0xffffff),
                 None,
-                true,
             ),
             ButtonKind::DangerOutline => (
                 Some(palette.surface),
                 Some(palette.danger_wash),
                 palette.danger_text,
                 Some(palette.danger_text.mix_oklab(palette.surface, 0.45)),
-                false,
             ),
         };
         let height = match self.size {
@@ -414,11 +403,6 @@ impl RenderOnce for ActionButton {
             ButtonSize::Sm => 10.,
             ButtonSize::Md => 12.,
         };
-        let key_tone = if self.kind == ButtonKind::Primary {
-            KeyTone::OnAction
-        } else {
-            KeyTone::Bare
-        };
         let focused = self.show_focus
             || self
                 .focus
@@ -428,11 +412,13 @@ impl RenderOnce for ActionButton {
         if focused {
             shadows.extend(palette.focus_ring());
         }
-        if shadow && !self.disabled {
-            shadows.extend(palette.shadow_sm());
-        }
         let on_click = self.on_click.clone();
         let disabled = self.disabled;
+        let tooltip_spec = self.tooltip.clone().or_else(|| {
+            self.keys
+                .clone()
+                .map(|keys| (self.label.clone(), Some(keys)))
+        });
         h_flex()
             .id(self.id)
             .flex_none()
@@ -462,7 +448,7 @@ impl RenderOnce for ActionButton {
             .when_some(self.focus.as_ref(), |this, focus| this.track_focus(focus))
             .role(gpui_kit::accesskit::Role::Button)
             .aria_label(self.label.clone())
-            .when_some(self.tooltip.clone(), |this, (label, keys)| {
+            .when_some(tooltip_spec, |this, (label, keys)| {
                 this.tooltip(tooltip(label, keys.as_deref()))
                     .tooltip_show_delay(TOOLTIP_DELAY)
             })
@@ -473,13 +459,6 @@ impl RenderOnce for ActionButton {
                 this.child(sized_icon(name, ICON_SM, text))
             })
             .child(self.label)
-            .when_some(self.keys, |this, keys| {
-                this.child(
-                    div()
-                        .ml(px(2.))
-                        .child(keycaps_toned(&palette, &keys, key_tone)),
-                )
-            })
             .test_support()
     }
 }
@@ -874,10 +853,7 @@ pub fn save_state(palette: &Palette, state: SaveState) -> Div {
         .text_size(px(12.))
         .line_height(px(16.));
     match state {
-        SaveState::Saved => row
-            .text_color(palette.ink_faint)
-            .child(sized_icon(IconName::Check, ICON_SM, palette.ink_faint))
-            .child("Saved"),
+        SaveState::Saved => row,
         SaveState::Unsaved => row
             .text_color(palette.ink)
             .child(dirty_dot(palette, true))

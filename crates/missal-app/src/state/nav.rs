@@ -3,7 +3,7 @@ use std::rc::Rc;
 use gpui_kit::{App, Context, EventEmitter, Window};
 use missal_core::{FirId, TemplateId};
 
-use crate::ui::dialogs::confirm_discard;
+use crate::ui::dialogs::{Choice, Tone, confirm_discard, open_choice};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PrintTarget {
@@ -37,11 +37,13 @@ pub enum NavEvent {
 }
 
 pub type Guard = Rc<dyn Fn(&App) -> bool>;
+pub type Saver = Rc<dyn Fn(&mut Window, &mut App, Box<dyn FnOnce(&mut Window, &mut App)>)>;
 
 pub struct Navigator {
     entries: Vec<Route>,
     index: usize,
     guard: Option<Guard>,
+    saver: Option<Saver>,
 }
 
 impl EventEmitter<NavEvent> for Navigator {}
@@ -52,6 +54,7 @@ impl Navigator {
             entries: vec![start],
             index: 0,
             guard: None,
+            saver: None,
         }
     }
 
@@ -73,6 +76,10 @@ impl Navigator {
 
     pub fn set_guard(&mut self, guard: Option<Guard>) {
         self.guard = guard;
+    }
+
+    pub fn set_saver(&mut self, saver: Option<Saver>) {
+        self.saver = saver;
     }
 
     pub fn has_unsaved_changes(&self, cx: &App) -> bool {
@@ -99,6 +106,38 @@ impl Navigator {
             return;
         }
         let navigator = cx.entity();
+        if let Some(saver) = self.saver.clone() {
+            let discard = navigator.clone();
+            open_choice(
+                window,
+                cx,
+                "Save changes first?",
+                "This page has unsaved changes.",
+                vec![
+                    Choice::new("discard", "Don't save", Tone::Ghost, move |_, cx| {
+                        discard.update(cx, |navigator, cx| {
+                            navigator.guard = None;
+                            navigator.commit(request, cx);
+                        });
+                    }),
+                    Choice::new("cancel", "Cancel", Tone::Neutral, |_, _| {}),
+                    Choice::new("save", "Save", Tone::Primary, move |window, cx| {
+                        let navigator = navigator.clone();
+                        saver(
+                            window,
+                            cx,
+                            Box::new(move |_, cx| {
+                                navigator.update(cx, |navigator, cx| {
+                                    navigator.guard = None;
+                                    navigator.commit(request, cx);
+                                });
+                            }),
+                        );
+                    }),
+                ],
+            );
+            return;
+        }
         confirm_discard(window, cx, move |_, cx| {
             navigator.update(cx, |navigator, cx| {
                 navigator.guard = None;

@@ -50,6 +50,7 @@ pub struct Palette {
     pub ink_faint: Hsla,
     pub line: Hsla,
     pub line_strong: Hsla,
+    pub line_input: Hsla,
     pub hover: Hsla,
     pub pressed: Hsla,
     pub action: Hsla,
@@ -94,6 +95,7 @@ impl Palette {
             ink_faint: hex(0x77726d),
             line: hex(0xe7e7e5),
             line_strong: hex(0x959391),
+            line_input: hex(0xd4d2ce),
             hover: hex(0xf4f3f2),
             pressed: hex(0xecebea),
             action: hex(0x1e1b18),
@@ -101,7 +103,7 @@ impl Palette {
             on_action: hex(0xfbfaf8),
             accent: hex(0x2b5bb7),
             accent_wash: hex(0xe9edf5),
-            field_wash: hex(0xeceff3),
+            field_wash: hex(0xf0f2f6),
             danger: hex(0xc32a28),
             danger_text: hex(0xb32322),
             danger_wash: hex(0xf9eceb),
@@ -110,7 +112,7 @@ impl Palette {
             notice_wash: hex(0xfff2d6),
             st_open: hex(0xd37812),
             st_investigating: hex(0x0077bd),
-            st_challan: hex(0x732679),
+            st_challan: hex(0x8b4bb0),
             st_closed: hex(0x888682),
             scrim: hex_alpha(0x14110e, 0.28),
         }
@@ -128,6 +130,7 @@ impl Palette {
             ink_faint: hex(0x8c8884),
             line: hex(0x2a2927),
             line_strong: hex(0x666564),
+            line_input: hex(0x3d3b39),
             hover: hex(0x22201f),
             pressed: hex(0x2b2a28),
             action: hex(0xedebe7),
@@ -135,7 +138,7 @@ impl Palette {
             on_action: hex(0x181613),
             accent: hex(0x80a3f0),
             accent_wash: hex(0x242b3d),
-            field_wash: hex(0x2f333d),
+            field_wash: hex(0x282c35),
             danger: hex(0xc44039),
             danger_text: hex(0xf47b74),
             danger_wash: hex(0x351d1a),
@@ -144,7 +147,7 @@ impl Palette {
             notice_wash: hex(0x382c1a),
             st_open: hex(0xf2a635),
             st_investigating: hex(0x3883d1),
-            st_challan: hex(0xf5a0c5),
+            st_challan: hex(0xb48ae0),
             st_closed: hex(0x6e6b68),
             scrim: hex_alpha(0x000000, 0.55),
         }
@@ -209,13 +212,13 @@ impl Palette {
 
     pub fn focus_ring(&self) -> Vec<BoxShadow> {
         vec![
-            shadow(self.accent, 0., 0., 4.),
-            shadow(self.surface, 0., 0., 2.),
+            shadow(self.accent, 0., 0., 3.),
+            shadow(self.surface, 0., 0., 1.),
         ]
     }
 
     pub fn input_focus_ring(&self) -> Vec<BoxShadow> {
-        vec![shadow(self.accent.opacity(0.22), 0., 0., 3.)]
+        vec![shadow(self.accent.opacity(0.16), 0., 0., 3.)]
     }
 }
 
@@ -249,7 +252,7 @@ pub const SEGMENTED_ITEM: f32 = 24.0;
 pub const TAB_HEIGHT: f32 = 40.0;
 pub const FILTER_ITEM: f32 = 28.0;
 pub const TABLE_HEAD: f32 = 36.0;
-pub const TABLE_ROW: f32 = 44.0;
+pub const TABLE_ROW: f32 = 40.0;
 pub const ROW_HEIGHT: f32 = TABLE_ROW;
 pub const LIST_ITEM: f32 = 40.0;
 pub const LIST_ITEM_META: f32 = 44.0;
@@ -338,7 +341,7 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     colors.window_border = palette.line;
     colors.status_bar_border = palette.line;
     colors.sidebar_border = palette.line;
-    colors.input = palette.line_strong;
+    colors.input = palette.line_input;
     colors.accent = palette.hover;
     colors.list_hover = palette.hover;
     colors.table_hover = palette.hover;

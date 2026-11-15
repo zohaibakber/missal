@@ -116,6 +116,18 @@ impl Screen {
         }
     }
 
+    fn saver(&self) -> Option<crate::state::nav::Saver> {
+        match self {
+            Screen::Templates(view) => {
+                let view = view.clone();
+                Some(Rc::new(move |window, cx, then| {
+                    view.update(cx, |screen, cx| screen.save(window, then, cx));
+                }))
+            }
+            _ => None,
+        }
+    }
+
     fn focus(&self, window: &mut Window, cx: &mut App) {
         match self {
             Screen::Firs(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
@@ -472,9 +484,14 @@ impl AppShell {
 
     fn activate(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let guard = self.print_guard().unwrap_or_else(|| self.screen.guard());
-        self.models
-            .nav
-            .update(cx, |nav, _| nav.set_guard(Some(guard)));
+        let saver = match self.print_guard() {
+            Some(_) => None,
+            None => self.screen.saver(),
+        };
+        self.models.nav.update(cx, |nav, _| {
+            nav.set_guard(Some(guard));
+            nav.set_saver(saver);
+        });
         self.screen.focus(window, cx);
     }
 

@@ -256,16 +256,17 @@ impl RenderOnce for Field {
             .dense()
             .on_click(move |_, window, cx| handler(window, cx))
         });
-        let mut shadows = palette.shadow_sm();
-        if focused && !self.error {
-            shadows.extend(palette.input_focus_ring());
-        }
+        let shadows = if focused && !self.error {
+            palette.input_focus_ring()
+        } else {
+            Vec::new()
+        };
         let border = if self.error {
             palette.danger_text
         } else if focused {
             palette.accent
         } else {
-            palette.line_strong
+            palette.line_input
         };
         let height = self.height.unwrap_or(self.kind.height());
         let focus_target = self.input.clone();

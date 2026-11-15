@@ -1249,18 +1249,6 @@ impl PrintPreview {
                     .overflow_y_scroll()
                     .children(rows),
             )
-            .child(
-                div()
-                    .flex_none()
-                    .px(px(PANEL_PADDING))
-                    .py(px(12.))
-                    .border_t_1()
-                    .border_color(palette.line)
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .text_color(palette.ink_faint)
-                    .child("You choose the printer in the next step."),
-            )
             .into_any_element()
     }
 
@@ -1438,7 +1426,7 @@ impl PrintPreview {
                     .border_color(if page_focused {
                         palette.accent
                     } else {
-                        palette.line_strong
+                        palette.line_input
                     })
                     .bg(palette.surface)
                     .text_color(palette.ink)

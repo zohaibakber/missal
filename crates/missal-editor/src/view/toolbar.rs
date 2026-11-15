@@ -214,14 +214,8 @@ impl RenderOnce for ToolButton {
     }
 }
 
-fn separator(theme: &EditorTheme) -> AnyElement {
-    div()
-        .flex_none()
-        .mx(px(6.))
-        .w(px(1.))
-        .h(px(20.))
-        .bg(theme.line)
-        .into_any_element()
+fn separator() -> AnyElement {
+    div().flex_none().w(px(12.)).into_any_element()
 }
 
 impl Editor {
@@ -434,8 +428,6 @@ impl Editor {
                 entity.update(cx, |editor, cx| f(editor, window, cx));
             }
         };
-        let zoom = self.placement.zoom;
-        let fit = self.is_fit_zoom();
         h_flex()
             .id("editor-toolbar")
             .flex_shrink_0()
@@ -459,7 +451,7 @@ impl Editor {
                     .disabled(!can_redo)
                     .on_click(act(Editor::redo)),
             )
-            .child(separator(&theme))
+            .child(separator())
             .child(
                 tool("editor-bold", IconName::Bold, "Bold")
                     .keys("Mod+B")
@@ -480,7 +472,7 @@ impl Editor {
                         e.toggle_format(TextFormat::UNDERLINE, w, cx)
                     })),
             )
-            .child(separator(&theme))
+            .child(separator())
             .child(
                 tool("editor-align-left", IconName::TextAlignStart, "Align left")
                     .keys("Mod+L")
@@ -509,7 +501,7 @@ impl Editor {
                 .toggled(align == Align::Justify)
                 .on_click(act(|e, w, cx| e.align(Align::Justify, w, cx))),
             )
-            .child(separator(&theme))
+            .child(separator())
             .child(
                 tool("editor-bullets", IconName::List, "Bulleted list")
                     .toggled(list == Some(ListType::Bullet))
@@ -520,13 +512,41 @@ impl Editor {
                     .toggled(list == Some(ListType::Number))
                     .on_click(act(|e, w, cx| e.list(ListType::Number, w, cx))),
             )
-            .child(separator(&theme))
+            .child(separator())
             .child(self.field_menu(theme, cx))
             .child(div().flex_1())
             .when(self.mode_toggle, |this| {
-                this.child(self.mode_toggle(theme, cx))
-                    .child(separator(&theme))
+                this.child(self.mode_toggle(theme, cx)).child(separator())
             })
+            .children(self.toolbar_trailing.clone())
+            .into_any_element()
+    }
+
+    pub(crate) fn render_zoom(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = EditorTheme::get(cx);
+        let entity = cx.entity();
+        let act = |f: fn(&mut Editor, &mut Window, &mut Context<Editor>)| {
+            let entity = entity.clone();
+            move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                entity.update(cx, |editor, cx| f(editor, window, cx));
+            }
+        };
+        let zoom = self.placement.zoom;
+        let fit = self.is_fit_zoom();
+        h_flex()
+            .id("editor-zoom")
+            .absolute()
+            .left(px(12.))
+            .bottom(px(12.))
+            .p(px(2.))
+            .gap(px(2.))
+            .items_center()
+            .rounded(px(8.))
+            .border_1()
+            .border_color(theme.line)
+            .bg(theme.surface)
+            .font_family(missal_text::UI_FAMILY)
+            .occlude()
             .child(
                 tool("editor-zoom-out", IconName::Minus, "Zoom out")
                     .keys("Mod+-")

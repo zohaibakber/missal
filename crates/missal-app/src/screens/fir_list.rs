@@ -1043,8 +1043,7 @@ impl FirListScreen {
             .flex_row_reverse()
             .h(px(TABLE_ROW))
             .items_center()
-            .border_b_1()
-            .border_color(palette.line)
+            .rounded(px(RADIUS))
             .cursor_pointer()
             .role(gpui_kit::accesskit::Role::Row)
             .aria_label(SharedString::from(format!("FIR {}", row.no)))
@@ -1168,8 +1167,6 @@ impl FirListScreen {
                     .flex_none()
                     .h(px(TABLE_ROW))
                     .items_center()
-                    .border_b_1()
-                    .border_color(palette.line)
                     .child(div().w(px(SELECT_WIDTH)).flex_none())
                     .children(
                         widths

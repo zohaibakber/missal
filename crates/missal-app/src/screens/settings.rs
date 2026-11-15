@@ -1064,6 +1064,7 @@ impl SettingsScreen {
                         };
                         v_flex()
                             .id(("global-row", index))
+                            .group("global-row")
                             .py(px(4.))
                             .child(
                                 h_flex()
@@ -1082,17 +1083,22 @@ impl SettingsScreen {
                                         ),
                                     )
                                     .child(
-                                        icon_button(
-                                            ("global-delete", index),
-                                            IconName::Trash,
-                                            "Delete",
-                                        )
-                                        .dense()
-                                        .on_click(
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.remove_global_row(index, window, cx)
-                                            }),
-                                        ),
+                                        div()
+                                            .opacity(0.)
+                                            .group_hover("global-row", |style| style.opacity(1.))
+                                            .child(
+                                                icon_button(
+                                                    ("global-delete", index),
+                                                    IconName::Trash,
+                                                    "Delete",
+                                                )
+                                                .dense()
+                                                .on_click(cx.listener(
+                                                    move |this, _, window, cx| {
+                                                        this.remove_global_row(index, window, cx)
+                                                    },
+                                                )),
+                                            ),
                                     ),
                             )
                             .children(error.map(|error| {

@@ -40,11 +40,13 @@ pub enum Scope {
 }
 
 impl Scope {
-    fn tag(&self) -> &'static str {
+    const GROUPS: [&'static str; 3] = ["Global", "This FIR", "FIR details"];
+
+    fn group(&self) -> usize {
         match self {
-            Scope::Global(_) => "Global",
-            Scope::Custom(_) => "This FIR",
-            Scope::Fir(_) => "FIR details",
+            Scope::Global(_) => 0,
+            Scope::Custom(_) => 1,
+            Scope::Fir(_) => 2,
         }
     }
 }
@@ -317,7 +319,7 @@ impl FieldsPanel {
         if let Some(input) = self.inputs.get(reference) {
             return input.clone();
         }
-        let input = field_input(window, cx, Kind::UrduAuto, "Empty", text);
+        let input = field_input(window, cx, Kind::UrduAuto, "", text);
         let key = reference.clone();
         let subscription = cx.subscribe_in(
             &input,
@@ -573,9 +575,38 @@ impl FieldsPanel {
                     .into_any_element(),
             );
         } else {
-            out.push(Self::section(&palette, "Empty in this document", None));
-            for (index, item) in empty.iter().enumerate() {
-                out.push(self.empty_item(&palette, index, item, window, cx));
+            for (group, title) in Scope::GROUPS.into_iter().enumerate() {
+                let items: Vec<(usize, &FieldItem)> = empty
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, item)| item.scope.group() == group)
+                    .collect();
+                if items.is_empty() {
+                    continue;
+                }
+                out.push(Self::section(&palette, title, Some(items.len())));
+                for (index, item) in items {
+                    out.push(self.empty_item(&palette, index, item, window, cx));
+                }
+                if group == 2 {
+                    out.push(
+                        h_flex()
+                            .px(px(10.))
+                            .pt(px(2.))
+                            .pb(px(6.))
+                            .flex_row_reverse()
+                            .child(
+                                button("edit-in-details", "Edit in details")
+                                    .ghost()
+                                    .sm()
+                                    .icon(IconName::Pencil)
+                                    .on_click(cx.listener(|_, _, _, cx| {
+                                        cx.emit(FieldsPanelEvent::EditDetails)
+                                    })),
+                            )
+                            .into_any_element(),
+                    );
+                }
             }
         }
         if !filled.is_empty() {
@@ -633,32 +664,12 @@ impl FieldsPanel {
                     .text_color(palette.ink)
                     .child(ur_label(item.name.clone(), UrRole::Body).truncate()),
             )
-            .child(div().flex_1())
-            .child(
-                div()
-                    .text_size(px(11.))
-                    .line_height(px(16.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .text_color(palette.ink_faint)
-                    .child(item.scope.tag()),
-            )
             .test_support();
-        let body: AnyElement = match &item.scope {
-            Scope::Fir(_) => h_flex()
-                .flex_row_reverse()
-                .child(
-                    button(("edit-in-details", index), "Edit in details")
-                        .ghost()
-                        .sm()
-                        .icon(IconName::Pencil)
-                        .on_click(
-                            cx.listener(|_, _, _, cx| cx.emit(FieldsPanelEvent::EditDetails)),
-                        ),
-                )
-                .into_any_element(),
+        let body: Option<AnyElement> = match &item.scope {
+            Scope::Fir(_) => None,
             _ => {
                 let input = self.ensure_input(&reference, "", window, cx);
-                field(("empty-field-input", index), &input, Kind::UrduAuto).into_any_element()
+                Some(field(("empty-field-input", index), &input, Kind::UrduAuto).into_any_element())
             }
         };
         let help = matches!(item.scope, Scope::Global(_))
@@ -671,7 +682,7 @@ impl FieldsPanel {
             .py(px(6.))
             .gap(px(6.))
             .child(top)
-            .child(body)
+            .children(body)
             .when(help, |this| {
                 this.child(
                     div()
