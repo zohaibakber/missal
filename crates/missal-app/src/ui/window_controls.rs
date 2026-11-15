@@ -238,17 +238,21 @@ fn linux_controls(window: &mut Window, cx: &mut App) -> impl IntoElement {
         controls.push(maximize_control(window));
     }
     controls.push(Control::Close);
-    let rest = palette.hover;
-    let hover = palette.pressed;
+    let hover = palette.hover;
     h_flex()
         .id("window-controls")
         .flex_none()
         .h(px(HEADER_HEIGHT))
         .items_center()
-        .gap(px(12.))
+        .gap(px(2.))
         .pl(px(8.))
-        .pr(px(12.))
+        .pr(px(8.))
         .children(controls.into_iter().map(move |control| {
+            let (hover_bg, hover_fg): (Hsla, Hsla) = if control == Control::Close {
+                (hex(0xf96f70), hex(0xffffff))
+            } else {
+                (hover, palette.ink)
+            };
             div()
                 .id(control.id())
                 .flex_none()
@@ -257,8 +261,8 @@ fn linux_controls(window: &mut Window, cx: &mut App) -> impl IntoElement {
                 .flex()
                 .items_center()
                 .justify_center()
-                .bg(rest)
-                .hover(move |s| s.bg(hover))
+                .text_color(palette.ink)
+                .hover(move |s| s.bg(hover_bg).text_color(hover_fg))
                 .occlude()
                 .role(gpui_kit::accesskit::Role::Button)
                 .aria_label(control.label())
@@ -270,7 +274,7 @@ fn linux_controls(window: &mut Window, cx: &mut App) -> impl IntoElement {
                     cx.stop_propagation();
                     control.act(window);
                 })
-                .child(sized_icon(control.icon(), 12., palette.ink))
+                .child(sized_icon(control.icon(), 15., palette.ink))
                 .test_support()
         }))
 }

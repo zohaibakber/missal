@@ -235,7 +235,7 @@ fn shadow_offset(color: Hsla, y: f32, blur: f32) -> BoxShadow {
 
 pub const FONT_SIZE: f32 = 14.0;
 
-pub const HEADER_HEIGHT: f32 = 44.0;
+pub const HEADER_HEIGHT: f32 = 40.0;
 pub const TITLE_BAR_HEIGHT: f32 = HEADER_HEIGHT;
 pub const ICON_BUTTON: f32 = 28.0;
 pub const ICON_BUTTON_DENSE: f32 = 24.0;

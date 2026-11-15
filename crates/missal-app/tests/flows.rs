@@ -177,6 +177,19 @@ fn validation_blocks_an_empty_fir(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn cancelling_a_new_fir_returns_to_the_list(cx: &mut TestAppContext) {
+    let fixture = boot(cx, 1);
+    fixture.go(cx, Route::NewFir);
+    assert_eq!(fixture.route(cx), Route::NewFir);
+    fixture.with(cx, |window, cx| {
+        let screen = fixture.shell.read(cx).new_fir().unwrap();
+        screen.update(cx, |screen, cx| screen.cancel(window, cx));
+    });
+    fixture.settle(cx);
+    assert_eq!(fixture.route(cx), Route::Firs);
+}
+
+#[gpui_kit::test]
 fn edit_an_fir_through_the_form(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
     let id = FirId::new(2).unwrap();

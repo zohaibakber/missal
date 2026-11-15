@@ -18,7 +18,7 @@ use missal_core::{
 };
 use missal_text::{Direction, LineHeight, TextInput, TextInputEvent};
 
-use crate::app::navigate_replace;
+use crate::app::{navigate_back, navigate_replace};
 use crate::shortcuts::*;
 use crate::state::rows::FirRow;
 use crate::state::{Models, Route, run_db_in, toast_error, toast_success};
@@ -1364,7 +1364,7 @@ impl NewFirScreen {
             let edit = self.edit;
             move |window: &mut Window, cx: &mut App| {
                 if nav.read(cx).can_go_back() {
-                    nav.update(cx, |nav, cx| nav.back(window, cx));
+                    navigate_back(window, cx);
                 } else {
                     navigate_replace(edit.map_or(Route::Firs, Route::Fir), cx);
                 }
