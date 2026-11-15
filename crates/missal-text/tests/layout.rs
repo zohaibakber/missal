@@ -486,8 +486,8 @@ fn cache_hits_and_rebreaks() {
     assert!(std::sync::Arc::ptr_eq(&a, &b));
     let c = engine.layout(&text, &paragraph, Some(300.0));
     assert!(c.lines().len() > a.lines().len());
-    let stats = engine.cache_stats();
-    assert_eq!((stats.builds, stats.rebreaks, stats.hits), (1, 1, 1));
+    let counts = engine.counts();
+    assert_eq!((counts.builds, counts.rebreaks, counts.hits), (1, 1, 1));
     let fresh = engine.layout_uncached(&text, &paragraph, Some(300.0));
     assert_eq!(
         fresh.lines(),

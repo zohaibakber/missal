@@ -4,8 +4,8 @@ use missal_core::document::{
 };
 use missal_core::{FieldDisplayText, FieldReference};
 use missal_page::{
-    Affinity, BlockPath, DocSource, Edit, FieldSource, Packet, PageEngine, Point, Position,
-    TokenFields, VerticalDirection, logical_text,
+    Affinity, BlockPath, DocSource, Edit, FieldSource, LayoutCache, Packet, PageEngine, Point,
+    Position, TokenFields, VerticalDirection, logical_text,
 };
 
 const WORDS: &str = "مدعی مقدمہ نے تھانہ صدر میں درخواست دی کہ مورخہ بارہ مارچ کی رات نامعلوم ملزمان اس کے گھر میں داخل ہوئے اور قیمتی سامان چوری کر کے فرار ہو گئے";
@@ -503,7 +503,7 @@ fn incremental_relayout_matches_full_layout() {
     for (edit, apply) in edits {
         apply(&mut doc);
         engine.update(&mut packet, 0, &DocSource::new(&doc, &TokenFields), &edit);
-        let mut fresh_engine = PageEngine::new();
+        let mut fresh_engine = PageEngine::with_cache(LayoutCache::default());
         let fresh = fresh_engine.layout(&[DocSource::new(&doc, &TokenFields)]);
         assert_eq!(packet.page_count(), fresh.page_count(), "{edit:?}");
         assert_eq!(line_signature(&packet), line_signature(&fresh), "{edit:?}");
@@ -574,7 +574,8 @@ fn field_refresh_touches_only_blocks_with_fields() {
     let changed = engine.refresh_fields(&mut packet, &[DocSource::new(&doc, &Switch(true))]);
     assert_eq!(changed, 2);
     assert_eq!(engine.last_stats().blocks_measured, 2);
-    let fresh = PageEngine::new().layout(&[DocSource::new(&doc, &Switch(true))]);
+    let fresh = PageEngine::with_cache(LayoutCache::default())
+        .layout(&[DocSource::new(&doc, &Switch(true))]);
     assert_eq!(line_signature(&packet), line_signature(&fresh));
     assert_eq!(
         engine.refresh_fields(&mut packet, &[DocSource::new(&doc, &Switch(true))]),

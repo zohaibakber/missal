@@ -150,11 +150,6 @@ impl TextCache {
         other.hits = 0;
         other.misses = 0;
     }
-
-    pub(crate) fn clear(&mut self) {
-        self.map.clear();
-        self.styles.clear();
-    }
 }
 
 pub(crate) struct Ctx<'a> {

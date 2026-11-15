@@ -3,7 +3,7 @@ use std::time::Instant;
 use missal_core::document::{Block, Inline};
 use missal_core::{Document, FieldDisplayText, FieldReference};
 use missal_page::pdf::{PdfOptions, write_packet};
-use missal_page::{BlockPath, DocSource, Edit, FieldSource, PageEngine, TokenFields};
+use missal_page::{BlockPath, DocSource, Edit, FieldSource, LayoutCache, PageEngine, TokenFields};
 
 fn bundle() -> Vec<(String, Document)> {
     missal_store::TemplateBundle::embedded()
@@ -103,7 +103,7 @@ fn main() {
     );
     let mut colds = Vec::new();
     for _ in 0..5 {
-        let mut fresh = PageEngine::new();
+        let mut fresh = PageEngine::with_cache(LayoutCache::default());
         fresh.layout(&[DocSource::new(&all[0].1, &fields)]);
         let started = Instant::now();
         fresh.layout(&[DocSource::new(doc, &fields)]);
@@ -113,10 +113,17 @@ fn main() {
         "cold layout (fresh caches, fonts warm), median of 5: {:.1} ms",
         median(colds)
     );
+    engine.layout(&[DocSource::new(doc, &fields)]);
     let started = Instant::now();
     engine.layout(&[DocSource::new(doc, &fields)]);
     println!(
         "warm full relayout (all blocks cached): {:.2} ms",
+        started.elapsed().as_secs_f64() * 1e3
+    );
+    let started = Instant::now();
+    PageEngine::new().layout(&[DocSource::new(doc, &fields)]);
+    println!(
+        "fresh engine on shaped text (print preview): {:.2} ms",
         started.elapsed().as_secs_f64() * 1e3
     );
 
