@@ -2,6 +2,7 @@ use std::cell::RefCell;
 
 use gpui_kit::{Context, EventEmitter};
 use missal_core::FirId;
+use missal_core::parallel::map_chunks;
 
 use super::rows::{FirRow, ListIndex};
 use super::{Load, run_db};
@@ -20,8 +21,10 @@ impl FirsEvent {
     }
 }
 
+const ROWS_PER_WORKER: usize = 4096;
+
 pub struct Firs {
-    pub rows: Vec<FirRow>,
+    rows: Vec<FirRow>,
     pub load: Load,
     pub index: RefCell<ListIndex>,
     version: u64,
@@ -41,6 +44,10 @@ impl Firs {
         firs
     }
 
+    pub fn rows(&self) -> &[FirRow] {
+        &self.rows
+    }
+
     pub fn version(&self) -> u64 {
         self.version
     }
@@ -49,15 +56,16 @@ impl Firs {
         run_db(
             cx,
             |store| {
-                Ok(store
-                    .firs()?
-                    .iter()
-                    .map(FirRow::from_summary)
-                    .collect::<Vec<_>>())
+                Ok(map_chunks(
+                    &store.firs()?,
+                    ROWS_PER_WORKER,
+                    FirRow::from_summary,
+                ))
             },
             |this, result, cx| {
                 match result {
                     Ok(rows) => {
+                        debug_assert!(rows.is_sorted_by(|a, b| a.id > b.id));
                         this.rows = rows;
                         this.load = Load::Ready;
                     }
@@ -76,16 +84,9 @@ impl Firs {
 
     pub fn upsert(&mut self, row: FirRow, cx: &mut Context<Self>) {
         let id = row.id;
-        match self.rows.iter().position(|existing| existing.id == row.id) {
-            Some(position) => self.rows[position] = row,
-            None => {
-                let position = self
-                    .rows
-                    .iter()
-                    .position(|existing| existing.id < row.id)
-                    .unwrap_or(self.rows.len());
-                self.rows.insert(position, row);
-            }
+        match self.position(id) {
+            Ok(position) => self.rows[position] = row,
+            Err(position) => self.rows.insert(position, row),
         }
         self.load = Load::Ready;
         self.changed(FirsEvent::Changed(vec![id]), cx);
@@ -97,6 +98,10 @@ impl Firs {
     }
 
     pub fn get(&self, id: FirId) -> Option<&FirRow> {
-        self.rows.iter().find(|row| row.id == id)
+        self.position(id).ok().map(|position| &self.rows[position])
+    }
+
+    fn position(&self, id: FirId) -> Result<usize, usize> {
+        self.rows.binary_search_by(|row| row.id.cmp(&id).reverse())
     }
 }
