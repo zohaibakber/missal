@@ -10,8 +10,6 @@ $stage = Join-Path $root "target/stage-win"
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Path $stage | Out-Null
 Copy-Item "target/release/missal.exe" $stage
-Copy-Item "packaging/THIRD-PARTY-NOTICES.txt" $stage
-Copy-Item "assets/fonts/Inter-LICENSE.txt" $stage
 & (Join-Path $PSScriptRoot "fetch-sumatra.ps1") -Destination $stage
 
 vpk pack `

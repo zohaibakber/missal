@@ -10,7 +10,6 @@ stage="target/stage-linux"
 rm -rf "$stage"
 mkdir -p "$stage"
 cp target/release/missal "$stage/"
-cp packaging/THIRD-PARTY-NOTICES.txt assets/fonts/Inter-LICENSE.txt "$stage/"
 
 vpk [linux] pack \
     --packId Missal \

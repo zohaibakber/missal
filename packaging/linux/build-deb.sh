@@ -12,8 +12,6 @@ trap 'rm -rf "$stage"' EXIT
 install -Dm755 "$binary" "$stage/usr/bin/missal"
 install -Dm644 "$root/packaging/linux/missal.desktop" "$stage/usr/share/applications/Missal.desktop"
 install -Dm644 "$root/assets/icon.png" "$stage/usr/share/icons/hicolor/1024x1024/apps/com.zohaibakber.missal.png"
-install -Dm644 "$root/assets/fonts/Inter-LICENSE.txt" "$stage/usr/share/doc/missal/Inter-LICENSE.txt"
-install -Dm644 "$root/packaging/THIRD-PARTY-NOTICES.txt" "$stage/usr/share/doc/missal/THIRD-PARTY-NOTICES.txt"
 
 size_kb="$(du -sk "$stage/usr" | cut -f1)"
 mkdir -p "$stage/DEBIAN"
