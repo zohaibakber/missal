@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Missal
+GenericName=FIR writer
+Comment=Write First Information Reports
+Exec=missal
+Icon=com.zohaibakber.missal
+Terminal=false
+Categories=Office;
+StartupWMClass=Missal
