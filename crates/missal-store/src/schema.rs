@@ -1,5 +1,6 @@
-use rusqlite::{Connection, Transaction};
+use rusqlite::{Connection, OptionalExtension, Transaction};
 
+use crate::firs::{SUMMARY_COLUMNS, SUMMARY_INDEX};
 use crate::{Result, failed, open_error};
 
 const MIGRATIONS: &[&str] = &[r#"
@@ -99,6 +100,28 @@ pub(crate) fn configure(connection: &Connection) -> Result<()> {
         )
         .and_then(|()| connection.busy_timeout(std::time::Duration::from_secs(5)))
         .map_err(failed("database.open"))
+}
+
+pub(crate) fn ensure_indexes(connection: &Connection) -> Result<()> {
+    let wanted = format!("CREATE INDEX {SUMMARY_INDEX} ON firs ({SUMMARY_COLUMNS})");
+    let current: Option<String> = connection
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?1",
+            [SUMMARY_INDEX],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(failed("database.index"))?;
+    if current.as_deref() == Some(wanted.as_str()) {
+        return Ok(());
+    }
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(failed("database.index"))?;
+    transaction
+        .execute_batch(&format!("DROP INDEX IF EXISTS {SUMMARY_INDEX}; {wanted}"))
+        .and_then(|()| transaction.commit())
+        .map_err(failed("database.index"))
 }
 
 pub(crate) fn migrate(connection: &mut Connection) -> Result<()> {

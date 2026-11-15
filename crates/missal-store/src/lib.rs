@@ -109,6 +109,7 @@ impl Store {
     fn from_connection(mut connection: Connection, bundle: &TemplateBundle) -> Result<Store> {
         schema::configure(&connection)?;
         schema::migrate(&mut connection)?;
+        schema::ensure_indexes(&connection)?;
         bundle::install(&mut connection, bundle)?;
         Ok(Store { connection })
     }
