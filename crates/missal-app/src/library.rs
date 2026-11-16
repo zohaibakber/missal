@@ -4,7 +4,7 @@ use std::sync::Arc;
 use gpui_kit::{App, AppContext, Context, Entity, Global, SharedString, Window};
 use missal_auth::{AuthError, SessionKeeper};
 use missal_core::TemplateId;
-use missal_library::{Library, LibraryConfig, LibraryEntry, LibraryError, Published, Upload};
+use missal_library::{Library, LibraryEntry, LibraryError, Published, Upload};
 use missal_store::{LibraryInstall, LibraryLink};
 
 use crate::auth::AuthModel;
@@ -22,24 +22,21 @@ enum Failure {
 impl Failure {
     fn message(&self) -> String {
         match self {
-            Failure::Auth(AuthError::Rejected(_)) | Failure::Library(LibraryError::SignedOut) => {
+            Failure::Library(LibraryError::SignedOut) => {
                 "Your session has ended. Sign in again.".to_owned()
             }
-            Failure::Auth(AuthError::Offline(_)) => {
-                "Could not reach the sign-in service. Check the internet connection and try again."
-                    .to_owned()
-            }
-            Failure::Auth(other) => format!("Could not confirm your session: {other}."),
+            Failure::Auth(error) => error.to_string(),
             Failure::Library(error) => error.to_string(),
             Failure::Store(message) => message.clone(),
         }
     }
 
     fn ends_session(&self) -> bool {
-        matches!(
-            self,
-            Failure::Auth(AuthError::Rejected(_)) | Failure::Library(LibraryError::SignedOut)
-        )
+        match self {
+            Failure::Auth(error) => error.ends_session(),
+            Failure::Library(error) => *error == LibraryError::SignedOut,
+            Failure::Store(_) => false,
+        }
     }
 }
 
@@ -84,7 +81,11 @@ fn template_key(id: TemplateId) -> String {
 
 impl LibraryModel {
     pub fn install(models: &Models, cx: &mut App) -> Entity<LibraryModel> {
-        let client = LibraryConfig::resolve().map(|config| Arc::new(Library::new(&config)));
+        let client = AuthModel::get(cx).and_then(|auth| {
+            auth.read(cx)
+                .api_url()
+                .map(|url| Arc::new(Library::new(url)))
+        });
         let entity = cx.new(|cx| {
             cx.subscribe(
                 &models.templates,

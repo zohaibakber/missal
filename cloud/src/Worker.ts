@@ -1,65 +1,30 @@
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as SQL from "@alchemy.run/cloudflare/D1/SQL";
 import * as Config from "effect/Config";
+import * as Digest from "effect/crypto/Digest";
+import * as Kdf from "effect/crypto/Kdf";
+import * as Mac from "effect/crypto/Mac";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
-import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 import * as Etag from "effect/http/Etag";
 import * as HttpPlatform from "effect/http/HttpPlatform";
 import * as HttpRouter from "effect/http/HttpRouter";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
-import { LibraryApi, Viewer } from "./Api.ts";
-import { AuthenticationLive, PublishersOnlyLive, parsePublishers } from "./Auth.ts";
-import { Library, LibraryLive } from "./Library.ts";
+import { Accounts } from "./Accounts.ts";
+import { MissalApi } from "./Api.ts";
+import { AuthorizationLive } from "./Auth.ts";
+import { HandlersLive } from "./Handlers.ts";
+import { Library } from "./Library.ts";
+import { Passwords } from "./Passwords.ts";
+import { Tokens } from "./Tokens.ts";
 
 export const Catalog = Cloudflare.D1.Database("Catalog", {
   migrations: "./migrations",
 });
 
 export const Templates = Cloudflare.R2.Bucket("Templates");
-
-const CatalogHandlers = HttpApiBuilder.group(LibraryApi, "catalog", (handlers) =>
-  Effect.gen(function* () {
-    const library = yield* Library;
-    return handlers
-      .handle("list", () =>
-        Effect.gen(function* () {
-          const who = yield* Viewer;
-          const templates = yield* library.list;
-          return { publisher: who.publisher, templates };
-        }),
-      )
-      .handle("download", ({ params }) =>
-        library.download(params.id).pipe(
-          Effect.map((stored) =>
-            HttpApiSchema.withHeaders({
-              body: stored.content,
-              headers: { "x-missal-version": stored.version },
-            }),
-          ),
-        ),
-      );
-  }),
-);
-
-const PublishingHandlers = HttpApiBuilder.group(LibraryApi, "publishing", (handlers) =>
-  Effect.gen(function* () {
-    const library = yield* Library;
-    return handlers
-      .handle("create", ({ payload }) =>
-        Effect.flatMap(Viewer, (who) => library.create(payload, who.id)),
-      )
-      .handle("update", ({ params, payload }) =>
-        Effect.flatMap(Viewer, (who) => library.update(params.id, payload, who.id)),
-      )
-      .handle("remove", ({ params }) => library.remove(params.id));
-  }),
-);
-
-const HealthHandlers = HttpApiBuilder.group(LibraryApi, "health", (handlers) =>
-  handlers.handle("health", () => Effect.succeed("ok")),
-);
 
 const WorkerPlatform = Layer.succeed(HttpPlatform.HttpPlatform, {
   platform: "web",
@@ -71,6 +36,10 @@ const WorkerPlatform = Layer.succeed(HttpPlatform.HttpPlatform, {
   fileWebResponse: () => Effect.die("file responses are not served"),
 });
 
+const CryptoLive = Layer.mergeAll(Kdf.layerWebCrypto, Digest.layerWebCrypto, Mac.layerWebCrypto).pipe(
+  Layer.provideMerge(SecureRandom.layerWebCrypto),
+);
+
 export default Cloudflare.Worker(
   "Api",
   {
@@ -78,23 +47,27 @@ export default Cloudflare.Worker(
     compatibility: { date: "2026-11-01" },
   },
   Effect.gen(function* () {
-    const clientId = yield* Config.String("WORKOS_CLIENT_ID");
-    const baseUrl = yield* Config.String("WORKOS_BASE_URL").pipe(
-      Config.withDefault("https://api.workos.com"),
-    );
-    const publishers = yield* Config.String("MISSAL_PUBLISHERS");
+    const tokenSecret = yield* Config.Redacted("MISSAL_TOKEN_SECRET");
+    const adminEmail = yield* Config.String("MISSAL_ADMIN_EMAIL");
+    const adminPassword = yield* Config.Redacted("MISSAL_ADMIN_PASSWORD");
     const database = yield* Cloudflare.D1.QueryDatabase(Catalog);
-    const sql = yield* SQL.D1(database);
     const bucket = yield* Cloudflare.R2.ReadWriteBucket(Templates);
 
+    const ServicesLive = Layer.mergeAll(
+      Accounts.layer({ email: adminEmail, password: adminPassword }),
+      Library.layer(bucket),
+    ).pipe(
+      Layer.provideMerge(Passwords.layer),
+      Layer.provideMerge(Tokens.layer(tokenSecret)),
+      Layer.provide(SQL.D1Layer(database)),
+      Layer.provideMerge(CryptoLive),
+    );
+
     return {
-      fetch: HttpApiBuilder.layer(LibraryApi).pipe(
-        Layer.provide([CatalogHandlers, PublishingHandlers, HealthHandlers]),
-        Layer.provide(LibraryLive(sql, bucket)),
-        Layer.provide(
-          AuthenticationLive({ baseUrl, clientId, publishers: parsePublishers(publishers) }),
-        ),
-        Layer.provide(PublishersOnlyLive),
+      fetch: HttpApiBuilder.layer(MissalApi).pipe(
+        Layer.provide(HandlersLive),
+        Layer.provide(AuthorizationLive),
+        Layer.provide(ServicesLive),
         Layer.provide([Etag.layer, WorkerPlatform, Path.layer]),
         HttpRouter.toHttpEffect,
       ),

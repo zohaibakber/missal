@@ -1,3 +1,4 @@
+pub mod account;
 pub mod cheatsheet;
 pub mod dialogs;
 pub mod input;

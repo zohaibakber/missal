@@ -1,18 +1,21 @@
 import type { ReadWriteBucketClient } from "@alchemy.run/cloudflare/R2/ReadWriteBucket";
 import type { RuntimeContext } from "alchemy/RuntimeContext";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import type * as SqlClient from "effect/sql/SqlClient";
+import * as SqlClient from "effect/sql/SqlClient";
 import {
   type Entry,
   PublishConflict,
-  StorageFailure,
+  type StorageFailure,
   TemplateNotFound,
   type Upload,
 } from "./Api.ts";
+import { storage } from "./Failures.ts";
 
 const Row = Schema.Struct({
   id: Schema.String,
@@ -31,14 +34,6 @@ const decodeVersion = Schema.decodeUnknownEffect(Schema.Array(VersionRow));
 const objectKey = (id: string, version: number) => `templates/${id}/${version}.msb`;
 
 const notFound = () => new TemplateNotFound({ error: "not found" });
-
-const storage =
-  (operation: string) =>
-  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, StorageFailure, R> =>
-    effect.pipe(
-      Effect.tapError((cause) => Effect.logError(`library ${operation} failed`, cause)),
-      Effect.mapError(() => new StorageFailure({ error: `could not ${operation} the template` })),
-    );
 
 export interface Stored {
   readonly version: number;
@@ -74,10 +69,13 @@ export class Library extends Context.Service<
       id: string,
     ) => Effect.Effect<void, TemplateNotFound | StorageFailure, RuntimeContext>;
   }
->()("missal/Library") {}
-
-export const LibraryLive = (sql: SqlClient.SqlClient, bucket: ReadWriteBucketClient) =>
-  Layer.sync(Library, () => {
+>()("missal/Library") {
+  static readonly layer = (bucket: ReadWriteBucketClient) =>
+  Layer.effect(
+    Library,
+    Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const random = yield* SecureRandom.SecureRandom;
     const currentVersion = (id: string) =>
       sql`SELECT version FROM templates WHERE id = ${id}`.pipe(
         Effect.flatMap(decodeVersion),
@@ -98,23 +96,23 @@ export const LibraryLive = (sql: SqlClient.SqlClient, bucket: ReadWriteBucketCli
           }),
         ),
       ),
-      storage("list"),
+      storage("list the templates"),
       Effect.withSpan("library.list"),
     );
 
     const download = Effect.fn("library.download")(function* (id: string) {
-      const version = yield* currentVersion(id).pipe(storage("read"));
+      const version = yield* currentVersion(id).pipe(storage("read the template"));
       if (Option.isNone(version)) return yield* notFound();
-      const object = yield* bucket.get(objectKey(id, version.value)).pipe(storage("read"));
+      const object = yield* bucket.get(objectKey(id, version.value)).pipe(storage("read the template"));
       if (object === null) return yield* notFound();
-      const content = yield* object.bytes().pipe(storage("read"));
+      const content = yield* object.bytes().pipe(storage("read the template"));
       return { version: version.value, content };
     });
 
     const create = Effect.fn("library.create")(function* (upload: Upload, by: string) {
-      const id = crypto.randomUUID();
-      const now = Date.now();
-      yield* bucket.put(objectKey(id, 1), upload.content).pipe(storage("store"));
+      const id = yield* random.uuidV4();
+      const now = yield* Clock.currentTimeMillis;
+      yield* bucket.put(objectKey(id, 1), upload.content).pipe(storage("store the template"));
       yield* sql`INSERT INTO templates ${sql.insert({
         id,
         name: upload.name,
@@ -125,7 +123,7 @@ export const LibraryLive = (sql: SqlClient.SqlClient, bucket: ReadWriteBucketCli
         published_by: by,
         created_at: now,
         updated_at: now,
-      })}`.pipe(storage("publish"));
+      })}`.pipe(storage("publish the template"));
       return { id, version: 1 };
     });
 
@@ -134,10 +132,10 @@ export const LibraryLive = (sql: SqlClient.SqlClient, bucket: ReadWriteBucketCli
       upload: Upload,
       by: string,
     ) {
-      const current = yield* currentVersion(id).pipe(storage("read"));
+      const current = yield* currentVersion(id).pipe(storage("read the template"));
       if (Option.isNone(current)) return yield* notFound();
       const version = current.value + 1;
-      yield* bucket.put(objectKey(id, version), upload.content).pipe(storage("store"));
+      yield* bucket.put(objectKey(id, version), upload.content).pipe(storage("store the template"));
       const changed = yield* sql`UPDATE templates SET ${sql.update({
         name: upload.name,
         version,
@@ -145,10 +143,10 @@ export const LibraryLive = (sql: SqlClient.SqlClient, bucket: ReadWriteBucketCli
         preview: upload.preview,
         size: upload.content.length,
         published_by: by,
-        updated_at: Date.now(),
+        updated_at: yield* Clock.currentTimeMillis,
       })} WHERE id = ${id} AND version = ${current.value} RETURNING version`.pipe(
         Effect.flatMap(decodeVersion),
-        storage("publish"),
+        storage("publish the template"),
       );
       if (changed.length === 0) {
         yield* bucket.delete(objectKey(id, version)).pipe(Effect.ignore);
@@ -163,16 +161,18 @@ export const LibraryLive = (sql: SqlClient.SqlClient, bucket: ReadWriteBucketCli
     const remove = Effect.fn("library.remove")(function* (id: string) {
       const removed = yield* sql`DELETE FROM templates WHERE id = ${id} RETURNING version`.pipe(
         Effect.flatMap(decodeVersion),
-        storage("remove"),
+        storage("remove the template"),
       );
       if (removed.length === 0) return yield* notFound();
-      const listing = yield* bucket.list({ prefix: `templates/${id}/` }).pipe(storage("remove"));
+      const listing = yield* bucket.list({ prefix: `templates/${id}/` }).pipe(storage("remove the template"));
       if (listing.objects.length > 0) {
         yield* bucket
           .delete(listing.objects.map((object) => object.key))
-          .pipe(storage("remove"));
+          .pipe(storage("remove the template"));
       }
     });
 
     return Library.of({ list, download, create, update, remove });
-  });
+    }),
+  );
+}

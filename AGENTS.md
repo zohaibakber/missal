@@ -10,11 +10,11 @@ Crates:
 - `missal-docx`: `.docx` import.
 - `missal-page`: paged layout and PDF output.
 - `missal-editor`: rich-text editor view and model.
-- `missal-auth`: WorkOS AuthKit sign-in (PKCE on `http://127.0.0.1:42155/callback`, which must be in the WorkOS Redirects list; no API key), session cached in the OS keyring, 30 days offline.
-- `missal-library`: client for the shared template library (`MISSAL_LIBRARY_URL`, compile time or run time; unset hides the library). Calls carry the WorkOS access token.
+- `missal-auth`: email and password accounts against the Missal API (`MISSAL_API_URL`, compile time or run time): sign-in, rotating refresh sessions through `SessionKeeper`, password changes and the admin user calls. The session is cached in the OS keyring, 30 days offline.
+- `missal-library`: client for the shared template library on the same API. Calls carry the access token from `SessionKeeper`.
 - `missal-app`: the `missal` binary: shell, screens, preferences, printing, updates.
 
-`cloud/`: the template library service, deployed with Alchemy v2 (exact beta pinned in `cloud/package.json`): an Effect `HttpApi` Worker in `cloud/src` (`Api.ts` contract, `Auth.ts` WorkOS bearer middleware, `Library.ts` D1 and R2 service, `Worker.ts` bindings), D1 catalog (`cloud/migrations`), R2 template blobs. It verifies WorkOS access tokens against the client's JWKS. Publishers are WorkOS users listed in `MISSAL_PUBLISHERS`, or with role `admin` or permission `templates:publish`; everyone signed in can list and download. A published template is a one-template `TemplateBundle`; installs are tracked in `library_links`.
+`cloud/`: the Missal API, deployed with Alchemy v2 (exact beta pinned in `cloud/package.json`) as an Effect `HttpApi` Worker in `cloud/src`: `Api.ts` contract, `Accounts.ts` users and sessions, `Passwords.ts` PBKDF2-SHA256 at 100,000 iterations (the Workers WebCrypto ceiling), `Tokens.ts` 15-minute HS256 access tokens, `Auth.ts` middleware, `Library.ts` templates, `Handlers.ts`, `Worker.ts` bindings. D1 holds users, sessions, sign-in lockouts and the template catalog (`cloud/migrations`); R2 holds template blobs. Accounts are created by administrators with a temporary password that must be changed at first sign-in; there is no public sign-up. Roles are member, publisher (may publish templates) and admin (also manages people). The first sign-in that matches `MISSAL_ADMIN_EMAIL` and `MISSAL_ADMIN_PASSWORD` while no user exists creates the first admin. Refresh tokens rotate, and reusing an old one ends that session. A published template is a one-template `TemplateBundle`; installs are tracked in `library_links`.
 
 Commands:
 
@@ -22,9 +22,9 @@ Commands:
 - Check: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`.
 - Screenshots: `cargo run -p missal-app --features headless --example shots -- --out DIR` (also `editor_shots`, `perf`).
 - Regenerate bundled templates from `templates/`: `cargo run -p missal-docx --example bundle` (writes `crates/missal-store/bundle/templates.bin`).
-- Sign-in: set `WORKOS_CLIENT_ID` (compile time or run time) to gate the app; debug builds without it skip sign-in. Release builds refuse to compile without it.
-- Release binary: `WORKOS_CLIENT_ID=client_… cargo build --release -p missal-app`, then `packaging/smoke.sh target/release/missal`.
-- Library service: in `cloud/`, `npm ci`, `npm run typecheck`, then `npm run dev` (local workerd, D1 and R2) or `npm run deploy`. Both need `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (state lives in Cloudflare), `WORKOS_CLIENT_ID` and `MISSAL_PUBLISHERS` in the environment or `cloud/.env` (see `cloud/.env.example`); `WORKOS_BASE_URL` is optional. The deployed URL goes in `MISSAL_LIBRARY_URL`.
+- Sign-in: set `MISSAL_API_URL` (compile time, run time or the root `.env`) to gate the app; debug builds without it skip sign-in and hide the library. Release builds refuse to compile without it. Only `https://` URLs are accepted, plus `http://127.0.0.1` and `http://localhost` for a local `npm run dev`.
+- Release binary: `MISSAL_API_URL=https://… cargo build --release -p missal-app`, then `packaging/smoke.sh target/release/missal`.
+- API service: in `cloud/`, `npm ci`, `npm run typecheck`, then `npm run dev` (local workerd, D1 and R2) or `npm run deploy`. Both need `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (state lives in Cloudflare), `MISSAL_TOKEN_SECRET` (32 random bytes, base64url: `node -e "console.log(crypto.randomBytes(32).toString('base64url'))"`), `MISSAL_ADMIN_EMAIL` and `MISSAL_ADMIN_PASSWORD` in the environment or `cloud/.env` (see `cloud/.env.example`). Changing `MISSAL_TOKEN_SECRET` signs everyone out within 15 minutes. Sign-in hashes a password with 100,000 PBKDF2 rounds, which may exceed the Workers free plan's per-request CPU limit; Workers Paid avoids that.
 - Set `CARGO_INCREMENTAL=0` and use the shared `target` directory only.
 
 Releases (CI in `.github/workflows/ci.yml`, Velopack `vpk` version pinned there):

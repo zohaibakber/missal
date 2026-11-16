@@ -76,7 +76,9 @@ impl Element for TextInputElement {
             });
             let height = input.update(cx, |input, cx| {
                 let color = input.text_color(cx);
-                input.build_layout(input.text(), color, width, cx).height()
+                input
+                    .build_layout(input.display_text(), color, width, cx)
+                    .height()
             });
             let height = height.clamp(row * min_rows as f32, row * max_rows as f32);
             size(px(width.unwrap_or(0.0)), px(height.ceil()))

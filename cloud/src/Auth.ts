@@ -1,64 +1,50 @@
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Redacted from "effect/Redacted";
-import * as Schema from "effect/Schema";
-import { createRemoteJWKSet, jwtVerify } from "jose";
-import { Authentication, NotPublisher, PublishersOnly, Unauthorized, Viewer } from "./Api.ts";
+import {
+  AdminsOnly,
+  Authentication,
+  canPublish,
+  NotAdmin,
+  NotPublisher,
+  PasswordChangeRequired,
+  PasswordCurrent,
+  PublishersOnly,
+  Viewer,
+} from "./Api.ts";
+import { Tokens } from "./Tokens.ts";
 
-const PUBLISH_ROLE = "admin";
-const PUBLISH_PERMISSION = "templates:publish";
-
-const Claims = Schema.Struct({
-  sub: Schema.NonEmptyString,
-  role: Schema.optional(Schema.String),
-  roles: Schema.optional(Schema.Array(Schema.String)),
-  permissions: Schema.optional(Schema.Array(Schema.String)),
-});
-
-const decodeClaims = Schema.decodeUnknownEffect(Claims);
-
-const signInRequired = () => new Unauthorized({ error: "sign in to use the template library" });
-
-export interface WorkOSOptions {
-  readonly baseUrl: string;
-  readonly clientId: string;
-  readonly publishers: ReadonlySet<string>;
-}
-
-export const AuthenticationLive = (options: WorkOSOptions) =>
-  Layer.sync(Authentication, () => {
-    const keys = createRemoteJWKSet(
-      new URL(`sso/jwks/${options.clientId}`, `${options.baseUrl.replace(/\/+$/, "")}/`),
-    );
-    const viewer = Effect.fn("Authentication.viewer")(function* (token: string) {
-      const { payload } = yield* Effect.tryPromise({
-        try: () => jwtVerify(token, keys, { algorithms: ["RS256"] }),
-        catch: signInRequired,
-      });
-      const claims = yield* decodeClaims(payload).pipe(Effect.mapError(signInRequired));
-      const roles = [claims.role, ...(claims.roles ?? [])];
-      return Viewer.of({
-        id: claims.sub,
-        publisher:
-          options.publishers.has(claims.sub) ||
-          roles.includes(PUBLISH_ROLE) ||
-          (claims.permissions ?? []).includes(PUBLISH_PERMISSION),
-      });
-    });
+export const AuthenticationLive = Layer.effect(
+  Authentication,
+  Effect.gen(function* () {
+    const tokens = yield* Tokens;
     return Authentication.of({
-      bearer: (httpEffect, { credential }) =>
-        viewer(Redacted.value(credential)).pipe(
-          Effect.flatMap((who) => Effect.provideService(httpEffect, Viewer, who)),
-        ),
+      bearer: Effect.fn("Authentication.bearer")(function* (httpEffect, { credential }) {
+        const viewer = yield* tokens.verify(credential);
+        return yield* Effect.provideService(httpEffect, Viewer, viewer);
+      }),
     });
-  });
+  }),
+);
+
+export const PasswordCurrentLive = Layer.succeed(
+  PasswordCurrent,
+  PasswordCurrent.of(
+    Effect.fn("PasswordCurrent")(function* (httpEffect) {
+      const viewer = yield* Viewer;
+      if (viewer.mustChangePassword) {
+        return yield* new PasswordChangeRequired({ error: "choose a new password first" });
+      }
+      return yield* httpEffect;
+    }),
+  ),
+);
 
 export const PublishersOnlyLive = Layer.succeed(
   PublishersOnly,
-  PublishersOnly.of((httpEffect) =>
-    Effect.gen(function* () {
-      const who = yield* Viewer;
-      if (!who.publisher) {
+  PublishersOnly.of(
+    Effect.fn("PublishersOnly")(function* (httpEffect) {
+      const viewer = yield* Viewer;
+      if (!canPublish(viewer.role)) {
         return yield* new NotPublisher({ error: "this account cannot publish templates" });
       }
       return yield* httpEffect;
@@ -66,10 +52,22 @@ export const PublishersOnlyLive = Layer.succeed(
   ),
 );
 
-export const parsePublishers = (value: string): ReadonlySet<string> =>
-  new Set(
-    value
-      .split(",")
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0),
-  );
+export const AdminsOnlyLive = Layer.succeed(
+  AdminsOnly,
+  AdminsOnly.of(
+    Effect.fn("AdminsOnly")(function* (httpEffect) {
+      const viewer = yield* Viewer;
+      if (viewer.role !== "admin") {
+        return yield* new NotAdmin({ error: "only administrators can manage accounts" });
+      }
+      return yield* httpEffect;
+    }),
+  ),
+);
+
+export const AuthorizationLive = Layer.mergeAll(
+  AuthenticationLive,
+  PasswordCurrentLive,
+  PublishersOnlyLive,
+  AdminsOnlyLive,
+);

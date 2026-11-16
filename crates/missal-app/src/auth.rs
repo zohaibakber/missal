@@ -1,22 +1,23 @@
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
 
 use gpui_kit::component::v_flex;
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, App, AppContext, Context, Entity, Global, SharedString, Task, Window, div, px,
+    AnyElement, App, AppContext, Context, Entity, Global, IntoElement, ParentElement, Render,
+    SharedString, Styled, Subscription, Task, Window, div, px,
 };
-use missal_auth::{
-    Account, AuthError, Config, Session, SessionKeeper, SessionStore, begin_sign_in,
-};
+use missal_auth::{Account, AuthError, Config, Session, SessionKeeper, SessionStore};
+use missal_text::{TextInput, TextInputEvent};
 
 use crate::state::{Models, toast_warning};
-use crate::theme::Palette;
-use crate::ui::{button, primary_sm};
+use crate::theme::{Palette, RADIUS_XL};
+use crate::ui::input::{Kind, field, field_input, secret_input};
+use crate::ui::primary_sm;
 
 const REFRESH_EVERY: Duration = Duration::from_secs(60 * 60);
+pub const MIN_PASSWORD: usize = 10;
 
 const ENDED: &str = "Your session has ended. Sign in again to continue.";
 const STALE: &str =
@@ -26,16 +27,26 @@ const STALE: &str =
 pub enum AuthState {
     Disabled,
     Restoring,
-    SignedOut { notice: Option<SharedString> },
-    SigningIn { cancel: Arc<AtomicBool> },
-    SignedIn { account: Account, online: bool },
+    SignedOut {
+        notice: Option<SharedString>,
+    },
+    SigningIn,
+    MustChangePassword {
+        account: Account,
+        notice: Option<SharedString>,
+        busy: bool,
+    },
+    SignedIn {
+        account: Account,
+        online: bool,
+    },
 }
 
 pub struct AuthModel {
     config: Option<Config>,
+    keeper: Option<Arc<SessionKeeper>>,
     store: Option<Arc<SessionStore>>,
     session: Option<Session>,
-    keeper: Option<Arc<SessionKeeper>>,
     state: AuthState,
     refresh_loop: Option<Task<()>>,
 }
@@ -44,11 +55,21 @@ struct AuthHandle(Entity<AuthModel>);
 
 impl Global for AuthHandle {}
 
+pub fn password_problem(password: &str, confirm: &str) -> Option<&'static str> {
+    if password.chars().count() < MIN_PASSWORD {
+        Some("Use at least 10 characters.")
+    } else if password != confirm {
+        Some("The two new passwords do not match.")
+    } else {
+        None
+    }
+}
+
 impl AuthModel {
     pub fn install(data_directory: Option<&Path>, cx: &mut App) -> Entity<AuthModel> {
         let config = Config::resolve();
         if config.is_none() {
-            eprintln!("missal: sign-in is off because WORKOS_CLIENT_ID is not set");
+            eprintln!("missal: sign-in is off because MISSAL_API_URL is not set");
         }
         let store = match (&config, data_directory) {
             (Some(_), Some(directory)) => {
@@ -61,13 +82,13 @@ impl AuthModel {
             Some(_) => AuthState::Restoring,
         };
         let keeper = config
-            .clone()
+            .as_ref()
             .map(|config| Arc::new(SessionKeeper::new(config, store.clone())));
         let entity = cx.new(|_| AuthModel {
             config,
+            keeper,
             store,
             session: None,
-            keeper,
             state,
             refresh_loop: None,
         });
@@ -80,8 +101,16 @@ impl AuthModel {
         cx.try_global::<AuthHandle>().map(|handle| handle.0.clone())
     }
 
+    pub fn api_url(&self) -> Option<&str> {
+        self.config.as_ref().map(|config| config.base_url.as_str())
+    }
+
     pub fn state(&self) -> &AuthState {
         &self.state
+    }
+
+    pub fn keeper(&self) -> Option<Arc<SessionKeeper>> {
+        self.keeper.clone()
     }
 
     pub fn unlocked(&self) -> bool {
@@ -93,10 +122,6 @@ impl AuthModel {
             AuthState::SignedIn { account, .. } => Some(account),
             _ => None,
         }
-    }
-
-    pub fn keeper(&self) -> Option<Arc<SessionKeeper>> {
-        self.keeper.clone()
     }
 
     fn keep(&mut self, session: Option<Session>) {
@@ -121,8 +146,38 @@ impl AuthModel {
         );
     }
 
+    fn signed_in(&mut self, session: Session, online: bool, cx: &mut Context<Self>) {
+        let state = if session.account.must_change_password {
+            AuthState::MustChangePassword {
+                account: session.account.clone(),
+                notice: None,
+                busy: false,
+            }
+        } else {
+            AuthState::SignedIn {
+                account: session.account.clone(),
+                online,
+            }
+        };
+        self.session = Some(session);
+        self.set(state, cx);
+        self.schedule_refresh(cx);
+    }
+
+    fn forget(&mut self, cx: &mut Context<Self>) {
+        self.keep(None);
+        if let Some(store) = self.store.clone() {
+            cx.background_spawn(async move {
+                if let Err(error) = store.clear() {
+                    eprintln!("missal: could not remove the saved session: {error}");
+                }
+            })
+            .detach();
+        }
+    }
+
     fn restore(&mut self, cx: &mut Context<Self>) {
-        if self.config.is_none() {
+        if self.keeper.is_none() {
             return;
         }
         let Some(store) = self.store.clone() else {
@@ -133,19 +188,17 @@ impl AuthModel {
         cx.spawn(async move |this, cx| {
             let loaded = load.await;
             this.update(cx, |this, cx| match loaded {
-                Ok(Some(session)) => {
-                    if session.usable_offline(SystemTime::now()) {
-                        this.set(
-                            AuthState::SignedIn {
-                                account: session.account.clone(),
-                                online: false,
-                            },
-                            cx,
-                        );
+                Ok(Some(session)) if !session.account.must_change_password => {
+                    let usable = session.usable_offline(SystemTime::now());
+                    this.keep(Some(session.clone()));
+                    if usable {
+                        this.signed_in(session, false, cx);
                     }
-                    this.keep(Some(session));
                     this.refresh(cx);
-                    this.schedule_refresh(cx);
+                }
+                Ok(Some(_)) => {
+                    this.forget(cx);
+                    this.signed_out(None, cx);
                 }
                 Ok(None) => this.signed_out(None, cx),
                 Err(error) => {
@@ -194,18 +247,8 @@ impl AuthModel {
             return;
         }
         match outcome {
-            Ok(session) => {
-                self.set(
-                    AuthState::SignedIn {
-                        account: session.account.clone(),
-                        online: true,
-                    },
-                    cx,
-                );
-                self.session = Some(session);
-            }
-            Err(AuthError::Rejected(reason)) => {
-                eprintln!("missal: session ended: {reason}");
+            Ok(session) => self.signed_in(session, true, cx),
+            Err(error) if error.ends_session() => {
                 self.forget(cx);
                 self.signed_out(Some(ENDED), cx);
             }
@@ -242,98 +285,22 @@ impl AuthModel {
         }
     }
 
-    fn forget(&mut self, cx: &mut Context<Self>) {
-        self.keep(None);
-        if let Some(store) = self.store.clone() {
-            cx.background_spawn(async move {
-                if let Err(error) = store.clear() {
-                    eprintln!("missal: could not remove the saved session: {error}");
-                }
-            })
-            .detach();
-        }
-    }
-
-    pub fn sign_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(config) = self.config.clone() else {
+    pub fn sign_in(&mut self, email: String, password: String, cx: &mut Context<Self>) {
+        let Some(keeper) = self.keeper.clone() else {
             return;
         };
-        if matches!(self.state, AuthState::SigningIn { .. }) {
+        if matches!(self.state, AuthState::SigningIn) {
             return;
         }
-        let pending = match begin_sign_in(&config) {
-            Ok(pending) => pending,
-            Err(error) => {
-                self.set(
-                    AuthState::SignedOut {
-                        notice: Some(format!("Could not start sign-in: {error}.").into()),
-                    },
-                    cx,
-                );
-                return;
-            }
-        };
-        cx.open_url(pending.url());
-        let cancel = pending.canceller();
-        self.set(
-            AuthState::SigningIn {
-                cancel: cancel.clone(),
-            },
-            cx,
-        );
-        let store = self.store.clone();
-        let task = cx.background_spawn(async move {
-            let session = pending.finish()?;
-            let saved = match store.as_deref() {
-                Some(store) => store.save(&session),
-                None => Ok(()),
-            };
-            Ok::<_, AuthError>((session, saved))
-        });
-        cx.spawn_in(window, async move |this, cx| {
+        self.set(AuthState::SigningIn, cx);
+        let task = cx.background_spawn(async move { keeper.sign_in(&email, &password) });
+        cx.spawn(async move |this, cx| {
             let outcome = task.await;
-            this.update_in(cx, |this, window, cx| {
-                if cancel.load(Ordering::Relaxed) {
-                    return;
-                }
-                match outcome {
-                    Ok((session, saved)) => {
-                        if let Err(error) = saved {
-                            eprintln!("missal: could not save the session: {error}");
-                            toast_warning(
-                                window,
-                                cx,
-                                "Signed in, but this computer could not remember the session. You will need to sign in again next time.",
-                            );
-                        }
-                        this.set(
-                            AuthState::SignedIn {
-                                account: session.account.clone(),
-                                online: true,
-                            },
-                            cx,
-                        );
-                        this.keep(Some(session));
-                        this.schedule_refresh(cx);
-                    }
-                    Err(AuthError::Cancelled) => {}
-                    Err(error) => {
-                        let notice = match error {
-                            AuthError::Offline(_) => {
-                                "Could not reach the sign-in service. Check the internet connection and try again.".to_owned()
-                            }
-                            AuthError::TimedOut => {
-                                "Sign-in took too long. Try again.".to_owned()
-                            }
-                            other => format!("Sign-in failed: {other}."),
-                        };
-                        this.set(
-                            AuthState::SignedOut {
-                                notice: Some(notice.into()),
-                            },
-                            cx,
-                        );
-                    }
+            this.update(cx, |this, cx| match outcome {
+                Ok(session) => this.signed_in(session, true, cx),
+                Err(error) => {
+                    let notice = error.to_string();
+                    this.signed_out(Some(&notice), cx);
                 }
             })
             .ok();
@@ -341,14 +308,54 @@ impl AuthModel {
         .detach();
     }
 
-    pub fn cancel_sign_in(&mut self, cx: &mut Context<Self>) {
-        if let AuthState::SigningIn { cancel } = &self.state {
-            cancel.store(true, Ordering::Relaxed);
-            let notice = self.session.is_some().then_some(STALE);
-            let session = self.session.take();
-            self.signed_out(notice, cx);
-            self.session = session;
+    pub fn change_password(
+        &mut self,
+        current: String,
+        new: String,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<(), AuthError>> {
+        let Some(keeper) = self.keeper.clone() else {
+            return Task::ready(Err(AuthError::SessionEnded));
+        };
+        if let AuthState::MustChangePassword { account, .. } = &self.state {
+            let account = account.clone();
+            self.set(
+                AuthState::MustChangePassword {
+                    account,
+                    notice: None,
+                    busy: true,
+                },
+                cx,
+            );
         }
+        let task = cx.background_spawn(async move { keeper.change_password(&current, &new) });
+        cx.spawn(async move |this, cx| {
+            let outcome = task.await;
+            this.update(cx, |this, cx| match outcome {
+                Ok(session) => {
+                    this.signed_in(session, true, cx);
+                    Ok(())
+                }
+                Err(error) => {
+                    if error.ends_session() {
+                        this.forget(cx);
+                        this.signed_out(Some(ENDED), cx);
+                    } else if let AuthState::MustChangePassword { account, .. } = &this.state {
+                        let account = account.clone();
+                        this.set(
+                            AuthState::MustChangePassword {
+                                account,
+                                notice: Some(error.to_string().into()),
+                                busy: false,
+                            },
+                            cx,
+                        );
+                    }
+                    Err(error)
+                }
+            })
+            .unwrap_or(Err(AuthError::SessionEnded))
+        })
     }
 
     pub fn end_session(&mut self, cx: &mut Context<Self>) {
@@ -360,7 +367,11 @@ impl AuthModel {
     }
 
     pub fn sign_out(&mut self, cx: &mut Context<Self>) {
-        self.forget(cx);
+        if let Some(keeper) = self.keeper.clone() {
+            cx.background_spawn(async move { keeper.sign_out() })
+                .detach();
+        }
+        self.session = None;
         self.signed_out(None, cx);
     }
 }
@@ -379,65 +390,278 @@ pub fn sign_out(window: &mut Window, cx: &mut App) {
     }
 }
 
-pub fn render_gate(auth: &Entity<AuthModel>, cx: &mut App) -> AnyElement {
-    let palette = *Palette::get(cx);
-    let state = auth.read(cx).state().clone();
-    let (message, notice, action): (&str, Option<SharedString>, Option<AnyElement>) = match state {
-        AuthState::Restoring => ("Checking your session…", None, None),
-        AuthState::SigningIn { .. } => (
-            "Finish signing in in your browser.",
-            None,
-            Some(
-                button("cancel-sign-in", "Cancel")
-                    .outline()
-                    .sm()
-                    .on_click({
-                        let auth = auth.clone();
-                        move |_, _, cx| auth.update(cx, |auth, cx| auth.cancel_sign_in(cx))
-                    })
-                    .into_any_element(),
+pub struct AuthGate {
+    auth: Entity<AuthModel>,
+    email: Entity<TextInput>,
+    password: Entity<TextInput>,
+    new_password: Entity<TextInput>,
+    confirm: Entity<TextInput>,
+    last_password: Option<String>,
+    problem: Option<SharedString>,
+    _subscriptions: Vec<Subscription>,
+}
+
+impl AuthGate {
+    pub fn new(auth: Entity<AuthModel>, window: &mut Window, cx: &mut Context<Self>) -> AuthGate {
+        let email = field_input(window, cx, Kind::Latin, "name@example.com", "");
+        let password = secret_input(window, cx, "Password");
+        let new_password = secret_input(window, cx, "New password");
+        let confirm = secret_input(window, cx, "Repeat the new password");
+        let submit = |input: &Entity<TextInput>, window: &mut Window, cx: &mut Context<Self>| {
+            cx.subscribe_in(
+                input,
+                window,
+                |this, _, event: &TextInputEvent, window, cx| match event {
+                    TextInputEvent::Submit => this.submit(window, cx),
+                    TextInputEvent::Change => {
+                        this.problem = None;
+                        cx.notify();
+                    }
+                    _ => {}
+                },
+            )
+        };
+        let subscriptions = vec![
+            submit(&email, window, cx),
+            submit(&password, window, cx),
+            submit(&new_password, window, cx),
+            submit(&confirm, window, cx),
+            cx.observe_in(&auth, window, |this, auth, window, cx| {
+                match auth.read(cx).state() {
+                    AuthState::SignedIn { .. } => {
+                        this.last_password = None;
+                        for input in [&this.password, &this.new_password, &this.confirm] {
+                            input.update(cx, |input, cx| input.set_text("", cx));
+                        }
+                    }
+                    AuthState::SignedOut { .. }
+                    | AuthState::MustChangePassword { busy: false, .. } => this.focus(window, cx),
+                    _ => {}
+                }
+                cx.notify();
+            }),
+        ];
+        AuthGate {
+            auth,
+            email,
+            password,
+            new_password,
+            confirm,
+            last_password: None,
+            problem: None,
+            _subscriptions: subscriptions,
+        }
+    }
+
+    pub fn focus(&self, window: &mut Window, cx: &mut App) {
+        let state = self.auth.read(cx).state().clone();
+        let input = match state {
+            AuthState::MustChangePassword { .. } if self.last_password.is_some() => {
+                &self.new_password
+            }
+            AuthState::MustChangePassword { .. } => &self.password,
+            _ if self.email.read(cx).text().trim().is_empty() => &self.email,
+            _ => &self.password,
+        };
+        input.update(cx, |input, cx| input.focus(window, cx));
+    }
+
+    fn submit(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+        match self.auth.read(cx).state().clone() {
+            AuthState::SignedOut { .. } => {
+                let email = self.email.read(cx).text().trim().to_owned();
+                let password = self.password.read(cx).text().to_owned();
+                if email.is_empty() || password.is_empty() {
+                    self.problem = Some("Enter your email and password.".into());
+                    cx.notify();
+                    return;
+                }
+                self.last_password = Some(password.clone());
+                self.password.update(cx, |input, cx| input.set_text("", cx));
+                self.auth
+                    .update(cx, |auth, cx| auth.sign_in(email, password, cx));
+            }
+            AuthState::MustChangePassword { busy: false, .. } => {
+                let current = match &self.last_password {
+                    Some(password) => password.clone(),
+                    None => self.password.read(cx).text().to_owned(),
+                };
+                let new = self.new_password.read(cx).text().to_owned();
+                let confirm = self.confirm.read(cx).text().to_owned();
+                if let Some(problem) = password_problem(&new, &confirm) {
+                    self.problem = Some(problem.into());
+                    cx.notify();
+                    return;
+                }
+                if new == current {
+                    self.problem =
+                        Some("Choose a password different from the temporary one.".into());
+                    cx.notify();
+                    return;
+                }
+                self.auth
+                    .update(cx, |auth, cx| auth.change_password(current, new, cx))
+                    .detach();
+            }
+            _ => {}
+        }
+    }
+
+    fn labelled(palette: &Palette, text: &'static str, element: impl IntoElement) -> AnyElement {
+        v_flex()
+            .gap(px(6.))
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .line_height(px(16.))
+                    .text_color(palette.ink_muted)
+                    .child(text),
+            )
+            .child(element)
+            .into_any_element()
+    }
+}
+
+impl Render for AuthGate {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = *Palette::get(cx);
+        let state = self.auth.read(cx).state().clone();
+        let width = px(340.);
+        let (title, message, notice, busy, fields, action): (
+            &str,
+            String,
+            Option<SharedString>,
+            bool,
+            Vec<AnyElement>,
+            &str,
+        ) = match &state {
+            AuthState::Restoring => (
+                "Missal",
+                "Checking your session…".to_owned(),
+                None,
+                true,
+                Vec::new(),
+                "",
             ),
-        ),
-        AuthState::SignedOut { notice } => (
-            "Sign in to open your FIRs and templates.",
-            notice,
-            Some(
-                primary_sm("sign-in", "Sign in")
-                    .on_click({
-                        let auth = auth.clone();
-                        move |_, window, cx| auth.update(cx, |auth, cx| auth.sign_in(window, cx))
-                    })
-                    .into_any_element(),
-            ),
-        ),
-        AuthState::Disabled | AuthState::SignedIn { .. } => return div().into_any_element(),
-    };
-    v_flex()
-        .id("sign-in-gate")
-        .size_full()
-        .items_center()
-        .justify_center()
-        .gap(px(12.))
-        .bg(palette.surface)
-        .child(
-            div()
-                .text_size(px(20.))
-                .text_color(palette.ink)
-                .child(crate::platform::PRODUCT_NAME),
-        )
-        .child(
-            div()
-                .text_size(px(14.))
-                .text_color(palette.ink_muted)
-                .child(message),
-        )
-        .children(notice.map(|notice| {
-            div()
-                .max_w(px(420.))
-                .text_size(px(13.))
-                .text_color(palette.danger_text)
-                .child(notice)
-        }))
-        .children(action.map(|action| div().mt(px(4.)).child(action)))
-        .into_any_element()
+            AuthState::SignedOut { .. } | AuthState::SigningIn => {
+                let notice = match &state {
+                    AuthState::SignedOut { notice } => notice.clone(),
+                    _ => None,
+                };
+                (
+                    "Sign in to Missal",
+                    "Use the email and password your administrator gave you.".to_owned(),
+                    notice,
+                    matches!(state, AuthState::SigningIn),
+                    vec![
+                        Self::labelled(
+                            &palette,
+                            "Email",
+                            field("sign-in-email", &self.email, Kind::Latin).width(width),
+                        ),
+                        Self::labelled(
+                            &palette,
+                            "Password",
+                            field("sign-in-password", &self.password, Kind::Latin).width(width),
+                        ),
+                    ],
+                    "Sign in",
+                )
+            }
+            AuthState::MustChangePassword {
+                account,
+                notice,
+                busy,
+            } => {
+                let mut fields = Vec::new();
+                if self.last_password.is_none() {
+                    fields.push(Self::labelled(
+                        &palette,
+                        "Current password",
+                        field("change-current", &self.password, Kind::Latin).width(width),
+                    ));
+                }
+                fields.push(Self::labelled(
+                    &palette,
+                    "New password",
+                    field("change-new", &self.new_password, Kind::Latin).width(width),
+                ));
+                fields.push(Self::labelled(
+                    &palette,
+                    "Repeat the new password",
+                    field("change-confirm", &self.confirm, Kind::Latin).width(width),
+                ));
+                (
+                    "Choose a new password",
+                    format!(
+                        "{} is signed in with a temporary password. Choose your own to continue; at least 10 characters.",
+                        account.email
+                    ),
+                    notice.clone(),
+                    *busy,
+                    fields,
+                    "Save password",
+                )
+            }
+            AuthState::Disabled | AuthState::SignedIn { .. } => {
+                return div().into_any_element();
+            }
+        };
+        let problem = self.problem.clone().or(notice);
+        let button_label = if busy && !action.is_empty() {
+            "Please wait…"
+        } else {
+            action
+        };
+        v_flex()
+            .id("sign-in-gate")
+            .size_full()
+            .items_center()
+            .justify_center()
+            .bg(palette.surface)
+            .child(
+                v_flex()
+                    .w(px(400.))
+                    .p(px(28.))
+                    .gap(px(14.))
+                    .rounded(px(RADIUS_XL))
+                    .bg(palette.raised)
+                    .border_1()
+                    .border_color(palette.line)
+                    .child(
+                        div()
+                            .text_size(px(20.))
+                            .line_height(px(28.))
+                            .text_color(palette.ink)
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .line_height(px(20.))
+                            .text_color(palette.ink_muted)
+                            .child(message),
+                    )
+                    .children(fields)
+                    .children(problem.map(|problem| {
+                        div()
+                            .text_size(px(13.))
+                            .line_height(px(20.))
+                            .text_color(palette.danger_text)
+                            .child(problem)
+                    }))
+                    .when(!action.is_empty(), |this| {
+                        this.child(
+                            div().mt(px(4.)).child(
+                                primary_sm("auth-submit", button_label)
+                                    .disabled(busy)
+                                    .on_click(
+                                        cx.listener(|this, _, window, cx| this.submit(window, cx)),
+                                    ),
+                            ),
+                        )
+                    }),
+            )
+            .into_any_element()
+    }
 }

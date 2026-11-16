@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use ureq::Agent;
 use ureq::http::Response;
 
-use crate::config::LibraryConfig;
 use crate::error::LibraryError;
 
 const TIMEOUT: Duration = Duration::from_secs(30);
@@ -81,7 +80,7 @@ pub struct Library {
 }
 
 impl Library {
-    pub fn new(config: &LibraryConfig) -> Library {
+    pub fn new(base_url: &str) -> Library {
         let agent = Agent::config_builder()
             .timeout_global(Some(TIMEOUT))
             .http_status_as_error(false)
@@ -89,7 +88,7 @@ impl Library {
             .build()
             .new_agent();
         Library {
-            base_url: config.base_url.clone(),
+            base_url: base_url.trim_end_matches('/').to_owned(),
             agent,
         }
     }
