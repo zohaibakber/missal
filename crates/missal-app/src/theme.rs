@@ -332,6 +332,30 @@ impl Palette {
         }
     }
 
+    pub fn field_fill(&self) -> Hsla {
+        if self.dark {
+            hex_alpha(0xffffff, 0.05)
+        } else {
+            hex_alpha(0x000000, 0.04)
+        }
+    }
+
+    pub fn field_fill_hover(&self) -> Hsla {
+        if self.dark {
+            hex_alpha(0xffffff, 0.08)
+        } else {
+            hex_alpha(0x000000, 0.06)
+        }
+    }
+
+    pub fn field_bg(&self, focused: bool) -> Hsla {
+        if focused {
+            self.control_fill()
+        } else {
+            self.field_fill()
+        }
+    }
+
     pub fn control_fill(&self) -> Hsla {
         if self.dark {
             hex(0x1d1d1d)

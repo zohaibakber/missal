@@ -996,7 +996,11 @@ impl FirForm {
             .px(px(10.))
             .py(px(3.))
             .rounded(px(crate::theme::RADIUS_LG))
-            .bg(palette.control_fill())
+            .bg(palette.field_bg(focused))
+            .when(!focused, |this| {
+                let hover = palette.field_fill_hover();
+                this.hover(move |s| s.bg(hover))
+            })
             .shadow(crate::ui::control_shadows(palette, focused, false))
             .cursor_text()
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -1040,7 +1044,11 @@ impl RenderOnce for StatusTrigger {
             .flex_row_reverse()
             .items_center()
             .rounded(px(crate::theme::RADIUS_LG))
-            .bg(palette.control_fill())
+            .bg(palette.field_bg(self.open))
+            .when(!self.open, |this| {
+                let hover = palette.field_fill_hover();
+                this.hover(move |s| s.bg(hover))
+            })
             .shadow(crate::ui::control_shadows(&palette, self.open, false))
             .role(gpui_kit::accesskit::Role::ComboBox)
             .aria_label("Status")
@@ -1216,7 +1224,7 @@ impl Render for FirForm {
                     .max_w_full()
                     .mx_auto()
                     .pt(px(8.))
-                    .pb(px(40.))
+                    .pb(px(112.))
                     .children(sections),
             )
     }
@@ -1374,25 +1382,31 @@ impl NewFirScreen {
             (form.is_dirty(), form.is_saving(), form.is_edit())
         };
         let unsaved = edit && dirty;
-        let row = h_flex()
-            .w(px(760.))
-            .max_w_full()
-            .mx_auto()
-            .gap(px(8.))
+        let bar = h_flex()
+            .id("fir-form-actions")
+            .flex_none()
+            .h(px(48.))
+            .pl(px(if unsaved { 16. } else { 6. }))
+            .pr(px(6.))
+            .gap(px(6.))
             .items_center()
+            .rounded(px(crate::theme::RADIUS_PILL))
+            .bg(palette.raised)
+            .shadow(palette.shadow_lg())
+            .occlude()
             .when(unsaved, |this| {
                 this.child(
                     h_flex()
+                        .mr(px(10.))
                         .gap(px(6.))
                         .items_center()
-                        .text_size(px(12.))
+                        .text_size(px(13.))
                         .line_height(px(16.))
                         .text_color(palette.ink_muted)
                         .child(div().size(px(6.)).rounded_full().bg(palette.notice))
                         .child("Unsaved changes"),
                 )
             })
-            .child(div().flex_1())
             .child(
                 button("cancel-fir", "Cancel")
                     .ghost()
@@ -1416,13 +1430,12 @@ impl NewFirScreen {
                 .on_click(move |_, window, cx| form.update(cx, |form, cx| form.submit(window, cx))),
             );
         h_flex()
-            .flex_none()
-            .h(px(60.))
-            .px(px(24.))
-            .items_center()
-            .rounded_b(px(crate::theme::RADIUS_XL))
-            .bg(crate::ui::muted_fill(&palette).opacity(0.8))
-            .child(row)
+            .absolute()
+            .left_0()
+            .right_0()
+            .bottom(px(20.))
+            .justify_center()
+            .child(bar)
             .into_any_element()
     }
 }
@@ -1457,6 +1470,7 @@ impl Render for NewFirScreen {
             .key_context("NewFir")
             .track_focus(&self.focus)
             .size_full()
+            .relative()
             .rounded(px(crate::theme::RADIUS_XL))
             .bg(palette.surface)
             .shadow(palette.shadow_xs())

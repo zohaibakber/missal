@@ -409,7 +409,6 @@ impl Editor {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let zoom = self.render_zoom(cx);
         let theme = EditorTheme::get(cx);
         let entity = cx.entity();
         let core = &self.core;
@@ -426,12 +425,13 @@ impl Editor {
                 entity.update(cx, |editor, cx| f(editor, window, cx));
             }
         };
-        h_flex()
+        let bar = h_flex()
             .id("editor-toolbar")
-            .flex_shrink_0()
-            .h(px(44.))
-            .m(px(8.))
-            .px(px(8.))
+            .flex_none()
+            .max_w_full()
+            .overflow_hidden()
+            .h(px(40.))
+            .px(px(6.))
             .gap(px(2.))
             .items_center()
             .rounded(px(999.))
@@ -513,13 +513,18 @@ impl Editor {
             )
             .child(separator())
             .child(self.field_menu(theme, cx))
-            .child(div().flex_1())
-            .child(zoom)
-            .child(separator())
             .when(self.mode_toggle, |this| {
-                this.child(self.mode_toggle(theme, cx)).child(separator())
+                this.child(separator()).child(self.mode_toggle(theme, cx))
             })
-            .children(self.toolbar_trailing.clone())
+            .children(self.toolbar_trailing.clone());
+        h_flex()
+            .flex_none()
+            .w_full()
+            .justify_center()
+            .px(px(12.))
+            .pt(px(10.))
+            .pb(px(2.))
+            .child(bar)
             .into_any_element()
     }
 
@@ -536,9 +541,17 @@ impl Editor {
         let fit = self.is_fit_zoom();
         h_flex()
             .id("editor-zoom")
-            .flex_none()
+            .absolute()
+            .right(px(12.))
+            .bottom(px(12.))
+            .h(px(32.))
+            .px(px(4.))
             .gap(px(2.))
             .items_center()
+            .rounded(px(999.))
+            .bg(theme.raised)
+            .shadow(theme.bar_shadows().to_vec())
+            .occlude()
             .font_family(missal_text::UI_FAMILY)
             .child(
                 tool("editor-zoom-out", IconName::Minus, "Zoom out")
@@ -553,12 +566,12 @@ impl Editor {
                 div()
                     .id("editor-zoom-fit")
                     .flex_none()
-                    .w(px(36.))
+                    .w(px(44.))
                     .h(px(24.))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(6.))
+                    .rounded(px(999.))
                     .text_size(px(12.))
                     .line_height(px(16.))
                     .text_color(theme.ink_muted)

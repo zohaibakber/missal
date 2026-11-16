@@ -39,9 +39,10 @@ use crate::ui::{
 use missal_core::digit_value;
 
 const PANEL_WIDTH: f32 = crate::theme::RAIL_WIDTH;
-const FOOTER_HEIGHT: f32 = 44.0;
+const FOOTER_HEIGHT: f32 = 36.0;
+const FLOAT_INSET: f32 = 12.0;
 const PAD_TOP: f32 = 20.0;
-const PAD_BOTTOM: f32 = PAD_TOP + FOOTER_HEIGHT + 16.0;
+const PAD_BOTTOM: f32 = PAD_TOP + FOOTER_HEIGHT + FLOAT_INSET;
 const FIT_PAGE_MARGIN: f32 = PAD_TOP + PAD_BOTTOM + 20.0;
 const FIT_WIDTH_MARGIN: f32 = 24.0;
 const GAP: f32 = 24.0;
@@ -1117,11 +1118,13 @@ impl PrintPreview {
         let name = isolate_urdu(first);
         let link = "Fill them in";
         let text = format!("{lead}{middle}{name}. {link}");
-        let base = TextStyle::interface(13.).with_color(to_rgba(palette.notice_text));
+        let base = TextStyle::interface(13.).with_color(to_rgba(palette.ink_muted));
         let name_start = lead.len() + middle.len();
         let link_start = text.len() - link.len();
         let rich = AttributedText::new(text.clone(), base)
             .with(0..lead.len(), Attr::Weight(600))
+            .with(0..lead.len(), Attr::Color(to_rgba(palette.ink)))
+            .with(link_start..text.len(), Attr::Color(to_rgba(palette.ink)))
             .with(
                 name_start..name_start + name.len(),
                 Attr::Family(FontFamily::Document),
@@ -1140,16 +1143,12 @@ impl PrintPreview {
                 .gap(px(10.))
                 .items_start()
                 .rounded(px(crate::theme::RADIUS_XL))
-                .bg(palette.notice_wash)
-                .shadow(vec![gpui_kit::BoxShadow {
-                    color: palette.notice.opacity(0.28),
-                    offset: gpui_kit::point(px(0.), px(0.)),
-                    blur_radius: px(0.),
-                    spread_radius: px(1.),
-                    inset: false,
-                }])
+                .bg(palette.surface)
+                .shadow(palette.shadow_xs())
                 .when(fill, |this| {
+                    let hover = palette.surface.blend(crate::ui::accent_fill(palette));
                     this.cursor_pointer()
+                        .hover(move |s| s.bg(hover))
                         .role(gpui_kit::accesskit::Role::Link)
                         .aria_label(SharedString::from(format!("{lead} {link}")))
                         .on_click(cx.listener(|this, _, _, cx| this.fill_in(cx)))
@@ -1157,7 +1156,7 @@ impl PrintPreview {
                 .child(div().pt(px(2.)).child(sized_icon(
                     IconName::TriangleAlert,
                     ICON_SM,
-                    palette.notice_text,
+                    palette.notice,
                 )))
                 .child(
                     div().flex_1().min_w_0().child(
@@ -1416,7 +1415,12 @@ impl PrintPreview {
         }
     }
 
-    fn footer(&self, palette: &Palette, window: &Window, cx: &mut Context<Self>) -> AnyElement {
+    fn footer(
+        &self,
+        palette: &Palette,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> (AnyElement, AnyElement) {
         let palette = *palette;
         let ready = self.is_ready() && self.document_count() > 0;
         let count = self.page_count();
@@ -1429,23 +1433,11 @@ impl PrintPreview {
         let page_focused = self.page_input.focus_handle(cx).is_focused(window);
         let zoom_bounds = self.zoom_bounds.clone();
         let menu_open = self.menu.is_some();
-        let hover = palette.hover;
+        let hover = crate::ui::accent_fill_strong(&palette);
         let laying_out = matches!(self.state, State::Loading) && self.show_skeleton;
         let page_input = self.page_input.clone();
-        h_flex()
+        let pages = crate::ui::floating_bar(&palette)
             .id("print-footer")
-            .flex_none()
-            .h(px(FOOTER_HEIGHT))
-            .items_center()
-            .gap(px(6.))
-            .px(px(8.))
-            .rounded(px(crate::theme::RADIUS_PILL))
-            .bg(palette.raised)
-            .shadow(palette.shadow_lg())
-            .occlude()
-            .text_size(px(13.))
-            .text_color(palette.ink_muted)
-            .font_features(tabular())
             .child(
                 icon_button("preview-previous", IconName::ChevronLeft, "Previous page")
                     .keys("PageUp")
@@ -1453,34 +1445,36 @@ impl PrintPreview {
                     .disabled(!ready || current <= 1)
                     .on_click(cx.listener(|this, _, _, cx| this.step_page(-1, cx))),
             )
-            .child("Page")
             .child(
                 div()
                     .id("preview-page-input")
-                    .w(px(44.))
-                    .h(px(28.))
+                    .w(px(40.))
+                    .h(px(24.))
                     .flex_none()
                     .flex()
                     .items_center()
                     .px(px(4.))
                     .rounded(px(RADIUS))
-                    .bg(palette.control_fill())
+                    .bg(crate::ui::muted_fill(&palette))
+                    .when(page_focused, |this| {
+                        this.bg(palette.control_fill())
+                            .shadow(crate::ui::control_shadows(&palette, true, false))
+                    })
                     .text_color(palette.ink)
-                    .shadow(crate::ui::control_shadows(&palette, page_focused, false))
                     .cursor_text()
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                         page_input.update(cx, |input, cx| input.focus(window, cx));
                     })
                     .child(div().w_full().child(self.page_input.clone())),
             )
-            .child(format!(
+            .child(div().px(px(2.)).whitespace_nowrap().child(format!(
                 "of {}",
                 if count == 0 {
                     "—".to_owned()
                 } else {
                     count.to_string()
                 }
-            ))
+            )))
             .child(
                 icon_button("preview-next", IconName::ChevronRight, "Next page")
                     .keys("PageDown")
@@ -1491,13 +1485,15 @@ impl PrintPreview {
             .when(laying_out, |this| {
                 this.child(
                     div()
-                        .ml(px(8.))
+                        .px(px(6.))
                         .text_size(px(12.))
-                        .text_color(palette.ink_muted)
+                        .whitespace_nowrap()
                         .child("Laying out pages…"),
                 )
             })
-            .child(crate::ui::vertical_rule(&palette).mx(px(4.)))
+            .into_any_element();
+        let zoom = crate::ui::floating_bar(&palette)
+            .id("print-zoom-bar")
             .child(
                 icon_button("preview-zoom-out", IconName::Minus, "Zoom out")
                     .keys("Mod+-")
@@ -1511,14 +1507,14 @@ impl PrintPreview {
                     .test_support()
                     .relative()
                     .flex_none()
-                    .h(px(28.))
-                    .pl(px(10.))
-                    .pr(px(8.))
-                    .gap(px(6.))
+                    .h(px(24.))
+                    .pl(px(8.))
+                    .pr(px(6.))
+                    .gap(px(4.))
                     .items_center()
                     .rounded(px(crate::theme::RADIUS_PILL))
-                    .bg(crate::ui::muted_fill(&palette))
                     .text_color(palette.ink)
+                    .whitespace_nowrap()
                     .when(menu_open, |this| this.bg(hover))
                     .when(!ready, |this| this.opacity(0.4))
                     .hover(move |style| style.bg(hover))
@@ -1549,7 +1545,8 @@ impl PrintPreview {
                     .disabled(!ready)
                     .on_click(cx.listener(|this, _, _, cx| this.step_zoom(1, cx))),
             )
-            .into_any_element()
+            .into_any_element();
+        (pages, zoom)
     }
 }
 
@@ -1737,8 +1734,13 @@ impl Render for PrintPreview {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
         let panel = self.panel(&palette, cx);
-        let footer =
-            (!matches!(self.state, State::Failed(_))).then(|| self.footer(&palette, window, cx));
+        let (pages, zoom) = match self.state {
+            State::Failed(_) => (None, None),
+            _ => {
+                let (pages, zoom) = self.footer(&palette, window, cx);
+                (Some(pages), Some(zoom))
+            }
+        };
         let area = self.pages_area(&palette, cx);
         let weak = cx.entity().downgrade();
         let probe = canvas(
@@ -1779,14 +1781,19 @@ impl Render for PrintPreview {
                         .shadow(palette.shadow_xs())
                         .child(probe)
                         .child(area)
-                        .children(footer.map(|footer| {
-                            h_flex()
+                        .children(pages.map(|pages| {
+                            div()
                                 .absolute()
-                                .left_0()
-                                .right_0()
-                                .bottom(px(16.))
-                                .justify_center()
-                                .child(footer)
+                                .left(px(FLOAT_INSET))
+                                .bottom(px(FLOAT_INSET))
+                                .child(pages)
+                        }))
+                        .children(zoom.map(|zoom| {
+                            div()
+                                .absolute()
+                                .right(px(FLOAT_INSET))
+                                .bottom(px(FLOAT_INSET))
+                                .child(zoom)
                         })),
                 ),
             )

@@ -270,13 +270,9 @@ impl RenderOnce for Field {
             (true, false) => palette.input_focus_ring(),
             (true, true) => palette.danger_ring(),
             (false, true) => palette.danger_edge(),
-            (false, false) => palette.input_shadow(),
+            (false, false) => Vec::new(),
         };
-        let hover_shadows = (!focused && !self.error).then(|| {
-            let mut hover = palette.input_shadow();
-            hover[0].color = palette.line_strong;
-            hover
-        });
+        let hover_fill = (!focused).then(|| palette.field_fill_hover());
         let height = self.height.unwrap_or(self.kind.height());
         let focus_target = self.input.clone();
         let mut start: Vec<gpui_kit::AnyElement> = Vec::new();
@@ -309,10 +305,10 @@ impl RenderOnce for Field {
             .gap(px(8.))
             .px(px(10.))
             .rounded(px(RADIUS_LG))
-            .when_some(hover_shadows, |this, hover| {
-                this.hover(move |style| style.shadow(hover.clone()))
+            .bg(palette.field_bg(focused))
+            .when_some(hover_fill, |this, hover| {
+                this.hover(move |style| style.bg(hover))
             })
-            .bg(palette.control_fill())
             .shadow(shadows)
             .cursor_text()
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {

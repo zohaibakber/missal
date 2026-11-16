@@ -31,7 +31,7 @@ use missal_text::{Align, Label, LineHeight, label};
 use crate::shortcuts::key_caps;
 use crate::theme::{
     BUTTON_MD, BUTTON_SM, CHECKBOX, ICON, ICON_BUTTON, ICON_BUTTON_DENSE, ICON_SM, ICON_XS, KEYCAP,
-    Palette, RADIUS, RADIUS_CHIP, RADIUS_LG, RADIUS_PILL, RADIUS_SM, RADIUS_XL, SEGMENTED_ITEM,
+    Palette, RADIUS, RADIUS_CHIP, RADIUS_LG, RADIUS_PILL, RADIUS_XL, SEGMENTED_ITEM,
     SEGMENTED_TRACK, TOOLTIP_DELAY, hex, hex_alpha,
 };
 
@@ -670,7 +670,7 @@ impl RenderOnce for IconButton {
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(if self.dense { RADIUS_SM } else { RADIUS }))
+            .rounded(px(if self.dense { RADIUS_PILL } else { RADIUS }))
             .text_color(color)
             .when(self.toggled, |this| this.bg(pressed))
             .when(self.show_hover && !self.toggled, |this| this.bg(hover))
@@ -718,7 +718,7 @@ pub fn control_shadows(palette: &Palette, focused: bool, error: bool) -> Vec<gpu
         (true, false) => palette.input_focus_ring(),
         (true, true) => palette.danger_ring(),
         (false, true) => palette.danger_edge(),
-        (false, false) => palette.input_shadow(),
+        (false, false) => Vec::new(),
     }
 }
 
@@ -727,6 +727,22 @@ pub fn card(palette: &Palette) -> Div {
         .rounded(px(RADIUS_XL))
         .bg(palette.surface)
         .shadow(palette.shadow_xs())
+}
+
+pub fn floating_bar(palette: &Palette) -> Div {
+    h_flex()
+        .flex_none()
+        .h(px(36.))
+        .px(px(4.))
+        .gap(px(2.))
+        .items_center()
+        .rounded(px(RADIUS_PILL))
+        .bg(palette.raised)
+        .shadow(palette.shadow_lg())
+        .occlude()
+        .text_size(px(13.))
+        .text_color(palette.ink_muted)
+        .font_features(tabular())
 }
 
 pub fn frame(palette: &Palette) -> Div {
@@ -888,14 +904,7 @@ pub fn warn_box(palette: &Palette, content: impl IntoElement) -> Div {
         .rounded(px(RADIUS_XL))
         .bg(palette
             .notice
-            .opacity(if palette.dark { 0.08 } else { 0.05 }))
-        .shadow(vec![gpui_kit::BoxShadow {
-            color: palette.notice.opacity(0.28),
-            offset: gpui_kit::point(px(0.), px(0.)),
-            blur_radius: px(0.),
-            spread_radius: px(1.),
-            inset: false,
-        }])
+            .opacity(if palette.dark { 0.1 } else { 0.07 }))
         .text_color(palette.ink)
         .text_size(px(13.))
         .line_height(px(20.))
