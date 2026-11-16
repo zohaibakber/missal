@@ -6,7 +6,7 @@ UPDATE users SET email_verified_at = created_at, trial_ends_at = unixepoch() * 1
 
 CREATE TABLE email_codes (
     email TEXT NOT NULL,
-    purpose TEXT NOT NULL CHECK (purpose IN ('verify', 'reset')),
+    purpose TEXT NOT NULL CHECK (purpose IN ('verify', 'reset', 'notice')),
     code_hash TEXT NOT NULL,
     expires_at INTEGER NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0,

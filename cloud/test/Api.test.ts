@@ -179,6 +179,9 @@ describe("accounts", () => {
       const notice = (yield* mailTo(READER)).at(-1);
       expect(notice?.text).toMatch(/already has one/);
       expect(notice?.text).not.toMatch(/\d{6}/);
+      const notices = (yield* mailTo(READER)).length;
+      yield* signUp(READER, "someone-else-123");
+      expect(yield* mailTo(READER)).toHaveLength(notices);
       expect((yield* signIn(READER, "someone-else-123").pipe(Effect.flip))._tag).toBe(
         "InvalidCredentials",
       );

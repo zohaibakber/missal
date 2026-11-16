@@ -315,15 +315,18 @@ export class Accounts extends Context.Service<
       const sendMail = (message: MailMessage) =>
         mailer.send(message).pipe(storage("send the email"));
 
-      const sendCode = Effect.fnUntraced(function* (email: Email, purpose: CodePurpose) {
+      const claimSend = Effect.fnUntraced(function* (
+        email: Email,
+        purpose: CodePurpose | "notice",
+        codeHash: string,
+        lifetime: Duration.Duration,
+      ) {
         const now = millis(yield* DateTime.now);
-        const code = String(yield* random.intBetween(0, 999_999)).padStart(6, "0");
-        const codeHash = yield* hashCode(email, purpose, code);
         const claimed = yield* sql`INSERT INTO email_codes ${sql.insert({
           email,
           purpose,
           codeHash,
-          expiresAt: now + Duration.toMillis(CODE_LIFETIME),
+          expiresAt: now + Duration.toMillis(lifetime),
           attempts: 0,
           sentAt: now,
         })}
@@ -334,7 +337,19 @@ export class Accounts extends Context.Service<
             sent_at = excluded.sent_at
           WHERE email_codes.sent_at <= ${now - Duration.toMillis(CODE_COOLDOWN)}
           RETURNING email`.pipe(storage("store the code"));
-        if (claimed.length === 0) return;
+        return claimed.length > 0;
+      });
+
+      const sendNotice = Effect.fnUntraced(function* (email: Email) {
+        if (!(yield* claimSend(email, "notice", "", CODE_COOLDOWN))) return;
+        yield* sendMail(accountExistsMessage(email));
+      });
+
+      const sendCode = Effect.fnUntraced(function* (email: Email, purpose: CodePurpose) {
+        const code = String(yield* random.intBetween(0, 999_999)).padStart(6, "0");
+        const codeHash = yield* hashCode(email, purpose, code);
+        const claimed = yield* claimSend(email, purpose, codeHash, CODE_LIFETIME);
+        if (!claimed) return;
         yield* sendMail(codeMessage(email, purpose, code)).pipe(
           Effect.tapError(() =>
             sql`DELETE FROM email_codes WHERE email = ${email} AND purpose = ${purpose} AND code_hash = ${codeHash}`.pipe(
@@ -386,7 +401,7 @@ export class Accounts extends Context.Service<
         const found = yield* userByEmail(request.email).pipe(storage("sign up"));
         const now = yield* DateTime.now;
         if (Option.isSome(found) && isVerified(found.value)) {
-          return yield* sendMail(accountExistsMessage(request.email));
+          return yield* sendNotice(request.email);
         }
         if (Option.isSome(found)) {
           yield* sql`UPDATE users SET ${sql.update({ ...fields, name: request.name })}
