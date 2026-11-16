@@ -281,6 +281,8 @@ fn account_menu(cx: &App) -> Option<AnyElement> {
     let name = SharedString::from(account.display_name().to_owned());
     let email = SharedString::from(account.email.clone());
     let admin = account.role.is_admin();
+    let trial = crate::auth::trial_days_left(&account).map(crate::auth::trial_label);
+    let purchase = AuthModel::get(cx)?.read(cx).purchase_url().is_some();
     Some(
         div()
             .mr(px(4.))
@@ -292,6 +294,26 @@ fn account_menu(cx: &App) -> Option<AnyElement> {
                     )
                     .content(move |menu, _, _| {
                         menu.header(name.clone(), Some(email.clone()))
+                            .when_some(trial.clone(), |menu, trial| {
+                                let menu = menu.separator().header(
+                                    trial,
+                                    (!purchase).then(|| {
+                                        SharedString::from("Contact us to buy a licence.")
+                                    }),
+                                );
+                                if purchase {
+                                    menu.item(
+                                        MenuEntry::new(
+                                            "account-buy",
+                                            "Buy a licence…",
+                                            |_, cx| crate::auth::open_purchase(cx),
+                                        )
+                                        .icon(IconName::ExternalLink),
+                                    )
+                                } else {
+                                    menu
+                                }
+                            })
                             .separator()
                             .item(
                                 MenuEntry::new(

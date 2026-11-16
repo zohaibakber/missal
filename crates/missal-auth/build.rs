@@ -1,19 +1,27 @@
 use std::path::PathBuf;
 
-const API_URL: &str = "MISSAL_API_URL";
+const FORWARDED: [&str; 2] = ["MISSAL_API_URL", "MISSAL_PURCHASE_URL"];
 
 fn main() {
     let manifest = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap_or_default());
     let env_file = manifest.join("../../.env");
     println!("cargo:rerun-if-changed={}", env_file.display());
-    println!("cargo:rerun-if-env-changed={API_URL}");
-    if std::env::var_os(API_URL).is_some_and(|value| !value.is_empty()) {
+    for variable in FORWARDED {
+        println!("cargo:rerun-if-env-changed={variable}");
+    }
+    let missing: Vec<&str> = FORWARDED
+        .into_iter()
+        .filter(|variable| std::env::var_os(variable).is_none_or(|value| value.is_empty()))
+        .collect();
+    if missing.is_empty() {
         return;
     }
     let Ok(entries) = dotenvy::from_path_iter(&env_file) else {
         return;
     };
-    if let Some((_, value)) = entries.flatten().find(|(key, _)| key == API_URL) {
-        println!("cargo:rustc-env={API_URL}={value}");
+    for (key, value) in entries.flatten() {
+        if missing.contains(&key.as_str()) {
+            println!("cargo:rustc-env={key}={value}");
+        }
     }
 }

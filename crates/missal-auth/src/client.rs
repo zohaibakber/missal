@@ -1,7 +1,7 @@
 use std::time::{Duration, SystemTime};
 
-use serde::Deserialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use ureq::Agent;
 use ureq::http::Response;
@@ -32,12 +32,11 @@ struct Problem {
     retry_after: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewUser {
-    pub email: String,
-    pub name: String,
-    pub role: Role,
-    pub password: String,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CodePurpose {
+    Verify,
+    Reset,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -55,15 +54,17 @@ fn problem(status: u16, body: &str) -> AuthError {
             retry_after: problem.map_or(0, |problem| problem.retry_after),
         },
         Some("SessionExpired" | "Unauthorized") => AuthError::SessionEnded,
-        Some("PasswordChangeRequired") => AuthError::PasswordChangeRequired,
         Some("WrongPassword") => AuthError::WrongPassword,
-        Some("EmailTaken") => AuthError::EmailTaken,
+        Some("InvalidCode") => AuthError::InvalidCode,
+        Some("EmailNotVerified") => AuthError::EmailNotVerified,
+        Some("LicenceRequired") => AuthError::LicenceRequired,
         Some("OwnAccess") => AuthError::OwnAccess,
         Some("NotAdmin" | "NotPublisher") => AuthError::NotAllowed,
         Some("UserNotFound") => AuthError::NotFound,
         _ => match status {
             400 => AuthError::Invalid,
             401 => AuthError::SessionEnded,
+            402 => AuthError::LicenceRequired,
             403 => AuthError::NotAllowed,
             404 => AuthError::NotFound,
             429 | 500.. => AuthError::Offline(format!("the server answered {status}")),
@@ -187,6 +188,39 @@ impl Api {
         )
     }
 
+    pub(crate) fn sign_up(&self, email: &str, name: &str, password: &str) -> Result<(), AuthError> {
+        let body = json!({ "email": email.trim(), "name": name.trim(), "password": password });
+        self.call(Method::Post, "auth/sign-up", None, Some(body))
+            .map(|_| ())
+    }
+
+    pub(crate) fn request_code(&self, email: &str, purpose: CodePurpose) -> Result<(), AuthError> {
+        let body = json!({ "email": email.trim(), "purpose": purpose });
+        self.call(Method::Post, "auth/codes", None, Some(body))
+            .map(|_| ())
+    }
+
+    pub(crate) fn verify_email(&self, email: &str, code: &str) -> Result<Session, AuthError> {
+        self.session(
+            "auth/verify-email",
+            None,
+            json!({ "email": email.trim(), "code": code.trim() }),
+        )
+    }
+
+    pub(crate) fn reset_password(
+        &self,
+        email: &str,
+        code: &str,
+        password: &str,
+    ) -> Result<Session, AuthError> {
+        self.session(
+            "auth/reset-password",
+            None,
+            json!({ "email": email.trim(), "code": code.trim(), "password": password }),
+        )
+    }
+
     pub(crate) fn refresh(&self, session: &Session) -> Result<Session, AuthError> {
         self.session(
             "auth/refresh",
@@ -222,16 +256,6 @@ impl Api {
         Self::json(&self.call(Method::Get, "users", Some(token), None)?)
     }
 
-    pub(crate) fn create_user(&self, token: &str, user: &NewUser) -> Result<Account, AuthError> {
-        let body = json!({
-            "email": user.email.trim(),
-            "name": user.name.trim(),
-            "role": user.role,
-            "password": user.password,
-        });
-        Self::json(&self.call(Method::Post, "users", Some(token), Some(body))?)
-    }
-
     pub(crate) fn update_user(
         &self,
         token: &str,
@@ -252,14 +276,14 @@ impl Api {
         Self::json(&self.call(Method::Patch, &path, Some(token), Some(Value::Object(body)))?)
     }
 
-    pub(crate) fn reset_password(
+    pub(crate) fn grant_licence(
         &self,
         token: &str,
         id: &str,
-        password: &str,
+        years: u8,
     ) -> Result<Account, AuthError> {
-        let path = format!("users/{}/password", valid_id(id)?);
-        let body = json!({ "password": password });
+        let path = format!("users/{}/licence", valid_id(id)?);
+        let body = json!({ "years": years });
         Self::json(&self.call(Method::Post, &path, Some(token), Some(body))?)
     }
 }
@@ -280,6 +304,18 @@ mod tests {
         assert_eq!(
             problem(401, r#"{"_tag":"InvalidCredentials","error":"x"}"#),
             AuthError::InvalidCredentials
+        );
+        assert_eq!(
+            problem(403, r#"{"_tag":"EmailNotVerified","error":"x"}"#),
+            AuthError::EmailNotVerified
+        );
+        assert_eq!(
+            problem(400, r#"{"_tag":"InvalidCode","error":"x"}"#),
+            AuthError::InvalidCode
+        );
+        assert_eq!(
+            problem(402, r#"{"_tag":"LicenceRequired","error":"x"}"#),
+            AuthError::LicenceRequired
         );
         assert_eq!(problem(401, "{}"), AuthError::SessionEnded);
         assert_eq!(problem(400, ""), AuthError::Invalid);
