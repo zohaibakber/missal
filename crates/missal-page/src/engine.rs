@@ -257,16 +257,8 @@ impl PageEngine {
         self.options
     }
 
-    pub fn text_engine(&mut self) -> &mut TextEngine {
-        &mut self.text
-    }
-
     pub fn last_stats(&self) -> RelayoutStats {
         self.last
-    }
-
-    pub fn cached_blocks(&self) -> usize {
-        self.cache.len()
     }
 
     pub fn layout(&mut self, sources: &[DocSource<'_>]) -> Packet {

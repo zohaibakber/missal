@@ -131,10 +131,6 @@ impl TextCache {
         self.styles.trim();
     }
 
-    pub(crate) fn len(&self) -> usize {
-        self.map.len()
-    }
-
     pub(crate) fn sync_generation(&mut self, other: &TextCache) {
         self.generation = other.generation;
         self.styles.trim();
