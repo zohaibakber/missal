@@ -11,7 +11,7 @@ use gpui_kit::{
 use missal_text::{LineHeight, label};
 
 use crate::state::ToastKind;
-use crate::theme::{ICON_SM, Palette, RADIUS_LG, TOAST_MAX_WIDTH, motion_base, motion_exit};
+use crate::theme::{ICON_SM, Palette, TOAST_MAX_WIDTH, motion_base, motion_exit};
 use crate::ui::sized_icon;
 
 pub const TOAST_DURATION: Duration = Duration::from_secs(4);
@@ -189,7 +189,7 @@ impl Default for ToastHost {
 
 pub fn toast_card(palette: &Palette, spec: &ToastSpec) -> gpui_kit::Div {
     let (icon, color) = match spec.kind {
-        ToastKind::Success => (IconName::CircleCheck, palette.success),
+        ToastKind::Success => (IconName::CircleCheck, palette.success_text),
         ToastKind::Error => (IconName::CircleAlert, palette.danger_text),
         ToastKind::Warning => (IconName::TriangleAlert, palette.notice),
         ToastKind::Info => (IconName::Info, palette.ink_muted),
@@ -199,14 +199,11 @@ pub fn toast_card(palette: &Palette, spec: &ToastSpec) -> gpui_kit::Div {
         .items_center()
         .gap(px(10.))
         .py(px(10.))
-        .px(px(12.))
-        .rounded(px(RADIUS_LG))
-        .bg(if palette.dark {
-            crate::theme::hex(0x2a2826)
-        } else {
-            palette.raised
-        })
-        .shadow(palette.shadow_lg())
+        .pl(px(14.))
+        .pr(px(10.))
+        .rounded(px(crate::theme::RADIUS_XL))
+        .bg(palette.raised)
+        .shadow(palette.shadow_xl())
         .text_size(px(13.))
         .line_height(px(20.))
         .text_color(palette.ink)
@@ -232,11 +229,10 @@ pub fn toast_card(palette: &Palette, spec: &ToastSpec) -> gpui_kit::Div {
 impl Render for ToastHost {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
-        let accent = palette.accent;
         div()
             .absolute()
-            .right(px(16.))
-            .bottom(px(16.))
+            .right(px(24.))
+            .bottom(px(24.))
             .w(px(TOAST_MAX_WIDTH))
             .child(
                 v_flex()
@@ -248,17 +244,21 @@ impl Render for ToastHost {
                             div()
                                 .id(("toast-action", id))
                                 .flex_none()
-                                .h(px(24.))
-                                .px(px(8.))
-                                .mr(px(-4.))
+                                .h(px(26.))
+                                .px(px(10.))
                                 .flex()
                                 .items_center()
-                                .rounded(px(crate::theme::RADIUS))
+                                .rounded(px(crate::theme::RADIUS_PILL))
+                                .bg(crate::ui::muted_fill(&palette))
                                 .text_size(px(12.))
                                 .font_weight(FontWeight::MEDIUM)
-                                .text_color(accent)
-                                .hover(move |style| style.bg(palette.hover_raised))
-                                .active(move |style| style.bg(palette.pressed_raised))
+                                .text_color(palette.ink)
+                                .hover(move |style| {
+                                    style.bg(crate::ui::accent_fill_strong(&palette))
+                                })
+                                .active(move |style| {
+                                    style.bg(crate::ui::accent_fill_strong(&palette))
+                                })
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     handler(window, cx);
                                     this.dismiss(id, cx);

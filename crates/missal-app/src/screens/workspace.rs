@@ -118,7 +118,7 @@ impl RenderOnce for AddRow {
             .px(px(10.))
             .gap(px(8.))
             .items_center()
-            .rounded(px(6.))
+            .rounded(px(crate::theme::RADIUS_LG))
             .text_size(px(13.))
             .line_height(px(20.))
             .font_weight(FontWeight::MEDIUM)
@@ -1095,7 +1095,7 @@ impl WorkspaceScreen {
                     .content(move |_, _, cx| {
                         menu_screen.update(cx, |this, cx| this.document_menu(id, index, cx))
                     });
-                let hover = palette.hover;
+                let hover = crate::ui::accent_fill_strong(&palette);
                 h_flex()
                     .id(("document-row", index))
                     .test_support()
@@ -1106,20 +1106,17 @@ impl WorkspaceScreen {
                     .px(px(10.))
                     .gap(px(8.))
                     .items_center()
-                    .rounded(px(6.))
+                    .rounded(px(crate::theme::RADIUS_LG))
                     .when(active, |this| {
-                        this.bg(if rail_focused {
-                            palette.accent_wash
-                        } else {
-                            palette.pressed
-                        })
+                        let mut shadows = palette.thumb_shadow();
+                        if rail_focused {
+                            shadows.extend(palette.focus_ring());
+                        }
+                        this.bg(palette.floating()).shadow(shadows)
                     })
                     .when(!active, |this| {
                         this.hover(move |style| style.bg(hover))
-                            .active(move |s| s.bg(palette.pressed))
-                    })
-                    .when(active && rail_focused, |this| {
-                        this.border_r_2().border_color(palette.accent)
+                            .active(move |s| s.bg(hover))
                     })
                     .role(gpui_kit::accesskit::Role::ListItem)
                     .aria_label(SharedString::from(title.clone()))
@@ -1179,9 +1176,6 @@ impl WorkspaceScreen {
             .w(px(RAIL_WIDTH))
             .flex_none()
             .h_full()
-            .border_r_1()
-            .border_color(palette.line)
-            .bg(palette.surface)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if !this.rail_focus.is_focused(window) {
                     return;
@@ -1307,8 +1301,8 @@ impl WorkspaceScreen {
                     .id("add-document-card")
                     .w(px(360.))
                     .bg(palette.raised)
-                    .rounded(px(8.))
-                    .shadow(palette.shadow_md())
+                    .rounded(px(crate::theme::RADIUS_XL))
+                    .shadow(palette.shadow_lg())
                     .text_color(palette.ink)
                     .font_family(missal_text::UI_FAMILY)
                     .on_action({
@@ -1369,8 +1363,6 @@ impl WorkspaceScreen {
                             .px(px(14.))
                             .gap(px(8.))
                             .items_center()
-                            .border_b_1()
-                            .border_color(palette.line)
                             .child(keycap(&palette, "Esc"))
                             .child(div().flex_1().min_w_0().mt(px(-1.)).child(search.clone()))
                             .child(sized_icon(IconName::Search, ICON_SM, palette.ink_faint)),
@@ -1395,16 +1387,24 @@ impl WorkspaceScreen {
                                         .px(px(10.))
                                         .gap(px(10.))
                                         .items_center()
-                                        .rounded(px(6.))
-                                        .when(highlighted, |this| this.bg(palette.hover))
+                                        .rounded(px(crate::theme::RADIUS))
+                                        .when(highlighted, |this| {
+                                            this.bg(crate::ui::accent_fill(&palette))
+                                        })
                                         .when(!added, |this| {
-                                            this.hover(move |style| style.bg(palette.hover))
-                                                .active(move |s| s.bg(palette.pressed))
-                                                .on_click(cx.listener(move |_, _, _, cx| {
+                                            this.hover(move |style| {
+                                                style.bg(crate::ui::accent_fill(&palette))
+                                            })
+                                            .active(move |s| {
+                                                s.bg(crate::ui::accent_fill_strong(&palette))
+                                            })
+                                            .on_click(
+                                                cx.listener(move |_, _, _, cx| {
                                                     screen.update(cx, |this, cx| {
                                                         this.toggle_template(id, cx)
                                                     });
-                                                }))
+                                                }),
+                                            )
                                         })
                                         .child(if added {
                                             checkbox(
@@ -1466,8 +1466,8 @@ impl WorkspaceScreen {
                             .px(px(12.))
                             .gap(px(8.))
                             .items_center()
-                            .border_t_1()
-                            .border_color(palette.line)
+                            .rounded_b(px(crate::theme::RADIUS_XL))
+                            .bg(crate::ui::muted_fill(&palette).opacity(0.8))
                             .child(
                                 div()
                                     .flex_1()
@@ -1655,6 +1655,7 @@ impl Render for WorkspaceScreen {
             .key_context(WORKSPACE)
             .track_focus(&self.focus)
             .size_full()
+            .gap(px(crate::theme::SHELL_INSET))
             .on_action(cx.listener(|this, _: &Save, window, cx| this.save_active(window, cx, None)))
             .on_action(cx.listener(|this, _: &EditFir, window, cx| this.edit_details(window, cx)))
             .on_action(
@@ -1696,7 +1697,10 @@ impl Render for WorkspaceScreen {
                     .flex_1()
                     .min_w_0()
                     .h_full()
+                    .rounded(px(crate::theme::RADIUS_XL))
+                    .overflow_hidden()
                     .bg(palette.sunken)
+                    .shadow(palette.shadow_xs())
                     .child(canvas),
             )
             .when(panel_open, |this| {

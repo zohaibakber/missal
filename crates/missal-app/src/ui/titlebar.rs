@@ -269,9 +269,7 @@ impl RenderOnce for Header {
             .w_full()
             .h(px(HEADER_HEIGHT))
             .items_center()
-            .bg(palette.surface)
-            .border_b_1()
-            .border_color(palette.line)
+            .bg(palette.canvas)
             .font_family(missal_text::UI_FAMILY)
             .child(content)
             .when_some(controls, |this, controls| {

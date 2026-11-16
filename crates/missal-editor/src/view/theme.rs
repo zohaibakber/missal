@@ -76,6 +76,32 @@ impl EditorTheme {
         ]
     }
 
+    pub fn bar_shadows(&self) -> [BoxShadow; 3] {
+        [
+            BoxShadow {
+                color: self.line,
+                offset: point(px(0.), px(0.)),
+                blur_radius: px(0.),
+                spread_radius: px(1.),
+                inset: false,
+            },
+            BoxShadow {
+                color: self.shadow,
+                offset: point(px(0.), px(1.)),
+                blur_radius: px(3.),
+                spread_radius: px(0.),
+                inset: false,
+            },
+            BoxShadow {
+                color: self.shadow,
+                offset: point(px(0.), px(6.)),
+                blur_radius: px(16.),
+                spread_radius: px(-4.),
+                inset: false,
+            },
+        ]
+    }
+
     pub fn control_shadow(&self) -> BoxShadow {
         BoxShadow {
             color: self.shadow,

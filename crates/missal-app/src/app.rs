@@ -757,7 +757,7 @@ impl Render for AppShell {
                 .id("app-shell")
                 .size_full()
                 .relative()
-                .bg(palette.surface)
+                .bg(palette.canvas)
                 .text_color(palette.ink)
                 .font_family(missal_text::UI_FAMILY)
                 .text_size(px(14.))
@@ -785,7 +785,7 @@ impl Render for AppShell {
             .track_focus(&self.focus)
             .size_full()
             .relative()
-            .bg(palette.surface)
+            .bg(palette.canvas)
             .text_color(palette.ink)
             .font_family(missal_text::UI_FAMILY)
             .text_size(px(14.))
@@ -838,7 +838,8 @@ impl Render for AppShell {
                     .flex_1()
                     .min_h_0()
                     .w_full()
-                    .bg(palette.surface)
+                    .px(px(crate::theme::SHELL_INSET))
+                    .pb(px(crate::theme::SHELL_INSET))
                     .child(
                         self.screen
                             .view()

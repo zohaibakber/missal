@@ -15,7 +15,8 @@ use crate::library::{EntryStatus, LibraryModel};
 use crate::state::{Load, Models, Route};
 use crate::theme::{Palette, RADIUS};
 use crate::ui::dialogs::{
-    Choice, Tone, confirm_delete, dialog_surface, dialog_title, open_choice, optical_top,
+    Choice, Tone, confirm_delete, dialog_footer, dialog_surface, dialog_title, open_choice,
+    optical_top,
 };
 use crate::ui::{
     button, empty_state_body, ghost_sm, icon_button, isolate_urdu, primary_sm, skeleton_bar,
@@ -301,7 +302,7 @@ impl Render for LibraryPanel {
                     .child(self.body(&palette, cx)),
             )
             .child(
-                h_flex().mt(px(12.)).pb(px(4.)).child(div().flex_1()).child(
+                dialog_footer(&palette).child(div().flex_1()).child(
                     button("library-close", "Close")
                         .primary()
                         .on_click(|_, window, cx| window.close_dialog(cx)),

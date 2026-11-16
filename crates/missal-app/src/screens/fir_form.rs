@@ -783,7 +783,7 @@ impl FirForm {
                     .children(FirStatus::ALL.iter().map(|status| {
                         let status = *status;
                         let weak = weak.clone();
-                        let hover = palette.hover;
+                        let hover = crate::ui::accent_fill(&palette);
                         h_flex()
                             .id(("status-choice", status as usize))
                             .test_support()
@@ -792,11 +792,11 @@ impl FirForm {
                             .px(px(10.))
                             .gap(px(8.))
                             .items_center()
-                            .rounded(px(4.))
+                            .rounded(px(crate::theme::RADIUS_SM))
                             .role(gpui_kit::accesskit::Role::MenuItemRadio)
-                            .when(status == current, |this| this.bg(palette.pressed))
+                            .when(status == current, |this| this.bg(hover))
                             .hover(move |style| style.bg(hover))
-                            .active(move |s| s.bg(palette.pressed))
+                            .active(move |s| s.bg(crate::ui::accent_fill_strong(&palette)))
                             .on_click(move |_, _, cx| {
                                 weak.update(cx, |this, cx| this.set_status(status, cx)).ok();
                             })
@@ -861,9 +861,9 @@ impl FirForm {
                                     .id(("calendar-panel", index))
                                     .occlude()
                                     .p(px(8.))
-                                    .rounded(px(8.))
+                                    .rounded(px(crate::theme::RADIUS_XL))
                                     .bg(palette.raised)
-                                    .shadow(palette.shadow_md())
+                                    .shadow(palette.shadow_lg())
                                     .on_mouse_down_out(move |_, window, cx| {
                                         closer
                                             .update(cx, |this, cx| {
@@ -966,13 +966,13 @@ impl FirForm {
                         .px(px(8.))
                         .gap(px(6.))
                         .items_center()
-                        .rounded(px(6.))
+                        .rounded(px(crate::theme::RADIUS_PILL))
                         .text_size(px(13.))
                         .line_height(px(20.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(palette.ink_muted)
-                        .hover(move |s| s.bg(palette.hover).text_color(ink))
-                        .active(move |s| s.bg(palette.pressed))
+                        .hover(move |s| s.bg(crate::ui::accent_fill(&palette)).text_color(ink))
+                        .active(move |s| s.bg(crate::ui::accent_fill_strong(&palette)))
                         .role(gpui_kit::accesskit::Role::Button)
                         .on_click(
                             cx.listener(move |this, _, window, cx| {
@@ -989,26 +989,19 @@ impl FirForm {
 
     fn body_control(&self, palette: &Palette, window: &Window, cx: &App) -> AnyElement {
         let focused = self.body.focus_handle(cx).is_focused(window);
-        let shadows = if focused {
-            palette.input_focus_ring()
-        } else {
-            Vec::new()
-        };
         let target = self.body.clone();
         div()
             .id("form-field-body")
             .w_full()
             .px(px(10.))
             .py(px(3.))
-            .rounded(px(6.))
-            .border_1()
-            .border_color(if focused {
-                palette.accent
-            } else {
-                palette.line_input
+            .rounded(px(crate::theme::RADIUS_LG))
+            .bg(palette.field_bg(focused))
+            .when(!focused, |this| {
+                let hover = palette.field_fill_hover();
+                this.hover(move |s| s.bg(hover))
             })
-            .bg(palette.surface)
-            .shadow(shadows)
+            .shadow(crate::ui::control_shadows(palette, focused, false))
             .cursor_text()
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 target.update(cx, |input, cx| input.focus(window, cx));
@@ -1042,11 +1035,6 @@ impl Selectable for StatusTrigger {
 impl RenderOnce for StatusTrigger {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let palette = *Palette::get(cx);
-        let shadows = if self.open {
-            palette.input_focus_ring()
-        } else {
-            Vec::new()
-        };
         h_flex()
             .id("status-select")
             .w_full()
@@ -1055,15 +1043,13 @@ impl RenderOnce for StatusTrigger {
             .gap(px(8.))
             .flex_row_reverse()
             .items_center()
-            .rounded(px(6.))
-            .border_1()
-            .border_color(if self.open {
-                palette.accent
-            } else {
-                palette.line_input
+            .rounded(px(crate::theme::RADIUS_LG))
+            .bg(palette.field_bg(self.open))
+            .when(!self.open, |this| {
+                let hover = palette.field_fill_hover();
+                this.hover(move |s| s.bg(hover))
             })
-            .bg(palette.surface)
-            .shadow(shadows)
+            .shadow(crate::ui::control_shadows(&palette, self.open, false))
             .role(gpui_kit::accesskit::Role::ComboBox)
             .aria_label("Status")
             .child(status_dot(&palette, self.status))
@@ -1238,7 +1224,7 @@ impl Render for FirForm {
                     .max_w_full()
                     .mx_auto()
                     .pt(px(8.))
-                    .pb(px(40.))
+                    .pb(px(112.))
                     .children(sections),
             )
     }
@@ -1396,25 +1382,31 @@ impl NewFirScreen {
             (form.is_dirty(), form.is_saving(), form.is_edit())
         };
         let unsaved = edit && dirty;
-        let row = h_flex()
-            .w(px(760.))
-            .max_w_full()
-            .mx_auto()
-            .gap(px(8.))
+        let bar = h_flex()
+            .id("fir-form-actions")
+            .flex_none()
+            .h(px(48.))
+            .pl(px(if unsaved { 16. } else { 6. }))
+            .pr(px(6.))
+            .gap(px(6.))
             .items_center()
+            .rounded(px(crate::theme::RADIUS_PILL))
+            .bg(palette.raised)
+            .shadow(palette.shadow_lg())
+            .occlude()
             .when(unsaved, |this| {
                 this.child(
                     h_flex()
+                        .mr(px(10.))
                         .gap(px(6.))
                         .items_center()
-                        .text_size(px(12.))
+                        .text_size(px(13.))
                         .line_height(px(16.))
                         .text_color(palette.ink_muted)
                         .child(div().size(px(6.)).rounded_full().bg(palette.notice))
                         .child("Unsaved changes"),
                 )
             })
-            .child(div().flex_1())
             .child(
                 button("cancel-fir", "Cancel")
                     .ghost()
@@ -1438,14 +1430,12 @@ impl NewFirScreen {
                 .on_click(move |_, window, cx| form.update(cx, |form, cx| form.submit(window, cx))),
             );
         h_flex()
-            .flex_none()
-            .h(px(56.))
-            .px(px(24.))
-            .items_center()
-            .border_t_1()
-            .border_color(palette.line)
-            .bg(palette.surface)
-            .child(row)
+            .absolute()
+            .left_0()
+            .right_0()
+            .bottom(px(20.))
+            .justify_center()
+            .child(bar)
             .into_any_element()
     }
 }
@@ -1480,6 +1470,10 @@ impl Render for NewFirScreen {
             .key_context("NewFir")
             .track_focus(&self.focus)
             .size_full()
+            .relative()
+            .rounded(px(crate::theme::RADIUS_XL))
+            .bg(palette.surface)
+            .shadow(palette.shadow_xs())
             .on_action(cx.listener(|this, _: &BlurFocus, window, cx| this.cancel(window, cx)))
             .on_action(cx.listener(|this, _: &Save, window, cx| {
                 if let Some(form) = this.form.clone() {

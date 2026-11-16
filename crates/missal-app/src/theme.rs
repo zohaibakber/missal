@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use gpui_kit::component::{ActiveTheme, Colorize, Theme, ThemeMode};
+use gpui_kit::component::{ActiveTheme, Theme, ThemeMode};
 use gpui_kit::{
     Animation, App, BoxShadow, Global, Hsla, Rgba, SharedString, Window, WindowAppearance, point,
     px, rgb,
@@ -41,6 +41,7 @@ pub fn oklch(lightness: f32, chroma: f32, hue_degrees: f32, alpha: f32) -> Hsla 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Palette {
     pub dark: bool,
+    pub canvas: Hsla,
     pub surface: Hsla,
     pub raised: Hsla,
     pub sunken: Hsla,
@@ -51,6 +52,7 @@ pub struct Palette {
     pub line: Hsla,
     pub line_strong: Hsla,
     pub line_input: Hsla,
+    pub hairline: Hsla,
     pub hover: Hsla,
     pub pressed: Hsla,
     pub hover_raised: Hsla,
@@ -62,7 +64,10 @@ pub struct Palette {
     pub accent: Hsla,
     pub accent_wash: Hsla,
     pub field_wash: Hsla,
+    pub ring: Hsla,
     pub success: Hsla,
+    pub success_text: Hsla,
+    pub success_wash: Hsla,
     pub danger: Hsla,
     pub danger_text: Hsla,
     pub danger_wash: Hsla,
@@ -90,78 +95,88 @@ impl Palette {
     pub fn light() -> Palette {
         Palette {
             dark: false,
-            surface: hex(0xfefdfc),
+            canvas: hex(0xf6f6f6),
+            surface: hex(0xffffff),
             raised: hex(0xffffff),
-            sunken: hex(0xf0efec),
-            paper: hex(0xfefdf8),
-            ink: hex(0x1e1b18),
-            ink_muted: hex(0x5f5a55),
-            ink_faint: hex(0x77726d),
-            line: hex(0xe7e7e5),
-            line_strong: hex(0x959391),
-            line_input: hex(0xc4c1bc),
-            hover: hex(0xf4f3f2),
-            pressed: hex(0xecebea),
-            hover_raised: hex(0xf1f0ee),
-            pressed_raised: hex(0xe8e7e4),
-            action: hex(0x1e1b18),
-            action_hover: hex(0x36322e),
-            action_pressed: hex(0x4a4540),
-            on_action: hex(0xfbfaf8),
-            accent: hex(0x2b5bb7),
-            accent_wash: hex(0xe9edf5),
-            field_wash: hex(0xf0f2f6),
-            success: hex(0x2f8a4e),
-            danger: hex(0xc32a28),
-            danger_text: hex(0xb32322),
-            danger_wash: hex(0xf9eceb),
-            notice: hex(0xc47a1c),
-            notice_text: hex(0x88520c),
-            notice_wash: hex(0xfff2d6),
-            st_open: hex(0xd37812),
-            st_investigating: hex(0x0077bd),
-            st_challan: hex(0x8b4bb0),
-            st_closed: hex(0x888682),
-            scrim: hex_alpha(0x14110e, 0.28),
+            sunken: hex(0xececec),
+            paper: hex(0xffffff),
+            ink: hex(0x262626),
+            ink_muted: hex(0x686868),
+            ink_faint: hex(0x8f8f8f),
+            line: hex(0xededed),
+            line_strong: hex(0xcfcfcf),
+            line_input: hex(0xe3e3e3),
+            hairline: hex_alpha(0x000000, 0.08),
+            hover: hex_alpha(0x000000, 0.04),
+            pressed: hex_alpha(0x000000, 0.07),
+            hover_raised: hex_alpha(0x000000, 0.04),
+            pressed_raised: hex_alpha(0x000000, 0.07),
+            action: hex(0x262626),
+            action_hover: hex(0x3b3b3b),
+            action_pressed: hex(0x474747),
+            on_action: hex(0xfafafa),
+            accent: hex(0x155dfc),
+            accent_wash: hex(0xeff4ff),
+            field_wash: hex(0xf1f5fd),
+            ring: hex(0xa1a1a1),
+            success: hex(0x00bc7d),
+            success_text: hex(0x007a55),
+            success_wash: hex(0xebfaf3),
+            danger: hex(0xfb2c36),
+            danger_text: hex(0xc10007),
+            danger_wash: hex(0xfff1f1),
+            notice: hex(0xfe9a00),
+            notice_text: hex(0xbb4d00),
+            notice_wash: hex(0xfff6e8),
+            st_open: hex(0xfe9a00),
+            st_investigating: hex(0x2b7fff),
+            st_challan: hex(0x8e51ff),
+            st_closed: hex(0xa1a1a1),
+            scrim: hex_alpha(0x000000, 0.32),
         }
     }
 
     pub fn dark() -> Palette {
         Palette {
             dark: true,
-            surface: hex(0x161513),
-            raised: hex(0x201e1c),
-            sunken: hex(0x0d0c0a),
-            paper: hex(0x201e1b),
-            ink: hex(0xedebe7),
-            ink_muted: hex(0xaeaaa5),
-            ink_faint: hex(0x8c8884),
-            line: hex(0x2a2927),
-            line_strong: hex(0x666564),
-            line_input: hex(0x4a4846),
-            hover: hex(0x22201f),
-            pressed: hex(0x2b2a28),
-            hover_raised: hex(0x2f2d2b),
-            pressed_raised: hex(0x393735),
-            action: hex(0xedebe7),
-            action_hover: hex(0xd3d1cd),
-            action_pressed: hex(0xbbb8b3),
-            on_action: hex(0x181613),
-            accent: hex(0x80a3f0),
-            accent_wash: hex(0x242b3d),
-            field_wash: hex(0x282c35),
-            success: hex(0x5cbf82),
-            danger: hex(0xc44039),
-            danger_text: hex(0xf47b74),
-            danger_wash: hex(0x351d1a),
-            notice: hex(0xeba941),
-            notice_text: hex(0xedbb64),
-            notice_wash: hex(0x382c1a),
-            st_open: hex(0xf2a635),
-            st_investigating: hex(0x3883d1),
-            st_challan: hex(0xb48ae0),
-            st_closed: hex(0x6e6b68),
-            scrim: hex_alpha(0x000000, 0.55),
+            canvas: hex(0x0f0f0f),
+            surface: hex(0x161616),
+            raised: hex(0x1c1c1c),
+            sunken: hex(0x121212),
+            paper: hex(0x1f1f1f),
+            ink: hex(0xf5f5f5),
+            ink_muted: hex(0x8f8f8f),
+            ink_faint: hex(0x707070),
+            line: hex(0x242424),
+            line_strong: hex(0x3d3d3d),
+            line_input: hex(0x2c2c2c),
+            hairline: hex_alpha(0xffffff, 0.07),
+            hover: hex_alpha(0xffffff, 0.05),
+            pressed: hex_alpha(0xffffff, 0.09),
+            hover_raised: hex_alpha(0xffffff, 0.06),
+            pressed_raised: hex_alpha(0xffffff, 0.1),
+            action: hex(0xf5f5f5),
+            action_hover: hex(0xdedede),
+            action_pressed: hex(0xcccccc),
+            on_action: hex(0x262626),
+            accent: hex(0x51a2ff),
+            accent_wash: hex(0x182335),
+            field_wash: hex(0x1b2230),
+            ring: hex(0x737373),
+            success: hex(0x00bc7d),
+            success_text: hex(0x00d492),
+            success_wash: hex(0x10291f),
+            danger: hex(0xf2444c),
+            danger_text: hex(0xff6467),
+            danger_wash: hex(0x351819),
+            notice: hex(0xfe9a00),
+            notice_text: hex(0xffb900),
+            notice_wash: hex(0x342611),
+            st_open: hex(0xffb020),
+            st_investigating: hex(0x51a2ff),
+            st_challan: hex(0xa684ff),
+            st_closed: hex(0x737373),
+            scrim: hex_alpha(0x000000, 0.6),
         }
     }
 
@@ -178,59 +193,175 @@ impl Palette {
         cx.global::<Palette>()
     }
 
-    fn shadow_tint(&self) -> Hsla {
+    fn shadow_tint(&self, alpha: f32) -> Hsla {
+        let boost = if self.dark { 6.0 } else { 1.0 };
+        hex(0x000000).opacity((alpha * boost).min(0.6))
+    }
+
+    pub fn hairline_ring(&self) -> BoxShadow {
+        shadow(self.hairline, 0., 0., 1.)
+    }
+
+    fn edge(&self) -> BoxShadow {
         if self.dark {
-            hex(0x000000)
+            inset(hex_alpha(0xffffff, 0.06), 1., 0.)
         } else {
-            hex(0x14110e)
+            shadow(hex_alpha(0x000000, 0.04), 1., 0., 0.)
         }
     }
 
-    fn ring(&self) -> BoxShadow {
-        let color = if self.dark {
-            hex_alpha(0xffffff, 0.08)
-        } else {
-            hex_alpha(0x14110e, 0.08)
-        };
-        shadow(color, 0., 0., 1.)
+    pub fn ring_only(&self) -> Vec<BoxShadow> {
+        vec![self.hairline_ring()]
+    }
+
+    pub fn shadow_xs(&self) -> Vec<BoxShadow> {
+        vec![
+            self.hairline_ring(),
+            self.edge(),
+            shadow_offset(self.shadow_tint(0.05), 1., 2.),
+        ]
     }
 
     pub fn shadow_sm(&self) -> Vec<BoxShadow> {
-        let alpha = if self.dark { 0.35 } else { 0.05 };
-        vec![shadow_offset(self.shadow_tint().opacity(alpha), 1., 2.)]
+        vec![
+            self.hairline_ring(),
+            self.edge(),
+            shadow_offset(self.shadow_tint(0.05), 1., 3.),
+            shadow(self.shadow_tint(0.05), 1., 2., -1.),
+        ]
     }
 
     pub fn shadow_md(&self) -> Vec<BoxShadow> {
-        let alpha = if self.dark { 0.45 } else { 0.10 };
         vec![
-            self.ring(),
-            shadow_offset(self.shadow_tint().opacity(alpha), 8., 24.),
+            self.hairline_ring(),
+            self.edge(),
+            shadow(self.shadow_tint(0.06), 4., 8., -1.),
+            shadow(self.shadow_tint(0.05), 2., 4., -2.),
         ]
     }
 
     pub fn shadow_lg(&self) -> Vec<BoxShadow> {
-        let alpha = if self.dark { 0.55 } else { 0.14 };
         vec![
-            self.ring(),
-            shadow_offset(self.shadow_tint().opacity(alpha), 16., 48.),
+            self.hairline_ring(),
+            self.edge(),
+            shadow(self.shadow_tint(0.08), 12., 24., -4.),
+            shadow(self.shadow_tint(0.05), 4., 8., -4.),
+        ]
+    }
+
+    pub fn shadow_xl(&self) -> Vec<BoxShadow> {
+        vec![
+            self.hairline_ring(),
+            self.edge(),
+            shadow(self.shadow_tint(0.12), 24., 48., -12.),
+            shadow(self.shadow_tint(0.05), 8., 16., -8.),
+        ]
+    }
+
+    pub fn thumb_shadow(&self) -> Vec<BoxShadow> {
+        if self.dark {
+            vec![
+                inset(hex_alpha(0xffffff, 0.06), 1., 0.),
+                shadow_offset(hex_alpha(0x000000, 0.3), 1., 2.),
+            ]
+        } else {
+            vec![
+                shadow(hex_alpha(0x000000, 0.06), 0., 0., 1.),
+                shadow_offset(hex_alpha(0x000000, 0.06), 1., 2.),
+            ]
+        }
+    }
+
+    pub fn primary_shadow(&self) -> Vec<BoxShadow> {
+        vec![
+            inset(
+                hex_alpha(0xffffff, if self.dark { 0.5 } else { 0.16 }),
+                1.,
+                0.,
+            ),
+            shadow_offset(self.action.opacity(0.24), 1., 2.),
         ]
     }
 
     pub fn paper_shadow(&self) -> Vec<BoxShadow> {
-        let mut shadows = vec![shadow(self.line, 0., 0., 1.)];
-        shadows.extend(self.shadow_sm());
-        shadows
+        vec![
+            self.hairline_ring(),
+            shadow_offset(self.shadow_tint(0.06), 2., 6.),
+            shadow(self.shadow_tint(0.08), 12., 32., -8.),
+        ]
     }
 
     pub fn focus_ring(&self) -> Vec<BoxShadow> {
         vec![
-            shadow(self.accent, 0., 0., 3.),
+            shadow(self.ring, 0., 0., 3.),
             shadow(self.surface, 0., 0., 1.),
         ]
     }
 
     pub fn input_focus_ring(&self) -> Vec<BoxShadow> {
-        vec![shadow(self.accent.opacity(0.16), 0., 0., 3.)]
+        vec![
+            shadow(self.ring, 0., 0., 1.),
+            shadow(self.ring.opacity(0.24), 0., 0., 4.),
+        ]
+    }
+
+    pub fn input_shadow(&self) -> Vec<BoxShadow> {
+        vec![
+            shadow(self.line_input, 0., 0., 1.),
+            self.edge(),
+            shadow_offset(self.shadow_tint(0.04), 1., 2.),
+        ]
+    }
+
+    pub fn danger_ring(&self) -> Vec<BoxShadow> {
+        vec![
+            shadow(self.danger.opacity(0.64), 0., 0., 1.),
+            shadow(self.danger.opacity(0.16), 0., 0., 4.),
+        ]
+    }
+
+    pub fn danger_edge(&self) -> Vec<BoxShadow> {
+        vec![shadow(self.danger.opacity(0.36), 0., 0., 1.)]
+    }
+
+    pub fn floating(&self) -> Hsla {
+        if self.dark {
+            hex(0x262626)
+        } else {
+            hex(0xffffff)
+        }
+    }
+
+    pub fn field_fill(&self) -> Hsla {
+        if self.dark {
+            hex_alpha(0xffffff, 0.05)
+        } else {
+            hex_alpha(0x000000, 0.04)
+        }
+    }
+
+    pub fn field_fill_hover(&self) -> Hsla {
+        if self.dark {
+            hex_alpha(0xffffff, 0.08)
+        } else {
+            hex_alpha(0x000000, 0.06)
+        }
+    }
+
+    pub fn field_bg(&self, focused: bool) -> Hsla {
+        if focused {
+            self.control_fill()
+        } else {
+            self.field_fill()
+        }
+    }
+
+    pub fn control_fill(&self) -> Hsla {
+        if self.dark {
+            hex(0x1d1d1d)
+        } else {
+            self.surface
+        }
     }
 }
 
@@ -241,6 +372,16 @@ fn shadow(color: Hsla, y: f32, blur: f32, spread: f32) -> BoxShadow {
         blur_radius: px(blur),
         spread_radius: px(spread),
         inset: false,
+    }
+}
+
+fn inset(color: Hsla, y: f32, blur: f32) -> BoxShadow {
+    BoxShadow {
+        color,
+        offset: point(px(0.), px(y)),
+        blur_radius: px(blur),
+        spread_radius: px(0.),
+        inset: true,
     }
 }
 
@@ -259,8 +400,8 @@ pub const BUTTON_MD: f32 = 32.0;
 pub const INPUT_LATIN: f32 = 32.0;
 pub const INPUT_URDU: f32 = 36.0;
 pub const CHECKBOX: f32 = 16.0;
-pub const SEGMENTED_TRACK: f32 = 28.0;
-pub const SEGMENTED_ITEM: f32 = 24.0;
+pub const SEGMENTED_TRACK: f32 = 30.0;
+pub const SEGMENTED_ITEM: f32 = 26.0;
 pub const TAB_HEIGHT: f32 = 40.0;
 pub const FILTER_ITEM: f32 = 28.0;
 pub const TABLE_HEAD: f32 = 36.0;
@@ -269,19 +410,21 @@ pub const ROW_HEIGHT: f32 = TABLE_ROW;
 pub const LIST_ITEM: f32 = 40.0;
 pub const LIST_ITEM_META: f32 = 44.0;
 pub const MENU_ITEM: f32 = 32.0;
-pub const KEYCAP: f32 = 18.0;
+pub const KEYCAP: f32 = 20.0;
 
 pub const ICON: f32 = 16.0;
 pub const ICON_SM: f32 = 14.0;
 pub const ICON_XS: f32 = 12.0;
 
-pub const RADIUS_CHIP: f32 = 3.0;
-pub const RADIUS_SM: f32 = 4.0;
-pub const RADIUS: f32 = 6.0;
-pub const RADIUS_LG: f32 = 8.0;
-pub const RADIUS_XL: f32 = 12.0;
+pub const RADIUS_CHIP: f32 = 4.0;
+pub const RADIUS_SM: f32 = 6.0;
+pub const RADIUS: f32 = 8.0;
+pub const RADIUS_LG: f32 = 10.0;
+pub const RADIUS_XL: f32 = 14.0;
+pub const RADIUS_2XL: f32 = 18.0;
 pub const RADIUS_PAPER: f32 = 2.0;
-pub const RADIUS_PILL: f32 = 12.0;
+pub const RADIUS_PILL: f32 = 999.0;
+pub const SHELL_INSET: f32 = 8.0;
 
 pub const SPACE: [f32; 10] = [2.0, 4.0, 6.0, 8.0, 12.0, 16.0, 20.0, 24.0, 32.0, 40.0];
 pub const GAP_IN_GROUP: f32 = 4.0;
@@ -331,10 +474,10 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     colors.list = palette.surface;
     colors.list_even = palette.surface;
     colors.list_head = palette.surface;
-    colors.title_bar = palette.surface;
-    colors.status_bar = palette.surface;
+    colors.title_bar = palette.canvas;
+    colors.status_bar = palette.canvas;
     colors.tab_active = palette.surface;
-    colors.sidebar = palette.surface;
+    colors.sidebar = palette.canvas;
     colors.popover = palette.raised;
     colors.foreground = palette.ink;
     colors.popover_foreground = palette.ink;
@@ -382,31 +525,31 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     colors.button_secondary_hover = palette.pressed;
     colors.button_secondary_active = palette.pressed;
     colors.button_secondary_foreground = palette.ink;
-    colors.ring = palette.accent;
+    colors.ring = palette.ring;
     colors.link = palette.accent;
     colors.drag_border = palette.accent;
     colors.list_active_border = palette.accent;
     colors.table_active_border = palette.accent;
     colors.selection = palette
         .accent
-        .opacity(if palette.dark { 0.40 } else { 0.28 });
+        .opacity(if palette.dark { 0.36 } else { 0.22 });
     colors.drop_target = palette.accent_wash;
     colors.danger = palette.danger;
     colors.button_danger = palette.danger;
-    colors.danger_hover = palette.danger.mix_oklab(palette.ink, 0.88);
-    colors.danger_active = palette.danger.mix_oklab(palette.ink, 0.78);
+    colors.danger_hover = palette.danger.opacity(0.9);
+    colors.danger_active = palette.danger.opacity(0.84);
     colors.button_danger_hover = colors.danger_hover;
     colors.button_danger_active = colors.danger_active;
     colors.danger_foreground = hex(0xffffff);
     colors.button_danger_foreground = hex(0xffffff);
     colors.warning = palette.notice;
-    colors.info = palette.st_investigating;
+    colors.info = palette.accent;
     colors.success = palette.success;
     colors.overlay = palette.scrim;
     colors.scrollbar = transparent;
-    colors.scrollbar_thumb = palette.ink_muted.opacity(0.4);
-    colors.scrollbar_thumb_hover = palette.ink_muted.opacity(0.7);
-    colors.switch_thumb = palette.surface;
+    colors.scrollbar_thumb = palette.ink_muted.opacity(0.28);
+    colors.scrollbar_thumb_hover = palette.ink_muted.opacity(0.5);
+    colors.switch_thumb = hex(0xffffff);
     colors.slider_thumb = palette.surface;
     colors.progress_bar = palette.action;
     colors.slider_bar = palette.action;

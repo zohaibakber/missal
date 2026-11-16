@@ -153,6 +153,7 @@ pub fn open(window: &mut Window, cx: &mut App) {
             .child(
                 v_flex()
                     .gap(px(12.))
+                    .pb(px(crate::ui::dialogs::DIALOG_PAD))
                     .child(dialog_title("Keyboard shortcuts"))
                     .child(sheet.clone()),
             )

@@ -19,7 +19,7 @@ use std::sync::{Arc, LazyLock};
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::{Colorize, Icon, Sizable, h_flex, v_flex};
+use gpui_kit::component::{Icon, Sizable, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyElement, AnyView, App, ClickEvent, Context, Div, ElementId, FocusHandle, FontFeatures,
@@ -31,8 +31,8 @@ use missal_text::{Align, Label, LineHeight, label};
 use crate::shortcuts::key_caps;
 use crate::theme::{
     BUTTON_MD, BUTTON_SM, CHECKBOX, ICON, ICON_BUTTON, ICON_BUTTON_DENSE, ICON_SM, ICON_XS, KEYCAP,
-    Palette, RADIUS, RADIUS_LG, RADIUS_PILL, RADIUS_SM, SEGMENTED_ITEM, SEGMENTED_TRACK,
-    TOOLTIP_DELAY,
+    Palette, RADIUS, RADIUS_CHIP, RADIUS_LG, RADIUS_PILL, RADIUS_XL, SEGMENTED_ITEM,
+    SEGMENTED_TRACK, TOOLTIP_DELAY, hex, hex_alpha,
 };
 
 pub type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
@@ -132,15 +132,9 @@ pub fn keycap(palette: &Palette, text: impl Into<SharedString>) -> Div {
 }
 
 pub fn keycap_toned(palette: &Palette, text: impl Into<SharedString>, tone: KeyTone) -> Div {
-    let (fill, border, color) = match tone {
-        KeyTone::Plain if palette.dark => (
-            Some(palette.hover_raised),
-            Some(palette.line_strong),
-            palette.ink_muted,
-        ),
-        KeyTone::Plain => (Some(palette.hover), None, palette.ink_muted),
-        KeyTone::Bare => (None, None, palette.ink_faint),
-        KeyTone::OnTooltip => (None, Some(palette.surface.opacity(0.35)), palette.surface),
+    let (fill, color) = match tone {
+        KeyTone::Plain | KeyTone::OnTooltip => (Some(muted_fill(palette)), palette.ink_muted),
+        KeyTone::Bare => (None, palette.ink_faint),
     };
     div()
         .flex_none()
@@ -150,14 +144,37 @@ pub fn keycap_toned(palette: &Palette, text: impl Into<SharedString>, tone: KeyT
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(RADIUS_SM))
-        .when_some(border, |this, border| this.border_1().border_color(border))
+        .rounded(px(RADIUS_CHIP))
         .when_some(fill, |this, fill| this.bg(fill))
         .text_size(px(11.))
         .line_height(px(16.))
         .font_weight(FontWeight::MEDIUM)
         .text_color(color)
         .child(text.into())
+}
+
+pub fn muted_fill(palette: &Palette) -> Hsla {
+    if palette.dark {
+        hex_alpha(0xffffff, 0.07)
+    } else {
+        hex_alpha(0x000000, 0.05)
+    }
+}
+
+pub fn accent_fill(palette: &Palette) -> Hsla {
+    if palette.dark {
+        hex_alpha(0xffffff, 0.05)
+    } else {
+        hex_alpha(0x000000, 0.04)
+    }
+}
+
+pub fn accent_fill_strong(palette: &Palette) -> Hsla {
+    if palette.dark {
+        hex_alpha(0xffffff, 0.09)
+    } else {
+        hex_alpha(0x000000, 0.07)
+    }
 }
 
 pub fn keycaps_toned(palette: &Palette, keys: &str, tone: KeyTone) -> Div {
@@ -220,15 +237,16 @@ pub struct TooltipView {
 impl Render for TooltipView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
-        div().pl(px(4.)).pt(px(4.)).child(
+        div().p(px(6.)).child(
             h_flex()
                 .items_center()
                 .gap(px(8.))
                 .py(px(4.))
                 .px(px(8.))
                 .rounded(px(RADIUS))
-                .bg(palette.ink)
-                .text_color(palette.surface)
+                .bg(palette.raised)
+                .shadow(palette.shadow_md())
+                .text_color(palette.ink)
                 .font_family(missal_text::UI_FAMILY)
                 .text_size(px(12.))
                 .line_height(px(18.))
@@ -260,6 +278,7 @@ pub fn tooltip(
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ButtonKind {
     Primary,
+    Secondary,
     Outline,
     Ghost,
     GhostMuted,
@@ -332,6 +351,10 @@ impl ActionButton {
         self.kind(ButtonKind::Outline)
     }
 
+    pub fn secondary(self) -> Self {
+        self.kind(ButtonKind::Secondary)
+    }
+
     pub fn ghost(self) -> Self {
         self.kind(ButtonKind::Ghost)
     }
@@ -395,48 +418,72 @@ impl ActionButton {
 impl RenderOnce for ActionButton {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let palette = *Palette::get(cx);
-        let (fill, hover_fill, press_fill, text, border) = match self.kind {
+        let white = hex(0xffffff);
+        let control = palette.control_fill();
+        let (fill, hover_fill, press_fill, text, mut shadows) = match self.kind {
             ButtonKind::Primary => (
                 Some(palette.action),
                 Some(palette.action_hover),
                 Some(palette.action_pressed),
                 palette.on_action,
-                None,
+                palette.primary_shadow(),
+            ),
+            ButtonKind::Secondary => (
+                Some(muted_fill(&palette)),
+                Some(accent_fill_strong(&palette)),
+                Some(accent_fill_strong(&palette)),
+                palette.ink,
+                Vec::new(),
             ),
             ButtonKind::Outline => (
-                Some(palette.surface),
-                Some(palette.hover),
-                Some(palette.pressed),
+                Some(control),
+                Some(control.blend(accent_fill(&palette))),
+                Some(control.blend(accent_fill_strong(&palette))),
                 palette.ink,
-                Some(palette.line_strong.mix_oklab(palette.surface, 0.7)),
+                palette.input_shadow(),
             ),
             ButtonKind::Ghost => (
                 None,
-                Some(palette.hover),
-                Some(palette.pressed),
+                Some(accent_fill(&palette)),
+                Some(accent_fill_strong(&palette)),
                 palette.ink,
-                None,
+                Vec::new(),
             ),
             ButtonKind::GhostMuted => (
                 None,
-                Some(palette.hover),
-                Some(palette.pressed),
+                Some(accent_fill(&palette)),
+                Some(accent_fill_strong(&palette)),
                 palette.ink_muted,
-                None,
+                Vec::new(),
             ),
             ButtonKind::Danger => (
                 Some(palette.danger),
-                Some(palette.danger.mix_oklab(palette.ink, 0.88)),
-                Some(palette.danger.mix_oklab(palette.ink, 0.78)),
-                crate::theme::hex(0xffffff),
-                None,
+                Some(palette.danger.opacity(0.9)),
+                Some(palette.danger.opacity(0.84)),
+                white,
+                vec![
+                    gpui_kit::BoxShadow {
+                        color: hex_alpha(0xffffff, 0.16),
+                        offset: gpui_kit::point(px(0.), px(1.)),
+                        blur_radius: px(0.),
+                        spread_radius: px(0.),
+                        inset: true,
+                    },
+                    gpui_kit::BoxShadow {
+                        color: palette.danger.opacity(0.24),
+                        offset: gpui_kit::point(px(0.), px(1.)),
+                        blur_radius: px(2.),
+                        spread_radius: px(0.),
+                        inset: false,
+                    },
+                ],
             ),
             ButtonKind::DangerOutline => (
-                Some(palette.surface),
-                Some(palette.danger_wash),
-                Some(palette.danger_wash.mix_oklab(palette.danger, 0.86)),
+                Some(control),
+                Some(control.blend(palette.danger.opacity(0.05))),
+                Some(control.blend(palette.danger.opacity(0.09))),
                 palette.danger_text,
-                Some(palette.danger_text.mix_oklab(palette.surface, 0.45)),
+                palette.input_shadow(),
             ),
         };
         let height = match self.size {
@@ -452,7 +499,6 @@ impl RenderOnce for ActionButton {
                 .focus
                 .as_ref()
                 .is_some_and(|focus| focus.is_focused(window) && window.last_input_was_keyboard());
-        let mut shadows = Vec::new();
         if focused {
             shadows.extend(palette.focus_ring());
         }
@@ -471,15 +517,16 @@ impl RenderOnce for ActionButton {
             .gap(px(6.))
             .items_center()
             .justify_center()
-            .rounded(px(RADIUS))
-            .border_1()
-            .border_color(border.unwrap_or(gpui_kit::transparent_black()))
+            .rounded(px(RADIUS_LG))
             .when_some(fill, |this, fill| this.bg(fill))
             .when(self.show_hover, |this| {
                 this.when_some(hover_fill, |this, fill| this.bg(fill))
             })
             .text_color(text)
-            .text_size(px(13.))
+            .text_size(px(match self.size {
+                ButtonSize::Sm => 13.,
+                ButtonSize::Md => 14.,
+            }))
             .line_height(px(20.))
             .font_weight(FontWeight::MEDIUM)
             .whitespace_nowrap()
@@ -500,7 +547,7 @@ impl RenderOnce for ActionButton {
                 this.on_click(move |event, window, cx| handler(event, window, cx))
             })
             .when_some(self.icon, |this, name| {
-                this.child(sized_icon(name, ICON_SM, text))
+                this.child(sized_icon(name, ICON, text.opacity(0.8)))
             })
             .child(self.label)
             .test_support()
@@ -614,8 +661,8 @@ impl RenderOnce for IconButton {
         let disabled = self.disabled;
         let on_click = self.on_click.clone();
         let ink = palette.ink;
-        let hover = palette.hover;
-        let pressed = palette.pressed;
+        let hover = accent_fill(&palette);
+        let pressed = accent_fill_strong(&palette);
         div()
             .id(self.id)
             .flex_none()
@@ -623,19 +670,11 @@ impl RenderOnce for IconButton {
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(RADIUS))
+            .rounded(px(if self.dense { RADIUS_PILL } else { RADIUS }))
             .text_color(color)
-            .when(self.toggled, |this| this.bg(palette.pressed))
+            .when(self.toggled, |this| this.bg(pressed))
             .when(self.show_hover && !self.toggled, |this| this.bg(hover))
-            .when(focused, |this| {
-                this.bg(palette.surface).shadow(vec![gpui_kit::BoxShadow {
-                    color: palette.accent,
-                    offset: gpui_kit::point(px(0.), px(0.)),
-                    blur_radius: px(0.),
-                    spread_radius: px(2.),
-                    inset: false,
-                }])
-            })
+            .when(focused, |this| this.shadow(palette.focus_ring()))
             .when(disabled, |this| this.opacity(0.4))
             .when(!disabled && !self.toggled, |this| {
                 this.hover(move |s| s.bg(hover).text_color(ink))
@@ -670,8 +709,110 @@ pub fn section_label(palette: &Palette, text: impl Into<SharedString>) -> Div {
         .text_size(px(12.))
         .line_height(px(16.))
         .font_weight(FontWeight::MEDIUM)
-        .text_color(palette.ink_muted)
+        .text_color(palette.ink_faint)
         .child(text.into())
+}
+
+pub fn control_shadows(palette: &Palette, focused: bool, error: bool) -> Vec<gpui_kit::BoxShadow> {
+    match (focused, error) {
+        (true, false) => palette.input_focus_ring(),
+        (true, true) => palette.danger_ring(),
+        (false, true) => palette.danger_edge(),
+        (false, false) => Vec::new(),
+    }
+}
+
+pub fn card(palette: &Palette) -> Div {
+    div()
+        .rounded(px(RADIUS_XL))
+        .bg(palette.surface)
+        .shadow(palette.shadow_xs())
+}
+
+pub fn floating_bar(palette: &Palette) -> Div {
+    h_flex()
+        .flex_none()
+        .h(px(36.))
+        .px(px(4.))
+        .gap(px(2.))
+        .items_center()
+        .rounded(px(RADIUS_PILL))
+        .bg(palette.raised)
+        .shadow(palette.shadow_lg())
+        .occlude()
+        .text_size(px(13.))
+        .text_color(palette.ink_muted)
+        .font_features(tabular())
+}
+
+pub fn frame(palette: &Palette) -> Div {
+    div()
+        .p(px(4.))
+        .rounded(px(crate::theme::RADIUS_2XL))
+        .bg(muted_fill(palette).opacity(0.72))
+}
+
+pub fn illustration(palette: &Palette, name: IconName) -> Div {
+    let paper = palette.raised;
+    let line = muted_fill(palette);
+    let sheet = |width: f32, height: f32, lines: usize| {
+        v_flex()
+            .w(px(width))
+            .h(px(height))
+            .p(px(8.))
+            .gap(px(5.))
+            .rounded(px(RADIUS))
+            .bg(paper)
+            .shadow(palette.shadow_sm())
+            .children((0..lines).map(move |index| {
+                div()
+                    .h(px(4.))
+                    .w(gpui_kit::relative(if index % 3 == 2 { 0.55 } else { 1.0 }))
+                    .rounded_full()
+                    .bg(line)
+            }))
+    };
+    div()
+        .relative()
+        .w(px(132.))
+        .h(px(96.))
+        .child(
+            div()
+                .absolute()
+                .left(px(6.))
+                .top(px(18.))
+                .opacity(0.7)
+                .child(sheet(52., 64., 4)),
+        )
+        .child(
+            div()
+                .absolute()
+                .right(px(6.))
+                .top(px(18.))
+                .opacity(0.7)
+                .child(sheet(52., 64., 4)),
+        )
+        .child(
+            div()
+                .absolute()
+                .left(px(34.))
+                .top(px(4.))
+                .child(sheet(64., 80., 6)),
+        )
+        .child(
+            div()
+                .absolute()
+                .left(px(78.))
+                .top(px(60.))
+                .size(px(32.))
+                .rounded_full()
+                .bg(palette.action)
+                .shadow(palette.primary_shadow())
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(sized_icon(name, ICON_SM, palette.on_action)),
+        )
 }
 
 pub fn empty_state(
@@ -698,21 +839,11 @@ pub fn empty_state_body(
 ) -> Div {
     v_flex()
         .items_center()
+        .child(div().mb(px(16.)).child(illustration(palette, name)))
         .child(
             div()
-                .size(px(36.))
-                .mb(px(10.))
-                .rounded(px(RADIUS_LG))
-                .bg(palette.hover)
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(small_icon(name, palette.ink_muted)),
-        )
-        .child(
-            div()
-                .text_size(px(14.))
-                .line_height(px(20.))
+                .text_size(px(15.))
+                .line_height(px(22.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(palette.ink)
                 .child(
@@ -734,15 +865,15 @@ pub fn empty_state_body(
                         .leading(LineHeight::Px(20.)),
                 )
         }))
-        .children(action.map(|action| div().mt(px(12.)).child(action)))
+        .children(action.map(|action| div().mt(px(16.)).child(action)))
 }
 
 pub fn skeleton_bar(palette: &Palette, width: f32, height: f32) -> Div {
     div()
         .w(px(width))
         .h(px(height))
-        .rounded(px(RADIUS_SM))
-        .bg(palette.hover)
+        .rounded_full()
+        .bg(muted_fill(palette))
 }
 
 pub fn count_badge(palette: &Palette, count: usize) -> Div {
@@ -754,8 +885,10 @@ pub fn count_badge(palette: &Palette, count: usize) -> Div {
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(9.))
-        .bg(palette.notice_wash)
+        .rounded(px(RADIUS_PILL))
+        .bg(palette
+            .notice
+            .opacity(if palette.dark { 0.16 } else { 0.1 }))
         .text_color(palette.notice_text)
         .text_size(px(11.))
         .font_weight(FontWeight::MEDIUM)
@@ -766,10 +899,13 @@ pub fn warn_box(palette: &Palette, content: impl IntoElement) -> Div {
     h_flex()
         .items_start()
         .gap(px(8.))
-        .p(px(12.))
-        .rounded(px(RADIUS_LG))
-        .bg(palette.notice_wash)
-        .text_color(palette.notice_text)
+        .px(px(14.))
+        .py(px(12.))
+        .rounded(px(RADIUS_XL))
+        .bg(palette
+            .notice
+            .opacity(if palette.dark { 0.1 } else { 0.07 }))
+        .text_color(palette.ink)
         .text_size(px(13.))
         .line_height(px(20.))
         .child(
@@ -785,8 +921,7 @@ pub fn checkbox(palette: &Palette, id: impl Into<ElementId>, checked: bool) -> S
         .id(id)
         .flex_none()
         .size(px(CHECKBOX))
-        .rounded(px(RADIUS_SM))
-        .border_1()
+        .rounded(px(RADIUS_CHIP))
         .flex()
         .items_center()
         .justify_center()
@@ -794,13 +929,14 @@ pub fn checkbox(palette: &Palette, id: impl Into<ElementId>, checked: bool) -> S
         .map(|this| {
             if checked {
                 this.bg(palette.action)
-                    .border_color(palette.action)
+                    .shadow(palette.primary_shadow())
                     .child(sized_icon(IconName::Check, ICON_XS, palette.on_action))
             } else {
-                let hover = palette.ink_muted;
-                this.bg(palette.surface)
-                    .border_color(palette.line_strong)
-                    .hover(move |s| s.border_color(hover))
+                let mut hover = palette.input_shadow();
+                hover[0].color = palette.line_strong;
+                this.bg(palette.control_fill())
+                    .shadow(palette.input_shadow())
+                    .hover(move |s| s.shadow(hover.clone()))
             }
         })
 }
@@ -832,28 +968,28 @@ pub fn segmented(palette: &Palette, items: Vec<SegmentItem>, selected: usize) ->
         .h(px(SEGMENTED_TRACK))
         .p(px(2.))
         .gap(px(2.))
-        .rounded(px(RADIUS_LG))
-        .bg(palette.hover)
+        .rounded(px(RADIUS_PILL))
+        .bg(muted_fill(palette))
         .children(items.into_iter().enumerate().map(|(index, item)| {
             let on = index == selected;
             let handler = item.on_select.clone();
             div()
                 .id(item.id)
                 .h(px(SEGMENTED_ITEM))
-                .px(px(10.))
+                .px(px(12.))
                 .flex()
                 .items_center()
-                .rounded(px(RADIUS))
+                .rounded(px(RADIUS_PILL))
                 .text_size(px(13.))
                 .font_weight(FontWeight::MEDIUM)
                 .role(gpui_kit::accesskit::Role::RadioButton)
                 .when(on, |this| {
-                    this.bg(palette.surface)
+                    this.bg(palette.floating())
                         .text_color(palette.ink)
-                        .shadow(palette.shadow_sm())
+                        .shadow(palette.thumb_shadow())
                 })
                 .when(!on, |this| {
-                    let pressed = palette.pressed;
+                    let pressed = accent_fill(palette);
                     this.text_color(palette.ink_muted)
                         .hover(move |s| s.text_color(ink))
                         .active(move |s| s.bg(pressed).text_color(ink))
@@ -867,16 +1003,15 @@ pub fn pill(palette: &Palette) -> Div {
     h_flex()
         .flex_none()
         .h(px(24.))
-        .px(px(8.))
+        .px(px(9.))
         .gap(px(6.))
         .items_center()
         .rounded(px(RADIUS_PILL))
-        .border_1()
-        .border_color(palette.line)
+        .bg(muted_fill(palette))
 }
 
 pub fn vertical_rule(palette: &Palette) -> Div {
-    div().w(px(1.)).h(px(20.)).bg(palette.line)
+    div().w(px(1.)).h(px(16.)).bg(palette.line)
 }
 
 pub fn dirty_dot(palette: &Palette, dirty: bool) -> Div {
@@ -905,7 +1040,14 @@ pub fn save_state(palette: &Palette, state: SaveState) -> Div {
     match state {
         SaveState::Saved => row,
         SaveState::Unsaved => row
-            .text_color(palette.ink)
+            .h(px(22.))
+            .px(px(8.))
+            .rounded(px(RADIUS_PILL))
+            .bg(palette
+                .notice
+                .opacity(if palette.dark { 0.14 } else { 0.1 }))
+            .text_color(palette.notice_text)
+            .font_weight(FontWeight::MEDIUM)
             .child(dirty_dot(palette, true))
             .child("Unsaved"),
         SaveState::Saving => row.text_color(palette.ink_faint).child("Saving…"),

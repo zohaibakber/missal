@@ -1584,6 +1584,7 @@ impl Render for Editor {
             .bg(canvas);
         let root = self.register_actions(root, cx);
         let toolbar = (!self.read_only).then(|| self.render_toolbar(window, cx));
+        let zoom = self.render_zoom(cx);
         root.children(toolbar).child(
             div()
                 .id("missal-editor-canvas")
@@ -1592,7 +1593,8 @@ impl Render for Editor {
                 .min_h_0()
                 .w_full()
                 .when(self.read_only, |this| this.opacity(1.0))
-                .child(PagesElement::new(entity)),
+                .child(PagesElement::new(entity))
+                .child(zoom),
         )
     }
 }
