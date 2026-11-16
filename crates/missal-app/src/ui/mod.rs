@@ -712,7 +712,7 @@ pub fn count_badge(palette: &Palette, count: usize) -> Div {
         .bg(palette.notice_wash)
         .text_color(palette.notice_text)
         .text_size(px(11.))
-        .font_weight(FontWeight::SEMIBOLD)
+        .font_weight(FontWeight::MEDIUM)
         .child(count.to_string())
 }
 

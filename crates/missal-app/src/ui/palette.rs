@@ -261,7 +261,7 @@ impl CommandPalette {
         } else {
             let firs = self.models.firs.read(cx);
             results.extend(
-                firs.rows
+                firs.rows()
                     .iter()
                     .filter(|row| row.matches(&words))
                     .take(FIR_LIMIT)
@@ -493,7 +493,7 @@ fn highlight_number(palette: &Palette, no: &SharedString, query: &str) -> AnyEle
                 range,
                 HighlightStyle {
                     color: Some(palette.accent),
-                    font_weight: Some(FontWeight::SEMIBOLD),
+                    font_weight: Some(FontWeight::MEDIUM),
                     ..Default::default()
                 },
             )])

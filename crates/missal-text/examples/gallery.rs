@@ -333,7 +333,7 @@ impl Render for LabelPage {
             .child(
                 label("Section 380 PPC کے تحت")
                     .text_size(px(14.))
-                    .font_weight(gpui_kit::FontWeight::BOLD),
+                    .font_weight(gpui_kit::FontWeight::MEDIUM),
             )
             .child(
                 label("ترچھا مصنوعی: تھانہ صدر")
@@ -345,7 +345,7 @@ impl Render for LabelPage {
                 label("موٹا مصنوعی: تھانہ صدر")
                     .document_font()
                     .text_size(px(20.))
-                    .font_weight(gpui_kit::FontWeight::BOLD),
+                    .font_weight(gpui_kit::FontWeight::MEDIUM),
             )
             .child(
                 div()
@@ -550,9 +550,10 @@ impl Render for WidgetsPage {
                             .rounded(px(6.))
                             .when(i == 1, |d| d.bg(theme.sidebar_accent))
                             .child(
-                                label(*s).rtl().text_size(px(14.)).when(i == 1, |l| {
-                                    l.font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                }),
+                                label(*s)
+                                    .rtl()
+                                    .text_size(px(14.))
+                                    .when(i == 1, |l| l.font_weight(gpui_kit::FontWeight::MEDIUM)),
                             )
                     })),
             )
@@ -566,7 +567,7 @@ impl Render for WidgetsPage {
                     .child(
                         label("ایف آئی آر فارم — Inputs")
                             .text_size(px(18.))
-                            .font_weight(gpui_kit::FontWeight::SEMIBOLD),
+                            .font_weight(gpui_kit::FontWeight::MEDIUM),
                     )
                     .children(self.inputs.iter().map(|(caption, input)| {
                         div()
@@ -584,7 +585,7 @@ impl Render for WidgetsPage {
                     .child(
                         label("جدول — 5000 rows (uniform_list, virtualised)")
                             .text_size(px(14.))
-                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                            .font_weight(gpui_kit::FontWeight::MEDIUM)
                             .mt(px(6.)),
                     )
                     .child(

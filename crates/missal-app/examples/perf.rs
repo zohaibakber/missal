@@ -86,7 +86,7 @@ fn main() {
         "launch to first frame with the list visible (CPU frame, no GPU submit): {:.0}ms",
         launch.elapsed().as_secs_f64() * 1e3
     );
-    let rows = cx.update(|cx| models.firs.read(cx).rows.len());
+    let rows = cx.update(|cx| models.firs.read(cx).rows().len());
     println!("rows loaded: {rows}");
     let list = cx.update(|cx| shell.read(cx).fir_list().unwrap());
 
@@ -151,7 +151,7 @@ fn main() {
         cx.update(|cx| list.read(cx).visible_count())
     );
 
-    let fir = cx.update(|cx| models.firs.read(cx).rows[0].id);
+    let fir = cx.update(|cx| models.firs.read(cx).rows()[0].id);
     let open_workspace = |cx: &mut HeadlessAppContext| {
         cx.update_window(handle, |_, window, cx| {
             models.nav.update(cx, |nav, cx| {
@@ -208,7 +208,7 @@ fn main() {
 
     let (rows_snapshot, version) = cx.update(|cx| {
         let firs = models.firs.read(cx);
-        (firs.rows.clone(), firs.version())
+        (firs.rows().to_vec(), firs.version())
     });
     let sort = cx.update(|cx| list.read(cx).sort());
     let mut index = ListIndex::default();

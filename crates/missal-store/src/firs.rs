@@ -14,8 +14,13 @@ const LIST_SEPARATOR: char = '\u{1F}';
 
 const COLUMNS: &str = "id, fir_no, date, offence, incident_date, arrest_date, status, accused, complainant, witness, zimni, investigation_officer, writer, recovery, imei_1, imei_2, sim_1, sim_2, body";
 const WRITE_COLUMNS: &str = "fir_no, date, offence, incident_date, arrest_date, status, accused, complainant, witness, zimni, investigation_officer, writer, recovery, imei_1, imei_2, sim_1, sim_2, body";
-const SUMMARY_COLUMNS: &str =
+pub(crate) const SUMMARY_COLUMNS: &str =
     "id, fir_no, date, offence, incident_date, arrest_date, status, accused";
+pub(crate) const SUMMARY_INDEX: &str = "firs_summary";
+
+fn summaries_query() -> String {
+    format!("SELECT {SUMMARY_COLUMNS} FROM firs ORDER BY id DESC")
+}
 
 fn join(items: &[String]) -> String {
     let mut joined = String::with_capacity(items.iter().map(|item| item.len() + 1).sum());
@@ -240,9 +245,7 @@ impl Store {
         let operation = "fir.list";
         let mut statement = self
             .connection
-            .prepare_cached(&format!(
-                "SELECT {SUMMARY_COLUMNS} FROM firs ORDER BY id DESC"
-            ))
+            .prepare_cached(&summaries_query())
             .map_err(failed(operation))?;
         let mut rows = statement.query([]).map_err(failed(operation))?;
         let mut firs = Vec::new();
@@ -386,5 +389,28 @@ impl Store {
         let saved = overrides(&transaction, fir_id, operation)?;
         transaction.commit().map_err(failed(operation))?;
         Ok(saved)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_fir_list_reads_only_the_summary_index() {
+        let store = Store::in_memory().unwrap();
+        let plan: Vec<String> = store
+            .connection
+            .prepare(&format!("EXPLAIN QUERY PLAN {}", summaries_query()))
+            .and_then(|mut statement| {
+                statement
+                    .query_map([], |row| row.get::<_, String>(3))?
+                    .collect()
+            })
+            .unwrap();
+        assert_eq!(
+            plan,
+            [format!("SCAN firs USING COVERING INDEX {SUMMARY_INDEX}")]
+        );
     }
 }

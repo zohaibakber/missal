@@ -72,10 +72,7 @@ impl EditorFields {
     }
 
     pub fn presentation(&self) -> FieldPresentation<'_> {
-        match &self.values {
-            Some(values) => FieldPresentation::for_fir(&self.catalog, values, self.mode),
-            None => FieldPresentation::labels(&self.catalog),
-        }
+        FieldPresentation::new(&self.catalog, self.values.as_deref(), self.mode)
     }
 }
 

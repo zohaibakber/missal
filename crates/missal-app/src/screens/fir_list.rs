@@ -214,7 +214,7 @@ impl FirListScreen {
     }
 
     pub fn visible_numbers(&self, cx: &App) -> Vec<String> {
-        let rows = &self.models.firs.read(cx).rows;
+        let rows = self.models.firs.read(cx).rows();
         self.visible
             .iter()
             .map(|&index| rows[index as usize].no.to_string())
@@ -230,7 +230,7 @@ impl FirListScreen {
             return;
         }
         let firs = self.models.firs.read(cx);
-        let present: HashSet<FirId> = firs.rows.iter().map(|row| row.id).collect();
+        let present: HashSet<FirId> = firs.rows().iter().map(|row| row.id).collect();
         self.selected.retain(|id| present.contains(id));
     }
 
@@ -245,7 +245,7 @@ impl FirListScreen {
         self.stale = false;
         let mut index = firs.index.borrow_mut();
         let shown = index.update(
-            &firs.rows,
+            firs.rows(),
             firs.version(),
             &self.query,
             &self.statuses,
@@ -334,14 +334,14 @@ impl FirListScreen {
         self.models
             .firs
             .read(cx)
-            .rows
+            .rows()
             .get(position as usize)
             .map(|row| row.id)
     }
 
     fn row_view(&self, index: usize, cx: &App) -> Option<RowView> {
         let position = *self.visible.get(index)?;
-        let row = self.models.firs.read(cx).rows.get(position as usize)?;
+        let row = self.models.firs.read(cx).rows().get(position as usize)?;
         Some(RowView {
             id: row.id,
             no: row.no.clone(),
@@ -369,7 +369,7 @@ impl FirListScreen {
     }
 
     fn all_visible_selected(&self, cx: &App) -> bool {
-        let rows = &self.models.firs.read(cx).rows;
+        let rows = self.models.firs.read(cx).rows();
         !self.visible.is_empty()
             && self
                 .visible
@@ -387,7 +387,7 @@ impl FirListScreen {
     }
 
     pub fn select_all(&mut self, cx: &mut Context<Self>) {
-        let rows = &self.models.firs.read(cx).rows;
+        let rows = self.models.firs.read(cx).rows();
         self.selected
             .extend(self.visible.iter().map(|&index| rows[index as usize].id));
         cx.notify();
@@ -1231,7 +1231,7 @@ impl FirListScreen {
     fn body(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let palette = *Palette::get(cx);
         let load = self.models.firs.read(cx).load.clone();
-        let total = self.models.firs.read(cx).rows.len();
+        let total = self.models.firs.read(cx).rows().len();
         match load {
             Load::Loading => {
                 if !self.skeleton {
@@ -1341,7 +1341,7 @@ impl Render for FirListScreen {
         let palette = *Palette::get(cx);
         self.ensure_derived(cx);
         let ready = self.models.firs.read(cx).load.is_ready();
-        let has_rows = !self.models.firs.read(cx).rows.is_empty();
+        let has_rows = !self.models.firs.read(cx).rows().is_empty();
         let toolbar = (has_rows || (!ready && self.skeleton)).then(|| self.toolbar(&palette, cx));
         let body = self.body(cx);
         v_flex()
@@ -1388,7 +1388,7 @@ impl Render for FirListScreen {
 impl HeaderSource for FirListScreen {
     fn header(&mut self, _: &mut Window, cx: &mut Context<Self>) -> HeaderContent {
         self.ensure_derived(cx);
-        let total = self.models.firs.read(cx).rows.len();
+        let total = self.models.firs.read(cx).rows().len();
         let visible = self.visible_count();
         let ready = self.models.firs.read(cx).load.is_ready();
         let meta = if !ready {

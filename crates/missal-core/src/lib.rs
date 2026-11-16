@@ -4,6 +4,7 @@ pub mod error;
 pub mod field;
 pub mod fir;
 pub mod ids;
+pub mod parallel;
 pub mod text;
 pub mod timestamp;
 

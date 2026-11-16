@@ -699,8 +699,8 @@ fn edits_match_fresh_layout(
     packet: &missal_page::Packet,
 ) {
     let fields = missal_page::TokenFields;
-    let fresh =
-        missal_page::PageEngine::new().layout(&[missal_page::DocSource::new(document, &fields)]);
+    let fresh = missal_page::PageEngine::with_cache(missal_page::LayoutCache::default())
+        .layout(&[missal_page::DocSource::new(document, &fields)]);
     assert_eq!(packet.page_count(), fresh.page_count());
     let a: Vec<_> = packet
         .lines(0)

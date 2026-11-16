@@ -83,7 +83,7 @@ impl Fixture {
     }
 
     fn rows(&self, cx: &mut TestAppContext) -> usize {
-        cx.update(|cx| self.models.firs.read(cx).rows.len())
+        cx.update(|cx| self.models.firs.read(cx).rows().len())
     }
 
     fn db_firs(&self) -> Vec<missal_core::FirSummary> {
@@ -234,7 +234,7 @@ fn search_filter_and_sort_the_list(cx: &mut TestAppContext) {
             .models
             .firs
             .read(cx)
-            .rows
+            .rows()
             .iter()
             .filter(|row| row.status == FirStatus::Closed)
             .count()
@@ -276,7 +276,7 @@ fn search_filter_and_sort_the_list(cx: &mut TestAppContext) {
             .models
             .firs
             .read(cx)
-            .rows
+            .rows()
             .iter()
             .filter(|row| row.status == FirStatus::Open)
             .count()

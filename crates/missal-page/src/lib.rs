@@ -17,7 +17,9 @@ pub mod pdf;
 use missal_core::{FieldDisplayText, FieldPresentation, FieldReference};
 
 pub use display::{DisplayItem, DisplayList, FieldMark, Glyph, GlyphRun, RectKind, TextLine};
-pub use engine::{DocSource, Edit, LayoutOptions, Packet, Page, PageEngine, RelayoutStats};
+pub use engine::{
+    DocSource, Edit, LayoutOptions, Packet, Page, PageEngine, RelayoutStats, shaping_cache,
+};
 pub use geom::{PX_PER_MM, Point, Rect, Size, mm_to_px};
 pub use mapping::{Caret, LineHit, PlacedCell, PlacedLine};
 pub use position::{BlockPath, Position, VerticalDirection};
@@ -27,7 +29,7 @@ pub use text::{
     logical_len, logical_text,
 };
 
-pub use missal_text::{Affinity, HorizontalDirection};
+pub use missal_text::{Affinity, HorizontalDirection, LayoutCache};
 
 pub trait FieldSource: Sync {
     fn display(&self, reference: &FieldReference) -> FieldDisplayText;

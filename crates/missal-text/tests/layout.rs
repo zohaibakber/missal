@@ -415,16 +415,15 @@ fn script_fallback_picks_faces_per_script() {
         .collect();
     assert!(faces.contains(&missal_text::URDU_FAMILY), "{faces:?}");
     assert!(faces.contains(&missal_text::UI_FAMILY), "{faces:?}");
-    let bold = engine.layout_uncached(
-        &AttributedText::new("Aslam", TextStyle::interface(14.0).with_weight(700)),
+    let medium = engine.layout_uncached(
+        &AttributedText::new("Aslam", TextStyle::interface(14.0).with_weight(500)),
         &ParagraphStyle::default(),
         None,
     );
-    assert!(
-        bold.glyph_runs()
-            .iter()
-            .all(|r| !r.synthesis.embolden && missal_text::fonts::face(r.face).weight == 700)
-    );
+    assert!(medium.glyph_runs().iter().all(|r| {
+        let face = missal_text::fonts::face(r.face);
+        !r.synthesis.embolden && face.family == missal_text::UI_FAMILY && face.weight == 500
+    }));
 }
 
 #[test]
@@ -486,8 +485,8 @@ fn cache_hits_and_rebreaks() {
     assert!(std::sync::Arc::ptr_eq(&a, &b));
     let c = engine.layout(&text, &paragraph, Some(300.0));
     assert!(c.lines().len() > a.lines().len());
-    let stats = engine.cache_stats();
-    assert_eq!((stats.builds, stats.rebreaks, stats.hits), (1, 1, 1));
+    let counts = engine.counts();
+    assert_eq!((counts.builds, counts.rebreaks, counts.hits), (1, 1, 1));
     let fresh = engine.layout_uncached(&text, &paragraph, Some(300.0));
     assert_eq!(
         fresh.lines(),

@@ -1066,10 +1066,6 @@ impl StyleCache {
             self.map.clear();
         }
     }
-
-    pub(crate) fn clear(&mut self) {
-        self.map.clear();
-    }
 }
 
 pub(crate) fn compute<'a>(

@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 use missal_core::document::{Block, Document, ListItemChild, PageLayout};
+use missal_core::parallel::workers;
 use missal_core::{FieldDisplayText, FieldReference};
-use missal_text::TextEngine;
+use missal_text::{LayoutCache, TextEngine};
 
 use crate::FieldSource;
 use crate::display::{self, DisplayList};
@@ -141,6 +142,16 @@ impl Packet {
     }
 }
 
+const SHAPING_CACHE_ENTRIES: usize = 16384;
+const SHAPING_CACHE_BYTES: usize = 96 * 1024 * 1024;
+
+pub fn shaping_cache() -> LayoutCache {
+    static CACHE: OnceLock<LayoutCache> = OnceLock::new();
+    CACHE
+        .get_or_init(|| LayoutCache::new(SHAPING_CACHE_ENTRIES, SHAPING_CACHE_BYTES))
+        .clone()
+}
+
 pub struct PageEngine {
     text: TextEngine,
     cache: TextCache,
@@ -222,8 +233,12 @@ fn shift_page(page: &mut Page, item_delta: isize, block_delta: isize) {
 
 impl PageEngine {
     pub fn new() -> PageEngine {
+        PageEngine::with_cache(shaping_cache())
+    }
+
+    pub fn with_cache(cache: LayoutCache) -> PageEngine {
         PageEngine {
-            text: TextEngine::new(),
+            text: TextEngine::with_cache(cache),
             cache: TextCache::new(),
             workers: Vec::new(),
             options: LayoutOptions::default(),
@@ -242,21 +257,8 @@ impl PageEngine {
         self.options
     }
 
-    pub fn text_engine(&mut self) -> &mut TextEngine {
-        &mut self.text
-    }
-
     pub fn last_stats(&self) -> RelayoutStats {
         self.last
-    }
-
-    pub fn cached_blocks(&self) -> usize {
-        self.cache.len()
-    }
-
-    pub fn clear_cache(&mut self) {
-        self.cache.clear();
-        self.text.clear_cache();
     }
 
     pub fn layout(&mut self, sources: &[DocSource<'_>]) -> Packet {
@@ -372,15 +374,14 @@ impl PageEngine {
         threshold: usize,
     ) -> Option<Vec<Vec<FlowItem>>> {
         let blocks = &source.document.blocks;
-        let threads = std::thread::available_parallelism()
-            .map(|n| n.get())
-            .unwrap_or(1)
-            .min(8);
+        let threads = workers();
         if threads < 2 || wanted.len() < threshold {
             return None;
         }
         while self.workers.len() < threads {
-            self.workers.push((TextEngine::new(), TextCache::new()));
+            let cache = self.text.cache().clone();
+            self.workers
+                .push((TextEngine::with_cache(cache), TextCache::new()));
         }
         let main_cache = &self.cache;
         let fields = source.fields;

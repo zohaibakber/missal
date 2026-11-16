@@ -5,7 +5,8 @@ use gpui_kit::{
     AppContext, Context, IntoElement, ParentElement, Render, Styled, Window, div, px, rgb, size,
 };
 use missal_text::{
-    AttributedText, LineHeight, ParagraphStyle, TextEngine, TextStyle, TextSystem, fonts, label,
+    AttributedText, LayoutCache, LineHeight, ParagraphStyle, TextEngine, TextStyle, TextSystem,
+    fonts, label,
 };
 
 const SHORT: &str = "ملزم محمد اسلم";
@@ -73,7 +74,7 @@ fn layout_costs() {
         let cold = per_iter(n, |_| {
             black_box(engine.layout_uncached(&attributed, &paragraph, Some(520.0)));
         });
-        engine.clear_cache();
+        engine.cache().clear();
         let layout = engine.layout(&attributed, &paragraph, Some(520.0));
         let cached = per_iter(n * 10, |_| {
             black_box(engine.layout(&attributed, &paragraph, Some(520.0)));
@@ -124,11 +125,11 @@ fn memory_costs() {
     for (name, text, count) in cases {
         let mut engine = TextEngine::new();
         let rss = fill(&mut engine, text, count);
-        let stats = engine.cache_stats();
+        let usage = engine.cache().usage();
         println!(
             "default cache, {count} distinct {name}s: {} entries, estimate {:.1} MiB, RSS +{rss:.1} MiB",
-            stats.entries,
-            stats.bytes as f64 / 1048576.0
+            usage.entries,
+            usage.bytes as f64 / 1048576.0
         );
     }
     let paragraph = ParagraphStyle::rtl().with_line_height(LineHeight::Relative(2.0));
@@ -140,19 +141,18 @@ fn memory_costs() {
     }
     println!(
         "default cache, one 5 KB paragraph at 300 widths (window resize): {} entries, estimate {:.1} MiB, RSS +{:.1} MiB",
-        engine.cache_stats().entries,
-        engine.cache_stats().bytes as f64 / 1048576.0,
+        engine.cache().usage().entries,
+        engine.cache().usage().bytes as f64 / 1048576.0,
         rss_kib().saturating_sub(before) as f64 / 1024.0
     );
     for (name, text, count) in cases {
-        let mut engine = TextEngine::new();
-        engine.set_cache_budget(usize::MAX);
+        let mut engine = TextEngine::with_cache(LayoutCache::new(usize::MAX, usize::MAX));
         let rss = fill(&mut engine, text, count);
-        let stats = engine.cache_stats();
+        let usage = engine.cache().usage();
         println!(
             "unbounded cache, {count} distinct {name}s: {:.1} KiB each, estimate {:.1} KiB each",
             rss * 1024.0 / count as f64,
-            stats.bytes as f64 / 1024.0 / count as f64
+            usage.bytes as f64 / 1024.0 / count as f64
         );
     }
 }

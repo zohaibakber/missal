@@ -343,6 +343,15 @@ pub enum DisplayMode {
     Values,
 }
 
+impl DisplayMode {
+    pub fn toggled(self) -> DisplayMode {
+        match self {
+            DisplayMode::Labels => DisplayMode::Values,
+            DisplayMode::Values => DisplayMode::Labels,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldDisplayText {
     pub text: String,
@@ -357,6 +366,17 @@ pub struct FieldPresentation<'a> {
 }
 
 impl<'a> FieldPresentation<'a> {
+    pub fn new(
+        catalog: &'a FieldCatalog,
+        values: Option<&'a FirValues>,
+        mode: DisplayMode,
+    ) -> FieldPresentation<'a> {
+        match values {
+            Some(values) => FieldPresentation::for_fir(catalog, values, mode),
+            None => FieldPresentation::labels(catalog),
+        }
+    }
+
     pub fn labels(catalog: &'a FieldCatalog) -> FieldPresentation<'a> {
         FieldPresentation {
             catalog,

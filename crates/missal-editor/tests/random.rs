@@ -6,7 +6,7 @@ use missal_core::{Document, FieldMarkers};
 use missal_editor::model::selection::pos;
 use missal_editor::model::tree::all_text_paths;
 use missal_editor::{EditorCore, Selection};
-use missal_page::{DocSource, PageEngine, TokenFields};
+use missal_page::{DocSource, LayoutCache, PageEngine, TokenFields};
 
 const SNIPPETS: &[&str] = &[
     "ک",
@@ -188,7 +188,8 @@ fn episode(document: Document, seed: u64, steps: usize, relayout: bool) {
         "seed {seed}: too few kinds of change {kinds:?}"
     );
     if let Some(packet) = &packet {
-        let fresh = PageEngine::new().layout(&[DocSource::new(core.document(), &fields)]);
+        let fresh = PageEngine::with_cache(LayoutCache::default())
+            .layout(&[DocSource::new(core.document(), &fields)]);
         assert_eq!(
             packet.page_count(),
             fresh.page_count(),

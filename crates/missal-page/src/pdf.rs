@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
+use missal_core::parallel::workers;
 use missal_text::{FaceId, Rgba};
 use pdf_writer::types::{CidFontType, FontFlags, SystemInfo, TextRenderingMode, UnicodeCmap};
 use pdf_writer::{Content, Filter, Finish, Name, Pdf, Rect as PdfRect, Ref, Str, TextStr};
@@ -60,11 +61,7 @@ impl Deflater {
 }
 
 fn run_parallel<T: Send>(count: usize, task: impl Fn(usize, &mut Deflater) -> T + Sync) -> Vec<T> {
-    let threads = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1)
-        .min(8)
-        .min(count);
+    let threads = workers().min(count);
     if threads < 2 {
         let mut deflater = Deflater::default();
         return (0..count).map(|i| task(i, &mut deflater)).collect();
