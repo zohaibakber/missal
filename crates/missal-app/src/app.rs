@@ -600,7 +600,12 @@ impl AppShell {
             return;
         }
         self.palette = None;
-        let menu = cx.new(NavMenu::new);
+        let keyboard = window.last_input_was_keyboard();
+        let menu = cx.new(|cx| {
+            let mut menu = NavMenu::new(cx);
+            menu.opened_by_keyboard(keyboard);
+            menu
+        });
         cx.subscribe_in(
             &menu,
             window,

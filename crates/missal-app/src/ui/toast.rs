@@ -189,7 +189,7 @@ impl Default for ToastHost {
 
 pub fn toast_card(palette: &Palette, spec: &ToastSpec) -> gpui_kit::Div {
     let (icon, color) = match spec.kind {
-        ToastKind::Success => (IconName::CircleCheck, palette.st_closed),
+        ToastKind::Success => (IconName::CircleCheck, palette.success),
         ToastKind::Error => (IconName::CircleAlert, palette.danger_text),
         ToastKind::Warning => (IconName::TriangleAlert, palette.notice),
         ToastKind::Info => (IconName::Info, palette.ink_muted),
@@ -201,8 +201,12 @@ pub fn toast_card(palette: &Palette, spec: &ToastSpec) -> gpui_kit::Div {
         .py(px(10.))
         .px(px(12.))
         .rounded(px(RADIUS_LG))
-        .bg(palette.raised)
-        .shadow(palette.shadow_md())
+        .bg(if palette.dark {
+            crate::theme::hex(0x2a2826)
+        } else {
+            palette.raised
+        })
+        .shadow(palette.shadow_lg())
         .text_size(px(13.))
         .line_height(px(20.))
         .text_color(palette.ink)
@@ -237,17 +241,24 @@ impl Render for ToastHost {
             .child(
                 v_flex()
                     .w_full()
-                    .gap(px(8.))
+                    .gap(px(6.))
                     .children(self.toasts.iter().map(|toast| {
                         let id = toast.id;
                         let action = toast.spec.action.clone().map(|(text, handler)| {
                             div()
                                 .id(("toast-action", id))
                                 .flex_none()
+                                .h(px(24.))
+                                .px(px(8.))
+                                .mr(px(-4.))
+                                .flex()
+                                .items_center()
+                                .rounded(px(crate::theme::RADIUS))
                                 .text_size(px(12.))
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(accent)
-                                .cursor_pointer()
+                                .hover(move |style| style.bg(palette.hover_raised))
+                                .active(move |style| style.bg(palette.pressed_raised))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     handler(window, cx);
                                     this.dismiss(id, cx);

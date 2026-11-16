@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::h_flex;
+use gpui_kit::component::{Colorize, h_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     App, AppContext, Context, ElementId, Entity, Focusable, InteractiveElement, IntoElement,
@@ -256,10 +256,16 @@ impl RenderOnce for Field {
             .dense()
             .on_click(move |_, window, cx| handler(window, cx))
         });
-        let shadows = if focused && !self.error {
-            palette.input_focus_ring()
-        } else {
-            Vec::new()
+        let shadows = match (focused, self.error) {
+            (true, false) => palette.input_focus_ring(),
+            (true, true) => vec![gpui_kit::BoxShadow {
+                color: palette.danger.opacity(0.16),
+                offset: gpui_kit::point(px(0.), px(0.)),
+                blur_radius: px(0.),
+                spread_radius: px(3.),
+                inset: false,
+            }],
+            _ => Vec::new(),
         };
         let border = if self.error {
             palette.danger_text
@@ -268,6 +274,8 @@ impl RenderOnce for Field {
         } else {
             palette.line_input
         };
+        let hover_border = (!focused && !self.error)
+            .then(|| palette.line_strong.mix_oklab(palette.line_input, 0.55));
         let height = self.height.unwrap_or(self.kind.height());
         let focus_target = self.input.clone();
         let mut start: Vec<gpui_kit::AnyElement> = Vec::new();
@@ -301,6 +309,9 @@ impl RenderOnce for Field {
             .rounded(px(RADIUS))
             .border_1()
             .border_color(border)
+            .when_some(hover_border, |this, color| {
+                this.hover(move |style| style.border_color(color))
+            })
             .bg(palette.surface)
             .shadow(shadows)
             .cursor_text()

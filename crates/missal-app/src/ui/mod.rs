@@ -131,6 +131,11 @@ pub fn keycap(palette: &Palette, text: impl Into<SharedString>) -> Div {
 
 pub fn keycap_toned(palette: &Palette, text: impl Into<SharedString>, tone: KeyTone) -> Div {
     let (fill, border, color) = match tone {
+        KeyTone::Plain if palette.dark => (
+            Some(palette.hover_raised),
+            Some(palette.line_strong),
+            palette.ink_muted,
+        ),
         KeyTone::Plain => (Some(palette.hover), None, palette.ink_muted),
         KeyTone::Bare => (None, None, palette.ink_faint),
         KeyTone::OnTooltip => (None, Some(palette.surface.opacity(0.35)), palette.surface),
@@ -154,6 +159,27 @@ pub fn keycap_toned(palette: &Palette, text: impl Into<SharedString>, tone: KeyT
 }
 
 pub fn keycaps_toned(palette: &Palette, keys: &str, tone: KeyTone) -> Div {
+    if tone == KeyTone::Bare {
+        let text = key_caps(keys)
+            .into_iter()
+            .map(|caps| {
+                caps.iter()
+                    .map(|cap| match display_key(cap) {
+                        key if key == "↵" => "Enter".to_owned(),
+                        key => key,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("+")
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        return div()
+            .flex_none()
+            .text_size(px(12.))
+            .line_height(px(16.))
+            .text_color(palette.ink_faint)
+            .child(text);
+    }
     h_flex().flex_none().items_center().gap(px(3.)).children(
         key_caps(keys)
             .into_iter()
@@ -367,30 +393,46 @@ impl ActionButton {
 impl RenderOnce for ActionButton {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let palette = *Palette::get(cx);
-        let (fill, hover_fill, text, border) = match self.kind {
+        let (fill, hover_fill, press_fill, text, border) = match self.kind {
             ButtonKind::Primary => (
                 Some(palette.action),
                 Some(palette.action_hover),
+                Some(palette.action_pressed),
                 palette.on_action,
                 None,
             ),
             ButtonKind::Outline => (
                 Some(palette.surface),
                 Some(palette.hover),
+                Some(palette.pressed),
                 palette.ink,
                 Some(palette.line_strong.mix_oklab(palette.surface, 0.7)),
             ),
-            ButtonKind::Ghost => (None, Some(palette.hover), palette.ink, None),
-            ButtonKind::GhostMuted => (None, Some(palette.hover), palette.ink_muted, None),
+            ButtonKind::Ghost => (
+                None,
+                Some(palette.hover),
+                Some(palette.pressed),
+                palette.ink,
+                None,
+            ),
+            ButtonKind::GhostMuted => (
+                None,
+                Some(palette.hover),
+                Some(palette.pressed),
+                palette.ink_muted,
+                None,
+            ),
             ButtonKind::Danger => (
                 Some(palette.danger),
                 Some(palette.danger.mix_oklab(palette.ink, 0.88)),
+                Some(palette.danger.mix_oklab(palette.ink, 0.78)),
                 crate::theme::hex(0xffffff),
                 None,
             ),
             ButtonKind::DangerOutline => (
                 Some(palette.surface),
                 Some(palette.danger_wash),
+                Some(palette.danger_wash.mix_oklab(palette.danger, 0.86)),
                 palette.danger_text,
                 Some(palette.danger_text.mix_oklab(palette.surface, 0.45)),
             ),
@@ -442,8 +484,8 @@ impl RenderOnce for ActionButton {
             .when(!shadows.is_empty(), |this| this.shadow(shadows))
             .when(disabled, |this| this.opacity(0.45))
             .when(!disabled, |this| {
-                this.cursor_pointer()
-                    .when_some(hover_fill, |this, fill| this.hover(move |s| s.bg(fill)))
+                this.when_some(hover_fill, |this, fill| this.hover(move |s| s.bg(fill)))
+                    .when_some(press_fill, |this, fill| this.active(move |s| s.bg(fill)))
             })
             .when_some(self.focus.as_ref(), |this, focus| this.track_focus(focus))
             .role(gpui_kit::accesskit::Role::Button)
@@ -571,6 +613,7 @@ impl RenderOnce for IconButton {
         let on_click = self.on_click.clone();
         let ink = palette.ink;
         let hover = palette.hover;
+        let pressed = palette.pressed;
         div()
             .id(self.id)
             .flex_none()
@@ -594,6 +637,7 @@ impl RenderOnce for IconButton {
             .when(disabled, |this| this.opacity(0.4))
             .when(!disabled && !self.toggled, |this| {
                 this.hover(move |s| s.bg(hover).text_color(ink))
+                    .active(move |s| s.bg(pressed).text_color(ink))
             })
             .when_some(self.focus.as_ref(), |this, focus| this.track_focus(focus))
             .occlude()
@@ -751,7 +795,10 @@ pub fn checkbox(palette: &Palette, id: impl Into<ElementId>, checked: bool) -> S
                     .border_color(palette.action)
                     .child(sized_icon(IconName::Check, ICON_XS, palette.on_action))
             } else {
-                this.bg(palette.surface).border_color(palette.line_strong)
+                let hover = palette.ink_muted;
+                this.bg(palette.surface)
+                    .border_color(palette.line_strong)
+                    .hover(move |s| s.border_color(hover))
             }
         })
 }
@@ -797,7 +844,6 @@ pub fn segmented(palette: &Palette, items: Vec<SegmentItem>, selected: usize) ->
                 .rounded(px(RADIUS))
                 .text_size(px(13.))
                 .font_weight(FontWeight::MEDIUM)
-                .cursor_pointer()
                 .role(gpui_kit::accesskit::Role::RadioButton)
                 .when(on, |this| {
                     this.bg(palette.surface)
@@ -805,8 +851,10 @@ pub fn segmented(palette: &Palette, items: Vec<SegmentItem>, selected: usize) ->
                         .shadow(palette.shadow_sm())
                 })
                 .when(!on, |this| {
+                    let pressed = palette.pressed;
                     this.text_color(palette.ink_muted)
                         .hover(move |s| s.text_color(ink))
+                        .active(move |s| s.bg(pressed).text_color(ink))
                 })
                 .on_click(move |event, window, cx| handler(event, window, cx))
                 .child(item.label)

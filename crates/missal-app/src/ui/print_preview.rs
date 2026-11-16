@@ -34,11 +34,11 @@ use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::toast::ToastSpec;
 use crate::ui::{
     UrRole, button, checkbox, empty_state, icon_button, isolate_urdu, primary_sm, section_label,
-    sized_icon, skeleton_bar, tabular, ur_inline, ur_label, vertical_rule,
+    sized_icon, skeleton_bar, tabular, ur_inline, ur_label,
 };
 use missal_core::digit_value;
 
-const PANEL_WIDTH: f32 = 280.0;
+const PANEL_WIDTH: f32 = crate::theme::RAIL_WIDTH;
 const FOOTER_HEIGHT: f32 = 44.0;
 const PAD_TOP: f32 = 20.0;
 const FIT_PAGE_MARGIN: f32 = 80.0;
@@ -1175,9 +1175,46 @@ impl PrintPreview {
         let hover = palette.hover;
         let warning = self.warning(&palette, cx);
         let has_warning = warning.is_some();
+        let failed = matches!(self.state, State::Failed(_));
         let rows = docs.into_iter().enumerate().map(|(index, doc)| {
             let pages = ranges.get(index).copied();
             let on = current_doc == Some(index);
+            let latin = !doc
+                .title
+                .chars()
+                .any(|c| ('\u{0600}'..='\u{06FF}').contains(&c));
+            let title = if latin {
+                missal_text::label(doc.title.clone())
+                    .ltr()
+                    .align(missal_text::Align::Right)
+                    .text_size(px(13.))
+                    .truncate()
+            } else {
+                ur_label(doc.title.clone(), UrRole::Body).truncate()
+            };
+            let lead = if failed {
+                div()
+                    .size(px(16.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(sized_icon(
+                        IconName::TriangleAlert,
+                        ICON_SM,
+                        palette.ink_faint,
+                    ))
+                    .into_any_element()
+            } else {
+                checkbox(&palette, ("print-include", index), doc.included)
+                    .aria_label(SharedString::from(format!("Print {}", doc.title)))
+                    .test_support()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.toggle_included(index, cx)
+                    }))
+                    .into_any_element()
+            };
             h_flex()
                 .id(("print-doc", index))
                 .test_support()
@@ -1189,30 +1226,25 @@ impl PrintPreview {
                 .flex_row_reverse()
                 .items_center()
                 .rounded(px(RADIUS))
-                .cursor_pointer()
-                .when(on, |this| this.bg(hover))
-                .when(!on, |this| this.hover(move |style| style.bg(hover)))
-                .on_click(cx.listener(move |this, _, _, cx| this.show_document(index, cx)))
-                .child(
-                    checkbox(&palette, ("print-include", index), doc.included)
-                        .cursor_pointer()
-                        .aria_label(SharedString::from(format!("Print {}", doc.title)))
-                        .test_support()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            cx.stop_propagation();
-                            this.toggle_included(index, cx)
-                        })),
-                )
+                .when(on, |this| this.bg(palette.pressed))
+                .when(!on, |this| {
+                    this.hover(move |style| style.bg(hover))
+                        .active(move |s| s.bg(palette.pressed))
+                })
+                .when(!failed, |this| {
+                    this.on_click(cx.listener(move |this, _, _, cx| this.show_document(index, cx)))
+                })
+                .child(lead)
                 .child(
                     div()
                         .flex_1()
                         .min_w_0()
-                        .text_color(if doc.included {
+                        .text_color(if doc.included && !failed {
                             palette.ink
                         } else {
                             palette.ink_faint
                         })
-                        .child(ur_label(doc.title.clone(), UrRole::Body).truncate()),
+                        .child(title),
                 )
                 .children(pages.map(|pages| {
                     div()
@@ -1484,10 +1516,10 @@ impl PrintPreview {
                     .border_1()
                     .border_color(palette.line)
                     .text_color(palette.ink)
-                    .cursor_pointer()
                     .when(menu_open, |this| this.bg(hover))
                     .when(!ready, |this| this.opacity(0.4))
                     .hover(move |style| style.bg(hover))
+                    .active(move |s| s.bg(palette.pressed))
                     .role(gpui_kit::accesskit::Role::ComboBox)
                     .aria_label("Zoom")
                     .when(ready, |this| {
@@ -1702,7 +1734,8 @@ impl Render for PrintPreview {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
         let panel = self.panel(&palette, cx);
-        let footer = self.footer(&palette, window, cx);
+        let footer =
+            (!matches!(self.state, State::Failed(_))).then(|| self.footer(&palette, window, cx));
         let area = self.pages_area(&palette, cx);
         let weak = cx.entity().downgrade();
         let probe = canvas(
@@ -1745,7 +1778,7 @@ impl Render for PrintPreview {
                             .child(probe)
                             .child(area),
                     )
-                    .child(footer),
+                    .children(footer),
             )
             .children(self.menu.clone().map(|menu| menu.into_any_element()))
     }
@@ -1753,7 +1786,6 @@ impl Render for PrintPreview {
 
 impl HeaderSource for PrintPreview {
     fn header(&mut self, _: &mut Window, cx: &mut Context<Self>) -> HeaderContent {
-        let palette = *Palette::get(cx);
         let ready = self.is_ready() && self.document_count() > 0;
         let busy = self.busy;
         let fir = matches!(self.target, Some(PrintTarget::Fir(_)))
@@ -1769,7 +1801,7 @@ impl HeaderSource for PrintPreview {
                     div()
                         .mt(px(-2.))
                         .font_weight(FontWeight::NORMAL)
-                        .child(ur_inline(title.clone(), UrRole::Title).truncate()),
+                        .child(ur_inline(title.clone(), UrRole::Body).truncate()),
                 ),
             )
         };
@@ -1793,6 +1825,5 @@ impl HeaderSource for PrintPreview {
                     .disabled(!ready || busy.is_some())
                     .on_click(cx.listener(|this, _, window, cx| this.print(window, cx))),
             )
-            .action(div().mx(px(4.)).child(vertical_rule(&palette)))
     }
 }

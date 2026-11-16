@@ -38,13 +38,13 @@ use crate::ui::print_preview::{PreviewDocument, PrintRequest};
 use crate::ui::titlebar::HeaderContent;
 use crate::ui::{
     SaveState, empty_state, empty_state_body, ghost_sm, icon_button, isolate_urdu, kit_icon_button,
-    primary_sm, save_state, warn_box,
+    primary_sm, save_state, section_label, warn_box,
 };
 use crate::word::{WordImport, is_docx};
 
 type Continuation = Box<dyn FnOnce(&mut Window, &mut App)>;
 
-const LIST_WIDTH: f32 = 320.0;
+const LIST_WIDTH: f32 = crate::theme::RAIL_WIDTH;
 const ROW_HEIGHT: f32 = 44.0;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -632,16 +632,15 @@ impl TemplatePage {
             .flex()
             .items_center()
             .rounded(px(6.))
-            .cursor_pointer()
             .hover(move |style| style.bg(palette.hover))
+            .active(move |s| s.bg(palette.pressed))
             .on_click(cx.listener(|this, _, window, cx| this.begin_rename(window, cx)))
             .child(
                 label(shown)
-                    .document_font()
-                    .text_size(px(15.))
+                    .text_size(px(18.))
                     .text_color(palette.ink)
                     .rtl()
-                    .leading(missal_text::LineHeight::Px(24.))
+                    .leading(missal_text::LineHeight::Px(30.))
                     .truncate(),
             )
             .into_any_element()
@@ -692,7 +691,8 @@ impl TemplatePage {
                     .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
             );
         }
-        let mut content = HeaderContent::new(if is_new { "New template" } else { "Template" });
+        let mut content = HeaderContent::new(if is_new { "New template" } else { "Template" })
+            .meta_element(self.title_strip(cx));
         if is_new {
             let save_enabled = !name.is_empty() && !self.saving && !self.importing;
             content = content
@@ -863,23 +863,6 @@ impl Render for TemplatePage {
     }
 }
 
-struct TemplateTitle {
-    page: Entity<TemplatePage>,
-}
-
-impl Render for TemplateTitle {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let page = self.page.clone();
-        page.update(cx, |page, cx| {
-            if page.state == PageState::Ready {
-                page.title_strip(cx)
-            } else {
-                div().into_any_element()
-            }
-        })
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum TemplateSort {
     Updated,
@@ -937,7 +920,7 @@ fn match_ranges(name: &str, words: &[String]) -> Vec<Range<usize>> {
 
 fn name_label(palette: &Palette, name: &str, ranges: Vec<Range<usize>>) -> Label {
     let style = TextStyle {
-        family: FontFamily::Document,
+        family: FontFamily::Interface,
         size: 16.0,
         weight: 400,
         italic: false,
@@ -952,7 +935,6 @@ fn name_label(palette: &Palette, name: &str, ranges: Vec<Range<usize>>) -> Label
         text.push(range, Attr::Background(wash));
     }
     Label::rich(text)
-        .document_font()
         .text_size(px(16.))
         .text_color(palette.ink)
         .rtl()
@@ -1007,15 +989,6 @@ impl TemplatesScreen {
         };
         if let Some(page) = &self.page {
             cx.observe(page, |_, _, cx| cx.notify()).detach();
-            let page = page.clone();
-            let title = cx.new(|cx| {
-                cx.observe(&page, |_, _, cx| cx.notify()).detach();
-                TemplateTitle { page: page.clone() }
-            });
-            let editor = page.read(cx).editor.clone();
-            editor.update(cx, |editor, cx| {
-                editor.set_toolbar_trailing(Some(title.into()), cx)
-            });
         }
         if let Route::Template(id) = self.route {
             let visible = self.visible(cx);
@@ -1169,15 +1142,27 @@ impl TemplatesScreen {
     }
 
     fn list_header(&self, cx: &mut Context<Self>) -> gpui_kit::Div {
+        let palette = *Palette::get(cx);
+        let total = self.models.templates.read(cx).items.len();
         let sort_bounds = self.sort_bounds.clone();
         let open = self.menu.is_some();
         h_flex()
             .flex_shrink_0()
             .h(px(44.))
             .items_center()
-            .gap(px(8.))
-            .pl(px(12.))
-            .pr(px(12.))
+            .gap(px(2.))
+            .pl(px(16.))
+            .pr(px(8.))
+            .child(section_label(&palette, "Templates"))
+            .child(
+                div()
+                    .ml(px(4.))
+                    .text_size(px(12.))
+                    .line_height(px(16.))
+                    .text_color(palette.ink_faint)
+                    .child(total.to_string()),
+            )
+            .child(div().flex_1())
             .child(
                 div()
                     .relative()
@@ -1195,7 +1180,6 @@ impl TemplatesScreen {
                             ),
                     ),
             )
-            .child(div().flex_1())
             .child(
                 icon_button("template-import", IconName::FileUp, "Import Word file")
                     .keys("Mod+O")
@@ -1242,10 +1226,10 @@ impl TemplatesScreen {
                                     .gap(px(10.))
                                     .px(px(10.))
                                     .rounded(px(RADIUS))
-                                    .cursor_pointer()
-                                    .when(is_active, |this| this.bg(palette.hover))
+                                    .when(is_active, |this| this.bg(palette.pressed))
                                     .when(!is_active, |this| {
                                         this.hover(move |style| style.bg(palette.hover))
+                                            .active(move |s| s.bg(palette.pressed))
                                     })
                                     .on_click(move |_, window, cx| {
                                         navigate(Route::Template(id), window, cx)
@@ -1261,12 +1245,7 @@ impl TemplatesScreen {
                                             .text_size(px(12.))
                                             .line_height(px(16.))
                                             .text_color(palette.ink_faint)
-                                            .when(!is_active, |this| {
-                                                this.opacity(0.)
-                                                    .group_hover("template-item", |style| {
-                                                        style.opacity(1.)
-                                                    })
-                                            })
+                                            .font_features(crate::ui::tabular())
                                             .child(fields),
                                     ),
                             ),
@@ -1350,7 +1329,7 @@ impl TemplatesScreen {
             .w(px(LIST_WIDTH))
             .flex_shrink_0()
             .h_full()
-            .border_l_1()
+            .border_r_1()
             .border_color(palette.line)
             .child(self.list_header(cx))
             .child(
@@ -1406,19 +1385,29 @@ impl Render for TemplatesScreen {
             templates.load.is_ready() && templates.items.is_empty() && self.page.is_none();
         let main: gpui_kit::AnyElement = match &self.page {
             Some(page) => page.clone().into_any_element(),
-            None => div()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    div()
-                        .text_size(px(13.))
-                        .line_height(px(20.))
-                        .text_color(palette.ink_muted)
-                        .child("Choose a template from the list."),
-                )
-                .into_any_element(),
+            None => empty_state(
+                &palette,
+                IconName::FileText,
+                "No template open",
+                Some("Pick one from the list, or start a new one.".into()),
+                Some(
+                    h_flex()
+                        .gap(px(8.))
+                        .child(
+                            primary_sm("open-new-template", "New template")
+                                .icon(IconName::Plus)
+                                .keys("Shift+N")
+                                .on_click(|_, window, cx| navigate(Route::NewTemplate, window, cx)),
+                        )
+                        .child(
+                            ghost_sm("open-import-template", "Import Word file")
+                                .icon(IconName::FileUp)
+                                .on_click(|_, window, cx| import_word_file(window, cx)),
+                        )
+                        .into_any_element(),
+                ),
+            )
+            .into_any_element(),
         };
         let body = if nothing_at_all {
             empty_state(
@@ -1446,8 +1435,8 @@ impl Render for TemplatesScreen {
             let list = self.list(cx);
             h_flex()
                 .size_full()
-                .child(div().flex_1().min_w_0().h_full().child(main))
                 .child(list)
+                .child(div().flex_1().min_w_0().h_full().child(main))
                 .into_any_element()
         };
         div()

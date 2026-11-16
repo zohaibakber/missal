@@ -640,7 +640,7 @@ impl FirForm {
             .gap(px(4.))
             .child(
                 div()
-                    .text_color(palette.ink)
+                    .text_color(palette.ink_muted)
                     .child(ur_label(title, UrRole::InputLabel)),
             )
             .children(required.then(|| {
@@ -676,16 +676,20 @@ impl FirForm {
         control: AnyElement,
     ) -> AnyElement {
         v_flex()
+            .relative()
             .flex_1()
             .min_w_0()
             .gap(px(4.))
             .child(Self::label_row(palette, title, required))
             .child(control)
-            .children(
-                self.errors
-                    .get(key)
-                    .map(|message| Self::error_line(palette, message)),
-            )
+            .children(self.errors.get(key).map(|message| {
+                div()
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .bottom(px(-20.))
+                    .child(Self::error_line(palette, message))
+            }))
             .into_any_element()
     }
 
@@ -728,18 +732,18 @@ impl FirForm {
         v_flex()
             .id(("form-section", index))
             .w_full()
-            .pt(px(32.))
+            .pt(px(40.))
             .child(
                 h_flex()
                     .flex_row_reverse()
                     .items_center()
                     .gap(px(12.))
-                    .mb(px(12.))
+                    .mb(px(8.))
                     .child(
                         div()
                             .flex_none()
                             .text_color(palette.ink)
-                            .child(ur_label(title, UrRole::Title)),
+                            .child(ur_label(title, UrRole::Display)),
                     ),
             )
             .child(body)
@@ -789,10 +793,10 @@ impl FirForm {
                             .gap(px(8.))
                             .items_center()
                             .rounded(px(4.))
-                            .cursor_pointer()
                             .role(gpui_kit::accesskit::Role::MenuItemRadio)
                             .when(status == current, |this| this.bg(palette.pressed))
                             .hover(move |style| style.bg(hover))
+                            .active(move |s| s.bg(palette.pressed))
                             .on_click(move |_, _, cx| {
                                 weak.update(cx, |this, cx| this.set_status(status, cx)).ok();
                             })
@@ -908,13 +912,16 @@ impl FirForm {
                     .flex_row_reverse()
                     .items_center()
                     .gap(px(8.))
+                    .mr(px(-26.))
+                    .ml(px(-36.))
                     .child(
                         div()
                             .w(px(18.))
                             .flex_none()
                             .text_size(px(12.))
                             .line_height(px(16.))
-                            .text_color(palette.ink_faint)
+                            .text_color(palette.ink_muted)
+                            .font_features(crate::ui::tabular())
                             .text_center()
                             .child((position + 1).to_string()),
                     )
@@ -950,14 +957,9 @@ impl FirForm {
                             })),
                     )
             }))
-            .children(error.map(|message| {
-                div()
-                    .pr(px(26.))
-                    .pl(px(36.))
-                    .child(Self::error_line(&palette, message))
-            }))
+            .children(error.map(|message| div().child(Self::error_line(&palette, message))))
             .child(
-                h_flex().flex_row_reverse().child(
+                h_flex().flex_row_reverse().mr(px(-8.)).child(
                     h_flex()
                         .id(("add-entry", kind.index()))
                         .h(px(28.))
@@ -969,8 +971,8 @@ impl FirForm {
                         .line_height(px(20.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(palette.ink_muted)
-                        .cursor_pointer()
                         .hover(move |s| s.bg(palette.hover).text_color(ink))
+                        .active(move |s| s.bg(palette.pressed))
                         .role(gpui_kit::accesskit::Role::Button)
                         .on_click(
                             cx.listener(move |this, _, window, cx| {
@@ -1062,7 +1064,6 @@ impl RenderOnce for StatusTrigger {
             })
             .bg(palette.surface)
             .shadow(shadows)
-            .cursor_pointer()
             .role(gpui_kit::accesskit::Role::ComboBox)
             .aria_label("Status")
             .child(status_dot(&palette, self.status))
@@ -1087,7 +1088,7 @@ impl Render for FirForm {
             0,
             "مقدمہ",
             v_flex()
-                .gap(px(14.))
+                .gap(px(24.))
                 .child(Self::row(vec![
                     self.input_cell(
                         &palette,
@@ -1138,7 +1139,7 @@ impl Render for FirForm {
             5,
             "تفتیش",
             v_flex()
-                .gap(px(14.))
+                .gap(px(24.))
                 .child(Self::row(vec![
                     self.input_cell(
                         &palette,
@@ -1172,7 +1173,7 @@ impl Render for FirForm {
             6,
             "موبائل",
             v_flex()
-                .gap(px(14.))
+                .gap(px(24.))
                 .child(Self::row(vec![
                     self.input_cell(
                         &palette,
@@ -1395,15 +1396,12 @@ impl NewFirScreen {
             (form.is_dirty(), form.is_saving(), form.is_edit())
         };
         let unsaved = edit && dirty;
-        h_flex()
-            .flex_none()
-            .h(px(48.))
-            .px(px(24.))
+        let row = h_flex()
+            .w(px(760.))
+            .max_w_full()
+            .mx_auto()
             .gap(px(8.))
             .items_center()
-            .border_t_1()
-            .border_color(palette.line)
-            .bg(palette.surface)
             .when(unsaved, |this| {
                 this.child(
                     h_flex()
@@ -1438,7 +1436,16 @@ impl NewFirScreen {
                 .keys("Mod+S")
                 .disabled(saving)
                 .on_click(move |_, window, cx| form.update(cx, |form, cx| form.submit(window, cx))),
-            )
+            );
+        h_flex()
+            .flex_none()
+            .h(px(56.))
+            .px(px(24.))
+            .items_center()
+            .border_t_1()
+            .border_color(palette.line)
+            .bg(palette.surface)
+            .child(row)
             .into_any_element()
     }
 }

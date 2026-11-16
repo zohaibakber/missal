@@ -127,9 +127,9 @@ impl RenderOnce for AddRow {
             } else {
                 palette.ink_muted
             })
-            .cursor_pointer()
             .when(self.open, |this| this.bg(palette.pressed))
             .hover(move |s| s.bg(palette.hover).text_color(ink))
+            .active(move |s| s.bg(palette.pressed))
             .role(gpui_kit::accesskit::Role::Button)
             .aria_label("Add document")
             .child(sized_icon(IconName::Plus, ICON_SM, palette.ink_muted))
@@ -1107,9 +1107,17 @@ impl WorkspaceScreen {
                     .gap(px(8.))
                     .items_center()
                     .rounded(px(6.))
-                    .cursor_pointer()
-                    .when(active, |this| this.bg(palette.accent_wash))
-                    .when(!active, |this| this.hover(move |style| style.bg(hover)))
+                    .when(active, |this| {
+                        this.bg(if rail_focused {
+                            palette.accent_wash
+                        } else {
+                            palette.pressed
+                        })
+                    })
+                    .when(!active, |this| {
+                        this.hover(move |style| style.bg(hover))
+                            .active(move |s| s.bg(palette.pressed))
+                    })
                     .when(active && rail_focused, |this| {
                         this.border_r_2().border_color(palette.accent)
                     })
@@ -1390,8 +1398,8 @@ impl WorkspaceScreen {
                                         .rounded(px(6.))
                                         .when(highlighted, |this| this.bg(palette.hover))
                                         .when(!added, |this| {
-                                            this.cursor_pointer()
-                                                .hover(move |style| style.bg(palette.hover))
+                                            this.hover(move |style| style.bg(palette.hover))
+                                                .active(move |s| s.bg(palette.pressed))
                                                 .on_click(cx.listener(move |_, _, _, cx| {
                                                     screen.update(cx, |this, cx| {
                                                         this.toggle_template(id, cx)
@@ -1465,13 +1473,21 @@ impl WorkspaceScreen {
                                     .flex_1()
                                     .text_size(px(12.))
                                     .line_height(px(16.))
-                                    .text_color(palette.ink_muted)
-                                    .child(format!("{selected_count} selected")),
+                                    .text_color(if selected_count > 0 {
+                                        palette.ink_muted
+                                    } else {
+                                        palette.ink_faint
+                                    })
+                                    .child(match selected_count {
+                                        0 => "Tick the templates to add".to_owned(),
+                                        n => format!("{n} selected"),
+                                    }),
                             )
                             .child(
                                 button(
                                     "add-templates-confirm",
                                     match selected_count {
+                                        0 => "Add".to_owned(),
                                         1 => "Add 1 document".to_owned(),
                                         n => format!("Add {n} documents"),
                                     },

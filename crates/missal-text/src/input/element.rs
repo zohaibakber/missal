@@ -13,6 +13,8 @@ use crate::{
     paint::{TextPaint, paint_text},
 };
 
+const PLACEHOLDER_CLEARANCE: f32 = 4.0;
+
 pub struct TextInputElement {
     input: Entity<TextInput>,
 }
@@ -25,7 +27,7 @@ impl TextInputElement {
 
 pub struct InputPrepaint {
     layout: Arc<TextLayout>,
-    placeholder: Option<Arc<TextLayout>>,
+    placeholder: Option<(Arc<TextLayout>, f32)>,
     hitbox: Hitbox,
     scroll: gpui_kit::Point<f32>,
 }
@@ -131,7 +133,17 @@ impl Element for TextInputElement {
             input.frame.scroll = scroll;
             input.frame.layout = Some(layout.clone());
             let placeholder = (input.text().is_empty() && !input.placeholder_text().is_empty())
-                .then(|| input.build_placeholder_layout(Some(width), cx));
+                .then(|| {
+                    let placeholder = input.build_placeholder_layout(Some(width), cx);
+                    let shift = placeholder
+                        .lines()
+                        .first()
+                        .filter(|line| line.left > 0.5 && caret.x > width / 2.)
+                        .map_or(0.0, |line| {
+                            (caret.x - PLACEHOLDER_CLEARANCE - line.right).min(0.0)
+                        });
+                    (placeholder, shift)
+                });
             (layout, placeholder, scroll)
         });
         let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
@@ -206,10 +218,10 @@ impl Element for TextInputElement {
         let layout = prepaint.layout.clone();
         let placeholder = prepaint.placeholder.clone();
         window.with_content_mask(Some(ContentMask { bounds: mask }), |window| {
-            if let Some(placeholder) = &placeholder {
+            if let Some((placeholder, shift)) = &placeholder {
                 paint_text(
                     placeholder,
-                    bounds.origin,
+                    point(bounds.origin.x + px(*shift), bounds.origin.y),
                     &TextPaint::default(),
                     window,
                     cx,
