@@ -570,7 +570,7 @@ mod fake_api {
     fn licence(email: &str, paid: i64) -> Value {
         match email {
             "admin@example.com" => json!({ "status": "licensed", "until": FOREVER }),
-            "expired@example.com" => json!({ "status": "expired", "until": now() - 2 * DAY }),
+            "expired@example.com" => json!({ "status": "trialEnded", "until": now() - 2 * DAY }),
             "lapsed@example.com" if paid > now() => json!({ "status": "licensed", "until": paid }),
             "lapsed@example.com" => json!({ "status": "expired", "until": now() - 40 * DAY }),
             _ => json!({ "status": "trial", "until": now() + 4 * DAY + 3_600_000 }),

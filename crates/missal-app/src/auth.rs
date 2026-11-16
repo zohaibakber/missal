@@ -21,8 +21,6 @@ use crate::ui::{ButtonKind, button};
 const REFRESH_EVERY: Duration = Duration::from_secs(60 * 60);
 pub const MIN_PASSWORD: usize = 10;
 const CODE_LENGTH: usize = 6;
-const TRIAL_DAYS: i64 = 7;
-const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
 const ENDED: &str = "Your session has ended. Sign in again to continue.";
 const STALE: &str =
@@ -589,10 +587,9 @@ pub fn open_purchase(cx: &mut App) {
 }
 
 fn expired_title(account: &Account) -> String {
-    let until = account.licence.until_ms;
-    let trial_only = until - account.created_at <= (TRIAL_DAYS + 1) * DAY_MS;
-    match crate::ui::library::day_month_year(until) {
-        Some(date) if !trial_only => format!("Your licence ended on {date}"),
+    let paid = account.licence.status == LicenceStatus::Expired;
+    match crate::ui::library::day_month_year(account.licence.until_ms) {
+        Some(date) if paid => format!("Your licence ended on {date}"),
         _ => "Your free week has ended".to_owned(),
     }
 }
@@ -1028,6 +1025,7 @@ impl AuthGate {
         if purchase {
             links.push(
                 button("licence-buy", "Buy a licence")
+                    .kind(ButtonKind::Ghost)
                     .sm()
                     .icon(gpui_kit::assets::IconName::ExternalLink)
                     .on_click(|_, _, cx| open_purchase(cx))

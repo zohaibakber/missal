@@ -221,6 +221,7 @@ fn licence_text(user: &Account) -> String {
         _ if user.role.is_admin() => "Always licensed".to_owned(),
         LicenceStatus::Trial => format!("Trial until {}", date()),
         LicenceStatus::Licensed => format!("Licensed until {}", date()),
+        LicenceStatus::TrialEnded => format!("Trial ended {}", date()),
         LicenceStatus::Expired => format!("Licence ended {}", date()),
     }
 }

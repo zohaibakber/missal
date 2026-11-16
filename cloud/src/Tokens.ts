@@ -40,7 +40,7 @@ export interface Subject {
 const seconds = (time: DateTime.Utc) => Math.floor(DateTime.toEpochMillis(time) / 1000);
 
 const licensedUntil = (licence: Licence) =>
-  licence.status === "expired" ? 0 : seconds(licence.until);
+  licence.status === "expired" || licence.status === "trialEnded" ? 0 : seconds(licence.until);
 
 const unauthorized = () => new Unauthorized({ error: "sign in to use Missal" });
 

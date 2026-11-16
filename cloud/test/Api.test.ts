@@ -258,12 +258,12 @@ describe("accounts", () => {
       yield* TestClock.adjust(Duration.days(8));
       const ended = yield* refresh(reader.refreshToken);
       expect(ended.account.licence).toEqual({
-        status: "expired",
+        status: "trialEnded",
         until: DateTime.makeUnsafe(Duration.toMillis(Duration.days(7))),
       });
       yield* useToken(ended.accessToken);
       expect((yield* api.catalog.list().pipe(Effect.flip))._tag).toBe("LicenceRequired");
-      expect((yield* api.account.me()).licence.status).toBe("expired");
+      expect((yield* api.account.me()).licence.status).toBe("trialEnded");
 
       const adminNow = yield* refresh(admin.refreshToken);
       yield* useToken(adminNow.accessToken);

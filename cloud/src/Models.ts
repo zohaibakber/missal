@@ -59,6 +59,7 @@ const licenceVariant = <const S extends string>(status: S) =>
 export const Licence = Schema.Union([
   licenceVariant("trial"),
   licenceVariant("licensed"),
+  licenceVariant("trialEnded"),
   licenceVariant("expired"),
 ]);
 export type Licence = typeof Licence.Type;
@@ -77,8 +78,8 @@ export const licenceOf = (
   if (Option.isSome(paid)) return { status: "licensed", until: paid.value };
   const trial = future(user.trialEndsAt);
   if (Option.isSome(trial)) return { status: "trial", until: trial.value };
-  const ended = [user.trialEndsAt, user.paidUntil].flatMap(Option.toArray);
-  return { status: "expired", until: ended.reduce((a, b) => DateTime.max(a, b), ended[0] ?? now) };
+  if (Option.isSome(user.paidUntil)) return { status: "expired", until: user.paidUntil.value };
+  return { status: "trialEnded", until: Option.getOrElse(user.trialEndsAt, () => now) };
 };
 
 export class Session extends Model.Class<Session>("Session")({

@@ -39,7 +39,15 @@ impl Role {
 pub enum LicenceStatus {
     Trial,
     Licensed,
+    #[serde(rename = "trialEnded")]
+    TrialEnded,
     Expired,
+}
+
+impl LicenceStatus {
+    pub fn active(self) -> bool {
+        matches!(self, LicenceStatus::Trial | LicenceStatus::Licensed)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,7 +67,7 @@ fn millis(at: SystemTime) -> i64 {
 
 impl Licence {
     pub fn active(&self, now: SystemTime) -> bool {
-        self.status != LicenceStatus::Expired && self.until_ms > millis(now)
+        self.status.active() && self.until_ms > millis(now)
     }
 
     pub fn days_left(&self, now: SystemTime) -> i64 {
