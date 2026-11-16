@@ -4,7 +4,7 @@ import * as Mac from "effect/crypto/Mac";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as Layer from "effect/Layer";
-import { Accounts, type Bootstrap } from "./Accounts.ts";
+import { Accounts } from "./Accounts.ts";
 import { MissalApi } from "./Api.ts";
 import { AuthorizationLive } from "./Auth.ts";
 import { HandlersLive } from "./Handlers.ts";
@@ -18,14 +18,12 @@ export const CryptoLive = Layer.mergeAll(
   Mac.layerWebCrypto,
 ).pipe(Layer.provideMerge(SecureRandom.layerWebCrypto));
 
-export const ServicesLive = (bootstrap: Bootstrap) =>
-  Layer.mergeAll(Accounts.layer(bootstrap), Library.layer).pipe(
-    Layer.provideMerge(Layer.mergeAll(Passwords.layer, Tokens.layer)),
-  );
+export const ServicesLive = Layer.mergeAll(Accounts.layer, Library.layer).pipe(
+  Layer.provideMerge(Layer.mergeAll(Passwords.layer, Tokens.layer)),
+);
 
-export const ApiLive = (bootstrap: Bootstrap) =>
-  HttpApiBuilder.layer(MissalApi, { openapiPath: "/openapi.json" }).pipe(
-    Layer.provide(HandlersLive),
-    Layer.provide(AuthorizationLive),
-    Layer.provide(ServicesLive(bootstrap)),
-  );
+export const ApiLive = HttpApiBuilder.layer(MissalApi, { openapiPath: "/openapi.json" }).pipe(
+  Layer.provide(HandlersLive),
+  Layer.provide(AuthorizationLive),
+  Layer.provide(ServicesLive),
+);

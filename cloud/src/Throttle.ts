@@ -9,20 +9,20 @@ export const WINDOW_SECONDS = 60;
 
 const slowDown = () =>
   new AccountLocked({
-    error: "too many sign-in attempts from this network; wait a minute",
+    error: "too many attempts from this network; wait a minute",
     retryAfter: WINDOW_SECONDS,
   });
 
-export class SignInThrottle extends Context.Service<
-  SignInThrottle,
+export class AuthThrottle extends Context.Service<
+  AuthThrottle,
   { readonly check: (client: string) => Effect.Effect<void, AccountLocked, RuntimeContext> }
->()("missal/SignInThrottle") {
+>()("missal/AuthThrottle") {
   static readonly layer = (limiter: RateLimitClient) =>
     Layer.succeed(
-      SignInThrottle,
-      SignInThrottle.of({
-        check: Effect.fn("SignInThrottle.check")(function* (client: string) {
-          const outcome = yield* limiter.limit({ key: `sign-in:${client}` }).pipe(
+      AuthThrottle,
+      AuthThrottle.of({
+        check: Effect.fn("AuthThrottle.check")(function* (client: string) {
+          const outcome = yield* limiter.limit({ key: `auth:${client}` }).pipe(
             Effect.tapError((cause) => Effect.logWarning("rate limiter unavailable", cause)),
             Effect.orElseSucceed(() => ({ success: true })),
           );
@@ -32,9 +32,9 @@ export class SignInThrottle extends Context.Service<
     );
 
   static readonly layerMemory = (limit: number) =>
-    Layer.sync(SignInThrottle, () => {
+    Layer.sync(AuthThrottle, () => {
       const counts = new Map<string, number>();
-      return SignInThrottle.of({
+      return AuthThrottle.of({
         check: (client) =>
           Effect.suspend(() => {
             const count = (counts.get(client) ?? 0) + 1;

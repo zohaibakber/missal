@@ -20,6 +20,7 @@ env:
   RUST_BACKTRACE: short
   VPK_VERSION: 1.3.39-g8d2844f
   MISSAL_API_URL: ${{ vars.MISSAL_API_URL }}
+  MISSAL_PURCHASE_URL: ${{ vars.MISSAL_PURCHASE_URL }}
 
 jobs:
   check:

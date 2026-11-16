@@ -1,4 +1,5 @@
 import * as Context from "effect/Context";
+import type * as DateTime from "effect/DateTime";
 import * as HttpApi from "effect/http-api/HttpApi";
 import * as HttpApiEndpoint from "effect/http-api/HttpApiEndpoint";
 import * as HttpApiGroup from "effect/http-api/HttpApiGroup";
@@ -7,14 +8,15 @@ import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 import * as HttpApiSecurity from "effect/http-api/HttpApiSecurity";
 import * as Schema from "effect/Schema";
 import {
+  CodePurpose,
   Email,
+  Licence,
   Name,
   Role,
   RouteId,
   type SessionId,
   Template,
-  User,
-  type UserId,
+  UserId,
 } from "./Models.ts";
 
 export { canPublish, Role } from "./Models.ts";
@@ -27,7 +29,7 @@ export class Viewer extends Context.Service<
     readonly id: UserId;
     readonly sessionId: SessionId;
     readonly role: Role;
-    readonly mustChangePassword: boolean;
+    readonly licensedUntil: DateTime.Utc;
   }
 >()("missal/Viewer") {}
 
@@ -46,8 +48,18 @@ export class SessionExpired extends Schema.TaggedError<SessionExpired>()(
   { error: Schema.String },
   { httpApiStatus: 401 },
 ) {}
-export class PasswordChangeRequired extends Schema.TaggedError<PasswordChangeRequired>()(
-  "PasswordChangeRequired",
+export class InvalidCode extends Schema.TaggedError<InvalidCode>()(
+  "InvalidCode",
+  { error: Schema.String },
+  { httpApiStatus: 400 },
+) {}
+export class LicenceRequired extends Schema.TaggedError<LicenceRequired>()(
+  "LicenceRequired",
+  { error: Schema.String },
+  { httpApiStatus: 402 },
+) {}
+export class EmailNotVerified extends Schema.TaggedError<EmailNotVerified>()(
+  "EmailNotVerified",
   { error: Schema.String },
   { httpApiStatus: 403 },
 ) {}
@@ -81,11 +93,6 @@ export class PublishConflict extends Schema.TaggedError<PublishConflict>()(
   { error: Schema.String },
   { httpApiStatus: 409 },
 ) {}
-export class EmailTaken extends Schema.TaggedError<EmailTaken>()(
-  "EmailTaken",
-  { error: Schema.String },
-  { httpApiStatus: 409 },
-) {}
 export class OwnAccess extends Schema.TaggedError<OwnAccess>()(
   "OwnAccess",
   { error: Schema.String },
@@ -111,12 +118,12 @@ export class Authentication extends HttpApiMiddleware.Service<
   error: Unauthorized,
 }) {}
 
-export class PasswordCurrent extends HttpApiMiddleware.Service<
-  PasswordCurrent,
-  { requires: Viewer }
->()("missal/PasswordCurrent", {
-  error: PasswordChangeRequired,
-}) {}
+export class Licensed extends HttpApiMiddleware.Service<Licensed, { requires: Viewer }>()(
+  "missal/Licensed",
+  {
+    error: LicenceRequired,
+  },
+) {}
 
 export class PublishersOnly extends HttpApiMiddleware.Service<
   PublishersOnly,
@@ -140,7 +147,15 @@ export const GivenPassword = Schema.RedactedFromValue(
   Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(256)),
 );
 
-export const Account = User.json;
+export const Account = Schema.Struct({
+  id: UserId,
+  email: Email,
+  name: Name,
+  role: Role,
+  disabled: Schema.Boolean,
+  createdAt: Schema.DateTimeUtcFromMillis,
+  licence: Licence,
+});
 export type Account = typeof Account.Type;
 
 export const Session = Schema.Struct({
@@ -177,13 +192,10 @@ export const Published = Schema.Struct({
   version: Schema.Int,
 });
 
-export const NewUser = Schema.Struct({
-  email: Email,
-  name: Name,
-  role: Role,
-  password: NewPassword,
-});
-export type NewUser = typeof NewUser.Type;
+export const SignUp = Schema.Struct({ email: Email, name: Name, password: NewPassword });
+export type SignUp = typeof SignUp.Type;
+
+const Code = Schema.Trim.check(Schema.isMaxLength(16));
 
 export const UserChanges = Schema.Struct({
   name: Schema.optional(Name),
@@ -199,10 +211,38 @@ const TemplateContent = HttpApiSchema.WithHeaders(
 
 export class AuthGroup extends HttpApiGroup.make("auth")
   .add(
+    HttpApiEndpoint.post("signUp", "/v1/auth/sign-up", {
+      payload: SignUp,
+      success: HttpApiSchema.Accepted,
+      error: [AccountLocked, StorageFailure],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("requestCode", "/v1/auth/codes", {
+      payload: Schema.Struct({ email: Email, purpose: CodePurpose }),
+      success: HttpApiSchema.Accepted,
+      error: [AccountLocked, StorageFailure],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("verifyEmail", "/v1/auth/verify-email", {
+      payload: Schema.Struct({ email: Email, code: Code }),
+      success: Session,
+      error: [InvalidCode, AccountLocked, StorageFailure],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("resetPassword", "/v1/auth/reset-password", {
+      payload: Schema.Struct({ email: Email, code: Code, password: NewPassword }),
+      success: Session,
+      error: [InvalidCode, AccountLocked, StorageFailure],
+    }),
+  )
+  .add(
     HttpApiEndpoint.post("signIn", "/v1/auth/sign-in", {
       payload: Schema.Struct({ email: Email, password: GivenPassword }),
       success: Session,
-      error: [InvalidCredentials, AccountLocked, StorageFailure],
+      error: [InvalidCredentials, EmailNotVerified, AccountLocked, StorageFailure],
     }),
   )
   .add(
@@ -250,7 +290,7 @@ export class CatalogGroup extends HttpApiGroup.make("catalog")
       error: [TemplateNotFound, StorageFailure],
     }),
   )
-  .middleware(PasswordCurrent)
+  .middleware(Licensed)
   .middleware(Authentication) {}
 
 export class PublishingGroup extends HttpApiGroup.make("publishing")
@@ -277,7 +317,7 @@ export class PublishingGroup extends HttpApiGroup.make("publishing")
     }),
   )
   .middleware(PublishersOnly)
-  .middleware(PasswordCurrent)
+  .middleware(Licensed)
   .middleware(Authentication) {}
 
 export class UsersGroup extends HttpApiGroup.make("users")
@@ -285,13 +325,6 @@ export class UsersGroup extends HttpApiGroup.make("users")
     HttpApiEndpoint.get("list", "/v1/users", {
       success: Schema.Array(Account),
       error: StorageFailure,
-    }),
-  )
-  .add(
-    HttpApiEndpoint.post("create", "/v1/users", {
-      payload: NewUser,
-      success: Account.pipe(HttpApiSchema.status(201)),
-      error: [EmailTaken, StorageFailure],
     }),
   )
   .add(
@@ -303,15 +336,16 @@ export class UsersGroup extends HttpApiGroup.make("users")
     }),
   )
   .add(
-    HttpApiEndpoint.post("resetPassword", "/v1/users/:id/password", {
+    HttpApiEndpoint.post("grantLicence", "/v1/users/:id/licence", {
       params: { id: RouteId },
-      payload: Schema.Struct({ password: NewPassword }),
+      payload: Schema.Struct({
+        years: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5 })),
+      }),
       success: Account,
       error: [UserNotFound, StorageFailure],
     }),
   )
   .middleware(AdminsOnly)
-  .middleware(PasswordCurrent)
   .middleware(Authentication) {}
 
 export class HealthGroup extends HttpApiGroup.make("health").add(

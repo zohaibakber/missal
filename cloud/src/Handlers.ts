@@ -7,19 +7,34 @@ import { canPublish, MissalApi, Viewer } from "./Api.ts";
 import { Accounts } from "./Accounts.ts";
 import { Library } from "./Library.ts";
 
+const clientAddress = Effect.map(
+  HttpServerRequest.HttpServerRequest,
+  (request) => request.headers["cf-connecting-ip"] ?? "unknown",
+);
+
 const AuthHandlers = HttpApiBuilder.group(
   MissalApi,
   "auth",
   Effect.fn(function* (handlers) {
     const accounts = yield* Accounts;
     return handlers.handleAll({
+      signUp: ({ payload }) =>
+        Effect.flatMap(clientAddress, (client) => accounts.signUp(client, payload)),
+      requestCode: ({ payload }) =>
+        Effect.flatMap(clientAddress, (client) =>
+          accounts.requestCode(client, payload.email, payload.purpose),
+        ),
+      verifyEmail: ({ payload }) =>
+        Effect.flatMap(clientAddress, (client) =>
+          accounts.verifyEmail(client, payload.email, payload.code),
+        ),
+      resetPassword: ({ payload }) =>
+        Effect.flatMap(clientAddress, (client) =>
+          accounts.resetPassword(client, payload.email, payload.code, payload.password),
+        ),
       signIn: ({ payload }) =>
-        Effect.flatMap(HttpServerRequest.HttpServerRequest, (request) =>
-          accounts.signIn(
-            request.headers["cf-connecting-ip"] ?? "unknown",
-            payload.email,
-            payload.password,
-          ),
+        Effect.flatMap(clientAddress, (client) =>
+          accounts.signIn(client, payload.email, payload.password),
         ),
       refresh: ({ payload }) => accounts.refresh(payload.refreshToken),
       signOut: ({ payload }) => accounts.signOut(payload.refreshToken),
@@ -89,10 +104,9 @@ const UsersHandlers = HttpApiBuilder.group(
     const accounts = yield* Accounts;
     return handlers.handleAll({
       list: () => accounts.list,
-      create: ({ payload }) => accounts.create(payload),
       update: ({ params, payload }) =>
         Effect.flatMap(Viewer, (viewer) => accounts.update(viewer, params.id, payload)),
-      resetPassword: ({ params, payload }) => accounts.resetPassword(params.id, payload.password),
+      grantLicence: ({ params, payload }) => accounts.grantLicence(params.id, payload.years),
     });
   }),
 );

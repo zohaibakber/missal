@@ -1,3 +1,4 @@
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import {
@@ -5,9 +6,9 @@ import {
   Authentication,
   canPublish,
   NotAdmin,
+  LicenceRequired,
+  Licensed,
   NotPublisher,
-  PasswordChangeRequired,
-  PasswordCurrent,
   PublishersOnly,
   Viewer,
 } from "./Api.ts";
@@ -26,13 +27,13 @@ export const AuthenticationLive = Layer.effect(
   }),
 );
 
-export const PasswordCurrentLive = Layer.succeed(
-  PasswordCurrent,
-  PasswordCurrent.of(
-    Effect.fn("PasswordCurrent")(function* (httpEffect) {
+export const LicensedLive = Layer.succeed(
+  Licensed,
+  Licensed.of(
+    Effect.fn("Licensed")(function* (httpEffect) {
       const viewer = yield* Viewer;
-      if (viewer.mustChangePassword) {
-        return yield* new PasswordChangeRequired({ error: "choose a new password first" });
+      if (DateTime.isLessThanOrEqualTo(viewer.licensedUntil, yield* DateTime.now)) {
+        return yield* new LicenceRequired({ error: "your Missal licence has ended" });
       }
       return yield* httpEffect;
     }),
@@ -67,7 +68,7 @@ export const AdminsOnlyLive = Layer.succeed(
 
 export const AuthorizationLive = Layer.mergeAll(
   AuthenticationLive,
-  PasswordCurrentLive,
+  LicensedLive,
   PublishersOnlyLive,
   AdminsOnlyLive,
 );

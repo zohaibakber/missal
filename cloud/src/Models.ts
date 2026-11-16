@@ -1,3 +1,5 @@
+import * as DateTime from "effect/DateTime";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import * as Model from "effect/schema/Model";
@@ -40,11 +42,44 @@ export class User extends Model.Class<User>("User")({
   passwordHash: Model.Sensitive(Schema.String),
   passwordSalt: Model.Sensitive(Schema.String),
   passwordIterations: Model.Sensitive(Schema.Int),
-  mustChangePassword: Model.BooleanSqlite,
   disabled: Model.BooleanSqlite,
+  emailVerifiedAt: Model.FieldOption(Schema.DateTimeUtcFromMillis),
+  trialEndsAt: Model.FieldOption(Schema.DateTimeUtcFromMillis),
+  paidUntil: Model.FieldOption(Schema.DateTimeUtcFromMillis),
   createdAt: Model.DateTimeInsertFromNumber,
   updatedAt: Model.DateTimeUpdateFromNumber,
 }) {}
+
+export const CodePurpose = Schema.Literals(["verify", "reset"]);
+export type CodePurpose = typeof CodePurpose.Type;
+
+const licenceVariant = <const S extends string>(status: S) =>
+  Schema.Struct({ status: Schema.Literal(status), until: Schema.DateTimeUtcFromMillis });
+
+export const Licence = Schema.Union([
+  licenceVariant("trial"),
+  licenceVariant("licensed"),
+  licenceVariant("expired"),
+]);
+export type Licence = typeof Licence.Type;
+
+export const TRIAL_LENGTH = { days: 7 } as const;
+const ADMIN_LICENCE_END = DateTime.makeUnsafe(Date.UTC(9999, 11, 31));
+
+export const licenceOf = (
+  user: Pick<User, "role" | "trialEndsAt" | "paidUntil">,
+  now: DateTime.Utc,
+): Licence => {
+  if (user.role === "admin") return { status: "licensed", until: ADMIN_LICENCE_END };
+  const future = (end: Option.Option<DateTime.Utc>) =>
+    Option.filter(end, (until) => DateTime.isGreaterThan(until, now));
+  const paid = future(user.paidUntil);
+  if (Option.isSome(paid)) return { status: "licensed", until: paid.value };
+  const trial = future(user.trialEndsAt);
+  if (Option.isSome(trial)) return { status: "trial", until: trial.value };
+  const ended = [user.trialEndsAt, user.paidUntil].flatMap(Option.toArray);
+  return { status: "expired", until: ended.reduce((a, b) => DateTime.max(a, b), ended[0] ?? now) };
+};
 
 export class Session extends Model.Class<Session>("Session")({
   id: Model.UuidV4Insert(SessionId),

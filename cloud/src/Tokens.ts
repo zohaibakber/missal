@@ -12,7 +12,7 @@ import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { Unauthorized, Viewer } from "./Api.ts";
-import { Role, SessionId, UserId } from "./Models.ts";
+import { type Licence, Role, SessionId, UserId } from "./Models.ts";
 
 export const ACCESS_SECONDS = 15 * 60;
 export const SECRET_VARIABLE = "MISSAL_TOKEN_SECRET";
@@ -27,15 +27,20 @@ const Claims = Schema.Struct({
   iat: Schema.Int,
   exp: Schema.Int,
   role: Role,
-  mcp: Schema.Boolean,
+  lic: Schema.Int,
 });
 
 export interface Subject {
   readonly userId: UserId;
   readonly sessionId: SessionId;
   readonly role: Role;
-  readonly mustChangePassword: boolean;
+  readonly licence: Licence;
 }
+
+const seconds = (time: DateTime.Utc) => Math.floor(DateTime.toEpochMillis(time) / 1000);
+
+const licensedUntil = (licence: Licence) =>
+  licence.status === "expired" ? 0 : seconds(licence.until);
 
 const unauthorized = () => new Unauthorized({ error: "sign in to use Missal" });
 
@@ -67,7 +72,7 @@ export class Tokens extends Context.Service<
       ).pipe(Effect.orDie);
 
       const issue = Effect.fn("Tokens.issue")(function* (subject: Subject) {
-        const now = Math.floor(DateTime.toEpochMillis(yield* DateTime.now) / 1000);
+        const now = seconds(yield* DateTime.now);
         const token = yield* Jwt.sign(
           Claims,
           {
@@ -77,7 +82,7 @@ export class Tokens extends Context.Service<
             iat: now,
             exp: now + ACCESS_SECONDS,
             role: subject.role,
-            mcp: subject.mustChangePassword,
+            lic: licensedUntil(subject.licence),
           },
           key,
           { typ: TYPE },
@@ -95,7 +100,7 @@ export class Tokens extends Context.Service<
           id: claims.sub,
           sessionId: claims.sid,
           role: claims.role,
-          mustChangePassword: claims.mcp,
+          licensedUntil: DateTime.makeUnsafe(claims.lic * 1000),
         });
       });
 
