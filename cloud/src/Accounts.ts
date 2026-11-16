@@ -1,8 +1,10 @@
-import * as Clock from "effect/Clock";
+import type { RuntimeContext } from "alchemy/RuntimeContext";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
 import * as Mac from "effect/crypto/Mac";
 import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Base64Url from "effect/encoding/Base64Url";
 import * as Layer from "effect/Layer";
@@ -10,6 +12,7 @@ import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
+import * as SqlModel from "effect/sql/SqlModel";
 import * as SqlSchema from "effect/sql/SqlSchema";
 import {
   type Account,
@@ -18,8 +21,7 @@ import {
   InvalidCredentials,
   type NewUser,
   OwnAccess,
-  Role,
-  type Session,
+  type Session as SessionTokens,
   SessionExpired,
   type StorageFailure,
   type UserChanges,
@@ -27,55 +29,29 @@ import {
   type Viewer,
   WrongPassword,
 } from "./Api.ts";
+import { Atomic } from "./Database.ts";
 import { storage } from "./Failures.ts";
+import { type Email, type Role, Session, SessionId, User, UserId } from "./Models.ts";
 import { Passwords, type StoredPassword } from "./Passwords.ts";
+import { SignInThrottle } from "./Throttle.ts";
 import { ACCESS_SECONDS, Tokens } from "./Tokens.ts";
 
-const SESSION_MS = 60 * 24 * 60 * 60 * 1000;
-const LOCK_MS = 15 * 60 * 1000;
+const SESSION_LIFETIME = Duration.days(60);
+const LOCK_LIFETIME = Duration.minutes(15);
 const MAX_FAILURES = 5;
 const SECRET_BYTES = 32;
 
-const UserRow = Schema.Struct({
-  id: Schema.String,
-  email: Schema.String,
-  name: Schema.String,
-  role: Role,
-  password_hash: Schema.String,
-  password_salt: Schema.String,
-  password_iterations: Schema.Int,
-  must_change_password: Schema.Int,
-  disabled: Schema.Int,
-  created_at: Schema.Number,
-});
-type UserRow = typeof UserRow.Type;
-
-const SessionRow = Schema.Struct({
-  id: Schema.String,
-  refresh_hash: Schema.String,
-  expires_at: Schema.Number,
-  user_id: Schema.String,
-});
-
-const FailureRow = Schema.Struct({ failures: Schema.Int, locked_until: Schema.Number });
+const FailureRow = Schema.Struct({ failures: Schema.Int, lockedUntil: Schema.Number });
 const CountRow = Schema.Struct({ count: Schema.Int });
 
 const encoder = new TextEncoder();
 
-const toAccount = (row: UserRow): Account => ({
-  id: row.id,
-  email: row.email,
-  name: row.name,
-  role: row.role,
-  mustChangePassword: row.must_change_password === 1,
-  disabled: row.disabled === 1,
-  createdAt: row.created_at,
-});
+const toAccount = (user: User): Account => user;
 
-const storedPassword = (row: UserRow): StoredPassword => ({
-  hash: row.password_hash,
-  salt: row.password_salt,
-  iterations: row.password_iterations,
+const storedPassword = (user: User): StoredPassword => ({
+  hash: user.passwordHash,
+  salt: user.passwordSalt,
+  iterations: user.passwordIterations,
 });
 
 const sameText = (left: string, right: string) => {
@@ -87,11 +63,11 @@ const sameText = (left: string, right: string) => {
 const splitToken = (token: string) => {
   const dot = token.indexOf(".");
   return dot > 0 && dot < token.length - 1
-    ? Option.some({ sessionId: token.slice(0, dot), secret: token.slice(dot + 1) })
+    ? Option.some({ sessionId: SessionId.make(token.slice(0, dot)), secret: token.slice(dot + 1) })
     : Option.none();
 };
 
-const normalize = (email: string) => email.trim().toLowerCase();
+const millis = DateTime.toEpochMillis;
 
 const expired = () => new SessionExpired({ error: "your session has ended; sign in again" });
 const invalid = () => new InvalidCredentials({ error: "wrong email or password" });
@@ -102,32 +78,36 @@ export interface Bootstrap {
   readonly password: Redacted.Redacted<string>;
 }
 
+type Effectful<A, E> = Effect.Effect<A, E, RuntimeContext>;
+
 export class Accounts extends Context.Service<
   Accounts,
   {
     readonly signIn: (
-      email: string,
+      client: string,
+      email: Email,
       password: Redacted.Redacted<string>,
-    ) => Effect.Effect<Session, InvalidCredentials | AccountLocked | StorageFailure>;
-    readonly refresh: (token: string) => Effect.Effect<Session, SessionExpired | StorageFailure>;
-    readonly signOut: (token: string) => Effect.Effect<void, StorageFailure>;
-    readonly me: (viewer: Viewer["Service"]) => Effect.Effect<Account, UserNotFound | StorageFailure>;
+    ) => Effectful<SessionTokens, InvalidCredentials | AccountLocked | StorageFailure>;
+    readonly refresh: (token: string) => Effectful<SessionTokens, SessionExpired | StorageFailure>;
+    readonly signOut: (token: string) => Effectful<void, StorageFailure>;
+    readonly me: (viewer: Viewer["Service"]) => Effectful<Account, UserNotFound | StorageFailure>;
     readonly changePassword: (
       viewer: Viewer["Service"],
       current: Redacted.Redacted<string>,
       next: Redacted.Redacted<string>,
-    ) => Effect.Effect<Session, WrongPassword | UserNotFound | StorageFailure>;
-    readonly list: Effect.Effect<ReadonlyArray<Account>, StorageFailure>;
-    readonly create: (user: NewUser) => Effect.Effect<Account, EmailTaken | StorageFailure>;
+    ) => Effectful<SessionTokens, WrongPassword | UserNotFound | StorageFailure>;
+    readonly list: Effectful<ReadonlyArray<Account>, StorageFailure>;
+    readonly create: (user: NewUser) => Effectful<Account, EmailTaken | StorageFailure>;
     readonly update: (
       viewer: Viewer["Service"],
       id: string,
       changes: UserChanges,
-    ) => Effect.Effect<Account, UserNotFound | OwnAccess | StorageFailure>;
+    ) => Effectful<Account, UserNotFound | OwnAccess | StorageFailure>;
     readonly resetPassword: (
       id: string,
       password: Redacted.Redacted<string>,
-    ) => Effect.Effect<Account, UserNotFound | StorageFailure>;
+    ) => Effectful<Account, UserNotFound | StorageFailure>;
+    readonly purgeExpired: Effectful<void, StorageFailure>;
   }
 >()("missal/Accounts") {
   static readonly layer = (bootstrap: Bootstrap) =>
@@ -135,31 +115,40 @@ export class Accounts extends Context.Service<
       Accounts,
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
+        const atomic = yield* Atomic;
         const passwords = yield* Passwords;
         const tokens = yield* Tokens;
+        const throttle = yield* SignInThrottle;
         const random = yield* SecureRandom.SecureRandom;
         const digest = yield* Digest.Digest;
 
+        const users = yield* SqlModel.makeRepository(User, {
+          tableName: "users",
+          spanPrefix: "Users",
+          idColumn: "id",
+        });
+        const sessions = yield* SqlModel.makeRepository(Session, {
+          tableName: "sessions",
+          spanPrefix: "Sessions",
+          idColumn: "id",
+        });
+        const encodeSession = Schema.encodeEffect(Session.insert);
+
         const userByEmail = SqlSchema.findOneOption({
           Request: Schema.String,
-          Result: UserRow,
+          Result: User,
           execute: (email) => sql`SELECT * FROM users WHERE email = ${email}`,
-        });
-        const userById = SqlSchema.findOneOption({
-          Request: Schema.String,
-          Result: UserRow,
-          execute: (id) => sql`SELECT * FROM users WHERE id = ${id}`,
         });
         const allUsers = SqlSchema.findAll({
           Request: Schema.Void,
-          Result: UserRow,
+          Result: User,
           execute: () => sql`SELECT * FROM users ORDER BY email`,
         });
-        const sessionById = SqlSchema.findOneOption({
-          Request: Schema.String,
-          Result: SessionRow,
-          execute: (id) =>
-            sql`SELECT id, refresh_hash, expires_at, user_id FROM sessions WHERE id = ${id}`,
+        const insertUser = SqlSchema.findOneOption({
+          Request: User.insert,
+          Result: User,
+          execute: (row) =>
+            sql`INSERT INTO users ${sql.insert(row)} ON CONFLICT (email) DO NOTHING RETURNING *`,
         });
         const failuresFor = SqlSchema.findOneOption({
           Request: Schema.String,
@@ -173,95 +162,122 @@ export class Accounts extends Context.Service<
           execute: () => sql`SELECT COUNT(*) AS count FROM users`,
         });
 
+        const findUser = (id: string) =>
+          users.findById(UserId.make(id)).pipe(
+            Effect.map(Option.some),
+            Effect.catchTag("NoSuchElementError", () => Effect.succeedNone),
+          );
+
+        const existing = (id: string) =>
+          findUser(id).pipe(
+            storage("read the user"),
+            Effect.flatMap((user) =>
+              Option.isSome(user) ? Effect.succeed(user.value) : Effect.fail(missing()),
+            ),
+          );
+
         const hashSecret = (secret: string) =>
           digest.digest(Digest.sha256, encoder.encode(secret)).pipe(Effect.map(Base64Url.encode));
 
         const newSecret = random.randomBytes(SECRET_BYTES).pipe(Effect.map(Base64Url.encode));
 
-        const issue = Effect.fnUntraced(function* (user: UserRow, sessionId: string, secret: string) {
+        const issue = Effect.fnUntraced(function* (user: User, sessionId: SessionId, secret: string) {
           const accessToken = yield* tokens.issue({
             userId: user.id,
             sessionId,
             role: user.role,
-            mustChangePassword: user.must_change_password === 1,
+            mustChangePassword: user.mustChangePassword,
           });
           return {
             accessToken,
             refreshToken: `${sessionId}.${secret}`,
             expiresIn: ACCESS_SECONDS,
             account: toAccount(user),
-          } satisfies Session;
+          } satisfies SessionTokens;
         });
 
-        const openSession = Effect.fnUntraced(function* (user: UserRow) {
-          const now = yield* Clock.currentTimeMillis;
-          const id = yield* random.uuidV4();
+        const newSession = Effect.fnUntraced(function* (user: User) {
           const secret = yield* newSecret;
-          yield* sql`INSERT INTO sessions ${sql.insert({
-            id,
-            user_id: user.id,
-            refresh_hash: yield* hashSecret(secret),
-            created_at: now,
-            last_used_at: now,
-            expires_at: now + SESSION_MS,
-          })}`;
-          return yield* issue(user, id, secret);
+          const now = yield* DateTime.now;
+          const session = Session.insert.make({
+            id: SessionId.make(yield* random.uuidV4()),
+            userId: user.id,
+            refreshHash: yield* hashSecret(secret),
+            expiresAt: DateTime.addDuration(now, SESSION_LIFETIME),
+          });
+          return { session, secret };
         });
 
-        const insertUser = Effect.fnUntraced(function* (
-          fields: { email: string; name: string; role: Role },
+        const openSession = Effect.fnUntraced(function* (user: User) {
+          const { session, secret } = yield* newSession(user);
+          const stored = yield* sessions.insert(session);
+          return yield* issue(user, stored.id, secret);
+        });
+
+        const passwordFields = Effect.fnUntraced(function* (
           password: Redacted.Redacted<string>,
+          mustChange: boolean,
         ) {
-          const now = yield* Clock.currentTimeMillis;
-          const id = yield* random.uuidV4();
           const stored = yield* passwords.hash(password);
-          yield* sql`INSERT INTO users ${sql.insert({
-            id,
-            email: fields.email,
-            name: fields.name,
-            role: fields.role,
+          return {
             password_hash: stored.hash,
             password_salt: stored.salt,
             password_iterations: stored.iterations,
-            must_change_password: 1,
-            disabled: 0,
-            created_at: now,
-            updated_at: now,
-          })}`;
-          return yield* userById(id).pipe(Effect.flatMap(Effect.fromOption));
+            must_change_password: mustChange ? 1 : 0,
+            updated_at: millis(yield* DateTime.now),
+          };
+        });
+
+        const createUser = Effect.fnUntraced(function* (
+          fields: { email: Email; name: string; role: Role },
+          password: Redacted.Redacted<string>,
+        ) {
+          const stored = yield* passwords.hash(password);
+          return yield* insertUser(
+            User.insert.make({
+              ...fields,
+              id: UserId.make(yield* random.uuidV4()),
+              passwordHash: stored.hash,
+              passwordSalt: stored.salt,
+              passwordIterations: stored.iterations,
+              mustChangePassword: true,
+              disabled: false,
+            }),
+          );
         });
 
         const bootstrapAdmin = Effect.fnUntraced(function* (
-          email: string,
+          email: Email,
           password: Redacted.Redacted<string>,
         ) {
-          if (email !== normalize(bootstrap.email)) return Option.none<UserRow>();
+          if (email !== bootstrap.email.trim().toLowerCase()) return Option.none<User>();
           if (!sameText(Redacted.value(password), Redacted.value(bootstrap.password))) {
-            return Option.none<UserRow>();
+            return Option.none<User>();
           }
           const count = yield* userCount(undefined);
-          if (Option.isSome(count) && count.value.count > 0) return Option.none<UserRow>();
+          if (Option.isSome(count) && count.value.count > 0) return Option.none<User>();
           yield* Effect.logInfo(`creating the first administrator, ${email}`);
-          return Option.some(yield* insertUser({ email, name: "", role: "admin" }, password));
+          return yield* createUser({ email, name: "", role: "admin" }, password);
         });
 
         const recordFailure = (email: string, now: number) =>
           sql`INSERT INTO sign_in_failures (email, failures, locked_until) VALUES (${email}, 1, 0)
             ON CONFLICT (email) DO UPDATE SET
               failures = CASE WHEN failures + 1 >= ${MAX_FAILURES} THEN 0 ELSE failures + 1 END,
-              locked_until = CASE WHEN failures + 1 >= ${MAX_FAILURES} THEN ${now + LOCK_MS} ELSE locked_until END`;
+              locked_until = CASE WHEN failures + 1 >= ${MAX_FAILURES} THEN ${now + Duration.toMillis(LOCK_LIFETIME)} ELSE locked_until END`;
 
         const signIn = Effect.fn("Accounts.signIn")(function* (
-          input: string,
+          client: string,
+          email: Email,
           password: Redacted.Redacted<string>,
         ) {
-          const email = normalize(input);
-          const now = yield* Clock.currentTimeMillis;
+          yield* throttle.check(client);
+          const now = millis(yield* DateTime.now);
           const lock = yield* failuresFor(email).pipe(storage("check sign-in attempts"));
-          if (Option.isSome(lock) && lock.value.locked_until > now) {
+          if (Option.isSome(lock) && lock.value.lockedUntil > now) {
             return yield* new AccountLocked({
               error: "too many failed sign-ins; try again later",
-              retryAfter: Math.ceil((lock.value.locked_until - now) / 1000),
+              retryAfter: Math.ceil((lock.value.lockedUntil - now) / 1000),
             });
           }
           const found = yield* userByEmail(email).pipe(
@@ -272,7 +288,7 @@ export class Accounts extends Context.Service<
           );
           const stored = Option.isSome(found) ? storedPassword(found.value) : yield* passwords.decoy;
           const matches = yield* passwords.verify(password, stored);
-          if (Option.isNone(found) || !matches || found.value.disabled === 1) {
+          if (Option.isNone(found) || !matches || found.value.disabled) {
             yield* recordFailure(email, now).pipe(storage("record a failed sign-in"));
             return yield* invalid();
           }
@@ -284,28 +300,30 @@ export class Accounts extends Context.Service<
           const parts = splitToken(token);
           if (Option.isNone(parts)) return yield* expired();
           const { sessionId, secret } = parts.value;
-          const now = yield* Clock.currentTimeMillis;
-          const session = yield* sessionById(sessionId).pipe(storage("refresh the session"));
+          const now = yield* DateTime.now;
+          const session = yield* sessions.findById(sessionId).pipe(
+            Effect.map(Option.some),
+            Effect.catchTag("NoSuchElementError", () => Effect.succeedNone),
+            storage("refresh the session"),
+          );
           if (Option.isNone(session)) return yield* expired();
-          const user = yield* userById(session.value.user_id).pipe(storage("refresh the session"));
+          const user = yield* findUser(session.value.userId).pipe(storage("refresh the session"));
           const presented = yield* hashSecret(secret);
           const valid =
             Option.isSome(user) &&
-            user.value.disabled === 0 &&
-            session.value.expires_at > now &&
-            sameText(presented, session.value.refresh_hash);
+            !user.value.disabled &&
+            DateTime.isGreaterThan(session.value.expiresAt, now) &&
+            sameText(presented, session.value.refreshHash);
           if (!valid || Option.isNone(user)) {
-            yield* sql`DELETE FROM sessions WHERE id = ${sessionId}`.pipe(
-              storage("end the session"),
-            );
+            yield* sessions.delete(sessionId).pipe(storage("end the session"));
             return yield* expired();
           }
           const next = yield* newSecret;
           const rotated = yield* sql`UPDATE sessions SET ${sql.update({
-            refresh_hash: yield* hashSecret(next),
-            last_used_at: now,
-            expires_at: now + SESSION_MS,
-          })} WHERE id = ${sessionId} AND refresh_hash = ${session.value.refresh_hash} RETURNING id`.pipe(
+            refreshHash: yield* hashSecret(next),
+            lastUsedAt: millis(now),
+            expiresAt: millis(DateTime.addDuration(now, SESSION_LIFETIME)),
+          })} WHERE id = ${sessionId} AND refresh_hash = ${session.value.refreshHash} RETURNING id`.pipe(
             storage("refresh the session"),
           );
           if (rotated.length === 0) return yield* expired();
@@ -321,32 +339,8 @@ export class Accounts extends Context.Service<
           );
         });
 
-        const existing = (id: string) =>
-          userById(id).pipe(
-            storage("read the user"),
-            Effect.flatMap((user) =>
-              Option.isSome(user) ? Effect.succeed(user.value) : Effect.fail(missing()),
-            ),
-          );
-
         const me = Effect.fn("Accounts.me")(function* (viewer: Viewer["Service"]) {
           return toAccount(yield* existing(viewer.id));
-        });
-
-        const writePassword = Effect.fnUntraced(function* (
-          id: string,
-          password: Redacted.Redacted<string>,
-          mustChange: boolean,
-        ) {
-          const stored = yield* passwords.hash(password);
-          const now = yield* Clock.currentTimeMillis;
-          yield* sql`UPDATE users SET ${sql.update({
-            password_hash: stored.hash,
-            password_salt: stored.salt,
-            password_iterations: stored.iterations,
-            must_change_password: mustChange ? 1 : 0,
-            updated_at: now,
-          })} WHERE id = ${id}`;
         });
 
         const changePassword = Effect.fn("Accounts.changePassword")(function* (
@@ -358,12 +352,18 @@ export class Accounts extends Context.Service<
           if (!(yield* passwords.verify(current, storedPassword(user)))) {
             return yield* new WrongPassword({ error: "the current password is wrong" });
           }
-          yield* writePassword(user.id, next, false).pipe(storage("change the password"));
-          yield* sql`DELETE FROM sessions WHERE user_id = ${user.id}`.pipe(
-            storage("change the password"),
-          );
+          const fields = yield* passwordFields(next, false);
+          const { session, secret } = yield* newSession(user);
+          const row = yield* encodeSession(session).pipe(Effect.orDie);
+          yield* atomic
+            .run([
+              sql`UPDATE users SET ${sql.update(fields)} WHERE id = ${user.id}`,
+              sql`DELETE FROM sessions WHERE user_id = ${user.id}`,
+              sql`INSERT INTO sessions ${sql.insert(row)}`,
+            ])
+            .pipe(storage("change the password"));
           const updated = yield* existing(user.id);
-          return yield* openSession(updated).pipe(storage("open a session"));
+          return yield* issue(updated, session.id, secret);
         });
 
         const list = allUsers(undefined).pipe(
@@ -373,15 +373,14 @@ export class Accounts extends Context.Service<
         );
 
         const create = Effect.fn("Accounts.create")(function* (user: NewUser) {
-          const email = normalize(user.email);
-          const taken = yield* userByEmail(email).pipe(storage("create the user"));
-          if (Option.isSome(taken)) {
+          const created = yield* createUser(
+            { email: user.email, name: user.name, role: user.role },
+            user.password,
+          ).pipe(storage("create the user"));
+          if (Option.isNone(created)) {
             return yield* new EmailTaken({ error: "an account with this email already exists" });
           }
-          const row = yield* insertUser({ email, name: user.name, role: user.role }, user.password).pipe(
-            storage("create the user"),
-          );
-          return toAccount(row);
+          return toAccount(created.value);
         });
 
         const update = Effect.fn("Accounts.update")(function* (
@@ -393,36 +392,48 @@ export class Accounts extends Context.Service<
             id === viewer.id &&
             ((changes.role !== undefined && changes.role !== "admin") || changes.disabled === true);
           if (demotesSelf) {
-            return yield* new OwnAccess({
-              error: "you cannot remove your own administrator access",
-            });
+            return yield* new OwnAccess({ error: "you cannot remove your own administrator access" });
           }
-          yield* existing(id);
-          const now = yield* Clock.currentTimeMillis;
+          const user = yield* existing(id);
           const fields = {
             ...(changes.name === undefined ? {} : { name: changes.name }),
             ...(changes.role === undefined ? {} : { role: changes.role }),
             ...(changes.disabled === undefined ? {} : { disabled: changes.disabled ? 1 : 0 }),
-            updated_at: now,
+            updated_at: millis(yield* DateTime.now),
           };
-          yield* sql`UPDATE users SET ${sql.update(fields)} WHERE id = ${id}`.pipe(
-            storage("update the user"),
-          );
-          if (changes.disabled === true) {
-            yield* sql`DELETE FROM sessions WHERE user_id = ${id}`.pipe(storage("update the user"));
-          }
-          return toAccount(yield* existing(id));
+          yield* atomic
+            .run([
+              sql`UPDATE users SET ${sql.update(fields)} WHERE id = ${user.id}`,
+              ...(changes.disabled === true
+                ? [sql`DELETE FROM sessions WHERE user_id = ${user.id}`]
+                : []),
+            ])
+            .pipe(storage("update the user"));
+          return toAccount(yield* existing(user.id));
         });
 
         const resetPassword = Effect.fn("Accounts.resetPassword")(function* (
           id: string,
           password: Redacted.Redacted<string>,
         ) {
-          yield* existing(id);
-          yield* writePassword(id, password, true).pipe(storage("reset the password"));
-          yield* sql`DELETE FROM sessions WHERE user_id = ${id}`.pipe(storage("reset the password"));
-          return toAccount(yield* existing(id));
+          const user = yield* existing(id);
+          const fields = yield* passwordFields(password, true);
+          yield* atomic
+            .run([
+              sql`UPDATE users SET ${sql.update(fields)} WHERE id = ${user.id}`,
+              sql`DELETE FROM sessions WHERE user_id = ${user.id}`,
+            ])
+            .pipe(storage("reset the password"));
+          return toAccount(yield* existing(user.id));
         });
+
+        const purgeExpired = Effect.gen(function* () {
+          const now = millis(yield* DateTime.now);
+          yield* atomic.run([
+            sql`DELETE FROM sessions WHERE expires_at <= ${now}`,
+            sql`DELETE FROM sign_in_failures WHERE locked_until <= ${now - Duration.toMillis(Duration.days(1))}`,
+          ]);
+        }).pipe(storage("purge expired sessions"), Effect.withSpan("Accounts.purgeExpired"));
 
         return Accounts.of({
           signIn,
@@ -434,6 +445,7 @@ export class Accounts extends Context.Service<
           create,
           update,
           resetPassword,
+          purgeExpired,
         });
       }),
     );

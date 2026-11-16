@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as Layer from "effect/Layer";
 import { canPublish, MissalApi, Viewer } from "./Api.ts";
 import { Accounts } from "./Accounts.ts";
@@ -12,7 +13,14 @@ const AuthHandlers = HttpApiBuilder.group(
   Effect.fn(function* (handlers) {
     const accounts = yield* Accounts;
     return handlers.handleAll({
-      signIn: ({ payload }) => accounts.signIn(payload.email, payload.password),
+      signIn: ({ payload }) =>
+        Effect.flatMap(HttpServerRequest.HttpServerRequest, (request) =>
+          accounts.signIn(
+            request.headers["cf-connecting-ip"] ?? "unknown",
+            payload.email,
+            payload.password,
+          ),
+        ),
       refresh: ({ payload }) => accounts.refresh(payload.refreshToken),
       signOut: ({ payload }) => accounts.signOut(payload.refreshToken),
     });

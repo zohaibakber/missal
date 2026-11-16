@@ -6,19 +6,17 @@ import * as HttpApiMiddleware from "effect/http-api/HttpApiMiddleware";
 import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 import * as HttpApiSecurity from "effect/http-api/HttpApiSecurity";
 import * as Schema from "effect/Schema";
+import { Email, Name, Role, RouteId, type SessionId, Template, User, type UserId } from "./Models.ts";
+
+export { canPublish, Role } from "./Models.ts";
 
 export const MAX_TEMPLATE_BYTES = 16 * 1024 * 1024;
-
-export const Role = Schema.Literals(["admin", "publisher", "member"]);
-export type Role = typeof Role.Type;
-
-export const canPublish = (role: Role) => role === "admin" || role === "publisher";
 
 export class Viewer extends Context.Service<
   Viewer,
   {
-    readonly id: string;
-    readonly sessionId: string;
+    readonly id: UserId;
+    readonly sessionId: SessionId;
     readonly role: Role;
     readonly mustChangePassword: boolean;
   }
@@ -125,12 +123,6 @@ export class AdminsOnly extends HttpApiMiddleware.Service<
   error: NotAdmin,
 }) {}
 
-export const Email = Schema.String.check(
-  Schema.isTrimmed(),
-  Schema.isMaxLength(254),
-  Schema.isPattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/),
-);
-
 export const NewPassword = Schema.RedactedFromValue(
   Schema.String.check(Schema.isMinLength(10), Schema.isMaxLength(256)),
 );
@@ -139,17 +131,7 @@ export const GivenPassword = Schema.RedactedFromValue(
   Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(256)),
 );
 
-export const Name = Schema.String.check(Schema.isTrimmed(), Schema.isMaxLength(120));
-
-export const Account = Schema.Struct({
-  id: Schema.String,
-  email: Schema.String,
-  name: Schema.String,
-  role: Role,
-  mustChangePassword: Schema.Boolean,
-  disabled: Schema.Boolean,
-  createdAt: Schema.Number,
-});
+export const Account = User.json;
 export type Account = typeof Account.Type;
 
 export const Session = Schema.Struct({
@@ -162,17 +144,7 @@ export type Session = typeof Session.Type;
 
 const RefreshToken = Schema.Struct({ refreshToken: Schema.String.check(Schema.isMaxLength(512)) });
 
-export const TemplateId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{1,64}$/));
-export const UserId = TemplateId;
-
-export const Entry = Schema.Struct({
-  id: Schema.String,
-  name: Schema.String,
-  version: Schema.Int,
-  fieldCount: Schema.Int,
-  preview: Schema.String,
-  updatedAt: Schema.Number,
-});
+export const Entry = Template.json;
 export type Entry = typeof Entry.Type;
 
 export const Catalog = Schema.Struct({
@@ -264,7 +236,7 @@ export class CatalogGroup extends HttpApiGroup.make("catalog")
   )
   .add(
     HttpApiEndpoint.get("download", "/v1/templates/:id/content", {
-      params: { id: TemplateId },
+      params: { id: RouteId },
       success: TemplateContent,
       error: [TemplateNotFound, StorageFailure],
     }),
@@ -282,7 +254,7 @@ export class PublishingGroup extends HttpApiGroup.make("publishing")
   )
   .add(
     HttpApiEndpoint.put("update", "/v1/templates/:id", {
-      params: { id: TemplateId },
+      params: { id: RouteId },
       payload: Upload,
       success: Published,
       error: [TemplateNotFound, PublishConflict, StorageFailure],
@@ -290,7 +262,7 @@ export class PublishingGroup extends HttpApiGroup.make("publishing")
   )
   .add(
     HttpApiEndpoint.delete("remove", "/v1/templates/:id", {
-      params: { id: TemplateId },
+      params: { id: RouteId },
       success: HttpApiSchema.NoContent,
       error: [TemplateNotFound, StorageFailure],
     }),
@@ -315,7 +287,7 @@ export class UsersGroup extends HttpApiGroup.make("users")
   )
   .add(
     HttpApiEndpoint.patch("update", "/v1/users/:id", {
-      params: { id: UserId },
+      params: { id: RouteId },
       payload: UserChanges,
       success: Account,
       error: [UserNotFound, OwnAccess, StorageFailure],
@@ -323,7 +295,7 @@ export class UsersGroup extends HttpApiGroup.make("users")
   )
   .add(
     HttpApiEndpoint.post("resetPassword", "/v1/users/:id/password", {
-      params: { id: UserId },
+      params: { id: RouteId },
       payload: Schema.Struct({ password: NewPassword }),
       success: Account,
       error: [UserNotFound, StorageFailure],

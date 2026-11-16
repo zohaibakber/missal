@@ -51,8 +51,9 @@ impl SessionKeeper {
 
     pub fn sign_in(&self, email: &str, password: &str) -> Result<Session, AuthError> {
         let session = self.api.sign_in(email, password)?;
+        let mut held = self.lock();
         self.save(&session);
-        *self.lock() = Some(session.clone());
+        *held = Some(session.clone());
         Ok(session)
     }
 
