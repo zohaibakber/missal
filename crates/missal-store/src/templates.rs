@@ -109,6 +109,62 @@ pub(crate) fn insert(
     summary(raw, operation)
 }
 
+pub(crate) fn summary_of(
+    connection: &Connection,
+    template: TemplateId,
+    operation: &'static str,
+) -> Result<TemplateSummary> {
+    summaries(
+        connection,
+        &format!("SELECT {SUMMARY_COLUMNS} FROM templates WHERE id = ?1"),
+        [template.get()],
+        operation,
+    )?
+    .pop()
+    .ok_or_else(|| RepositoryError::not_found(Entity::Template, template))
+}
+
+pub(crate) fn replace(
+    connection: &Connection,
+    template: TemplateId,
+    name: &str,
+    document: &Document,
+    operation: &'static str,
+) -> Result<TemplateSummary> {
+    let projections = document.projections();
+    let now = Timestamp::now().unix_millis();
+    let changed = connection
+        .prepare_cached(
+            "UPDATE templates SET name = ?1, revision = revision + 1, updated_at = ?2, preview = ?3, field_count = ?4 WHERE id = ?5",
+        )
+        .and_then(|mut statement| {
+            statement.execute(params![
+                name,
+                now,
+                projections.preview_text,
+                projections.field_count as i64,
+                template.get(),
+            ])
+        })
+        .map_err(failed(operation))?;
+    if changed == 0 {
+        return Err(RepositoryError::not_found(Entity::Template, template));
+    }
+    connection
+        .prepare_cached(
+            "UPDATE template_bodies SET plain_text = ?1, body = ?2 WHERE template_id = ?3",
+        )
+        .and_then(|mut statement| {
+            statement.execute(params![
+                projections.plain_text,
+                pack(document),
+                template.get()
+            ])
+        })
+        .map_err(failed(operation))?;
+    summary_of(connection, template, operation)
+}
+
 pub(crate) fn revision_conflict(
     connection: &Connection,
     table: &str,

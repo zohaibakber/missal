@@ -152,10 +152,29 @@ pub struct AppShell {
     toasts: Entity<ToastHost>,
     pending_import: bool,
     screen_subscription: Subscription,
+    gate: Option<Entity<crate::auth::AuthGate>>,
     _subscriptions: Vec<Subscription>,
 }
 
 impl AppShell {
+    fn gate(
+        &mut self,
+        auth: &Entity<AuthModel>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<crate::auth::AuthGate> {
+        if let Some(gate) = &self.gate {
+            return gate.clone();
+        }
+        let gate = cx.new(|cx| crate::auth::AuthGate::new(auth.clone(), window, cx));
+        let focus = gate.clone();
+        window.defer(cx, move |window, cx| {
+            focus.update(cx, |gate, cx| gate.focus(window, cx));
+        });
+        self.gate = Some(gate.clone());
+        gate
+    }
+
     pub fn new(models: Models, window: &mut Window, cx: &mut Context<Self>) -> AppShell {
         let focus = cx.focus_handle();
         let route = models.nav.read(cx).current();
@@ -197,6 +216,7 @@ impl AppShell {
             toasts,
             pending_import: false,
             screen_subscription,
+            gate: None,
             _subscriptions: subscriptions,
         };
         shell.wire_print(window, cx);
@@ -747,7 +767,7 @@ impl Render for AppShell {
                         .flex_1()
                         .min_h_0()
                         .w_full()
-                        .child(crate::auth::render_gate(&auth, cx)),
+                        .child(self.gate(&auth, window, cx)),
                 )
                 .child(self.toasts.clone())
                 .into_any_element();

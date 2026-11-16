@@ -284,6 +284,7 @@ fn account_menu(cx: &App) -> Option<AnyElement> {
     let account = AuthModel::get(cx)?.read(cx).account()?.clone();
     let name = SharedString::from(account.display_name().to_owned());
     let email = SharedString::from(account.email.clone());
+    let admin = account.role.is_admin();
     Some(
         div()
             .mr(px(4.))
@@ -295,21 +296,38 @@ fn account_menu(cx: &App) -> Option<AnyElement> {
                     .tooltip(name.clone())
                     .child(Avatar::new().name(name.clone()).small())
                     .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
-                        menu.item(PopupMenuItem::label(name.clone()))
+                        let menu = menu
+                            .item(PopupMenuItem::label(name.clone()))
                             .item(PopupMenuItem::label(email.clone()))
                             .item(PopupMenuItem::separator())
                             .item(
-                                PopupMenuItem::new("Settings")
-                                    .icon(IconName::Settings)
+                                PopupMenuItem::new("Change password…")
+                                    .icon(IconName::KeyRound)
                                     .on_click(|_, window, cx| {
-                                        navigate(Route::Settings, window, cx)
+                                        crate::ui::account::open_change_password(window, cx)
+                                    }),
+                            );
+                        let menu = if admin {
+                            menu.item(
+                                PopupMenuItem::new("People…")
+                                    .icon(IconName::Users)
+                                    .on_click(|_, window, cx| {
+                                        crate::ui::account::open_users(window, cx)
                                     }),
                             )
-                            .item(
-                                PopupMenuItem::new("Sign out")
-                                    .icon(IconName::LogOut)
-                                    .on_click(|_, window, cx| crate::auth::sign_out(window, cx)),
-                            )
+                        } else {
+                            menu
+                        };
+                        menu.item(
+                            PopupMenuItem::new("Settings")
+                                .icon(IconName::Settings)
+                                .on_click(|_, window, cx| navigate(Route::Settings, window, cx)),
+                        )
+                        .item(
+                            PopupMenuItem::new("Sign out")
+                                .icon(IconName::LogOut)
+                                .on_click(|_, window, cx| crate::auth::sign_out(window, cx)),
+                        )
                     }),
             )
             .into_any_element(),

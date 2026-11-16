@@ -1443,16 +1443,22 @@ impl SettingsScreen {
                 crate::auth::AuthState::SignedIn { account, online } => {
                     let status = if *online { "" } else { " (offline)" };
                     (
-                        format!("{} · {}{status}", account.display_name(), account.email),
+                        format!(
+                            "{} · {} · {}{status}",
+                            account.display_name(),
+                            account.email,
+                            account.role.label()
+                        ),
                         true,
+                        account.role.is_admin(),
                     )
                 }
-                _ => ("Not signed in".to_owned(), false),
+                _ => ("Not signed in".to_owned(), false, false),
             }
         });
         v_flex()
             .gap(px(4.))
-            .children(account.map(|(text, signed_in)| {
+            .children(account.map(|(text, signed_in, admin)| {
                 row(
                     "Account",
                     h_flex()
@@ -1465,8 +1471,18 @@ impl SettingsScreen {
                                 .text_color(palette.ink_muted)
                                 .child(label(text).ltr().truncate()),
                         )
+                        .when(admin, |this| {
+                            this.child(ghost_sm("manage-people", "People").on_click(
+                                |_, window, cx| crate::ui::account::open_users(window, cx),
+                            ))
+                        })
                         .when(signed_in, |this| {
-                            this.child(
+                            this.child(ghost_sm("change-password", "Change password").on_click(
+                                |_, window, cx| {
+                                    crate::ui::account::open_change_password(window, cx)
+                                },
+                            ))
+                            .child(
                                 ghost_sm("sign-out", "Sign out")
                                     .on_click(|_, window, cx| crate::auth::sign_out(window, cx)),
                             )

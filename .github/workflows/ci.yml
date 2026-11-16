@@ -19,7 +19,7 @@ env:
   CARGO_INCREMENTAL: "0"
   RUST_BACKTRACE: short
   VPK_VERSION: 1.3.39-g8d2844f
-  WORKOS_CLIENT_ID: ${{ vars.WORKOS_CLIENT_ID }}
+  MISSAL_API_URL: ${{ vars.MISSAL_API_URL }}
 
 jobs:
   check:

@@ -5,7 +5,7 @@ use missal_core::document::{Block, Field, Inline, Paragraph, Text};
 use missal_core::{
     CustomFieldDraft, DisplayMode, Document, Entity, FieldMarkers, FieldPresentation,
     FieldReference, FirDocumentId, FirId, GlobalPlaceholderDraft, Invalid, PlaceholderId,
-    RepositoryError, Revision, TemplateId,
+    PlaceholderSource, RepositoryError, Revision, TemplateId,
 };
 use missal_store::{Store, TemplateBundle};
 
@@ -611,4 +611,61 @@ fn foreign_and_newer_databases_are_refused() {
 
 fn store_at(path: &std::path::Path) -> Store {
     Store::open_with(path, &empty_bundle()).unwrap()
+}
+
+fn field_references(document: &Document) -> Vec<FieldReference> {
+    let mut found = Vec::new();
+    let mut document = document.clone();
+    document.for_each_field_mut(&mut |field| found.push(field.reference.clone()));
+    found
+}
+
+#[test]
+fn a_published_template_installs_with_its_fields_and_updates_in_place() {
+    let scratch = Scratch::new();
+    let mut publisher =
+        Store::open_with(scratch.path("publisher.sqlite"), &empty_bundle()).unwrap();
+    let mut reader = Store::open_with(scratch.path("reader.sqlite"), &empty_bundle()).unwrap();
+    reader.create_placeholder("تھانہ").unwrap();
+    let station = publisher.create_placeholder("تھانہ").unwrap();
+    let vehicle = publisher.create_placeholder("گاڑی").unwrap();
+    let document = Document::new(vec![Block::Paragraph(Paragraph::new(vec![
+        Inline::Text(Text::new("رپورٹ")),
+        Inline::Field(Field::new(FieldReference::Catalog(station.id))),
+        Inline::Field(Field::new(FieldReference::Catalog(vehicle.id))),
+    ]))]);
+    let created = publisher.create_template("رپورٹ", &document).unwrap();
+    let export = publisher.export_template(created.id).unwrap();
+    assert_eq!(export.name, "رپورٹ");
+    assert_eq!(export.revision, created.revision);
+
+    let first = reader
+        .install_library_template("tpl_1", 1, &export.content)
+        .unwrap();
+    assert!(!first.replaced);
+    assert_eq!(first.link.version, 1);
+    let catalog = reader.placeholders().unwrap();
+    let id_of = |label: &str| catalog.iter().find(|item| item.label == label).unwrap();
+    assert_eq!(id_of("گاڑی").source, PlaceholderSource::Custom);
+    let installed = reader.template(first.summary.id).unwrap();
+    assert_eq!(
+        field_references(&installed.document),
+        [
+            FieldReference::Catalog(id_of("تھانہ").id),
+            FieldReference::Catalog(id_of("گاڑی").id)
+        ]
+    );
+
+    let second = reader
+        .install_library_template("tpl_1", 2, &export.content)
+        .unwrap();
+    assert!(second.replaced);
+    assert_eq!(second.summary.id, first.summary.id);
+    assert_eq!(reader.templates().unwrap().len(), 1);
+    assert_eq!(reader.library_links().unwrap(), [second.link]);
+    assert!(
+        reader
+            .install_library_template("tpl_2", 1, b"junk")
+            .is_err()
+    );
 }

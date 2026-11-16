@@ -1,6 +1,8 @@
+pub mod account;
 pub mod cheatsheet;
 pub mod dialogs;
 pub mod input;
+pub mod library;
 pub mod menu;
 pub mod nav_menu;
 pub mod palette;

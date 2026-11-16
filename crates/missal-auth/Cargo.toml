@@ -1,6 +1,6 @@
 [package]
 name = "missal-auth"
-description = "Missal sign-in through WorkOS AuthKit with an offline session cache"
+description = "Missal accounts: email sign-in against the Missal API with an offline session cache"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,12 +8,10 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-workos.workspace = true
 keyring.workspace = true
-tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-url.workspace = true
+ureq.workspace = true
 
 [build-dependencies]
 dotenvy.workspace = true

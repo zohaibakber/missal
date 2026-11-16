@@ -35,7 +35,9 @@ pub fn init_app(cx: &mut App, db: Db, paths: Option<&Paths>, preferences: Prefer
         });
         crate::auth::AuthModel::install(Some(&paths.directory), cx);
     }
-    Models::install(db, paths, preferences, cx)
+    let models = Models::install(db, paths, preferences, cx);
+    crate::library::LibraryModel::install(&models, cx);
+    models
 }
 
 pub fn window_options(preferences: &Preferences, cx: &App) -> WindowOptions {

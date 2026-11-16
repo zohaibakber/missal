@@ -21,10 +21,10 @@ pub struct TemplateBundle {
     packed: Cow<'static, [u8]>,
 }
 
-struct Contents {
-    global: Vec<String>,
-    custom: Vec<String>,
-    templates: Vec<(String, Document)>,
+pub(crate) struct Contents {
+    pub(crate) global: Vec<String>,
+    pub(crate) custom: Vec<String>,
+    pub(crate) templates: Vec<(String, Document)>,
 }
 
 fn invalid() -> RepositoryError {
@@ -96,7 +96,7 @@ impl TemplateBundle {
         Ok(TemplateBundle { version, packed })
     }
 
-    fn contents(&self) -> Result<Contents> {
+    pub(crate) fn contents(&self) -> Result<Contents> {
         let mut decoder = DeflateDecoder::new(self.packed.as_ref());
         header(&mut decoder)?;
         let mut raw = Vec::new();
@@ -153,6 +153,30 @@ impl TemplateBundle {
     }
 }
 
+pub(crate) fn ensure_labels(
+    connection: &Connection,
+    global: &[String],
+    custom: &[String],
+    operation: &'static str,
+) -> Result<HashMap<String, PlaceholderId>> {
+    let mut ids: HashMap<String, PlaceholderId> = placeholders::list(connection, operation)?
+        .into_iter()
+        .map(|placeholder| (field_lookup_key(&placeholder.label), placeholder.id))
+        .collect();
+    let labels = global
+        .iter()
+        .map(|label| (label, true))
+        .chain(custom.iter().map(|label| (label, false)));
+    for (label, shared) in labels {
+        if let Entry::Vacant(entry) = ids.entry(field_lookup_key(label)) {
+            entry.insert(placeholders::insert(
+                connection, label, shared, "", operation,
+            )?);
+        }
+    }
+    Ok(ids)
+}
+
 pub(crate) fn install(connection: &mut Connection, bundle: &TemplateBundle) -> Result<()> {
     let operation = "bundledTemplates.install";
     let installed: i64 = connection
@@ -169,26 +193,7 @@ pub(crate) fn install(connection: &mut Connection, bundle: &TemplateBundle) -> R
     }
     let contents = bundle.contents()?;
     let transaction = connection.transaction().map_err(failed(operation))?;
-    let mut ids: HashMap<String, PlaceholderId> = placeholders::list(&transaction, operation)?
-        .into_iter()
-        .map(|placeholder| (field_lookup_key(&placeholder.label), placeholder.id))
-        .collect();
-    let labels = contents
-        .global
-        .iter()
-        .map(|label| (label, true))
-        .chain(contents.custom.iter().map(|label| (label, false)));
-    for (label, shared) in labels {
-        if let Entry::Vacant(entry) = ids.entry(field_lookup_key(label)) {
-            entry.insert(placeholders::insert(
-                &transaction,
-                label,
-                shared,
-                "",
-                operation,
-            )?);
-        }
-    }
+    let ids = ensure_labels(&transaction, &contents.global, &contents.custom, operation)?;
     let existing: HashSet<String> = transaction
         .prepare("SELECT name FROM templates")
         .and_then(|mut statement| statement.query_map([], |row| row.get(0))?.collect())

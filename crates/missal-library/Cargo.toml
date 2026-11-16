@@ -1,0 +1,17 @@
+[package]
+name = "missal-library"
+description = "Missal client for the shared template library"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+ureq.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+base64.workspace = true
+
+[lints]
+workspace = true

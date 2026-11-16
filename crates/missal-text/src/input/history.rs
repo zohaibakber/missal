@@ -5,6 +5,7 @@ use crate::layout::TextPosition;
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Snapshot {
     pub(crate) text: String,
+    pub(crate) secret: Option<String>,
     pub(crate) anchor: TextPosition,
     pub(crate) head: TextPosition,
 }

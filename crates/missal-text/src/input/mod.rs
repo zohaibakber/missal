@@ -164,9 +164,22 @@ pub(crate) struct Frame {
     pub(crate) layout: Option<Arc<TextLayout>>,
 }
 
+const MASK: char = '•';
+
+fn mask(text: &str) -> String {
+    text.chars().map(|_| MASK).collect()
+}
+
+fn char_offset(text: &str, chars: usize) -> usize {
+    text.char_indices()
+        .nth(chars)
+        .map_or(text.len(), |(offset, _)| offset)
+}
+
 pub struct TextInput {
     focus_handle: FocusHandle,
     text: String,
+    secret: Option<String>,
     anchor: TextPosition,
     head: TextPosition,
     marked: Option<Range<usize>>,
@@ -223,6 +236,7 @@ impl TextInput {
         Self {
             focus_handle,
             text: String::new(),
+            secret: None,
             anchor: TextPosition::default(),
             head: TextPosition::default(),
             marked: None,
@@ -263,8 +277,19 @@ impl TextInput {
         self
     }
 
+    pub fn masked(mut self) -> Self {
+        let value = std::mem::take(&mut self.text);
+        self.text = mask(&value);
+        self.secret = Some(value);
+        self
+    }
+
+    pub fn is_masked(&self) -> bool {
+        self.secret.is_some()
+    }
+
     pub fn default_text(mut self, text: impl Into<String>) -> Self {
-        self.text = self.sanitize(&text.into());
+        self.store(self.sanitize(&text.into()));
         let end = TextPosition::upstream(self.text.len());
         self.anchor = end;
         self.head = end;
@@ -347,7 +372,35 @@ impl TextInput {
     }
 
     pub fn text(&self) -> &str {
+        self.secret.as_deref().unwrap_or(&self.text)
+    }
+
+    pub(crate) fn display_text(&self) -> &str {
         &self.text
+    }
+
+    fn store(&mut self, value: String) {
+        match &mut self.secret {
+            Some(secret) => {
+                self.text = mask(&value);
+                *secret = value;
+            }
+            None => self.text = value,
+        }
+    }
+
+    fn splice(&mut self, range: Range<usize>, new_text: &str) -> usize {
+        let Some(secret) = &mut self.secret else {
+            self.text.replace_range(range, new_text);
+            return new_text.len();
+        };
+        let width = MASK.len_utf8();
+        let start = char_offset(secret, range.start / width);
+        let end = char_offset(secret, range.end / width);
+        secret.replace_range(start..end, new_text);
+        let shown = mask(new_text);
+        self.text.replace_range(range, &shown);
+        shown.len()
     }
 
     pub fn is_multiline(&self) -> bool {
@@ -388,7 +441,7 @@ impl TextInput {
     }
 
     pub fn set_text(&mut self, text: impl Into<String>, cx: &mut Context<Self>) {
-        self.text = self.sanitize(&text.into());
+        self.store(self.sanitize(&text.into()));
         let end = TextPosition::upstream(self.text.len());
         self.anchor = end;
         self.head = end;
@@ -568,6 +621,7 @@ impl TextInput {
     fn snapshot(&self) -> Snapshot {
         Snapshot {
             text: self.text.clone(),
+            secret: self.secret.clone(),
             anchor: self.anchor,
             head: self.head,
         }
@@ -575,6 +629,9 @@ impl TextInput {
 
     fn restore(&mut self, snapshot: Snapshot, cx: &mut Context<Self>) {
         self.text = snapshot.text;
+        if self.secret.is_some() {
+            self.secret = snapshot.secret;
+        }
         self.anchor = snapshot.anchor;
         self.head = snapshot.head;
         self.marked = None;
@@ -601,9 +658,9 @@ impl TextInput {
         }
         let snapshot = self.snapshot();
         self.history.record(snapshot, kind);
-        self.text.replace_range(range.clone(), &new_text);
+        let inserted = self.splice(range.clone(), &new_text);
         let caret = TextPosition::new(
-            range.start + new_text.len(),
+            range.start + inserted,
             if new_text.is_empty() {
                 Affinity::Downstream
             } else {
@@ -877,7 +934,7 @@ impl TextInput {
     }
     fn on_action_copy(&mut self, _: &Copy, _: &mut Window, cx: &mut Context<Self>) {
         let range = self.selected_range();
-        if !range.is_empty() {
+        if !range.is_empty() && !self.is_masked() {
             cx.write_to_clipboard(ClipboardItem::new_string(self.text[range].to_string()));
         }
     }
@@ -886,9 +943,11 @@ impl TextInput {
         if range.is_empty() || !self.editable() {
             return;
         }
-        cx.write_to_clipboard(ClipboardItem::new_string(
-            self.text[range.clone()].to_string(),
-        ));
+        if !self.is_masked() {
+            cx.write_to_clipboard(ClipboardItem::new_string(
+                self.text[range.clone()].to_string(),
+            ));
+        }
         self.replace(range, "", EditKind::Other, cx);
     }
     fn on_action_paste(&mut self, _: &Paste, _: &mut Window, cx: &mut Context<Self>) {
@@ -1171,14 +1230,16 @@ impl EntityInputHandler for TextInput {
         let new_text = self.sanitize(new_text);
         let snapshot = self.snapshot();
         self.history.record(snapshot, EditKind::Compose);
-        self.text.replace_range(range.clone(), &new_text);
-        self.marked = (!new_text.is_empty()).then(|| range.start..range.start + new_text.len());
+        let inserted = self.splice(range.clone(), &new_text);
+        self.marked = (inserted > 0).then(|| range.start..range.start + inserted);
+        let end = range.start + inserted;
         let selection = new_selected_range_utf16
+            .filter(|_| !self.is_masked())
             .map(|r| {
                 let base = self.byte_to_utf16(range.start);
                 self.range_from_utf16(&(base + r.start..base + r.end))
             })
-            .unwrap_or(range.start + new_text.len()..range.start + new_text.len());
+            .unwrap_or(end..end);
         self.anchor = TextPosition::downstream(selection.start);
         self.head = TextPosition::upstream(selection.end);
         self.sticky_x = None;

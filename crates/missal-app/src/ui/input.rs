@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{Colorize, h_flex};
 use gpui_kit::prelude::*;
@@ -108,6 +109,15 @@ pub fn field_input(
         let input = TextInput::new(window, cx).bare();
         let line = if kind.holds_urdu() { 30. } else { 20. };
         configure(input, kind, placeholder, text, cx).line_height(LineHeight::Px(line))
+    })
+}
+
+pub fn secret_input(window: &mut Window, cx: &mut App, placeholder: &str) -> Entity<TextInput> {
+    cx.new(|cx| {
+        let input = TextInput::new(window, cx).bare();
+        configure(input, Kind::Latin, placeholder, "", cx)
+            .masked()
+            .line_height(LineHeight::Px(20.))
     })
 }
 
@@ -299,6 +309,7 @@ impl RenderOnce for Field {
         }
         h_flex()
             .id(self.id)
+            .test_support()
             .flex_none()
             .when_some(self.width, |this, width| this.w(width))
             .when(self.width.is_none(), |this| this.w_full())

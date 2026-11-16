@@ -3,7 +3,8 @@ use rusqlite::{Connection, OptionalExtension, Transaction};
 use crate::firs::{SUMMARY_COLUMNS, SUMMARY_INDEX};
 use crate::{Result, failed, open_error};
 
-const MIGRATIONS: &[&str] = &[r#"
+const MIGRATIONS: &[&str] = &[
+    r#"
 CREATE TABLE settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     open_marker TEXT NOT NULL DEFAULT '«',
@@ -86,7 +87,16 @@ CREATE TABLE document_bodies (
     document_id INTEGER PRIMARY KEY REFERENCES documents (id) ON DELETE CASCADE,
     body BLOB NOT NULL
 );
-"#];
+"#,
+    r#"
+CREATE TABLE library_links (
+    template_id INTEGER PRIMARY KEY REFERENCES templates (id) ON DELETE CASCADE,
+    remote_id TEXT NOT NULL UNIQUE,
+    version INTEGER NOT NULL,
+    revision INTEGER NOT NULL
+);
+"#,
+];
 
 pub(crate) fn configure(connection: &Connection) -> Result<()> {
     connection

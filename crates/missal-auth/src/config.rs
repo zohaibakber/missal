@@ -1,45 +1,56 @@
-const CLIENT_ID_VARIABLE: &str = "WORKOS_CLIENT_ID";
-const BASE_URL_VARIABLE: &str = "WORKOS_BASE_URL";
+const URL_VARIABLE: &str = "MISSAL_API_URL";
 
 #[cfg(not(debug_assertions))]
-const BUILT_CLIENT_ID: Option<&str> = Some(env!(
-    "WORKOS_CLIENT_ID",
-    "release builds need WORKOS_CLIENT_ID set to the WorkOS client ID"
+const BUILT_URL: Option<&str> = Some(env!(
+    "MISSAL_API_URL",
+    "release builds need MISSAL_API_URL set to the Missal API URL"
 ));
 
 #[cfg(not(debug_assertions))]
 const _: () = assert!(
-    !env!("WORKOS_CLIENT_ID").is_empty(),
-    "release builds need a non-empty WORKOS_CLIENT_ID"
+    !env!("MISSAL_API_URL").is_empty(),
+    "release builds need a non-empty MISSAL_API_URL"
 );
 
 #[cfg(debug_assertions)]
-const BUILT_CLIENT_ID: Option<&str> = option_env!("WORKOS_CLIENT_ID");
+const BUILT_URL: Option<&str> = option_env!("MISSAL_API_URL");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
-    pub client_id: String,
     pub base_url: String,
 }
 
-fn non_empty(value: String) -> Option<String> {
-    let value = value.trim().to_owned();
-    (!value.is_empty()).then_some(value)
+fn usable(value: &str) -> Option<String> {
+    let value = value.trim().trim_end_matches('/');
+    let local = ["http://127.0.0.1", "http://localhost"]
+        .iter()
+        .any(|prefix| value.starts_with(prefix));
+    (value.starts_with("https://") || local).then(|| value.to_owned())
 }
 
 impl Config {
     pub fn resolve() -> Option<Config> {
-        let client_id = std::env::var(CLIENT_ID_VARIABLE)
+        std::env::var(URL_VARIABLE)
             .ok()
-            .and_then(non_empty)
-            .or_else(|| BUILT_CLIENT_ID.map(str::to_owned).and_then(non_empty))?;
-        let base_url = std::env::var(BASE_URL_VARIABLE)
-            .ok()
-            .and_then(non_empty)
-            .unwrap_or_else(|| workos::DEFAULT_BASE_URL.to_owned());
-        Some(Config {
-            client_id,
-            base_url,
-        })
+            .as_deref()
+            .and_then(usable)
+            .or_else(|| BUILT_URL.and_then(usable))
+            .map(|base_url| Config { base_url })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::usable;
+
+    #[test]
+    fn only_https_or_a_local_server_is_accepted() {
+        assert_eq!(
+            usable(" https://api.example.com/ ").as_deref(),
+            Some("https://api.example.com")
+        );
+        assert!(usable("http://127.0.0.1:1337").is_some());
+        assert!(usable("http://api.example.com").is_none());
+        assert!(usable("").is_none());
     }
 }
