@@ -14,7 +14,6 @@ use missal_text::{TextInput, TextInputEvent};
 use crate::state::{Models, toast_warning};
 use crate::theme::{Palette, RADIUS_XL};
 use crate::ui::input::{Kind, field, field_input, secret_input};
-use crate::ui::primary_sm;
 
 const REFRESH_EVERY: Duration = Duration::from_secs(60 * 60);
 pub const MIN_PASSWORD: usize = 10;
@@ -618,20 +617,36 @@ impl Render for AuthGate {
             .size_full()
             .items_center()
             .justify_center()
-            .bg(palette.surface)
+            .bg(palette.canvas)
             .child(
                 v_flex()
                     .w(px(400.))
-                    .p(px(28.))
+                    .p(px(32.))
                     .gap(px(14.))
-                    .rounded(px(RADIUS_XL))
+                    .rounded(px(crate::theme::RADIUS_2XL))
                     .bg(palette.raised)
-                    .border_1()
-                    .border_color(palette.line)
+                    .shadow(palette.shadow_lg())
+                    .child(
+                        div()
+                            .mb(px(6.))
+                            .size(px(40.))
+                            .rounded(px(RADIUS_XL))
+                            .bg(palette.action)
+                            .shadow(palette.primary_shadow())
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(crate::ui::sized_icon(
+                                gpui_kit::assets::IconName::FileText,
+                                20.,
+                                palette.on_action,
+                            )),
+                    )
                     .child(
                         div()
                             .text_size(px(20.))
                             .line_height(px(28.))
+                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                             .text_color(palette.ink)
                             .child(title),
                     )
@@ -652,8 +667,9 @@ impl Render for AuthGate {
                     }))
                     .when(!action.is_empty(), |this| {
                         this.child(
-                            div().mt(px(4.)).child(
-                                primary_sm("auth-submit", button_label)
+                            div().mt(px(6.)).child(
+                                crate::ui::button("auth-submit", button_label)
+                                    .primary()
                                     .disabled(busy)
                                     .on_click(
                                         cx.listener(|this, _, window, cx| this.submit(window, cx)),

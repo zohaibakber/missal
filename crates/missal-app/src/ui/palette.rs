@@ -14,7 +14,7 @@ use crate::app::{import_word_file, navigate, set_theme, show_shortcuts};
 use crate::prefs::ThemeChoice;
 use crate::state::rows::{fold_for_search, search_words};
 use crate::state::{Models, Route};
-use crate::theme::{ICON, PALETTE_TOP, PALETTE_WIDTH, Palette, RADIUS, RADIUS_XL};
+use crate::theme::{ICON, PALETTE_TOP, PALETTE_WIDTH, Palette, RADIUS, RADIUS_2XL, RADIUS_XL};
 use crate::ui::input::{Kind, field_input};
 use crate::ui::status::status_dot;
 use crate::ui::{KeyTone, UrRole, keycap, keycaps_toned, sized_icon, ur_inline};
@@ -454,12 +454,14 @@ impl CommandPalette {
             .id(("palette-item", index))
             .flex_none()
             .h(px(40.))
-            .mx(px(6.))
+            .mx(px(8.))
             .px(px(10.))
             .gap(px(10.))
             .items_center()
             .rounded(px(RADIUS))
-            .when(selected, |this| this.bg(palette.hover_raised))
+            .when(selected, |this| {
+                this.bg(crate::ui::accent_fill_strong(palette))
+            })
             .on_mouse_move(cx.listener(move |this, _, _, cx| {
                 if this.selected != index {
                     this.selected = index;
@@ -516,11 +518,11 @@ impl Render for CommandPalette {
                         .flex_none()
                         .pt(px(10.))
                         .pb(px(4.))
-                        .px(px(16.))
+                        .px(px(18.))
                         .text_size(px(12.))
                         .line_height(px(20.))
                         .font_weight(FontWeight::MEDIUM)
-                        .text_color(palette.ink_muted)
+                        .text_color(palette.ink_faint)
                         .child(entry.group.title())
                         .into_any_element(),
                 );
@@ -578,21 +580,19 @@ impl Render for CommandPalette {
                     .mt(px(PALETTE_TOP))
                     .w(px(PALETTE_WIDTH))
                     .max_w_full()
-                    .rounded(px(RADIUS_XL))
-                    .bg(palette.raised)
-                    .shadow(palette.shadow_lg())
+                    .rounded(px(RADIUS_2XL))
+                    .bg(palette.raised.blend(crate::ui::muted_fill(&palette).opacity(0.72)))
+                    .shadow(palette.shadow_xl())
                     .text_color(palette.ink)
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         h_flex()
                             .h(px(52.))
-                            .pl(px(16.))
+                            .pl(px(18.))
                             .pr(px(14.))
                             .gap(px(10.))
                             .items_center()
-                            .border_b_1()
-                            .border_color(palette.line)
-                            .child(sized_icon(IconName::Search, ICON, palette.ink))
+                            .child(sized_icon(IconName::Search, ICON, palette.ink_muted))
                             .child(div().flex_1().min_w_0().child(self.input.clone()))
                             .child(keycap(&palette, "Esc")),
                     )
@@ -600,6 +600,10 @@ impl Render for CommandPalette {
                         v_flex()
                             .id("palette-list")
                             .max_h(px(520.))
+                            .py(px(6.))
+                            .rounded_t(px(RADIUS_XL))
+                            .bg(palette.raised)
+                            .shadow(palette.ring_only())
                             .overflow_y_scroll()
                             .track_scroll(&self.scroll)
                             .children(rows)
@@ -614,16 +618,32 @@ impl Render for CommandPalette {
                                 )
                             }),
                     )
-                    .children(count.map(|count| {
+                    .child({
                         h_flex()
-                            .h(px(32.))
-                            .px(px(16.))
+                            .h(px(36.))
+                            .px(px(18.))
+                            .gap(px(12.))
                             .items_center()
-                            .justify_end()
                             .text_size(px(12.))
                             .text_color(palette.ink_faint)
-                            .child(count)
-                    })),
+                            .child(
+                                h_flex()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .child(keycap(&palette, "↑"))
+                                    .child(keycap(&palette, "↓"))
+                                    .child("Navigate"),
+                            )
+                            .child(
+                                h_flex()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .child(keycap(&palette, "↵"))
+                                    .child("Open"),
+                            )
+                            .child(div().flex_1())
+                            .children(count)
+                    }),
             )
     }
 }

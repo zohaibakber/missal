@@ -41,7 +41,8 @@ use missal_core::digit_value;
 const PANEL_WIDTH: f32 = crate::theme::RAIL_WIDTH;
 const FOOTER_HEIGHT: f32 = 44.0;
 const PAD_TOP: f32 = 20.0;
-const FIT_PAGE_MARGIN: f32 = 80.0;
+const PAD_BOTTOM: f32 = PAD_TOP + FOOTER_HEIGHT + 16.0;
+const FIT_PAGE_MARGIN: f32 = PAD_TOP + PAD_BOTTOM + 20.0;
 const FIT_WIDTH_MARGIN: f32 = 24.0;
 const GAP: f32 = 24.0;
 const FIT_MIN: f32 = 0.1;
@@ -261,8 +262,8 @@ impl PrintPreview {
             }),
         };
         let mut viewport = window.viewport_size();
-        viewport.width -= px(PANEL_WIDTH);
-        viewport.height -= px(crate::theme::HEADER_HEIGHT + FOOTER_HEIGHT);
+        viewport.width -= px(PANEL_WIDTH + crate::theme::SHELL_INSET * 3.0);
+        viewport.height -= px(crate::theme::HEADER_HEIGHT + crate::theme::SHELL_INSET);
         let mut preview = PrintPreview {
             target,
             source: Some(source),
@@ -756,7 +757,7 @@ impl PrintPreview {
             tops.push(cursor);
             cursor += ready.pages[*index].size.height * scale + GAP;
         }
-        (tops, cursor - GAP + PAD_TOP)
+        (tops, cursor - GAP + PAD_BOTTOM)
     }
 
     fn scroll_top(&self) -> f32 {
@@ -1133,13 +1134,20 @@ impl PrintPreview {
             h_flex()
                 .id("print-warning")
                 .test_support()
-                .m(px(12.))
+                .m(px(8.))
                 .px(px(12.))
                 .py(px(10.))
                 .gap(px(10.))
                 .items_start()
-                .rounded(px(crate::theme::RADIUS_LG))
+                .rounded(px(crate::theme::RADIUS_XL))
                 .bg(palette.notice_wash)
+                .shadow(vec![gpui_kit::BoxShadow {
+                    color: palette.notice.opacity(0.28),
+                    offset: gpui_kit::point(px(0.), px(0.)),
+                    blur_radius: px(0.),
+                    spread_radius: px(1.),
+                    inset: false,
+                }])
                 .when(fill, |this| {
                     this.cursor_pointer()
                         .role(gpui_kit::accesskit::Role::Link)
@@ -1225,8 +1233,10 @@ impl PrintPreview {
                 .gap(px(10.))
                 .flex_row_reverse()
                 .items_center()
-                .rounded(px(RADIUS))
-                .when(on, |this| this.bg(palette.pressed))
+                .rounded(px(crate::theme::RADIUS_LG))
+                .when(on, |this| {
+                    this.bg(palette.floating()).shadow(palette.thumb_shadow())
+                })
                 .when(!on, |this| {
                     this.hover(move |style| style.bg(hover))
                         .active(move |s| s.bg(palette.pressed))
@@ -1260,8 +1270,6 @@ impl PrintPreview {
             .w(px(PANEL_WIDTH))
             .flex_none()
             .h_full()
-            .border_r_1()
-            .border_color(palette.line)
             .children(warning)
             .child(
                 div()
@@ -1397,7 +1405,8 @@ impl PrintPreview {
                             .items_center()
                             .gap(px(GAP))
                             .px(px(FIT_WIDTH_MARGIN))
-                            .py(px(PAD_TOP))
+                            .pt(px(PAD_TOP))
+                            .pb(px(PAD_BOTTOM))
                             .children(frames),
                     )
                     .vertical_scrollbar(&self.scroll)
@@ -1428,11 +1437,12 @@ impl PrintPreview {
             .flex_none()
             .h(px(FOOTER_HEIGHT))
             .items_center()
-            .gap(px(8.))
-            .px(px(PANEL_PADDING))
-            .border_t_1()
-            .border_color(palette.line)
-            .bg(palette.surface)
+            .gap(px(6.))
+            .px(px(8.))
+            .rounded(px(crate::theme::RADIUS_PILL))
+            .bg(palette.raised)
+            .shadow(palette.shadow_lg())
+            .occlude()
             .text_size(px(13.))
             .text_color(palette.ink_muted)
             .font_features(tabular())
@@ -1454,15 +1464,9 @@ impl PrintPreview {
                     .items_center()
                     .px(px(4.))
                     .rounded(px(RADIUS))
-                    .border_1()
-                    .border_color(if page_focused {
-                        palette.accent
-                    } else {
-                        palette.line_input
-                    })
-                    .bg(palette.surface)
+                    .bg(palette.control_fill())
                     .text_color(palette.ink)
-                    .when(page_focused, |this| this.shadow(palette.input_focus_ring()))
+                    .shadow(crate::ui::control_shadows(&palette, page_focused, false))
                     .cursor_text()
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                         page_input.update(cx, |input, cx| input.focus(window, cx));
@@ -1493,7 +1497,7 @@ impl PrintPreview {
                         .child("Laying out pages…"),
                 )
             })
-            .child(div().flex_1())
+            .child(crate::ui::vertical_rule(&palette).mx(px(4.)))
             .child(
                 icon_button("preview-zoom-out", IconName::Minus, "Zoom out")
                     .keys("Mod+-")
@@ -1512,9 +1516,8 @@ impl PrintPreview {
                     .pr(px(8.))
                     .gap(px(6.))
                     .items_center()
-                    .rounded(px(RADIUS))
-                    .border_1()
-                    .border_color(palette.line)
+                    .rounded(px(crate::theme::RADIUS_PILL))
+                    .bg(crate::ui::muted_fill(&palette))
                     .text_color(palette.ink)
                     .when(menu_open, |this| this.bg(hover))
                     .when(!ready, |this| this.opacity(0.4))
@@ -1751,7 +1754,7 @@ impl Render for PrintPreview {
             .key_context(PRINT_PREVIEW)
             .track_focus(&self.focus)
             .size_full()
-            .bg(palette.surface)
+            .gap(px(crate::theme::SHELL_INSET))
             .on_action(cx.listener(|this, _: &PreviewNextPage, _, cx| this.step_page(1, cx)))
             .on_action(cx.listener(|this, _: &PreviewPreviousPage, _, cx| this.step_page(-1, cx)))
             .on_action(cx.listener(|this, _: &PreviewZoomIn, _, cx| this.step_zoom(1, cx)))
@@ -1764,21 +1767,28 @@ impl Render for PrintPreview {
             .on_action(cx.listener(|this, _: &MoveDocumentDown, _, cx| this.move_document(1, cx)))
             .child(panel)
             .child(
-                v_flex()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .child(
-                        div()
-                            .id("preview-viewport")
-                            .flex_1()
-                            .min_h_0()
-                            .relative()
-                            .bg(palette.sunken)
-                            .child(probe)
-                            .child(area),
-                    )
-                    .children(footer),
+                v_flex().flex_1().min_w_0().h_full().child(
+                    div()
+                        .id("preview-viewport")
+                        .flex_1()
+                        .min_h_0()
+                        .relative()
+                        .rounded(px(crate::theme::RADIUS_XL))
+                        .overflow_hidden()
+                        .bg(palette.sunken)
+                        .shadow(palette.shadow_xs())
+                        .child(probe)
+                        .child(area)
+                        .children(footer.map(|footer| {
+                            h_flex()
+                                .absolute()
+                                .left_0()
+                                .right_0()
+                                .bottom(px(16.))
+                                .justify_center()
+                                .child(footer)
+                        })),
+                ),
             )
             .children(self.menu.clone().map(|menu| menu.into_any_element()))
     }

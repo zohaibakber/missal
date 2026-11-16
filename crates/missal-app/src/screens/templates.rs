@@ -31,7 +31,7 @@ use crate::state::templates::TemplatesEvent;
 use crate::state::{
     Load, Models, Route, ToastKind, run_db_in, toast_detailed, toast_error, toast_success,
 };
-use crate::theme::{Palette, RADIUS};
+use crate::theme::Palette;
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
 use crate::ui::input::{Kind, field, field_input, search_field};
 use crate::ui::library::open_library;
@@ -1282,8 +1282,10 @@ impl TemplatesScreen {
                                     .items_center()
                                     .gap(px(10.))
                                     .px(px(10.))
-                                    .rounded(px(RADIUS))
-                                    .when(is_active, |this| this.bg(palette.pressed))
+                                    .rounded(px(crate::theme::RADIUS_LG))
+                                    .when(is_active, |this| {
+                                        this.bg(palette.floating()).shadow(palette.thumb_shadow())
+                                    })
                                     .when(!is_active, |this| {
                                         this.hover(move |style| style.bg(palette.hover))
                                             .active(move |s| s.bg(palette.pressed))
@@ -1336,8 +1338,8 @@ impl TemplatesScreen {
                     div()
                         .id(("template-skeleton", index))
                         .h(px(ROW_HEIGHT - 12.))
-                        .rounded(px(RADIUS))
-                        .bg(palette.hover)
+                        .rounded(px(crate::theme::RADIUS_LG))
+                        .bg(crate::ui::muted_fill(&palette))
                 }))
                 .into_any_element(),
             Load::Failed(message) => empty_state(
@@ -1386,8 +1388,6 @@ impl TemplatesScreen {
             .w(px(LIST_WIDTH))
             .flex_shrink_0()
             .h_full()
-            .border_r_1()
-            .border_color(palette.line)
             .child(self.list_header(cx))
             .child(
                 div()
@@ -1498,16 +1498,34 @@ impl Render for TemplatesScreen {
             let list = self.list(cx);
             h_flex()
                 .size_full()
+                .gap(px(crate::theme::SHELL_INSET))
                 .child(list)
-                .child(div().flex_1().min_w_0().h_full().child(main))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .rounded(px(crate::theme::RADIUS_XL))
+                        .overflow_hidden()
+                        .bg(palette.surface)
+                        .shadow(palette.shadow_xs())
+                        .child(main),
+                )
                 .into_any_element()
+        };
+        let body = if nothing_at_all {
+            crate::ui::card(&palette)
+                .size_full()
+                .child(body)
+                .into_any_element()
+        } else {
+            body
         };
         div()
             .id("templates")
             .key_context(TEMPLATES)
             .track_focus(&self.focus)
             .size_full()
-            .bg(palette.surface)
             .on_action(cx.listener(|this, _: &NextTemplate, window, cx| this.step(1, window, cx)))
             .on_action(
                 cx.listener(|this, _: &PreviousTemplate, window, cx| this.step(-1, window, cx)),

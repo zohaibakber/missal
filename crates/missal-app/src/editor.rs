@@ -52,11 +52,11 @@ fn sync_theme(cx: &mut App) {
         notice_wash: palette.notice_wash,
         selection: palette
             .accent
-            .opacity(if palette.dark { 0.40 } else { 0.28 }),
+            .opacity(if palette.dark { 0.36 } else { 0.22 }),
         shadow: if palette.dark {
             gpui_kit::black().opacity(0.35)
         } else {
-            crate::theme::hex(0x14110e).opacity(0.05)
+            gpui_kit::black().opacity(0.06)
         },
     }
     .install(cx);

@@ -1,3 +1,4 @@
+use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{InteractiveElementExt as _, h_flex};
 use gpui_kit::prelude::*;
@@ -222,11 +223,7 @@ impl RenderOnce for Header {
                         .disabled(!self.can_forward)
                         .on_click(|_, window, cx| navigate_forward(window, cx)),
                 )
-                .child(
-                    icon_button("header-search", IconName::Search, "Search")
-                        .keys("Mod+K")
-                        .on_click(|_, window, cx| open_palette(window, cx)),
-                )
+                .child(search_pill(&palette))
             })
             .child(
                 h_flex()
@@ -269,15 +266,50 @@ impl RenderOnce for Header {
             .w_full()
             .h(px(HEADER_HEIGHT))
             .items_center()
-            .bg(palette.surface)
-            .border_b_1()
-            .border_color(palette.line)
+            .bg(palette.canvas)
             .font_family(missal_text::UI_FAMILY)
             .child(content)
             .when_some(controls, |this, controls| {
                 this.child(div().flex_none().ml(px(8.)).child(controls))
             })
     }
+}
+
+fn search_pill(palette: &Palette) -> impl IntoElement {
+    let hover = crate::ui::accent_fill_strong(palette);
+    let ink = palette.ink;
+    h_flex()
+        .id("header-search")
+        .flex_none()
+        .ml(px(6.))
+        .h(px(28.))
+        .w(px(220.))
+        .pl(px(10.))
+        .pr(px(4.))
+        .gap(px(8.))
+        .items_center()
+        .rounded(px(crate::theme::RADIUS_PILL))
+        .bg(crate::ui::muted_fill(palette))
+        .text_size(px(13.))
+        .text_color(palette.ink_faint)
+        .hover(move |style| style.bg(hover).text_color(ink))
+        .role(gpui_kit::accesskit::Role::Button)
+        .aria_label("Search")
+        .tooltip(crate::ui::tooltip("Search", Some("Mod+K")))
+        .tooltip_show_delay(crate::theme::TOOLTIP_DELAY)
+        .on_click(|_, window, cx| open_palette(window, cx))
+        .child(crate::ui::sized_icon(
+            IconName::Search,
+            crate::theme::ICON_SM,
+            palette.ink_faint,
+        ))
+        .child(div().flex_1().child("Search"))
+        .child(crate::ui::keycaps_toned(
+            palette,
+            "Mod+K",
+            crate::ui::KeyTone::Plain,
+        ))
+        .test_support()
 }
 
 fn account_menu(cx: &App) -> Option<AnyElement> {

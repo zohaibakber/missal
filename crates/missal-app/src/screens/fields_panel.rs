@@ -417,14 +417,15 @@ impl FieldsPanel {
             let ink = palette.ink;
             h_flex()
                 .id(id)
-                .h(px(TAB_HEIGHT))
+                .flex_1()
+                .h(px(crate::theme::SEGMENTED_ITEM))
+                .px(px(12.))
                 .gap(px(6.))
                 .items_center()
-                .border_b_2()
-                .border_color(if on {
-                    palette.ink
-                } else {
-                    gpui_kit::transparent_black()
+                .justify_center()
+                .rounded(px(crate::theme::RADIUS_PILL))
+                .when(on, |this| {
+                    this.bg(palette.floating()).shadow(palette.thumb_shadow())
                 })
                 .text_size(px(13.))
                 .line_height(px(20.))
@@ -445,24 +446,31 @@ impl FieldsPanel {
                     .tooltip_show_delay(crate::theme::TOOLTIP_DELAY)
                 })
                 .on_click(cx.listener(move |this, _, _, cx| this.set_tab(which, cx)))
-                .child(div().pt(px(2.)).child(text))
+                .child(text)
                 .children(
                     badge
                         .filter(|count| *count > 0)
-                        .map(|count| div().pt(px(2.)).child(count_badge(&palette, count))),
+                        .map(|count| count_badge(&palette, count)),
                 )
                 .test_support()
         };
         h_flex()
             .flex_none()
             .h(px(TAB_HEIGHT))
-            .px(px(16.))
-            .gap(px(16.))
-            .items_end()
-            .border_b_1()
-            .border_color(palette.line)
-            .child(tab("fields-tab", "Fields", FieldsTab::Fields, Some(empty)))
-            .child(tab("details-tab", "Case details", FieldsTab::Details, None))
+            .px(px(12.))
+            .items_center()
+            .child(
+                h_flex()
+                    .flex_1()
+                    .h(px(crate::theme::SEGMENTED_TRACK))
+                    .p(px(2.))
+                    .gap(px(2.))
+                    .items_center()
+                    .rounded(px(crate::theme::RADIUS_PILL))
+                    .bg(crate::ui::muted_fill(&palette))
+                    .child(tab("fields-tab", "Fields", FieldsTab::Fields, Some(empty)))
+                    .child(tab("details-tab", "Case details", FieldsTab::Details, None)),
+            )
             .into_any_element()
     }
 
@@ -568,12 +576,14 @@ impl FieldsPanel {
                     .child(
                         div()
                             .size(px(36.))
-                            .rounded(px(8.))
-                            .bg(palette.hover)
+                            .rounded_full()
+                            .bg(palette
+                                .success
+                                .opacity(if palette.dark { 0.16 } else { 0.1 }))
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(sized_icon(IconName::CircleCheck, 16., palette.st_closed)),
+                            .child(sized_icon(IconName::CircleCheck, 16., palette.success_text)),
                     )
                     .child(
                         div()
@@ -997,9 +1007,9 @@ impl Render for FieldsPanel {
             .w(px(DETAILS_RAIL_WIDTH))
             .flex_none()
             .h_full()
-            .border_l_1()
-            .border_color(palette.line)
+            .rounded(px(crate::theme::RADIUS_XL))
             .bg(palette.surface)
+            .shadow(palette.shadow_xs())
             .child(self.tabs(&palette, empty, cx))
             .child(
                 v_flex()

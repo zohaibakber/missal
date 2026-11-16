@@ -8,7 +8,7 @@ use gpui_kit::{
 };
 use missal_text::{LineHeight, label};
 
-use crate::theme::{DIALOG_WIDTH, Palette, RADIUS_XL, hex_alpha};
+use crate::theme::{DIALOG_WIDTH, Palette, RADIUS_2XL};
 use crate::ui::{ButtonKind, button};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -45,23 +45,33 @@ impl Choice {
     }
 }
 
+pub const DIALOG_PAD: f32 = 24.0;
+
 pub fn dialog_surface(dialog: Dialog, palette: &Palette, width: f32) -> Dialog {
-    let ring = if palette.dark {
-        hex_alpha(0xffffff, 0.08)
-    } else {
-        hex_alpha(0x14110e, 0.08)
-    };
     dialog
         .w(px(width))
         .close_button(false)
         .entrance(DialogEntrance::Fade)
         .bg(palette.raised)
-        .border_color(ring)
-        .rounded(px(RADIUS_XL))
-        .p(px(20.))
-        .pb(px(16.))
+        .border_color(palette.hairline)
+        .rounded(px(RADIUS_2XL))
+        .shadow(palette.shadow_xl())
+        .p(px(DIALOG_PAD))
+        .pb_0()
         .font_family(missal_text::UI_FAMILY)
         .text_color(palette.ink)
+}
+
+pub fn dialog_footer(palette: &Palette) -> gpui_kit::Div {
+    h_flex()
+        .mt(px(DIALOG_PAD))
+        .mx(px(-DIALOG_PAD))
+        .px(px(DIALOG_PAD))
+        .py(px(16.))
+        .items_center()
+        .gap(px(8.))
+        .rounded_b(px(RADIUS_2XL))
+        .bg(crate::ui::muted_fill(palette).opacity(0.8))
 }
 
 pub fn optical_top(window: &Window, height: f32) -> gpui_kit::Pixels {
@@ -71,9 +81,9 @@ pub fn optical_top(window: &Window, height: f32) -> gpui_kit::Pixels {
 
 pub fn dialog_title(text: impl Into<SharedString>) -> AnyElement {
     div()
-        .text_size(px(16.))
+        .text_size(px(17.))
         .line_height(px(24.))
-        .font_weight(FontWeight::MEDIUM)
+        .font_weight(FontWeight::SEMIBOLD)
         .child(label(text.into()).leading(LineHeight::Px(24.)))
         .into_any_element()
 }
@@ -108,17 +118,17 @@ fn choice_button(choice: &Choice, focus: Option<&FocusHandle>) -> AnyElement {
         .into_any_element()
 }
 
-pub fn choice_row(choices: &[Choice], focus: Option<(&'static str, &FocusHandle)>) -> AnyElement {
+pub fn choice_row(
+    palette: &Palette,
+    choices: &[Choice],
+    focus: Option<(&'static str, &FocusHandle)>,
+) -> AnyElement {
     let focus_for = |choice: &Choice| {
         focus
             .filter(|(id, _)| *id == choice.id)
             .map(|(_, handle)| handle)
     };
-    h_flex()
-        .mt(px(18.))
-        .pb(px(4.))
-        .items_center()
-        .gap(px(8.))
+    dialog_footer(palette)
         .children(
             choices
                 .iter()
@@ -160,6 +170,7 @@ pub fn open_choice(
                     .child(dialog_title(title.clone()))
                     .child(dialog_body(&palette, description.clone()))
                     .child(choice_row(
+                        &palette,
                         &choices,
                         initial.map(|id| (id, &focus_for_dialog)),
                     )),
@@ -235,10 +246,8 @@ pub fn about(window: &mut Window, cx: &mut App, data_folder: Option<String>, can
                     .child(row("Version", version.into()))
                     .child(row("Data folder", folder.into()))
                     .child(
-                        h_flex()
-                            .mt(px(12.))
-                            .pb(px(4.))
-                            .gap(px(8.))
+                        dialog_footer(&palette)
+                            .mt(px(18.))
                             .child(div().flex_1())
                             .child(
                                 button("about-check-updates", "Check for updates")

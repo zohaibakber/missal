@@ -45,15 +45,16 @@ pub struct ToolTip {
 impl Render for ToolTip {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = EditorTheme::get(cx);
-        div().pl(px(4.)).pt(px(4.)).child(
+        div().p(px(6.)).child(
             h_flex()
                 .items_center()
                 .gap(px(8.))
                 .py(px(4.))
                 .px(px(8.))
-                .rounded(px(6.))
-                .bg(theme.ink)
-                .text_color(theme.surface)
+                .rounded(px(8.))
+                .bg(theme.raised)
+                .shadow(theme.bar_shadows().to_vec())
+                .text_color(theme.ink)
                 .font_family(missal_text::UI_FAMILY)
                 .text_size(px(12.))
                 .line_height(px(18.))
@@ -63,15 +64,15 @@ impl Render for ToolTip {
                         .gap(px(3.))
                         .children(caps(keys).into_iter().map(|cap| {
                             div()
-                                .h(px(18.))
-                                .min_w(px(18.))
+                                .h(px(20.))
+                                .min_w(px(20.))
                                 .px(px(4.))
                                 .flex()
                                 .items_center()
                                 .justify_center()
                                 .rounded(px(4.))
-                                .border_1()
-                                .border_color(theme.surface.opacity(0.35))
+                                .bg(theme.hover)
+                                .text_color(theme.ink_muted)
                                 .text_size(px(11.))
                                 .line_height(px(16.))
                                 .font_weight(FontWeight::MEDIUM)
@@ -189,7 +190,7 @@ impl RenderOnce for ToolButton {
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(6.))
+            .rounded(px(999.))
             .text_color(color)
             .when(self.toggled, |this| this.bg(theme.pressed))
             .when(disabled, |this| this.opacity(0.4))
@@ -215,7 +216,7 @@ impl RenderOnce for ToolButton {
 }
 
 fn separator() -> AnyElement {
-    div().flex_none().w(px(12.)).into_any_element()
+    div().flex_none().w(px(6.)).into_any_element()
 }
 
 impl Editor {
@@ -332,10 +333,8 @@ impl Editor {
                                 .px(px(10.))
                                 .gap(px(8.))
                                 .items_center()
-                                .rounded(px(6.))
-                                .border_1()
-                                .border_color(theme.accent)
-                                .bg(theme.surface)
+                                .rounded(px(10.))
+                                .bg(theme.hover)
                                 .children(clear)
                                 .child(div().flex_1().min_w_0().mt(px(-1.)).child(search.clone()))
                                 .child(
@@ -360,11 +359,11 @@ impl Editor {
             let ink = theme.ink;
             div()
                 .id(id)
-                .h(px(24.))
-                .px(px(8.))
+                .h(px(26.))
+                .px(px(10.))
                 .flex()
                 .items_center()
-                .rounded(px(5.))
+                .rounded(px(999.))
                 .text_size(px(12.))
                 .line_height(px(16.))
                 .font_weight(FontWeight::MEDIUM)
@@ -398,7 +397,7 @@ impl Editor {
             .flex_none()
             .p(px(2.))
             .gap(px(2.))
-            .rounded(px(7.))
+            .rounded(px(999.))
             .bg(theme.hover)
             .child(item("editor-mode-values", "Values", DisplayMode::Values))
             .child(item("editor-mode-names", "Names", DisplayMode::Labels))
@@ -430,13 +429,14 @@ impl Editor {
         h_flex()
             .id("editor-toolbar")
             .flex_shrink_0()
-            .h(px(40.))
+            .h(px(44.))
+            .m(px(8.))
             .px(px(8.))
             .gap(px(2.))
             .items_center()
-            .border_b_1()
-            .border_color(theme.line)
-            .bg(theme.surface)
+            .rounded(px(999.))
+            .bg(theme.raised)
+            .shadow(theme.bar_shadows().to_vec())
             .font_family(missal_text::UI_FAMILY)
             .child(
                 tool("editor-undo", IconName::Undo2, "Undo")

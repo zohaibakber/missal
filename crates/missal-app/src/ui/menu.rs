@@ -17,15 +17,15 @@ type HoverHandler = Rc<dyn Fn(&mut Window, &mut App)>;
 pub fn menu_panel(palette: &Palette) -> Div {
     v_flex()
         .p(px(4.))
-        .rounded(px(RADIUS_LG))
+        .rounded(px(RADIUS_LG + 2.))
         .bg(palette.raised)
         .text_color(palette.ink)
-        .shadow(palette.shadow_md())
+        .shadow(palette.shadow_lg())
         .font_family(missal_text::UI_FAMILY)
 }
 
 pub fn menu_separator(palette: &Palette) -> Div {
-    div().h(px(1.)).my(px(4.)).mx(px(-4.)).bg(palette.line)
+    div().h(px(1.)).my(px(4.)).mx(px(8.)).bg(palette.line)
 }
 
 pub enum Lead {
@@ -193,7 +193,8 @@ impl RenderOnce for MenuItem {
                 sized_icon(IconName::ChevronRight, ICON_SM, palette.ink_muted).into_any_element(),
             ),
         };
-        let hover = palette.hover_raised;
+        let hover = crate::ui::accent_fill(&palette);
+        let pressed = crate::ui::accent_fill_strong(&palette);
         let on_click = self.on_click.filter(|_| !self.disabled);
         let on_hover = self.on_hover;
         h_flex()
@@ -204,7 +205,7 @@ impl RenderOnce for MenuItem {
             .gap(px(8.))
             .items_center()
             .rounded(px(RADIUS_SM))
-            .text_size(px(13.))
+            .text_size(px(13.5))
             .font_weight(FontWeight::NORMAL)
             .text_color(text)
             .role(gpui_kit::accesskit::Role::MenuItem)
@@ -213,7 +214,7 @@ impl RenderOnce for MenuItem {
             .when(self.disabled, |this| this.opacity(0.45))
             .when(!self.disabled, |this| {
                 this.hover(move |s| s.bg(hover))
-                    .active(move |s| s.bg(palette.pressed_raised))
+                    .active(move |s| s.bg(pressed))
             })
             .when_some(on_hover, |this, handler| {
                 this.on_hover(move |hovered, window, cx| {

@@ -23,9 +23,7 @@ use crate::shortcuts::*;
 use crate::state::firs::FirsEvent;
 
 use crate::state::{Load, Models, PrintTarget, Route, run_db_in, toast_error, toast_success};
-use crate::theme::{
-    FILTER_ITEM, ICON_XS, PAGE_GUTTER, Palette, RADIUS, RADIUS_CHIP, TABLE_HEAD, TABLE_ROW,
-};
+use crate::theme::{FILTER_ITEM, ICON_XS, PAGE_GUTTER, Palette, RADIUS, TABLE_HEAD, TABLE_ROW};
 use crate::ui::dialogs::{Choice, Tone, open_choice};
 use crate::ui::input::{Hint, Kind, field_input, search_field};
 use crate::ui::popup_menu::{Dismissed, Placement, PopupEntry, PopupList, PopupRow};
@@ -723,24 +721,26 @@ impl FirListScreen {
             )
         };
         let item = |id: SharedString, on: bool, count: usize, content: Option<FirStatus>| {
-            let hover = palette.hover;
+            let hover = crate::ui::accent_fill(&palette);
             h_flex()
                 .id(id)
                 .test_support()
                 .flex_none()
                 .h(px(FILTER_ITEM))
-                .px(px(10.))
+                .px(px(12.))
                 .gap(px(6.))
                 .items_center()
-                .rounded(px(RADIUS))
+                .rounded(px(crate::theme::RADIUS_PILL))
                 .text_size(px(13.))
                 .line_height(px(20.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(if on { palette.ink } else { palette.ink_muted })
-                .when(on, |this| this.bg(palette.pressed))
+                .when(on, |this| {
+                    this.bg(palette.floating()).shadow(palette.thumb_shadow())
+                })
                 .when(!on, |this| {
-                    let pressed = palette.pressed;
-                    this.hover(move |style| style.bg(hover))
+                    let pressed = crate::ui::accent_fill_strong(&palette);
+                    this.hover(move |style| style.bg(hover).text_color(palette.ink))
                         .active(move |style| style.bg(pressed))
                 })
                 .when(content.is_some(), |this| this.flex_row_reverse())
@@ -774,8 +774,11 @@ impl FirListScreen {
         };
         let mut row = h_flex()
             .id("status-filter")
+            .p(px(3.))
             .gap(px(2.))
             .items_center()
+            .rounded(px(crate::theme::RADIUS_PILL))
+            .bg(crate::ui::muted_fill(&palette))
             .child(
                 item("status-all".into(), filter.is_none(), all_count, None)
                     .on_click(cx.listener(|this, _, _, cx| this.set_status_filter(None, cx))),
@@ -861,8 +864,8 @@ impl FirListScreen {
             .flex_none()
             .h(px(TABLE_HEAD))
             .items_center()
-            .border_b_1()
-            .border_color(palette.line)
+            .rounded(px(RADIUS))
+            .bg(crate::ui::muted_fill(&palette).opacity(0.6))
             .text_color(palette.ink_muted)
             .child(
                 div()
@@ -1013,8 +1016,8 @@ impl FirListScreen {
                                     .px(px(5.))
                                     .flex()
                                     .items_center()
-                                    .rounded(px(RADIUS_CHIP))
-                                    .bg(palette.hover)
+                                    .rounded(px(crate::theme::RADIUS_PILL))
+                                    .bg(crate::ui::muted_fill(&palette))
                                     .text_size(px(11.))
                                     .line_height(px(16.))
                                     .font_weight(FontWeight::MEDIUM)
@@ -1372,7 +1375,9 @@ impl Render for FirListScreen {
             .key_context(FIR_LIST)
             .track_focus(&self.focus)
             .size_full()
+            .rounded(px(crate::theme::RADIUS_XL))
             .bg(palette.surface)
+            .shadow(palette.shadow_xs())
             .on_action(cx.listener(|this, _: &NextRow, _, cx| this.move_focus(1, cx)))
             .on_action(cx.listener(|this, _: &PreviousRow, _, cx| this.move_focus(-1, cx)))
             .on_action(cx.listener(|this, _: &ToggleRow, _, cx| {

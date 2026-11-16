@@ -14,7 +14,7 @@ use missal_text::{TextInput, TextInputEvent, label};
 use crate::auth::{AuthModel, password_problem};
 use crate::state::{Load, toast_success};
 use crate::theme::{Palette, RADIUS};
-use crate::ui::dialogs::{dialog_surface, dialog_title, optical_top};
+use crate::ui::dialogs::{dialog_footer, dialog_surface, dialog_title, optical_top};
 use crate::ui::input::{Kind, field, field_input, secret_input};
 use crate::ui::{SegmentItem, button, ghost_sm, primary_sm, segmented, skeleton_bar};
 
@@ -169,10 +169,8 @@ impl Render for ChangePassword {
             .child(field("password-confirm", &self.confirm, Kind::Latin).width(width))
             .children(problem_line(&palette, self.problem.clone()))
             .child(
-                h_flex()
-                    .mt(px(8.))
-                    .pb(px(4.))
-                    .gap(px(8.))
+                dialog_footer(&palette)
+                    .mt(px(14.))
                     .child(div().flex_1())
                     .child(
                         button("password-cancel", "Cancel")
@@ -667,9 +665,8 @@ impl UsersPanel {
         v_flex()
             .gap(px(8.))
             .p(px(12.))
-            .rounded(px(RADIUS))
-            .border_1()
-            .border_color(palette.line)
+            .rounded(px(crate::theme::RADIUS_XL))
+            .bg(crate::ui::muted_fill(palette).opacity(0.72))
             .child(caption(palette, "Add a person"))
             .child(
                 h_flex()
@@ -708,8 +705,8 @@ impl Render for UsersPanel {
             .children(problem_line(&palette, self.problem.clone()))
             .child(div().h(px(LIST_HEIGHT)).child(self.list(&palette, cx)))
             .child(
-                h_flex()
-                    .pb(px(4.))
+                dialog_footer(&palette)
+                    .mt(px(12.))
                     .child(div().flex_1())
                     .child(
                         button("users-close", "Close")
