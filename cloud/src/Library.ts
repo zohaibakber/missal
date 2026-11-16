@@ -110,11 +110,17 @@ export class Library extends Context.Service<
         return { id: created.id, version: created.version };
       });
 
-      const update = Effect.fn("Library.update")(function* (id: string, upload: Upload, by: UserId) {
+      const update = Effect.fn("Library.update")(function* (
+        id: string,
+        upload: Upload,
+        by: UserId,
+      ) {
         const current = yield* find(id);
         if (Option.isNone(current)) return yield* notFound();
         const version = current.value.version + 1;
-        yield* blobs.put(objectKey(id, version), upload.content).pipe(storage("store the template"));
+        yield* blobs
+          .put(objectKey(id, version), upload.content)
+          .pipe(storage("store the template"));
         const fields = {
           name: upload.name,
           version,
@@ -124,9 +130,10 @@ export class Library extends Context.Service<
           publishedBy: by,
           updatedAt: DateTime.toEpochMillis(yield* DateTime.now),
         };
-        const updated = yield* sql`UPDATE templates SET ${sql.update(fields)} WHERE id = ${id} AND version = ${current.value.version} RETURNING id`.pipe(
-          storage("publish the template"),
-        );
+        const updated =
+          yield* sql`UPDATE templates SET ${sql.update(fields)} WHERE id = ${id} AND version = ${current.value.version} RETURNING id`.pipe(
+            storage("publish the template"),
+          );
         if (updated.length === 0) {
           yield* blobs.remove(objectKey(id, version)).pipe(Effect.ignore);
           return yield* new PublishConflict({

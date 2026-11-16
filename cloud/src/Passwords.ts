@@ -68,7 +68,9 @@ export class Passwords extends Context.Service<
         return Mac.timingSafeEqual(derived, expected.success);
       });
 
-      const decoy = yield* Effect.cached(hash(Redacted.make("decoy password for unknown accounts")));
+      const decoy = yield* Effect.cached(
+        hash(Redacted.make("decoy password for unknown accounts")),
+      );
 
       return Passwords.of({ hash, verify, decoy });
     }),

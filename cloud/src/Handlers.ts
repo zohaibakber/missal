@@ -73,7 +73,8 @@ const PublishingHandlers = HttpApiBuilder.group(
   Effect.fn(function* (handlers) {
     const library = yield* Library;
     return handlers.handleAll({
-      create: ({ payload }) => Effect.flatMap(Viewer, (viewer) => library.create(payload, viewer.id)),
+      create: ({ payload }) =>
+        Effect.flatMap(Viewer, (viewer) => library.create(payload, viewer.id)),
       update: ({ params, payload }) =>
         Effect.flatMap(Viewer, (viewer) => library.update(params.id, payload, viewer.id)),
       remove: ({ params }) => library.remove(params.id),
@@ -96,12 +97,8 @@ const UsersHandlers = HttpApiBuilder.group(
   }),
 );
 
-const HealthHandlers = HttpApiBuilder.group(
-  MissalApi,
-  "health",
-  Effect.fn(function* (handlers) {
-    return handlers.handleAll({ health: () => Effect.succeed("ok") });
-  }),
+const HealthHandlers = HttpApiBuilder.group(MissalApi, "health", (handlers) =>
+  handlers.handleAll({ health: () => Effect.succeed("ok") }),
 );
 
 export const HandlersLive = Layer.mergeAll(

@@ -6,7 +6,16 @@ import * as HttpApiMiddleware from "effect/http-api/HttpApiMiddleware";
 import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 import * as HttpApiSecurity from "effect/http-api/HttpApiSecurity";
 import * as Schema from "effect/Schema";
-import { Email, Name, Role, RouteId, type SessionId, Template, User, type UserId } from "./Models.ts";
+import {
+  Email,
+  Name,
+  Role,
+  RouteId,
+  type SessionId,
+  Template,
+  User,
+  type UserId,
+} from "./Models.ts";
 
 export { canPublish, Role } from "./Models.ts";
 
@@ -116,12 +125,12 @@ export class PublishersOnly extends HttpApiMiddleware.Service<
   error: NotPublisher,
 }) {}
 
-export class AdminsOnly extends HttpApiMiddleware.Service<
-  AdminsOnly,
-  { requires: Viewer }
->()("missal/AdminsOnly", {
-  error: NotAdmin,
-}) {}
+export class AdminsOnly extends HttpApiMiddleware.Service<AdminsOnly, { requires: Viewer }>()(
+  "missal/AdminsOnly",
+  {
+    error: NotAdmin,
+  },
+) {}
 
 export const NewPassword = Schema.RedactedFromValue(
   Schema.String.check(Schema.isMinLength(10), Schema.isMaxLength(256)),

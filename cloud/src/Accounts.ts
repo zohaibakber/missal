@@ -181,7 +181,11 @@ export class Accounts extends Context.Service<
 
         const newSecret = random.randomBytes(SECRET_BYTES).pipe(Effect.map(Base64Url.encode));
 
-        const issue = Effect.fnUntraced(function* (user: User, sessionId: SessionId, secret: string) {
+        const issue = Effect.fnUntraced(function* (
+          user: User,
+          sessionId: SessionId,
+          secret: string,
+        ) {
           const accessToken = yield* tokens.issue({
             userId: user.id,
             sessionId,
@@ -286,7 +290,9 @@ export class Accounts extends Context.Service<
             ),
             storage("sign in"),
           );
-          const stored = Option.isSome(found) ? storedPassword(found.value) : yield* passwords.decoy;
+          const stored = Option.isSome(found)
+            ? storedPassword(found.value)
+            : yield* passwords.decoy;
           const matches = yield* passwords.verify(password, stored);
           if (Option.isNone(found) || !matches || found.value.disabled) {
             yield* recordFailure(email, now).pipe(storage("record a failed sign-in"));
@@ -392,7 +398,9 @@ export class Accounts extends Context.Service<
             id === viewer.id &&
             ((changes.role !== undefined && changes.role !== "admin") || changes.disabled === true);
           if (demotesSelf) {
-            return yield* new OwnAccess({ error: "you cannot remove your own administrator access" });
+            return yield* new OwnAccess({
+              error: "you cannot remove your own administrator access",
+            });
           }
           const user = yield* existing(id);
           const fields = {

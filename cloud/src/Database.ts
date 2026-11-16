@@ -31,7 +31,8 @@ export class Atomic extends Context.Service<
     Atomic,
     Effect.map(SqlClient.SqlClient, (sql) =>
       Atomic.of({
-        run: (statements) => sql.withTransaction(Effect.forEach(statements, (statement) => statement)),
+        run: (statements) =>
+          sql.withTransaction(Effect.forEach(statements, (statement) => statement)),
       }),
     ),
   );

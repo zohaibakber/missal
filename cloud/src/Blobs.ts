@@ -11,8 +11,13 @@ export class BlobError extends Data.TaggedError("BlobError")<{ readonly cause: u
 export class Blobs extends Context.Service<
   Blobs,
   {
-    readonly put: (key: string, bytes: Uint8Array) => Effect.Effect<void, BlobError, RuntimeContext>;
-    readonly get: (key: string) => Effect.Effect<Option.Option<Uint8Array>, BlobError, RuntimeContext>;
+    readonly put: (
+      key: string,
+      bytes: Uint8Array,
+    ) => Effect.Effect<void, BlobError, RuntimeContext>;
+    readonly get: (
+      key: string,
+    ) => Effect.Effect<Option.Option<Uint8Array>, BlobError, RuntimeContext>;
     readonly removePrefix: (prefix: string) => Effect.Effect<void, BlobError, RuntimeContext>;
     readonly remove: (key: string) => Effect.Effect<void, BlobError, RuntimeContext>;
   }
@@ -22,7 +27,10 @@ export class Blobs extends Context.Service<
       Blobs,
       Blobs.of({
         put: (key, bytes) =>
-          bucket.put(key, bytes).pipe(Effect.asVoid, Effect.mapError((cause) => new BlobError({ cause }))),
+          bucket.put(key, bytes).pipe(
+            Effect.asVoid,
+            Effect.mapError((cause) => new BlobError({ cause })),
+          ),
         get: (key) =>
           bucket.get(key).pipe(
             Effect.flatMap((object) =>
@@ -30,11 +38,14 @@ export class Blobs extends Context.Service<
             ),
             Effect.mapError((cause) => new BlobError({ cause })),
           ),
-        remove: (key) => bucket.delete(key).pipe(Effect.mapError((cause) => new BlobError({ cause }))),
+        remove: (key) =>
+          bucket.delete(key).pipe(Effect.mapError((cause) => new BlobError({ cause }))),
         removePrefix: (prefix) =>
           bucket.list({ prefix }).pipe(
             Effect.flatMap(({ objects }) =>
-              objects.length === 0 ? Effect.void : bucket.delete(objects.map((object) => object.key)),
+              objects.length === 0
+                ? Effect.void
+                : bucket.delete(objects.map((object) => object.key)),
             ),
             Effect.mapError((cause) => new BlobError({ cause })),
           ),
@@ -49,7 +60,7 @@ export class Blobs extends Context.Service<
       remove: (key) => Effect.sync(() => void objects.delete(key)),
       removePrefix: (prefix) =>
         Effect.sync(() => {
-          for (const key of [...objects.keys()]) if (key.startsWith(prefix)) objects.delete(key);
+          for (const key of objects.keys()) if (key.startsWith(prefix)) objects.delete(key);
         }),
     });
   });

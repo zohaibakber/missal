@@ -50,7 +50,9 @@ export class Tokens extends Context.Service<
   Tokens,
   {
     readonly issue: (subject: Subject) => Effect.Effect<string>;
-    readonly verify: (token: Redacted.Redacted<string>) => Effect.Effect<Viewer["Service"], Unauthorized>;
+    readonly verify: (
+      token: Redacted.Redacted<string>,
+    ) => Effect.Effect<Viewer["Service"], Unauthorized>;
   }
 >()("missal/Tokens") {
   static readonly layer = Layer.effect(
