@@ -53,12 +53,16 @@ pub struct Palette {
     pub line_input: Hsla,
     pub hover: Hsla,
     pub pressed: Hsla,
+    pub hover_raised: Hsla,
+    pub pressed_raised: Hsla,
     pub action: Hsla,
     pub action_hover: Hsla,
+    pub action_pressed: Hsla,
     pub on_action: Hsla,
     pub accent: Hsla,
     pub accent_wash: Hsla,
     pub field_wash: Hsla,
+    pub success: Hsla,
     pub danger: Hsla,
     pub danger_text: Hsla,
     pub danger_wash: Hsla,
@@ -95,15 +99,19 @@ impl Palette {
             ink_faint: hex(0x77726d),
             line: hex(0xe7e7e5),
             line_strong: hex(0x959391),
-            line_input: hex(0xd4d2ce),
+            line_input: hex(0xc4c1bc),
             hover: hex(0xf4f3f2),
             pressed: hex(0xecebea),
+            hover_raised: hex(0xf1f0ee),
+            pressed_raised: hex(0xe8e7e4),
             action: hex(0x1e1b18),
             action_hover: hex(0x36322e),
+            action_pressed: hex(0x4a4540),
             on_action: hex(0xfbfaf8),
             accent: hex(0x2b5bb7),
             accent_wash: hex(0xe9edf5),
             field_wash: hex(0xf0f2f6),
+            success: hex(0x2f8a4e),
             danger: hex(0xc32a28),
             danger_text: hex(0xb32322),
             danger_wash: hex(0xf9eceb),
@@ -130,15 +138,19 @@ impl Palette {
             ink_faint: hex(0x8c8884),
             line: hex(0x2a2927),
             line_strong: hex(0x666564),
-            line_input: hex(0x3d3b39),
+            line_input: hex(0x4a4846),
             hover: hex(0x22201f),
             pressed: hex(0x2b2a28),
+            hover_raised: hex(0x2f2d2b),
+            pressed_raised: hex(0x393735),
             action: hex(0xedebe7),
             action_hover: hex(0xd3d1cd),
+            action_pressed: hex(0xbbb8b3),
             on_action: hex(0x181613),
             accent: hex(0x80a3f0),
             accent_wash: hex(0x242b3d),
             field_wash: hex(0x282c35),
+            success: hex(0x5cbf82),
             danger: hex(0xc44039),
             danger_text: hex(0xf47b74),
             danger_wash: hex(0x351d1a),
@@ -281,12 +293,12 @@ pub const NAV_MENU_WIDTH: f32 = 248.0;
 pub const PALETTE_WIDTH: f32 = 600.0;
 pub const PALETTE_TOP: f32 = 88.0;
 pub const DIALOG_WIDTH: f32 = 420.0;
-pub const CHEATSHEET_WIDTH: f32 = 640.0;
+pub const CHEATSHEET_WIDTH: f32 = 880.0;
 pub const TOAST_MAX_WIDTH: f32 = 360.0;
 pub const CAPTION_RESERVE: f32 = 138.0;
 
-pub const RAIL_WIDTH: f32 = 248.0;
-pub const DETAILS_RAIL_WIDTH: f32 = 296.0;
+pub const RAIL_WIDTH: f32 = 296.0;
+pub const DETAILS_RAIL_WIDTH: f32 = 320.0;
 
 pub const MOTION_FAST: Duration = Duration::from_millis(120);
 pub const MOTION_BASE: Duration = Duration::from_millis(180);
@@ -342,7 +354,7 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     colors.status_bar_border = palette.line;
     colors.sidebar_border = palette.line;
     colors.input = palette.line_input;
-    colors.accent = palette.hover;
+    colors.accent = palette.hover_raised;
     colors.list_hover = palette.hover;
     colors.table_hover = palette.hover;
     colors.secondary = palette.hover;
@@ -360,8 +372,8 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     colors.switch = palette.action;
     colors.primary_hover = palette.action_hover;
     colors.button_primary_hover = palette.action_hover;
-    colors.primary_active = palette.action_hover;
-    colors.button_primary_active = palette.action_hover;
+    colors.primary_active = palette.action_pressed;
+    colors.button_primary_active = palette.action_pressed;
     colors.primary_foreground = palette.on_action;
     colors.button_primary_foreground = palette.on_action;
     colors.sidebar_primary = palette.action;
@@ -389,7 +401,7 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     colors.button_danger_foreground = hex(0xffffff);
     colors.warning = palette.notice;
     colors.info = palette.st_investigating;
-    colors.success = Palette::light().st_closed;
+    colors.success = palette.success;
     colors.overlay = palette.scrim;
     colors.scrollbar = transparent;
     colors.scrollbar_thumb = palette.ink_muted.opacity(0.4);

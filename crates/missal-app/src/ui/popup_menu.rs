@@ -11,7 +11,7 @@ use gpui_kit::{
 use crate::shortcuts::{BlurFocus, PreviewClose};
 use crate::theme::{Palette, motion_fast};
 use crate::ui::menu::{menu_item, menu_item_element, menu_panel, menu_separator};
-use crate::ui::{UrRole, ur_inline};
+use crate::ui::{UrRole, ur_label};
 
 pub struct Dismissed;
 
@@ -267,12 +267,12 @@ impl PopupList {
             Label::Text(text) => div().child(text.clone()).into_any_element(),
             Label::Urdu(text) => div()
                 .mt(px(-2.))
-                .child(ur_inline(text.clone(), UrRole::Body))
+                .child(ur_label(text.clone(), UrRole::Body))
                 .into_any_element(),
         };
         let mut item = match &entry.label {
             Label::Text(text) => menu_item(entry.id.clone(), text.clone()),
-            Label::Urdu(_) => menu_item_element(entry.id.clone(), content),
+            Label::Urdu(_) => menu_item_element(entry.id.clone(), content).rtl(),
         };
         if let Some(icon) = entry.icon {
             item = item.icon(icon);

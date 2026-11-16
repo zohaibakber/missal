@@ -281,7 +281,6 @@ impl Editor {
                                 .h(px(32.))
                                 .px(px(8.))
                                 .rounded(px(4.))
-                                .cursor_pointer()
                                 .hover(move |style| style.bg(theme.hover))
                                 .on_click(move |_, window, cx| {
                                     let reference = reference.clone();
@@ -369,7 +368,6 @@ impl Editor {
                 .text_size(px(12.))
                 .line_height(px(16.))
                 .font_weight(FontWeight::MEDIUM)
-                .cursor_pointer()
                 .role(gpui_kit::accesskit::Role::RadioButton)
                 .when(on, |this| {
                     this.bg(theme.surface)
@@ -412,6 +410,7 @@ impl Editor {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let zoom = self.render_zoom(cx);
         let theme = EditorTheme::get(cx);
         let entity = cx.entity();
         let core = &self.core;
@@ -515,6 +514,8 @@ impl Editor {
             .child(separator())
             .child(self.field_menu(theme, cx))
             .child(div().flex_1())
+            .child(zoom)
+            .child(separator())
             .when(self.mode_toggle, |this| {
                 this.child(self.mode_toggle(theme, cx)).child(separator())
             })
@@ -535,18 +536,10 @@ impl Editor {
         let fit = self.is_fit_zoom();
         h_flex()
             .id("editor-zoom")
-            .absolute()
-            .left(px(12.))
-            .bottom(px(12.))
-            .p(px(2.))
+            .flex_none()
             .gap(px(2.))
             .items_center()
-            .rounded(px(8.))
-            .border_1()
-            .border_color(theme.line)
-            .bg(theme.surface)
             .font_family(missal_text::UI_FAMILY)
-            .occlude()
             .child(
                 tool("editor-zoom-out", IconName::Minus, "Zoom out")
                     .keys("Mod+-")
@@ -569,8 +562,12 @@ impl Editor {
                     .text_size(px(12.))
                     .line_height(px(16.))
                     .text_color(theme.ink_muted)
-                    .cursor_pointer()
+                    .font_features(gpui_kit::FontFeatures(std::sync::Arc::new(vec![(
+                        "tnum".into(),
+                        1,
+                    )])))
                     .hover(move |s| s.bg(theme.hover).text_color(theme.ink))
+                    .active(move |s| s.bg(theme.pressed))
                     .role(gpui_kit::accesskit::Role::Button)
                     .aria_label("Fit width")
                     .tooltip(tooltip(

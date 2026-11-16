@@ -291,7 +291,7 @@ impl SettingsScreen {
         cx: &mut Context<Self>,
     ) -> GlobalRow {
         let name_input = field_input(window, cx, Kind::Urdu, "", name);
-        let value_input = field_input(window, cx, Kind::UrduAuto, "Empty", value);
+        let value_input = field_input(window, cx, Kind::UrduAuto, "", value);
         self.watch_global(&name_input, true, window, cx);
         self.watch_global(&value_input, false, window, cx);
         GlobalRow {
@@ -941,12 +941,10 @@ impl SettingsScreen {
         v_flex()
             .id(("settings-section", index))
             .w(px(COLUMN_WIDTH))
-            .ml(px(24.))
+            .max_w_full()
+            .px(px(24.))
             .flex_shrink_0()
-            .pb(px(28.))
-            .when(!last, |this| {
-                this.mb(px(28.)).border_b_1().border_color(palette.line)
-            })
+            .when(!last, |this| this.mb(px(56.)))
             .child(
                 h_flex()
                     .items_center()
@@ -971,7 +969,7 @@ impl SettingsScreen {
             .child(
                 div()
                     .mt(px(2.))
-                    .mb(px(14.))
+                    .mb(px(16.))
                     .text_size(px(13.))
                     .line_height(px(20.))
                     .text_color(palette.ink_muted)
@@ -1034,14 +1032,14 @@ impl SettingsScreen {
                         let error = errors.get(index).copied().flatten();
                         let name_cell: AnyElement = if row.editing_name {
                             field(("global-name", index), &row.name, Kind::Urdu)
-                                .width(px(150.))
+                                .width(px(120.))
                                 .error(error.is_some())
                                 .into_any_element()
                         } else {
                             div()
                                 .id(("global-name-label", index))
                                 .test_support()
-                                .w(px(150.))
+                                .w(px(120.))
                                 .h(px(36.))
                                 .flex_none()
                                 .px(px(10.))
@@ -1050,6 +1048,7 @@ impl SettingsScreen {
                                 .items_center()
                                 .cursor_text()
                                 .hover(move |style| style.bg(palette.hover))
+                                .active(move |s| s.bg(palette.pressed))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.rename_global(index, window, cx)
                                 }))
@@ -1066,6 +1065,8 @@ impl SettingsScreen {
                             .id(("global-row", index))
                             .group("global-row")
                             .py(px(4.))
+                            .ml(px(-34.))
+                            .mr(px(-10.))
                             .child(
                                 h_flex()
                                     .flex_row_reverse()
@@ -1105,12 +1106,12 @@ impl SettingsScreen {
                                 h_flex()
                                     .flex_row_reverse()
                                     .pt(px(2.))
-                                    .child(div().w(px(150.)).flex_none())
+                                    .child(div().w(px(160.)).flex_none())
                                     .child(self.error_line(&palette, error))
                             }))
                     }))
                     .child(
-                        h_flex().flex_row_reverse().pt(px(8.)).child(
+                        h_flex().flex_row_reverse().pt(px(8.)).mr(px(-10.)).child(
                             ghost_sm("add-global", "Add global value")
                                 .icon(IconName::Plus)
                                 .on_click(
@@ -1185,7 +1186,7 @@ impl SettingsScreen {
             .children(show_filter.then(|| {
                 div().pb(px(8.)).child(
                     search_field("custom-filter-field", &self.custom_filter, Kind::SearchRtl)
-                        .width(px(300.)),
+                        .height(32.),
                 )
             }))
             .child(v_flex().children(visible.iter().map(|&index| {
@@ -1218,69 +1219,78 @@ impl SettingsScreen {
                 v_flex()
                     .id(("custom-row", index))
                     .test_support()
-                    .border_b_1()
-                    .border_color(palette.line)
+                    .group("custom-row")
+                    .mx(px(-10.))
+                    .rounded(px(RADIUS))
+                    .hover(move |style| style.bg(palette.hover))
                     .child(
                         h_flex()
                             .flex_row_reverse()
                             .h(px(40.))
                             .items_center()
                             .gap(px(10.))
-                            .px(px(8.))
+                            .px(px(10.))
                             .child(content)
                             .child(
-                                Button::new(("custom-more", index))
-                                    .ghost()
-                                    .xsmall()
-                                    .icon(IconName::Ellipsis)
-                                    .tooltip("More actions")
-                                    .dropdown_menu(move |menu, _, _| {
-                                        let rename = weak.clone();
-                                        let delete = weak.clone();
-                                        let name = name.clone();
-                                        menu.item(
-                                            PopupMenuItem::new("Rename")
-                                                .icon(IconName::Pencil)
-                                                .disabled(id.is_none())
-                                                .on_click(move |_, window, cx| {
-                                                    rename
-                                                        .update(cx, |this, cx| {
-                                                            this.rename_custom(index, window, cx)
-                                                        })
-                                                        .ok();
-                                                }),
-                                        )
-                                        .item(PopupMenuItem::separator())
-                                        .item(
-                                            PopupMenuItem::new("Delete…")
-                                                .icon(IconName::Trash)
-                                                .disabled(id.is_none())
-                                                .on_click(move |_, window, cx| {
-                                                    let name = name.clone();
-                                                    delete
-                                                        .update(cx, |this, cx| {
-                                                            if let Some(id) = id {
-                                                                this.request_delete_field(
-                                                                    id, name, window, cx,
-                                                                )
-                                                            }
-                                                        })
-                                                        .ok();
-                                                }),
-                                        )
-                                    }),
+                                div()
+                                    .opacity(0.)
+                                    .group_hover("custom-row", |style| style.opacity(1.))
+                                    .child(
+                                        Button::new(("custom-more", index))
+                                            .ghost()
+                                            .xsmall()
+                                            .icon(IconName::Ellipsis)
+                                            .tooltip("More actions")
+                                            .dropdown_menu(move |menu, _, _| {
+                                                let rename = weak.clone();
+                                                let delete = weak.clone();
+                                                let name = name.clone();
+                                                menu.item(
+                                                    PopupMenuItem::new("Rename")
+                                                        .icon(IconName::Pencil)
+                                                        .disabled(id.is_none())
+                                                        .on_click(move |_, window, cx| {
+                                                            rename
+                                                                .update(cx, |this, cx| {
+                                                                    this.rename_custom(
+                                                                        index, window, cx,
+                                                                    )
+                                                                })
+                                                                .ok();
+                                                        }),
+                                                )
+                                                .item(PopupMenuItem::separator())
+                                                .item(
+                                                    PopupMenuItem::new("Delete…")
+                                                        .icon(IconName::Trash)
+                                                        .disabled(id.is_none())
+                                                        .on_click(move |_, window, cx| {
+                                                            let name = name.clone();
+                                                            delete
+                                                                .update(cx, |this, cx| {
+                                                                    if let Some(id) = id {
+                                                                        this.request_delete_field(
+                                                                            id, name, window, cx,
+                                                                        )
+                                                                    }
+                                                                })
+                                                                .ok();
+                                                        }),
+                                                )
+                                            }),
+                                    ),
                             ),
                     )
                     .children(error.map(|error| {
                         h_flex()
                             .flex_row_reverse()
-                            .px(px(8.))
+                            .px(px(10.))
                             .pb(px(6.))
                             .child(self.error_line(&palette, error))
                     }))
             })))
             .child(
-                h_flex().flex_row_reverse().pt(px(8.)).child(
+                h_flex().flex_row_reverse().pt(px(8.)).mr(px(-10.)).child(
                     ghost_sm("add-custom", "Add custom field")
                         .icon(IconName::Plus)
                         .on_click(cx.listener(|this, _, window, cx| this.add_custom(window, cx))),
@@ -1542,11 +1552,11 @@ impl SettingsScreen {
                     .rounded(px(RADIUS))
                     .text_size(px(13.))
                     .font_medium()
-                    .cursor_pointer()
                     .text_color(if on { palette.ink } else { palette.ink_muted })
-                    .when(on, |this| this.bg(palette.hover))
+                    .when(on, |this| this.bg(palette.pressed))
                     .when(!on, |this| {
                         this.hover(move |style| style.bg(palette.hover).text_color(palette.ink))
+                            .active(move |s| s.bg(palette.pressed))
                     })
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.scroll_to(index);
@@ -1645,6 +1655,7 @@ impl Render for SettingsScreen {
                     .overflow_y_scroll()
                     .track_scroll(&self.scroll)
                     .on_scroll(cx.listener(|_, _, _, cx| cx.notify()))
+                    .items_center()
                     .children(sections)
                     .child(div().h(px(420.)).flex_none()),
             )

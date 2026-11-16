@@ -108,6 +108,8 @@ pub struct NavMenu {
     highlighted: usize,
     theme_open: bool,
     theme_highlighted: usize,
+    animate: bool,
+    pointer_idle: bool,
 }
 
 impl EventEmitter<Dismissed> for NavMenu {}
@@ -131,7 +133,14 @@ impl NavMenu {
             highlighted,
             theme_open: false,
             theme_highlighted: 0,
+            animate: true,
+            pointer_idle: false,
         }
+    }
+
+    pub fn opened_by_keyboard(&mut self, keyboard: bool) {
+        self.animate = !keyboard;
+        self.pointer_idle = !keyboard;
     }
 
     pub fn focus(&self, window: &mut Window, cx: &mut App) {
@@ -147,6 +156,15 @@ impl NavMenu {
     }
 
     fn move_highlight(&mut self, delta: isize, cx: &mut Context<Self>) {
+        if std::mem::take(&mut self.pointer_idle) {
+            self.highlighted = if delta > 0 {
+                0
+            } else {
+                NavEntry::ALL.len() - 1
+            };
+            cx.notify();
+            return;
+        }
         if self.theme_open {
             let count = ThemeChoice::ALL.len() as isize;
             self.theme_highlighted =
@@ -210,6 +228,10 @@ impl NavMenu {
             }
             "left" if self.theme_open => {
                 self.theme_open = false;
+                cx.notify();
+            }
+            "enter" | "space" if self.pointer_idle => {
+                self.pointer_idle = false;
                 cx.notify();
             }
             "enter" | "space" => {
@@ -288,7 +310,7 @@ impl Render for NavMenu {
             }
             let mut item = menu_item(entry.id(), entry.label())
                 .icon(entry.icon())
-                .highlighted(index == highlighted)
+                .highlighted(index == highlighted && !self.pointer_idle)
                 .on_hover(cx.listener_for_hover(index))
                 .on_click(cx.listener(move |this, _, window, cx| this.run(entry, window, cx)));
             item = match entry.keys() {
@@ -336,17 +358,23 @@ impl Render for NavMenu {
                 MouseButton::Left,
                 cx.listener(|_, _, _, cx| cx.emit(Dismissed)),
             )
-            .child(
-                div()
+            .child({
+                let anchor = div()
                     .absolute()
                     .left(px(8.))
                     .top(px(HEADER_HEIGHT - 4.))
                     .child(panel)
-                    .children(submenu)
-                    .with_animation("nav-menu-enter", motion_fast(), |this, delta| {
-                        this.opacity(delta).mt(px(-4. * (1. - delta)))
-                    }),
-            )
+                    .children(submenu);
+                if self.animate {
+                    anchor
+                        .with_animation("nav-menu-enter", motion_fast(), |this, delta| {
+                            this.opacity(delta).mt(px(-4. * (1. - delta)))
+                        })
+                        .into_any_element()
+                } else {
+                    anchor.into_any_element()
+                }
+            })
     }
 }
 
@@ -359,6 +387,10 @@ impl HoverListener for Context<'_, NavMenu> {
         let weak = self.weak_entity();
         move |_, cx| {
             weak.update(cx, |menu, cx| {
+                if menu.pointer_idle {
+                    menu.pointer_idle = false;
+                    cx.notify();
+                }
                 if menu.highlighted != index {
                     menu.highlighted = index;
                     if NavEntry::ALL[index] != NavEntry::Theme {

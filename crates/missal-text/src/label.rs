@@ -8,12 +8,79 @@ use gpui_kit::{
 
 use crate::{
     fonts::{FontFamily, UI_FAMILY_ALIASES, URDU_FAMILY_ALIASES},
-    layout::{Align, AttributedText, Direction, LineHeight, ParagraphStyle, TextLayout, TextStyle},
+    layout::{
+        Align, Attr, AttributedText, Direction, LineHeight, ParagraphStyle, TextLayout, TextStyle,
+    },
     paint::{TextPaint, paint_text},
     system::{TextSystem, to_rgba},
 };
 
 const ELLIPSIS: &str = "\u{2026}";
+const LATIN_IN_URDU: f32 = 0.8;
+
+fn balance_scripts(text: &mut AttributedText, direction: Direction) {
+    if text.style.family != FontFamily::Interface {
+        return;
+    }
+    let size = text.style.size;
+    let content = text.text.clone();
+    if direction == Direction::Rtl {
+        for range in latin_runs(&content) {
+            text.push(range, Attr::Size(size * LATIN_IN_URDU));
+        }
+    } else if content.chars().any(|c| c.is_ascii_alphabetic()) {
+        for range in urdu_runs(&content) {
+            text.push(range, Attr::Size(size / LATIN_IN_URDU));
+        }
+    }
+}
+
+fn is_urdu(c: char) -> bool {
+    ('\u{0600}'..='\u{06FF}').contains(&c) || ('\u{FB50}'..='\u{FEFF}').contains(&c)
+}
+
+fn urdu_runs(text: &str) -> Vec<std::ops::Range<usize>> {
+    let mut runs = Vec::new();
+    let mut start: Option<usize> = None;
+    let mut end = 0;
+    for (index, c) in text.char_indices() {
+        if is_urdu(c) {
+            start.get_or_insert(index);
+            end = index + c.len_utf8();
+        } else if !(c == ' ' || ('\u{2066}'..='\u{2069}').contains(&c))
+            && let Some(begin) = start.take()
+        {
+            runs.push(begin..end);
+        }
+    }
+    if let Some(begin) = start {
+        runs.push(begin..end);
+    }
+    runs
+}
+
+fn latin_runs(text: &str) -> Vec<std::ops::Range<usize>> {
+    if !text.chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c)) {
+        return Vec::new();
+    }
+    let mut runs = Vec::new();
+    let mut start: Option<usize> = None;
+    let mut end = 0;
+    for (index, c) in text.char_indices() {
+        if c.is_ascii_alphanumeric() {
+            start.get_or_insert(index);
+            end = index + c.len_utf8();
+        } else if !(c.is_ascii_punctuation() || c == ' ')
+            && let Some(begin) = start.take()
+        {
+            runs.push(begin..end);
+        }
+    }
+    if let Some(begin) = start {
+        runs.push(begin..end);
+    }
+    runs
+}
 
 #[derive(Clone)]
 enum Content {
@@ -108,7 +175,7 @@ impl Label {
             color: to_rgba(text_style.color),
             background: text_style.background_color.map(to_rgba),
         };
-        let text = match &self.content {
+        let mut text = match &self.content {
             Content::Plain(text) => AttributedText::new(text.as_ref(), style),
             Content::Rich(rich) => {
                 let mut rich = rich.clone();
@@ -127,6 +194,7 @@ impl Label {
                 rich
             }
         };
+        balance_scripts(&mut text, self.direction);
         let line_height = self
             .line_height
             .unwrap_or_else(|| match refinement.line_height {

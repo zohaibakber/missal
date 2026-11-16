@@ -1,4 +1,3 @@
-use gpui_kit::AnimationExt;
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{h_flex, v_flex};
@@ -15,7 +14,7 @@ use crate::app::{import_word_file, navigate, set_theme, show_shortcuts};
 use crate::prefs::ThemeChoice;
 use crate::state::rows::{fold_for_search, search_words};
 use crate::state::{Models, Route};
-use crate::theme::{ICON, PALETTE_TOP, PALETTE_WIDTH, Palette, RADIUS, RADIUS_XL, motion_base};
+use crate::theme::{ICON, PALETTE_TOP, PALETTE_WIDTH, Palette, RADIUS, RADIUS_XL};
 use crate::ui::input::{Kind, field_input};
 use crate::ui::status::status_dot;
 use crate::ui::{KeyTone, UrRole, keycap, keycaps_toned, sized_icon, ur_inline};
@@ -460,8 +459,7 @@ impl CommandPalette {
             .gap(px(10.))
             .items_center()
             .rounded(px(RADIUS))
-            .cursor_pointer()
-            .when(selected, |this| this.bg(palette.hover))
+            .when(selected, |this| this.bg(palette.hover_raised))
             .on_mouse_move(cx.listener(move |this, _, _, cx| {
                 if this.selected != index {
                     this.selected = index;
@@ -571,10 +569,7 @@ impl Render for CommandPalette {
                 div()
                     .absolute()
                     .inset_0()
-                    .bg(palette.scrim)
-                    .with_animation("palette-scrim", motion_base(), |this, delta| {
-                        this.opacity(delta)
-                    }),
+                    .bg(palette.scrim),
             )
             .child(
                 v_flex()
@@ -628,10 +623,7 @@ impl Render for CommandPalette {
                             .text_size(px(12.))
                             .text_color(palette.ink_faint)
                             .child(count)
-                    }))
-                    .with_animation("palette-enter", motion_base(), |this, delta| {
-                        this.opacity(delta)
-                    }),
+                    })),
             )
     }
 }

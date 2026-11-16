@@ -64,6 +64,11 @@ pub fn dialog_surface(dialog: Dialog, palette: &Palette, width: f32) -> Dialog {
         .text_color(palette.ink)
 }
 
+pub fn optical_top(window: &Window, height: f32) -> gpui_kit::Pixels {
+    let viewport = f32::from(window.viewport_size().height);
+    px((viewport * 0.4 - height / 2.).max(viewport / 10.))
+}
+
 pub fn dialog_title(text: impl Into<SharedString>) -> AnyElement {
     div()
         .text_size(px(16.))
@@ -146,17 +151,19 @@ pub fn open_choice(
         .map(|choice| choice.id);
     let focus = cx.focus_handle();
     let focus_for_dialog = focus.clone();
-    window.open_dialog(cx, move |dialog: Dialog, _, cx| {
+    window.open_dialog(cx, move |dialog: Dialog, window, cx| {
         let palette = *Palette::get(cx);
-        dialog_surface(dialog, &palette, DIALOG_WIDTH).child(
-            v_flex()
-                .child(dialog_title(title.clone()))
-                .child(dialog_body(&palette, description.clone()))
-                .child(choice_row(
-                    &choices,
-                    initial.map(|id| (id, &focus_for_dialog)),
-                )),
-        )
+        dialog_surface(dialog, &palette, DIALOG_WIDTH)
+            .margin_top(optical_top(window, 152.))
+            .child(
+                v_flex()
+                    .child(dialog_title(title.clone()))
+                    .child(dialog_body(&palette, description.clone()))
+                    .child(choice_row(
+                        &choices,
+                        initial.map(|id| (id, &focus_for_dialog)),
+                    )),
+            )
     });
     window.defer(cx, move |window, cx| window.focus(&focus, cx));
 }
@@ -200,7 +207,7 @@ pub fn confirm_discard(
 
 pub fn about(window: &mut Window, cx: &mut App, data_folder: Option<String>, can_check: bool) {
     let version = env!("CARGO_PKG_VERSION");
-    window.open_dialog(cx, move |dialog: Dialog, _, cx| {
+    window.open_dialog(cx, move |dialog: Dialog, window, cx| {
         let palette = *Palette::get(cx);
         let row = |name: &'static str, value: SharedString| {
             h_flex()
@@ -218,34 +225,36 @@ pub fn about(window: &mut Window, cx: &mut App, data_folder: Option<String>, can
                 .child(div().flex_1().min_w_0().child(label(value).ltr()))
         };
         let folder = data_folder.clone().unwrap_or_else(|| "Not set".to_owned());
-        dialog_surface(dialog, &palette, DIALOG_WIDTH).child(
-            v_flex()
-                .gap(px(6.))
-                .child(dialog_title("About Missal"))
-                .child(div().h(px(6.)))
-                .child(row("Version", version.into()))
-                .child(row("Data folder", folder.into()))
-                .child(
-                    h_flex()
-                        .mt(px(12.))
-                        .pb(px(4.))
-                        .gap(px(8.))
-                        .child(div().flex_1())
-                        .child(
-                            button("about-check-updates", "Check for updates")
-                                .outline()
-                                .disabled(!can_check)
-                                .on_click(|_, window, cx| {
-                                    window.close_dialog(cx);
-                                    crate::app::check_for_updates(window, cx);
-                                }),
-                        )
-                        .child(
-                            button("about-close", "Close")
-                                .primary()
-                                .on_click(|_, window, cx| window.close_dialog(cx)),
-                        ),
-                ),
-        )
+        dialog_surface(dialog, &palette, DIALOG_WIDTH)
+            .margin_top(optical_top(window, 200.))
+            .child(
+                v_flex()
+                    .gap(px(6.))
+                    .child(dialog_title("About Missal"))
+                    .child(div().h(px(6.)))
+                    .child(row("Version", version.into()))
+                    .child(row("Data folder", folder.into()))
+                    .child(
+                        h_flex()
+                            .mt(px(12.))
+                            .pb(px(4.))
+                            .gap(px(8.))
+                            .child(div().flex_1())
+                            .child(
+                                button("about-check-updates", "Check for updates")
+                                    .outline()
+                                    .disabled(!can_check)
+                                    .on_click(|_, window, cx| {
+                                        window.close_dialog(cx);
+                                        crate::app::check_for_updates(window, cx);
+                                    }),
+                            )
+                            .child(
+                                button("about-close", "Close")
+                                    .primary()
+                                    .on_click(|_, window, cx| window.close_dialog(cx)),
+                            ),
+                    ),
+            )
     });
 }

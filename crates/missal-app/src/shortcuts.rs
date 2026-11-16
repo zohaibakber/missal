@@ -136,7 +136,7 @@ pub const SHORTCUTS: &[Shortcut] = &[
     shortcut("E", "Edit details", Group::Workspace),
     shortcut("Mod+.", "Fields panel", Group::Workspace),
     shortcut("Mod+Shift+L", "Show field names", Group::Workspace),
-    shortcut("Mod+P", "Print", Group::Workspace),
+    shortcut("Mod+P", "Print…", Group::Workspace),
     shortcut("Mod+Z", "Undo", Group::Editor),
     shortcut("Mod+Y", "Redo", Group::Editor),
     shortcut("Mod+B", "Bold", Group::Editor),

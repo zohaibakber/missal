@@ -51,6 +51,7 @@ pub struct MenuItem {
     highlighted: bool,
     danger: bool,
     disabled: bool,
+    rtl: bool,
     on_click: Option<ClickHandler>,
     on_hover: Option<HoverHandler>,
 }
@@ -69,6 +70,7 @@ pub fn menu_item_element(id: impl Into<ElementId>, content: AnyElement) -> MenuI
         highlighted: false,
         danger: false,
         disabled: false,
+        rtl: false,
         on_click: None,
         on_hover: None,
     }
@@ -97,6 +99,11 @@ impl MenuItem {
 
     pub fn trailing_text(mut self, text: impl Into<SharedString>) -> Self {
         self.trail = Trail::Text(text.into());
+        self
+    }
+
+    pub fn rtl(mut self) -> Self {
+        self.rtl = true;
         self
     }
 
@@ -167,17 +174,26 @@ impl RenderOnce for MenuItem {
                 Some(keycaps_toned(&palette, &keys, KeyTone::Bare).into_any_element())
             }
             Trail::Text(value) => Some(
-                div()
+                h_flex()
+                    .flex_none()
+                    .items_center()
+                    .gap(px(4.))
+                    .mr(px(-2.))
                     .text_size(px(12.))
                     .text_color(palette.ink_muted)
                     .child(value)
+                    .child(sized_icon(
+                        IconName::ChevronRight,
+                        ICON_SM,
+                        palette.ink_faint,
+                    ))
                     .into_any_element(),
             ),
             Trail::Chevron => Some(
                 sized_icon(IconName::ChevronRight, ICON_SM, palette.ink_muted).into_any_element(),
             ),
         };
-        let hover = palette.hover;
+        let hover = palette.hover_raised;
         let on_click = self.on_click.filter(|_| !self.disabled);
         let on_hover = self.on_hover;
         h_flex()
@@ -192,10 +208,12 @@ impl RenderOnce for MenuItem {
             .font_weight(FontWeight::NORMAL)
             .text_color(text)
             .role(gpui_kit::accesskit::Role::MenuItem)
+            .when(self.rtl, |this| this.flex_row_reverse())
             .when(self.highlighted, |this| this.bg(hover))
             .when(self.disabled, |this| this.opacity(0.45))
             .when(!self.disabled, |this| {
-                this.cursor_pointer().hover(move |s| s.bg(hover))
+                this.hover(move |s| s.bg(hover))
+                    .active(move |s| s.bg(palette.pressed_raised))
             })
             .when_some(on_hover, |this, handler| {
                 this.on_hover(move |hovered, window, cx| {

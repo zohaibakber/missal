@@ -430,10 +430,20 @@ impl FieldsPanel {
                 .line_height(px(20.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(if on { palette.ink } else { palette.ink_muted })
-                .cursor_pointer()
                 .role(gpui_kit::accesskit::Role::Tab)
                 .when(on, |this| this.aria_selected(true))
                 .when(!on, |this| this.hover(move |s| s.text_color(ink)))
+                .when_some(badge.filter(|count| *count > 0), |this, count| {
+                    this.tooltip(crate::ui::tooltip(
+                        if count == 1 {
+                            "1 field is still empty".to_owned()
+                        } else {
+                            format!("{count} fields are still empty")
+                        },
+                        None,
+                    ))
+                    .tooltip_show_delay(crate::theme::TOOLTIP_DELAY)
+                })
                 .on_click(cx.listener(move |this, _, _, cx| this.set_tab(which, cx)))
                 .child(div().pt(px(2.)).child(text))
                 .children(
@@ -459,7 +469,7 @@ impl FieldsPanel {
     fn section(palette: &Palette, title: &'static str, count: Option<usize>) -> AnyElement {
         h_flex()
             .px(px(16.))
-            .pt(px(12.))
+            .pt(px(16.))
             .pb(px(4.))
             .gap(px(8.))
             .items_center()
@@ -516,11 +526,11 @@ impl FieldsPanel {
             .py(px(2.))
             .child(
                 div()
-                    .w(px(92.))
+                    .w(px(88.))
                     .flex_none()
-                    .pt(px(2.))
+                    .pt(px(1.))
                     .text_color(palette.ink_muted)
-                    .child(ur_label(name.to_owned(), UrRole::Label).truncate()),
+                    .child(ur_label(name.to_owned(), UrRole::InputLabel).truncate()),
             )
             .child(value)
     }
@@ -585,6 +595,18 @@ impl FieldsPanel {
                     continue;
                 }
                 out.push(Self::section(&palette, title, Some(items.len())));
+                if group == 0 {
+                    out.push(
+                        div()
+                            .px(px(16.))
+                            .pb(px(4.))
+                            .text_size(px(12.))
+                            .line_height(px(16.))
+                            .text_color(palette.ink_faint)
+                            .child("Shared by every FIR. Press Enter to save.")
+                            .into_any_element(),
+                    );
+                }
                 for (index, item) in items {
                     out.push(self.empty_item(&palette, index, item, window, cx));
                 }
@@ -625,8 +647,8 @@ impl FieldsPanel {
                         &item.name,
                         Self::value_cell(&palette, &item.value),
                     )
-                    .cursor_pointer()
                     .hover(move |s| s.bg(palette.hover))
+                    .active(move |s| s.bg(palette.pressed))
                     .on_click(cx.listener(move |_, _, _, cx| {
                         cx.emit(FieldsPanelEvent::Reveal(reference.clone(), true))
                     }))
@@ -649,49 +671,51 @@ impl FieldsPanel {
         let palette = *palette;
         let reference = item.reference.clone();
         let reveal = reference.clone();
-        let top = h_flex()
+        let name = h_flex()
             .id(("empty-field", index))
+            .w(px(88.))
+            .flex_none()
             .flex_row_reverse()
             .items_center()
-            .gap(px(8.))
-            .cursor_pointer()
             .on_click(cx.listener(move |_, _, _, cx| {
                 cx.emit(FieldsPanelEvent::Reveal(reveal.clone(), true))
             }))
             .child(
                 div()
                     .min_w_0()
+                    .mt(px(-2.))
                     .text_color(palette.ink)
-                    .child(ur_label(item.name.clone(), UrRole::Body).truncate()),
+                    .child(ur_label(item.name.clone(), UrRole::InputLabel).truncate()),
             )
+            .tooltip(crate::ui::tooltip(item.name.clone(), None))
+            .tooltip_show_delay(crate::theme::TOOLTIP_DELAY)
             .test_support();
-        let body: Option<AnyElement> = match &item.scope {
-            Scope::Fir(_) => None,
+        let body: AnyElement = match &item.scope {
+            Scope::Fir(_) => div()
+                .flex_1()
+                .h(px(32.))
+                .flex()
+                .items_center()
+                .text_color(palette.ink_faint)
+                .child(label("—").ltr())
+                .into_any_element(),
             _ => {
                 let input = self.ensure_input(&reference, "", window, cx);
-                Some(field(("empty-field-input", index), &input, Kind::UrduAuto).into_any_element())
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(field(("empty-field-input", index), &input, Kind::UrduAuto).height(32.))
+                    .into_any_element()
             }
         };
-        let help = matches!(item.scope, Scope::Global(_))
-            && self
-                .inputs
-                .get(&reference)
-                .is_some_and(|input| input.focus_handle(cx).is_focused(window));
-        v_flex()
+        h_flex()
+            .flex_row_reverse()
+            .items_center()
+            .gap(px(12.))
             .px(px(16.))
-            .py(px(6.))
-            .gap(px(6.))
-            .child(top)
-            .children(body)
-            .when(help, |this| {
-                this.child(
-                    div()
-                        .text_size(px(12.))
-                        .line_height(px(16.))
-                        .text_color(palette.ink_faint)
-                        .child("Used by every FIR. Press Enter to save."),
-                )
-            })
+            .py(px(4.))
+            .child(name)
+            .child(body)
             .into_any_element()
     }
 

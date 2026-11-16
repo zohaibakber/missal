@@ -115,8 +115,9 @@ impl Render for Cheatsheet {
                 h_flex()
                     .items_start()
                     .gap(px(32.))
-                    .child(column(&[Group::General, Group::FirList, Group::Templates]))
-                    .child(column(&[Group::Workspace, Group::Editor, Group::Print])),
+                    .child(column(&[Group::General, Group::Templates]))
+                    .child(column(&[Group::FirList, Group::Print]))
+                    .child(column(&[Group::Workspace, Group::Editor])),
             )
             .child(
                 div()
