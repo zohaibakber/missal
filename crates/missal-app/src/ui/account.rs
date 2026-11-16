@@ -8,19 +8,20 @@ use gpui_kit::{
     AnyElement, App, AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString,
     Styled, Subscription, Window, div, px,
 };
-use missal_auth::{Account, AuthError, NewUser, Role, SessionKeeper, UserChanges};
+use missal_auth::{Account, AuthError, LicenceStatus, Role, SessionKeeper, UserChanges};
 use missal_text::{TextInput, TextInputEvent, label};
 
 use crate::auth::{AuthModel, password_problem};
 use crate::state::{Load, toast_success};
 use crate::theme::{Palette, RADIUS};
 use crate::ui::dialogs::{dialog_footer, dialog_surface, dialog_title, optical_top};
-use crate::ui::input::{Kind, field, field_input, secret_input};
-use crate::ui::{SegmentItem, button, ghost_sm, primary_sm, segmented, skeleton_bar};
+use crate::ui::input::{Kind, field, secret_input};
+use crate::ui::library::day_month_year;
+use crate::ui::{SegmentItem, button, ghost_sm, segmented, skeleton_bar};
 
 const PASSWORD_WIDTH: f32 = 420.;
 const USERS_WIDTH: f32 = 760.;
-const LIST_HEIGHT: f32 = 340.;
+const LIST_HEIGHT: f32 = 420.;
 
 fn caption(palette: &Palette, text: impl Into<SharedString>) -> AnyElement {
     div()
@@ -198,11 +199,11 @@ pub fn open_users(window: &mut Window, cx: &mut App) {
     if keeper(cx).is_none() {
         return;
     }
-    let panel = cx.new(|cx| UsersPanel::new(window, cx));
+    let panel = cx.new(UsersPanel::new);
     window.open_dialog(cx, move |dialog: Dialog, window, cx| {
         let palette = *Palette::get(cx);
         dialog_surface(dialog, &palette, USERS_WIDTH)
-            .margin_top(optical_top(window, LIST_HEIGHT + 260.))
+            .margin_top(optical_top(window, LIST_HEIGHT + 180.))
             .child(panel.clone())
     });
 }
@@ -211,60 +212,26 @@ struct UsersPanel {
     users: Vec<Account>,
     load: Load,
     busy: HashSet<String>,
-    email: Entity<TextInput>,
-    name: Entity<TextInput>,
-    password: Entity<TextInput>,
-    role: Role,
-    adding: bool,
     problem: Option<SharedString>,
-    resetting: Option<String>,
-    reset_password: Entity<TextInput>,
-    _subscriptions: Vec<Subscription>,
+}
+
+fn licence_text(user: &Account) -> String {
+    let date = || day_month_year(user.licence.until_ms).unwrap_or_default();
+    match user.licence.status {
+        _ if user.role.is_admin() => "Always licensed".to_owned(),
+        LicenceStatus::Trial => format!("Trial until {}", date()),
+        LicenceStatus::Licensed => format!("Licensed until {}", date()),
+        LicenceStatus::Expired => format!("Licence ended {}", date()),
+    }
 }
 
 impl UsersPanel {
-    fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let email = field_input(window, cx, Kind::Latin, "Email", "");
-        let name = field_input(window, cx, Kind::Latin, "Name (optional)", "");
-        let password = secret_input(window, cx, "Temporary password");
-        let reset_password = secret_input(window, cx, "New temporary password");
-        let watch = |input: &Entity<TextInput>,
-                     reset: bool,
-                     window: &mut Window,
-                     cx: &mut Context<Self>| {
-            cx.subscribe_in(
-                input,
-                window,
-                move |this, _, event: &TextInputEvent, window, cx| match event {
-                    TextInputEvent::Submit if reset => this.reset(window, cx),
-                    TextInputEvent::Submit => this.add(window, cx),
-                    TextInputEvent::Change => {
-                        this.problem = None;
-                        cx.notify();
-                    }
-                    _ => {}
-                },
-            )
-        };
-        let subscriptions = vec![
-            watch(&email, false, window, cx),
-            watch(&name, false, window, cx),
-            watch(&password, false, window, cx),
-            watch(&reset_password, true, window, cx),
-        ];
+    fn new(cx: &mut Context<Self>) -> Self {
         let mut panel = UsersPanel {
             users: Vec::new(),
             load: Load::Loading,
             busy: HashSet::new(),
-            email,
-            name,
-            password,
-            role: Role::Member,
-            adding: false,
             problem: None,
-            resetting: None,
-            reset_password,
-            _subscriptions: subscriptions,
         };
         panel.reload(cx);
         panel
@@ -304,58 +271,43 @@ impl UsersPanel {
         .detach();
     }
 
-    fn replace_user(&mut self, account: Account) {
-        match self.users.iter_mut().find(|user| user.id == account.id) {
-            Some(user) => *user = account,
-            None => {
-                self.users.push(account);
-                self.users.sort_by(|a, b| a.email.cmp(&b.email));
-            }
-        }
-    }
-
-    fn add(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn apply(
+        &mut self,
+        id: String,
+        job: impl FnOnce(&SessionKeeper, &str) -> Result<Account, AuthError> + Send + 'static,
+        announce: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(keeper) = keeper(cx) else {
             return;
         };
-        if self.adding {
+        if !self.busy.insert(id.clone()) {
             return;
         }
-        let user = NewUser {
-            email: self.email.read(cx).text().trim().to_owned(),
-            name: self.name.read(cx).text().trim().to_owned(),
-            role: self.role,
-            password: self.password.read(cx).text().to_owned(),
-        };
-        if !user.email.contains('@') {
-            self.problem = Some("Enter the person's email address.".into());
-            cx.notify();
-            return;
-        }
-        if let Some(problem) = password_problem(&user.password, &user.password) {
-            self.problem = Some(format!("Temporary password: {problem}").into());
-            cx.notify();
-            return;
-        }
-        self.adding = true;
+        self.problem = None;
         cx.notify();
-        let task = cx.background_spawn(async move { keeper.create_user(&user) });
+        let task = cx.background_spawn({
+            let id = id.clone();
+            async move { job(&keeper, &id) }
+        });
         cx.spawn_in(window, async move |this, cx| {
             let outcome = task.await;
             this.update_in(cx, |this, window, cx| {
-                this.adding = false;
+                this.busy.remove(&id);
                 match outcome {
                     Ok(account) => {
-                        let message = format!(
-                            "Added {}. Give them the temporary password; they choose their own when they first sign in.",
-                            account.email
-                        );
-                        this.replace_user(account);
-                        for input in [&this.email, &this.name, &this.password] {
-                            input.update(cx, |input, cx| input.set_text("", cx));
+                        if announce {
+                            toast_success(
+                                window,
+                                cx,
+                                format!("{}: {}", account.email, licence_text(&account)),
+                            );
                         }
-                        this.role = Role::Member;
-                        toast_success(window, cx, message);
+                        if let Some(user) = this.users.iter_mut().find(|user| user.id == account.id)
+                        {
+                            *user = account;
+                        }
                     }
                     Err(error) => this.problem = Some(this.failed(&error, cx)),
                 }
@@ -373,74 +325,13 @@ impl UsersPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(keeper) = keeper(cx) else {
-            return;
-        };
-        if !self.busy.insert(id.clone()) {
-            return;
-        }
-        self.problem = None;
-        cx.notify();
-        let task = cx.background_spawn({
-            let id = id.clone();
-            async move { keeper.update_user(&id, &changes) }
-        });
-        cx.spawn_in(window, async move |this, cx| {
-            let outcome = task.await;
-            this.update_in(cx, |this, _, cx| {
-                this.busy.remove(&id);
-                match outcome {
-                    Ok(account) => this.replace_user(account),
-                    Err(error) => this.problem = Some(this.failed(&error, cx)),
-                }
-                cx.notify();
-            })
-            .ok();
-        })
-        .detach();
-    }
-
-    fn reset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (Some(keeper), Some(id)) = (keeper(cx), self.resetting.clone()) else {
-            return;
-        };
-        let password = self.reset_password.read(cx).text().to_owned();
-        if let Some(problem) = password_problem(&password, &password) {
-            self.problem = Some(format!("Temporary password: {problem}").into());
-            cx.notify();
-            return;
-        }
-        if !self.busy.insert(id.clone()) {
-            return;
-        }
-        cx.notify();
-        let task = cx.background_spawn({
-            let id = id.clone();
-            async move { keeper.reset_password(&id, &password) }
-        });
-        cx.spawn_in(window, async move |this, cx| {
-            let outcome = task.await;
-            this.update_in(cx, |this, window, cx| {
-                this.busy.remove(&id);
-                match outcome {
-                    Ok(account) => {
-                        let message = format!(
-                            "{} must choose a new password at their next sign-in.",
-                            account.email
-                        );
-                        this.replace_user(account);
-                        this.resetting = None;
-                        this.reset_password
-                            .update(cx, |input, cx| input.set_text("", cx));
-                        toast_success(window, cx, message);
-                    }
-                    Err(error) => this.problem = Some(this.failed(&error, cx)),
-                }
-                cx.notify();
-            })
-            .ok();
-        })
-        .detach();
+        self.apply(
+            id,
+            move |keeper, id| keeper.update_user(id, &changes),
+            false,
+            window,
+            cx,
+        );
     }
 
     fn role_picker(
@@ -493,111 +384,74 @@ impl UsersPanel {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let busy = self.busy.contains(&user.id);
-        let status = if user.disabled {
-            "Disabled"
-        } else if user.must_change_password {
-            "Has a temporary password"
-        } else {
-            ""
-        };
-        let resetting = self.resetting.as_deref() == Some(user.id.as_str());
-        let id = user.id.clone();
+        let mut details = Vec::new();
+        if !user.name.trim().is_empty() {
+            details.push(user.email.clone());
+        }
+        details.push(licence_text(user));
+        if user.disabled {
+            details.push("Disabled".to_owned());
+        }
+        let grant_id = user.id.clone();
         let toggle_id = user.id.clone();
         let disabled_now = user.disabled;
-        v_flex()
+        h_flex()
             .id(("user-row", index))
             .px(px(10.))
             .py(px(8.))
-            .gap(px(8.))
+            .gap(px(12.))
+            .items_center()
             .rounded(px(RADIUS))
             .hover(|style| style.bg(palette.hover))
             .child(
-                h_flex()
-                    .gap(px(12.))
-                    .items_center()
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
                     .child(
-                        v_flex()
-                            .flex_1()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .text_size(px(14.))
-                                    .line_height(px(20.))
-                                    .text_color(if user.disabled {
-                                        palette.ink_faint
-                                    } else {
-                                        palette.ink
-                                    })
-                                    .child(label(user.display_name().to_owned()).ltr().truncate()),
-                            )
-                            .child(caption(
-                                palette,
-                                match (user.name.trim().is_empty(), status.is_empty()) {
-                                    (true, true) => String::new(),
-                                    (true, false) => status.to_owned(),
-                                    (false, true) => user.email.clone(),
-                                    (false, false) => format!("{} · {status}", user.email),
-                                },
-                            )),
+                        div()
+                            .text_size(px(14.))
+                            .line_height(px(20.))
+                            .text_color(if user.disabled {
+                                palette.ink_faint
+                            } else {
+                                palette.ink
+                            })
+                            .child(label(user.display_name().to_owned()).ltr().truncate()),
                     )
-                    .child(self.role_picker(&user.id, index, user.role, busy || own, cx))
-                    .child(
-                        ghost_sm(("user-reset", index), "Reset password")
-                            .disabled(busy || own)
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.resetting = if this.resetting.as_deref() == Some(id.as_str()) {
-                                    None
-                                } else {
-                                    Some(id.clone())
-                                };
-                                this.reset_password
-                                    .update(cx, |input, cx| input.set_text("", cx));
-                                if this.resetting.is_some() {
-                                    this.reset_password
-                                        .update(cx, |input, cx| input.focus(window, cx));
-                                }
-                                cx.notify();
-                            })),
-                    )
-                    .child(
-                        ghost_sm(
-                            ("user-toggle", index),
-                            if disabled_now { "Enable" } else { "Disable" },
-                        )
-                        .disabled(busy || own)
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| {
-                                this.change(
-                                    toggle_id.clone(),
-                                    UserChanges {
-                                        disabled: Some(!disabled_now),
-                                        ..UserChanges::default()
-                                    },
-                                    window,
-                                    cx,
-                                );
-                            },
-                        )),
-                    ),
+                    .child(caption(palette, details.join(" · "))),
             )
-            .when(resetting, |this| {
-                this.child(
-                    h_flex()
-                        .gap(px(8.))
-                        .items_center()
-                        .child(
-                            field("user-reset-password", &self.reset_password, Kind::Latin)
-                                .width(px(280.)),
-                        )
-                        .child(
-                            primary_sm(("user-reset-save", index), "Set temporary password")
-                                .disabled(busy)
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.reset(window, cx)),
-                                ),
-                        ),
+            .child(self.role_picker(&user.id, index, user.role, busy || own, cx))
+            .child(
+                ghost_sm(("user-licence", index), "Add 1 year")
+                    .disabled(busy || user.role.is_admin())
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.apply(
+                            grant_id.clone(),
+                            |keeper, id| keeper.grant_licence(id, 1),
+                            true,
+                            window,
+                            cx,
+                        );
+                    })),
+            )
+            .child(
+                ghost_sm(
+                    ("user-toggle", index),
+                    if disabled_now { "Enable" } else { "Disable" },
                 )
-            })
+                .disabled(busy || own)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.change(
+                        toggle_id.clone(),
+                        UserChanges {
+                            disabled: Some(!disabled_now),
+                            ..UserChanges::default()
+                        },
+                        window,
+                        cx,
+                    );
+                })),
+            )
             .into_any_element()
     }
 
@@ -640,54 +494,6 @@ impl UsersPanel {
             }
         }
     }
-
-    fn add_form(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let selected = Role::ALL
-            .iter()
-            .position(|role| *role == self.role)
-            .unwrap_or(0);
-        let roles = Role::ALL
-            .iter()
-            .enumerate()
-            .map(|(position, role)| {
-                let role = *role;
-                SegmentItem::new(
-                    ("new-user-role", position),
-                    role.label(),
-                    cx.listener(move |this, _, _, cx| {
-                        this.role = role;
-                        cx.notify();
-                    }),
-                )
-            })
-            .collect();
-        v_flex()
-            .gap(px(8.))
-            .p(px(12.))
-            .rounded(px(crate::theme::RADIUS_XL))
-            .bg(palette.hover.opacity(0.72))
-            .child(caption(palette, "Add a person"))
-            .child(
-                h_flex()
-                    .gap(px(8.))
-                    .child(field("new-user-email", &self.email, Kind::Latin).width(px(240.)))
-                    .child(field("new-user-name", &self.name, Kind::Latin).width(px(200.)))
-                    .child(field("new-user-password", &self.password, Kind::Latin).width(px(220.))),
-            )
-            .child(
-                h_flex()
-                    .gap(px(8.))
-                    .items_center()
-                    .child(segmented(roles, selected))
-                    .child(div().flex_1())
-                    .child(
-                        primary_sm("new-user-add", if self.adding { "Adding…" } else { "Add" })
-                            .disabled(self.adding)
-                            .on_click(cx.listener(|this, _, window, cx| this.add(window, cx))),
-                    ),
-            )
-            .into_any_element()
-    }
 }
 
 impl Render for UsersPanel {
@@ -698,9 +504,8 @@ impl Render for UsersPanel {
             .child(dialog_title("People"))
             .child(caption(
                 &palette,
-                "Members use templates. Publishers can also publish to the library. Administrators also manage people.",
+                "People create their own accounts. Members use templates, publishers can also publish to the library, and administrators also manage people. Add 1 year extends a licence from today or from its current end, whichever is later.",
             ))
-            .child(self.add_form(&palette, cx))
             .children(problem_line(&palette, self.problem.clone()))
             .child(div().h(px(LIST_HEIGHT)).child(self.list(&palette, cx)))
             .child(

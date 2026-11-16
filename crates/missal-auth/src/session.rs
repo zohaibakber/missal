@@ -34,6 +34,42 @@ impl Role {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LicenceStatus {
+    Trial,
+    Licensed,
+    Expired,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Licence {
+    pub status: LicenceStatus,
+    #[serde(rename = "until")]
+    pub until_ms: i64,
+}
+
+const DAY_MS: i64 = 24 * 60 * 60 * 1000;
+
+fn millis(at: SystemTime) -> i64 {
+    at.duration_since(UNIX_EPOCH).map_or(0, |since| {
+        i64::try_from(since.as_millis()).unwrap_or(i64::MAX)
+    })
+}
+
+impl Licence {
+    pub fn active(&self, now: SystemTime) -> bool {
+        self.status != LicenceStatus::Expired && self.until_ms > millis(now)
+    }
+
+    pub fn days_left(&self, now: SystemTime) -> i64 {
+        if !self.active(now) {
+            return 0;
+        }
+        (self.until_ms - millis(now) + DAY_MS - 1) / DAY_MS
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
@@ -41,11 +77,11 @@ pub struct Account {
     pub email: String,
     pub name: String,
     pub role: Role,
-    pub must_change_password: bool,
     #[serde(default)]
     pub disabled: bool,
     #[serde(default)]
     pub created_at: i64,
+    pub licence: Licence,
 }
 
 impl Account {
@@ -125,7 +161,7 @@ impl Session {
 
     pub fn usable_offline(&self, now: SystemTime) -> bool {
         let verified = self.verified_at();
-        now >= verified && now < self.offline_until() && !self.account.must_change_password
+        now >= verified && now < self.offline_until() && self.account.licence.active(now)
     }
 }
 
@@ -133,20 +169,26 @@ impl Session {
 mod tests {
     use super::*;
 
-    fn account(must_change_password: bool) -> Account {
+    const FAR: i64 = 253_402_300_799_000;
+
+    fn account(licence: Licence) -> Account {
         Account {
             id: "user_1".into(),
             email: "a@b.c".into(),
             name: String::new(),
             role: Role::Member,
-            must_change_password,
             disabled: false,
             created_at: 0,
+            licence,
         }
     }
 
     fn session_at(at: SystemTime) -> Session {
-        Session::verified(account(false), "refresh".into(), "access".into(), 900, at)
+        let licence = Licence {
+            status: LicenceStatus::Licensed,
+            until_ms: FAR,
+        };
+        Session::verified(account(licence), "refresh".into(), "access".into(), 900, at)
     }
 
     #[test]
@@ -164,10 +206,35 @@ mod tests {
     }
 
     #[test]
-    fn a_session_that_must_change_its_password_is_not_usable_offline() {
+    fn offline_use_ends_when_the_licence_ends() {
         let verified = UNIX_EPOCH + Duration::from_secs(1_800_000_000);
-        let session = Session::verified(account(true), "r".into(), "a".into(), 900, verified);
+        let until = verified + Duration::from_secs(3 * 24 * 60 * 60);
+        let trial = Licence {
+            status: LicenceStatus::Trial,
+            until_ms: super::millis(until),
+        };
+        let session = Session::verified(account(trial), "r".into(), "a".into(), 900, verified);
+        assert!(session.usable_offline(until - Duration::from_secs(1)));
+        assert!(!session.usable_offline(until));
+        let expired = Licence {
+            status: LicenceStatus::Expired,
+            until_ms: FAR,
+        };
+        let session = Session::verified(account(expired), "r".into(), "a".into(), 900, verified);
         assert!(!session.usable_offline(verified));
+    }
+
+    #[test]
+    fn days_left_rounds_a_started_day_up_and_stops_at_zero() {
+        let now = UNIX_EPOCH + Duration::from_secs(1_800_000_000);
+        let trial = |hours: u64| Licence {
+            status: LicenceStatus::Trial,
+            until_ms: super::millis(now + Duration::from_secs(hours * 60 * 60)),
+        };
+        assert_eq!(trial(7 * 24).days_left(now), 7);
+        assert_eq!(trial(25).days_left(now), 2);
+        assert_eq!(trial(1).days_left(now), 1);
+        assert_eq!(trial(0).days_left(now), 0);
     }
 
     #[test]
@@ -197,10 +264,17 @@ mod tests {
     #[test]
     fn accounts_read_the_server_shape() {
         let account: Account = serde_json::from_str(
-            r#"{"id":"u","email":"e@x.y","name":"","role":"publisher","mustChangePassword":false,"disabled":false,"createdAt":5}"#,
+            r#"{"id":"u","email":"e@x.y","name":"","role":"publisher","disabled":false,"createdAt":5,"licence":{"status":"trial","until":1790000000000}}"#,
         )
         .unwrap();
         assert_eq!(account.role, Role::Publisher);
+        assert_eq!(
+            account.licence,
+            Licence {
+                status: LicenceStatus::Trial,
+                until_ms: 1_790_000_000_000
+            }
+        );
         assert_eq!(account.display_name(), "e@x.y");
     }
 }

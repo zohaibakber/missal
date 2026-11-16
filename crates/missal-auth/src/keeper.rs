@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::SystemTime;
 
-use crate::client::{Api, NewUser, UserChanges};
+use crate::client::{Api, CodePurpose, UserChanges};
 use crate::config::Config;
 use crate::error::AuthError;
 use crate::session::{Account, Session};
@@ -49,12 +49,37 @@ impl SessionKeeper {
         *self.lock() = session;
     }
 
-    pub fn sign_in(&self, email: &str, password: &str) -> Result<Session, AuthError> {
-        let session = self.api.sign_in(email, password)?;
+    fn hold(&self, session: Result<Session, AuthError>) -> Result<Session, AuthError> {
+        let session = session?;
         let mut held = self.lock();
         self.save(&session);
         *held = Some(session.clone());
         Ok(session)
+    }
+
+    pub fn sign_in(&self, email: &str, password: &str) -> Result<Session, AuthError> {
+        self.hold(self.api.sign_in(email, password))
+    }
+
+    pub fn sign_up(&self, email: &str, name: &str, password: &str) -> Result<(), AuthError> {
+        self.api.sign_up(email, name, password)
+    }
+
+    pub fn request_code(&self, email: &str, purpose: CodePurpose) -> Result<(), AuthError> {
+        self.api.request_code(email, purpose)
+    }
+
+    pub fn verify_email(&self, email: &str, code: &str) -> Result<Session, AuthError> {
+        self.hold(self.api.verify_email(email, code))
+    }
+
+    pub fn reset_password(
+        &self,
+        email: &str,
+        code: &str,
+        password: &str,
+    ) -> Result<Session, AuthError> {
+        self.hold(self.api.reset_password(email, code, password))
     }
 
     pub fn sign_out(&self) {
@@ -91,19 +116,14 @@ impl SessionKeeper {
         self.api.users(&token)
     }
 
-    pub fn create_user(&self, user: &NewUser) -> Result<Account, AuthError> {
-        let token = self.access_token()?;
-        self.api.create_user(&token, user)
-    }
-
     pub fn update_user(&self, id: &str, changes: &UserChanges) -> Result<Account, AuthError> {
         let token = self.access_token()?;
         self.api.update_user(&token, id, changes)
     }
 
-    pub fn reset_password(&self, id: &str, password: &str) -> Result<Account, AuthError> {
+    pub fn grant_licence(&self, id: &str, years: u8) -> Result<Account, AuthError> {
         let token = self.access_token()?;
-        self.api.reset_password(&token, id, password)
+        self.api.grant_licence(&token, id, years)
     }
 
     fn token_held(&self, held: &mut Option<Session>) -> Result<String, AuthError> {

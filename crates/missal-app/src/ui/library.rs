@@ -28,7 +28,7 @@ const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-fn published_on(millis: i64) -> Option<String> {
+pub(crate) fn day_month_year(millis: i64) -> Option<String> {
     let date = chrono::DateTime::from_timestamp_millis(millis)?.date_naive();
     let month = MONTHS.get(date.month0() as usize)?;
     Some(format!("{} {month} {}", date.day(), date.year()))
@@ -40,7 +40,7 @@ fn meta(entry: &LibraryEntry) -> String {
     } else {
         format!("{} fields", entry.field_count)
     };
-    match published_on(entry.updated_at) {
+    match day_month_year(entry.updated_at) {
         Some(date) => format!("{fields} · updated {date}"),
         None => fields,
     }

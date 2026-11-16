@@ -6,9 +6,10 @@ pub enum AuthError {
     InvalidCredentials,
     Locked { retry_after: u64 },
     SessionEnded,
-    PasswordChangeRequired,
     WrongPassword,
-    EmailTaken,
+    InvalidCode,
+    EmailNotVerified,
+    LicenceRequired,
     OwnAccess,
     NotAllowed,
     NotFound,
@@ -39,9 +40,10 @@ impl fmt::Display for AuthError {
                 )
             }
             AuthError::SessionEnded => write!(f, "Your session has ended. Sign in again."),
-            AuthError::PasswordChangeRequired => write!(f, "Choose a new password first."),
             AuthError::WrongPassword => write!(f, "The current password is wrong."),
-            AuthError::EmailTaken => write!(f, "An account with this email already exists."),
+            AuthError::InvalidCode => write!(f, "That code is wrong or has expired."),
+            AuthError::EmailNotVerified => write!(f, "Confirm your email first."),
+            AuthError::LicenceRequired => write!(f, "Your Missal licence has ended."),
             AuthError::OwnAccess => {
                 write!(f, "You cannot remove your own administrator access.")
             }

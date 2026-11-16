@@ -1438,9 +1438,12 @@ impl SettingsScreen {
             match auth.state() {
                 crate::auth::AuthState::SignedIn { account, online } => {
                     let status = if *online { "" } else { " (offline)" };
+                    let trial = crate::auth::trial_days_left(account)
+                        .map(|days| format!(" · {}", crate::auth::trial_label(days)))
+                        .unwrap_or_default();
                     (
                         format!(
-                            "{} · {} · {}{status}",
+                            "{} · {} · {}{trial}{status}",
                             account.display_name(),
                             account.email,
                             account.role.label()

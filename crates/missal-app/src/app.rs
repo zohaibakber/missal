@@ -753,6 +753,10 @@ impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
         if let Some(auth) = AuthModel::get(cx).filter(|auth| !auth.read(cx).unlocked()) {
+            let title = match auth.read(cx).state() {
+                crate::auth::AuthState::LicenceExpired { .. } => "Licence",
+                _ => "Sign in",
+            };
             return v_flex()
                 .id("app-shell")
                 .size_full()
@@ -761,7 +765,7 @@ impl Render for AppShell {
                 .text_color(palette.ink)
                 .font_family(missal_text::UI_FAMILY)
                 .text_size(px(14.))
-                .child(Header::locked(HeaderContent::new("Sign in")))
+                .child(Header::locked(HeaderContent::new(title)))
                 .child(
                     div()
                         .flex_1()

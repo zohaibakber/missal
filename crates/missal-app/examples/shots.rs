@@ -7,6 +7,7 @@ use gpui_kit::{
     AnyWindowHandle, Bounds, HeadlessAppContext, Size, WindowBounds, WindowOptions, point, px, size,
 };
 use missal_app::app::{AppShell, ShellHandle, navigate, show_shortcuts, toggle_nav_menu};
+use missal_app::auth::{AuthModel, AuthState, Flow};
 use missal_app::db::Db;
 use missal_app::launch::{init_app, open_shell};
 use missal_app::prefs::{Preferences, ThemeChoice};
@@ -86,7 +87,13 @@ impl Harness {
     }
 }
 
-fn build(dark: bool, out: &Path, width: f32, height: f32) -> (Harness, tempfile::TempDir) {
+fn build(
+    dark: bool,
+    out: &Path,
+    width: f32,
+    height: f32,
+    auth: Option<missal_auth::Config>,
+) -> (Harness, tempfile::TempDir) {
     let directory = tempfile::tempdir().expect("tempdir");
     let database = directory.path().join("missal.db");
     seed_firs(&database, 90).expect("seed");
@@ -123,6 +130,9 @@ fn build(dark: bool, out: &Path, width: f32, height: f32) -> (Harness, tempfile:
     };
     let (handle, models) = cx.update(|cx| {
         let models = init_app(cx, Db::inline(store), None, preferences);
+        if let Some(config) = auth {
+            AuthModel::install_with(Some(config), None, cx);
+        }
         cx.set_reduce_motion(true);
         cx.set_global(ForceControls(ControlsStyle::Windows));
         let options = WindowOptions {
@@ -220,7 +230,7 @@ fn run_wp0(h: &mut Harness) {
 }
 
 fn run(dark: bool, out: &Path, only_wp0: bool) {
-    let (mut h, _directory) = build(dark, out, 1280.0, 800.0);
+    let (mut h, _directory) = build(dark, out, 1280.0, 800.0, None);
     run_wp0(&mut h);
     if only_wp0 {
         return;
@@ -377,11 +387,314 @@ fn main() {
         .position(|argument| argument == "--theme")
         .map(|index| args[index + 1].clone());
     let only_wp0 = args.iter().any(|argument| argument == "--wp0");
+    let only_gate = args.iter().any(|argument| argument == "--gate");
+    let api = fake_api::start();
     for dark in [false, true] {
         if only.as_deref().is_some_and(|only| (only == "dark") != dark) {
             continue;
         }
-        run(dark, &out, only_wp0);
+        if !only_gate {
+            run(dark, &out, only_wp0);
+        }
+        if !only_wp0 {
+            run_gate(dark, &out, &api);
+        }
     }
     let _ = Size::<gpui_kit::Pixels>::default;
+}
+
+impl Harness {
+    fn fill(&mut self, id: &'static str, text: &str) {
+        self.click(id);
+        self.with_window(|window, cx| window.input(text, cx));
+    }
+
+    fn replace(&mut self, id: &'static str, text: &str) {
+        self.click(id);
+        self.press("secondary-a");
+        self.with_window(|window, cx| window.input(text, cx));
+    }
+
+    fn wait_auth(&mut self, done: impl Fn(&AuthState) -> bool) {
+        for _ in 0..200 {
+            self.settle();
+            let ready = self
+                .cx
+                .update(|cx| AuthModel::get(cx).is_some_and(|auth| done(auth.read(cx).state())));
+            if ready {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        panic!("the sign-in gate never reached the expected state");
+    }
+
+    fn wait_flow(&mut self, expected: fn(&Flow) -> bool) {
+        self.wait_auth(|state| {
+            matches!(state, AuthState::SignedOut { flow, busy: false, .. } if expected(flow))
+        });
+    }
+
+    fn idle(&mut self) {
+        for _ in 0..20 {
+            self.settle();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+}
+
+fn noticed(state: &AuthState) -> bool {
+    matches!(
+        state,
+        AuthState::SignedOut {
+            notice: Some(_),
+            busy: false,
+            ..
+        } | AuthState::LicenceExpired {
+            notice: Some(_),
+            busy: false,
+            ..
+        }
+    )
+}
+
+fn run_gate(dark: bool, out: &Path, api: &str) {
+    let config = missal_auth::Config {
+        base_url: api.to_owned(),
+        purchase_url: Some("https://missal.example/buy".to_owned()),
+    };
+    let (mut h, _directory) = build(dark, out, 1280.0, 800.0, Some(config));
+    h.wait_flow(|flow| *flow == Flow::SignIn);
+    h.shot("40-gate-sign-in");
+
+    h.click("auth-sign-up");
+    h.wait_flow(|flow| *flow == Flow::SignUp);
+    h.fill("sign-up-name", "Amina Khan");
+    h.fill("sign-up-email", "new@example.com");
+    h.fill("auth-new-password", "short");
+    h.fill("auth-confirm", "short");
+    h.click("auth-submit");
+    h.shot("41-gate-sign-up-problem");
+    h.replace("auth-new-password", "correct horse battery");
+    h.replace("auth-confirm", "correct horse battery");
+    h.shot("41b-gate-sign-up");
+    h.click("auth-submit");
+    h.wait_flow(|flow| matches!(flow, Flow::VerifyEmail { .. }));
+    h.shot("42-gate-verify");
+    h.fill("verify-code", "000000");
+    h.click("auth-submit");
+    h.wait_auth(noticed);
+    h.shot("43-gate-verify-wrong-code");
+    h.click("auth-resend");
+    h.wait_auth(noticed);
+    h.shot("43b-gate-verify-resent");
+
+    h.click("auth-other-email");
+    h.wait_flow(|flow| *flow == Flow::SignUp);
+    h.click("auth-have-account");
+    h.wait_flow(|flow| *flow == Flow::SignIn);
+    h.fill("sign-in-password", "correct horse battery");
+    h.click("auth-submit");
+    h.wait_flow(|flow| matches!(flow, Flow::VerifyEmail { .. }));
+    h.shot("44-gate-sign-in-unverified");
+
+    h.click("auth-other-email");
+    h.wait_flow(|flow| *flow == Flow::SignUp);
+    h.click("auth-have-account");
+    h.wait_flow(|flow| *flow == Flow::SignIn);
+    h.click("auth-forgot");
+    h.wait_flow(|flow| *flow == Flow::ForgotPassword);
+    h.shot("45-gate-forgot");
+    h.click("auth-submit");
+    h.wait_flow(|flow| matches!(flow, Flow::ResetPassword { .. }));
+    h.fill("reset-code", "123456");
+    h.replace("auth-new-password", "short");
+    h.replace("auth-confirm", "shorter");
+    h.click("auth-submit");
+    h.shot("46-gate-reset");
+
+    h.click("auth-back");
+    h.wait_flow(|flow| *flow == Flow::SignIn);
+    h.replace("sign-in-email", "expired@example.com");
+    h.fill("sign-in-password", "correct horse battery");
+    h.click("auth-submit");
+    h.wait_auth(|state| matches!(state, AuthState::LicenceExpired { busy: false, .. }));
+    h.shot("47-gate-licence-expired");
+    h.click("auth-submit");
+    h.wait_auth(noticed);
+    h.shot("47b-gate-licence-check-again");
+
+    h.click("licence-sign-out");
+    h.wait_flow(|flow| *flow == Flow::SignIn);
+    h.replace("sign-in-email", "trial@example.com");
+    h.fill("sign-in-password", "correct horse battery");
+    h.click("auth-submit");
+    h.wait_auth(|state| matches!(state, AuthState::SignedIn { .. }));
+    h.go(Route::Firs);
+    h.click("account-menu");
+    h.shot("48-account-menu-trial");
+    h.press("escape");
+
+    h.with_window(|_, cx| {
+        AuthModel::get(cx)
+            .expect("auth")
+            .update(cx, |auth, cx| auth.sign_out(cx));
+    });
+    h.wait_flow(|flow| *flow == Flow::SignIn);
+    h.replace("sign-in-email", "admin@example.com");
+    h.fill("sign-in-password", "correct horse battery");
+    h.click("auth-submit");
+    h.wait_auth(|state| matches!(state, AuthState::SignedIn { .. }));
+    h.with_window(missal_app::ui::account::open_users);
+    h.idle();
+    h.shot("49-people");
+    h.with_window(|window, cx| window.click(("user-licence", 2usize), cx));
+    h.idle();
+    h.shot("49b-people-added-year");
+}
+
+mod fake_api {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::{Arc, Mutex};
+
+    use serde_json::{Value, json};
+
+    const DAY: i64 = 24 * 60 * 60 * 1000;
+    const FOREVER: i64 = 253_402_300_799_000;
+
+    fn now() -> i64 {
+        chrono::Utc::now().timestamp_millis()
+    }
+
+    fn licence(email: &str, paid: i64) -> Value {
+        match email {
+            "admin@example.com" => json!({ "status": "licensed", "until": FOREVER }),
+            "expired@example.com" => json!({ "status": "expired", "until": now() - 2 * DAY }),
+            "lapsed@example.com" if paid > now() => json!({ "status": "licensed", "until": paid }),
+            "lapsed@example.com" => json!({ "status": "expired", "until": now() - 40 * DAY }),
+            _ => json!({ "status": "trial", "until": now() + 4 * DAY + 3_600_000 }),
+        }
+    }
+
+    fn account(email: &str, paid: &Mutex<i64>) -> Value {
+        let paid = *paid.lock().expect("paid");
+        let (name, role, created) = match email {
+            "admin@example.com" => ("Admin", "admin", now() - 400 * DAY),
+            "lapsed@example.com" => ("Bilal Ahmed", "publisher", now() - 420 * DAY),
+            "trial@example.com" => ("Sara Malik", "member", now() - 3 * DAY),
+            _ => ("", "member", now() - 3 * DAY),
+        };
+        json!({
+            "id": email.split('@').next().unwrap_or("user"),
+            "email": email,
+            "name": name,
+            "role": role,
+            "disabled": false,
+            "createdAt": created,
+            "licence": licence(email, paid),
+        })
+    }
+
+    fn session(email: &str, paid: &Mutex<i64>) -> Value {
+        json!({
+            "accessToken": "access",
+            "refreshToken": email,
+            "expiresIn": 900,
+            "account": account(email, paid),
+        })
+    }
+
+    fn problem(tag: &str, error: &str) -> Value {
+        json!({ "_tag": tag, "error": error })
+    }
+
+    fn answer(method: &str, path: &str, body: &Value, paid: &Mutex<i64>) -> (u16, Value) {
+        let email = body["email"].as_str().unwrap_or_default();
+        match (method, path) {
+            ("POST", "/v1/auth/sign-up" | "/v1/auth/codes") => (202, json!({})),
+            ("POST", "/v1/auth/sign-in") if email.starts_with("new") => {
+                (403, problem("EmailNotVerified", "confirm your email first"))
+            }
+            ("POST", "/v1/auth/sign-in") => (200, session(email, paid)),
+            ("POST", "/v1/auth/verify-email" | "/v1/auth/reset-password")
+                if body["code"] == "123456" =>
+            {
+                (200, session(email, paid))
+            }
+            ("POST", "/v1/auth/verify-email" | "/v1/auth/reset-password") => (
+                400,
+                problem("InvalidCode", "that code is wrong or has expired"),
+            ),
+            ("POST", "/v1/auth/refresh") => (
+                200,
+                session(body["refreshToken"].as_str().unwrap_or_default(), paid),
+            ),
+            ("POST", "/v1/auth/sign-out") => (204, Value::Null),
+            ("GET", "/v1/users") => (
+                200,
+                json!([
+                    account("admin@example.com", paid),
+                    account("trial@example.com", paid),
+                    account("lapsed@example.com", paid),
+                ]),
+            ),
+            ("POST", "/v1/users/lapsed/licence") if body["years"] == 1 => {
+                *paid.lock().expect("paid") = now() + 365 * DAY;
+                (200, account("lapsed@example.com", paid))
+            }
+            _ => (404, problem("NotFound", "not found")),
+        }
+    }
+
+    fn serve(stream: TcpStream, paid: &Mutex<i64>) -> std::io::Result<()> {
+        let mut reader = BufReader::new(stream.try_clone()?);
+        let mut line = String::new();
+        reader.read_line(&mut line)?;
+        let mut parts = line.split_whitespace();
+        let method = parts.next().unwrap_or_default().to_owned();
+        let path = parts.next().unwrap_or_default().to_owned();
+        let mut length = 0;
+        loop {
+            let mut header = String::new();
+            reader.read_line(&mut header)?;
+            if header.trim().is_empty() {
+                break;
+            }
+            if let Some((name, value)) = header.split_once(':')
+                && name.eq_ignore_ascii_case("content-length")
+            {
+                length = value.trim().parse().unwrap_or(0);
+            }
+        }
+        let mut body = vec![0; length];
+        reader.read_exact(&mut body)?;
+        let body = serde_json::from_slice(&body).unwrap_or(Value::Null);
+        let (status, reply) = answer(&method, &path, &body, paid);
+        let text = if reply.is_null() {
+            String::new()
+        } else {
+            reply.to_string()
+        };
+        let mut stream = stream;
+        write!(
+            stream,
+            "HTTP/1.1 {status} OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}",
+            text.len()
+        )
+    }
+
+    pub fn start() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let address = listener.local_addr().expect("address");
+        let paid = Arc::new(Mutex::new(0));
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                if let Err(error) = serve(stream, &paid) {
+                    eprintln!("fake api: {error}");
+                }
+            }
+        });
+        format!("http://{address}")
+    }
 }

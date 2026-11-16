@@ -1,4 +1,6 @@
 const URL_VARIABLE: &str = "MISSAL_API_URL";
+const PURCHASE_VARIABLE: &str = "MISSAL_PURCHASE_URL";
+const BUILT_PURCHASE_URL: Option<&str> = option_env!("MISSAL_PURCHASE_URL");
 
 #[cfg(not(debug_assertions))]
 const BUILT_URL: Option<&str> = Some(env!(
@@ -18,6 +20,12 @@ const BUILT_URL: Option<&str> = option_env!("MISSAL_API_URL");
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
     pub base_url: String,
+    pub purchase_url: Option<String>,
+}
+
+fn https(value: &str) -> Option<String> {
+    let value = value.trim();
+    (value.starts_with("https://") && value.len() > "https://".len()).then(|| value.to_owned())
 }
 
 fn usable(value: &str) -> Option<String> {
@@ -35,13 +43,20 @@ impl Config {
             .as_deref()
             .and_then(usable)
             .or_else(|| BUILT_URL.and_then(usable))
-            .map(|base_url| Config { base_url })
+            .map(|base_url| Config {
+                base_url,
+                purchase_url: std::env::var(PURCHASE_VARIABLE)
+                    .ok()
+                    .as_deref()
+                    .and_then(https)
+                    .or_else(|| BUILT_PURCHASE_URL.and_then(https)),
+            })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::usable;
+    use super::{https, usable};
 
     #[test]
     fn only_https_or_a_local_server_is_accepted() {
@@ -52,5 +67,16 @@ mod tests {
         assert!(usable("http://127.0.0.1:1337").is_some());
         assert!(usable("http://api.example.com").is_none());
         assert!(usable("").is_none());
+    }
+
+    #[test]
+    fn the_purchase_link_must_be_https() {
+        assert_eq!(
+            https(" https://missal.example/buy ").as_deref(),
+            Some("https://missal.example/buy")
+        );
+        assert!(https("http://missal.example/buy").is_none());
+        assert!(https("https://").is_none());
+        assert!(https("").is_none());
     }
 }
