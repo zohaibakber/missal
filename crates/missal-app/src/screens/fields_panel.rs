@@ -6,9 +6,9 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, App, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight,
-    InteractiveElement, IntoElement, ParentElement, Render, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Window, div, px,
+    AnyElement, App, Context, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement,
+    IntoElement, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled,
+    Subscription, Window, div, px,
 };
 use missal_core::{
     DisplayMode, FieldPresentation, FieldReference, FirField, FirId, FirValues, PlaceholderId,
@@ -410,30 +410,10 @@ impl FieldsPanel {
         }
     }
 
-    fn tabs(&self, palette: &Palette, empty: usize, cx: &mut Context<Self>) -> AnyElement {
-        let palette = *palette;
+    fn tabs(&self, empty: usize, cx: &mut Context<Self>) -> AnyElement {
         let tab = |id: &'static str, text: &'static str, which: FieldsTab, badge: Option<usize>| {
-            let on = self.tab == which;
-            let ink = palette.ink;
-            h_flex()
-                .id(id)
+            crate::ui::tab(id, self.tab == which)
                 .flex_1()
-                .h(px(crate::theme::SEGMENTED_ITEM))
-                .px(px(12.))
-                .gap(px(6.))
-                .items_center()
-                .justify_center()
-                .rounded(px(crate::theme::RADIUS_PILL))
-                .when(on, |this| {
-                    this.bg(palette.floating()).shadow(palette.thumb_shadow())
-                })
-                .text_size(px(13.))
-                .line_height(px(20.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(if on { palette.ink } else { palette.ink_muted })
-                .role(gpui_kit::accesskit::Role::Tab)
-                .when(on, |this| this.aria_selected(true))
-                .when(!on, |this| this.hover(move |s| s.text_color(ink)))
                 .when_some(badge.filter(|count| *count > 0), |this, count| {
                     this.tooltip(crate::ui::tooltip(
                         if count == 1 {
@@ -447,48 +427,32 @@ impl FieldsPanel {
                 })
                 .on_click(cx.listener(move |this, _, _, cx| this.set_tab(which, cx)))
                 .child(text)
-                .children(
-                    badge
-                        .filter(|count| *count > 0)
-                        .map(|count| count_badge(&palette, count)),
-                )
-                .test_support()
+                .children(badge.filter(|count| *count > 0).map(|count| {
+                    crate::ui::badge(crate::ui::BadgeVariant::Intent(crate::ui::Intent::Warning))
+                        .child(count.to_string())
+                }))
         };
         h_flex()
             .flex_none()
-            .h(px(TAB_HEIGHT))
+            .h(px(TAB_HEIGHT + 8.))
             .px(px(12.))
+            .pt(px(8.))
             .items_center()
             .child(
-                h_flex()
+                crate::ui::tab_list()
                     .flex_1()
-                    .h(px(crate::theme::SEGMENTED_TRACK))
-                    .p(px(2.))
-                    .gap(px(2.))
-                    .items_center()
-                    .rounded(px(crate::theme::RADIUS_PILL))
-                    .bg(crate::ui::muted_fill(&palette))
                     .child(tab("fields-tab", "Fields", FieldsTab::Fields, Some(empty)))
                     .child(tab("details-tab", "Case details", FieldsTab::Details, None)),
             )
             .into_any_element()
     }
 
-    fn section(palette: &Palette, title: &'static str, count: Option<usize>) -> AnyElement {
+    fn section(title: &'static str, count: Option<usize>) -> AnyElement {
         h_flex()
-            .px(px(16.))
-            .pt(px(16.))
-            .pb(px(4.))
-            .gap(px(8.))
+            .px(px(8.))
+            .pt(px(12.))
             .items_center()
-            .child(section_label(palette, title))
-            .children(count.map(|count| {
-                div()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .text_color(palette.ink_faint)
-                    .child(count.to_string())
-            }))
+            .child(section_label(title).children(count.map(count_badge)))
             .into_any_element()
     }
 
@@ -498,7 +462,7 @@ impl FieldsPanel {
                 .flex_1()
                 .min_w_0()
                 .pt(px(3.))
-                .text_size(px(13.))
+                .text_size(px(14.))
                 .line_height(px(20.))
                 .text_color(palette.ink)
                 .child(
@@ -556,7 +520,7 @@ impl FieldsPanel {
                 div()
                     .px(px(16.))
                     .py(px(12.))
-                    .text_size(px(13.))
+                    .text_size(px(14.))
                     .text_color(palette.ink_muted)
                     .child("Open a document to see its fields.")
                     .into_any_element(),
@@ -587,7 +551,7 @@ impl FieldsPanel {
                     )
                     .child(
                         div()
-                            .text_size(px(13.))
+                            .text_size(px(14.))
                             .line_height(px(20.))
                             .text_color(palette.ink_muted)
                             .child("Every field in this document is filled."),
@@ -604,7 +568,7 @@ impl FieldsPanel {
                 if items.is_empty() {
                     continue;
                 }
-                out.push(Self::section(&palette, title, Some(items.len())));
+                out.push(Self::section(title, Some(items.len())));
                 if group == 0 {
                     out.push(
                         div()
@@ -645,7 +609,7 @@ impl FieldsPanel {
             out.push(
                 div()
                     .pt(px(4.))
-                    .child(Self::section(&palette, "Filled", Some(filled.len())))
+                    .child(Self::section("Filled", Some(filled.len())))
                     .into_any_element(),
             );
             for (index, item) in filled.iter().enumerate() {
@@ -770,7 +734,7 @@ impl FieldsPanel {
             div()
                 .flex_1()
                 .pt(px(3.))
-                .text_size(px(13.))
+                .text_size(px(14.))
                 .line_height(px(20.))
                 .text_color(palette.ink_faint)
                 .child(label("—").align(Align::Right).leading(LineHeight::Px(20.)))
@@ -787,7 +751,7 @@ impl FieldsPanel {
             h_flex()
                 .flex_1()
                 .flex_row_reverse()
-                .child(status_label(&palette, fir.status).flex_row_reverse())
+                .child(status_label(fir.status).flex_row_reverse())
                 .into_any_element(),
         );
         push(&mut out, "جرم", text(&fir.offence).unwrap_or_else(dash));
@@ -878,7 +842,7 @@ impl FieldsPanel {
         out.push(
             div()
                 .pt(px(12.))
-                .child(Self::section(&palette, "Custom values", Some(with_value)))
+                .child(Self::section("Custom values", Some(with_value)))
                 .into_any_element(),
         );
         if self.show_all || total > 12 {
@@ -950,7 +914,7 @@ impl FieldsPanel {
                 div()
                     .px(px(16.))
                     .py(px(8.))
-                    .text_size(px(13.))
+                    .text_size(px(14.))
                     .text_color(palette.ink_muted)
                     .child("No custom fields match.")
                     .into_any_element(),
@@ -1009,8 +973,8 @@ impl Render for FieldsPanel {
             .h_full()
             .rounded(px(crate::theme::RADIUS_XL))
             .bg(palette.surface)
-            .shadow(palette.shadow_xs())
-            .child(self.tabs(&palette, empty, cx))
+            .shadow(palette.shadow_sm())
+            .child(self.tabs(empty, cx))
             .child(
                 v_flex()
                     .id("fields-panel-scroll")

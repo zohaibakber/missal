@@ -2,30 +2,69 @@ use std::rc::Rc;
 
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::{h_flex, v_flex};
+use gpui_kit::component::{StyledExt as _, h_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, App, ClickEvent, Div, ElementId, FontWeight, InteractiveElement, IntoElement,
+    AnyElement, App, ClickEvent, ElementId, FontWeight, InteractiveElement, IntoElement,
     ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
-use crate::theme::{ICON_SM, MENU_ITEM, Palette, RADIUS_LG, RADIUS_SM};
-use crate::ui::{ClickHandler, KeyTone, keycaps_toned, sized_icon};
+use crate::theme::{ICON, ICON_SM, MENU_ITEM, Palette, RADIUS_LG, RADIUS_SM};
+use crate::ui::part::{Part, part};
+use crate::ui::{ClickHandler, KeyTone, sized_icon};
 
 type HoverHandler = Rc<dyn Fn(&mut Window, &mut App)>;
 
-pub fn menu_panel(palette: &Palette) -> Div {
-    v_flex()
-        .p(px(4.))
-        .rounded(px(RADIUS_LG + 2.))
-        .bg(palette.raised)
-        .text_color(palette.ink)
-        .shadow(palette.shadow_lg())
-        .font_family(missal_text::UI_FAMILY)
+pub fn menu_popup() -> Part {
+    part(|base, palette| {
+        base.v_flex()
+            .p(px(4.))
+            .min_w(px(128.))
+            .rounded(px(RADIUS_LG))
+            .bg(palette.raised)
+            .text_color(palette.ink)
+            .shadow(palette.shadow_lg())
+            .font_family(missal_text::UI_FAMILY)
+    })
 }
 
-pub fn menu_separator(palette: &Palette) -> Div {
-    div().h(px(1.)).my(px(4.)).mx(px(8.)).bg(palette.line)
+pub fn menu_separator() -> Part {
+    part(|base, palette| base.h(px(1.)).my(px(4.)).mx(px(8.)).bg(palette.line))
+}
+
+pub fn menu_group_label() -> Part {
+    part(|base, palette| {
+        base.h_flex()
+            .h(px(MENU_ITEM))
+            .px(px(8.))
+            .items_center()
+            .text_size(px(12.))
+            .line_height(px(16.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(palette.ink_muted)
+    })
+}
+
+pub fn menu_header() -> Part {
+    part(|base, palette| {
+        base.v_flex()
+            .px(px(8.))
+            .py(px(6.))
+            .min_w_0()
+            .text_size(px(14.))
+            .line_height(px(20.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(palette.ink)
+    })
+}
+
+pub fn menu_header_detail() -> Part {
+    part(|base, palette| {
+        base.text_size(px(12.))
+            .line_height(px(16.))
+            .font_weight(FontWeight::NORMAL)
+            .text_color(palette.ink_muted)
+    })
 }
 
 pub enum Lead {
@@ -149,20 +188,22 @@ impl RenderOnce for MenuItem {
         } else {
             palette.ink
         };
-        let icon_color = if self.danger {
-            palette.danger_text
-        } else {
-            palette.ink_muted
-        };
+        let icon_color = text.opacity(0.8);
         let lead: Option<AnyElement> = match self.lead {
             Lead::None => None,
-            Lead::Icon(name) => Some(sized_icon(name, ICON_SM, icon_color).into_any_element()),
+            Lead::Icon(name) => Some(
+                div()
+                    .mx(px(-2.))
+                    .child(sized_icon(name, ICON, icon_color))
+                    .into_any_element(),
+            ),
             Lead::Check(checked) => Some(
                 div()
-                    .size(px(ICON_SM))
+                    .size(px(ICON))
                     .flex_none()
+                    .mx(px(-2.))
                     .when(checked, |this| {
-                        this.child(sized_icon(IconName::Check, ICON_SM, palette.ink))
+                        this.child(sized_icon(IconName::Check, ICON, palette.ink))
                     })
                     .into_any_element(),
             ),
@@ -170,9 +211,11 @@ impl RenderOnce for MenuItem {
         };
         let trail: Option<AnyElement> = match self.trail {
             Trail::None => None,
-            Trail::Keys(keys) => {
-                Some(keycaps_toned(&palette, &keys, KeyTone::Bare).into_any_element())
-            }
+            Trail::Keys(keys) => Some(
+                crate::ui::kbd_group(keys.clone())
+                    .tone(KeyTone::Bare)
+                    .into_any_element(),
+            ),
             Trail::Text(value) => Some(
                 h_flex()
                     .flex_none()
@@ -190,11 +233,17 @@ impl RenderOnce for MenuItem {
                     .into_any_element(),
             ),
             Trail::Chevron => Some(
-                sized_icon(IconName::ChevronRight, ICON_SM, palette.ink_muted).into_any_element(),
+                div()
+                    .mr(px(-2.))
+                    .child(sized_icon(
+                        IconName::ChevronRight,
+                        ICON,
+                        palette.ink.opacity(0.8),
+                    ))
+                    .into_any_element(),
             ),
         };
-        let hover = crate::ui::accent_fill(&palette);
-        let pressed = crate::ui::accent_fill_strong(&palette);
+        let hover = palette.hover;
         let on_click = self.on_click.filter(|_| !self.disabled);
         let on_hover = self.on_hover;
         h_flex()
@@ -205,17 +254,15 @@ impl RenderOnce for MenuItem {
             .gap(px(8.))
             .items_center()
             .rounded(px(RADIUS_SM))
-            .text_size(px(13.5))
+            .text_size(px(14.))
+            .line_height(px(20.))
             .font_weight(FontWeight::NORMAL)
             .text_color(text)
             .role(gpui_kit::accesskit::Role::MenuItem)
             .when(self.rtl, |this| this.flex_row_reverse())
             .when(self.highlighted, |this| this.bg(hover))
-            .when(self.disabled, |this| this.opacity(0.45))
-            .when(!self.disabled, |this| {
-                this.hover(move |s| s.bg(hover))
-                    .active(move |s| s.bg(pressed))
-            })
+            .when(self.disabled, |this| this.opacity(0.64))
+            .when(!self.disabled, |this| this.hover(move |s| s.bg(hover)))
             .when_some(on_hover, |this, handler| {
                 this.on_hover(move |hovered, window, cx| {
                     if *hovered {

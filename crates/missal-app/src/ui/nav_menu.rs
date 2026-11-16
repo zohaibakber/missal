@@ -8,8 +8,8 @@ use gpui_kit::{
 use crate::app::{import_word_file, navigate, set_theme, show_about, show_shortcuts};
 use crate::prefs::ThemeChoice;
 use crate::state::{Models, Route};
-use crate::theme::{HEADER_HEIGHT, MENU_ITEM, NAV_MENU_WIDTH, Palette, motion_fast};
-use crate::ui::menu::{menu_item, menu_panel, menu_separator};
+use crate::theme::{HEADER_HEIGHT, MENU_ITEM, NAV_MENU_WIDTH, motion_fast};
+use crate::ui::menu::{menu_item, menu_popup, menu_separator};
 
 pub struct Dismissed;
 
@@ -296,17 +296,16 @@ impl NavMenu {
 
 impl Render for NavMenu {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = *Palette::get(cx);
         let theme = Models::get(cx).prefs.read(cx).read().theme;
         let highlighted = self.highlighted;
-        let mut panel = menu_panel(&palette)
+        let mut panel = menu_popup()
             .id("nav-menu-panel")
             .w(px(NAV_MENU_WIDTH))
             .occlude()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation());
         for (index, entry) in NavEntry::ALL.into_iter().enumerate() {
             if entry.separated_before() {
-                panel = panel.child(menu_separator(&palette));
+                panel = panel.child(menu_separator());
             }
             let mut item = menu_item(entry.id(), entry.label())
                 .icon(entry.icon())
@@ -322,7 +321,7 @@ impl Render for NavMenu {
         }
         let submenu = self.theme_open.then(|| {
             let theme_highlighted = self.theme_highlighted;
-            menu_panel(&palette)
+            menu_popup()
                 .id("nav-theme-menu")
                 .absolute()
                 .left(px(NAV_MENU_WIDTH - 4.))

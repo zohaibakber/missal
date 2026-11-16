@@ -212,13 +212,11 @@ impl LibraryPanel {
             Load::Loading => v_flex()
                 .gap(px(10.))
                 .pt(px(8.))
-                .children((0..5).map(|_| skeleton_bar(palette, WIDTH - 40., 40.)))
+                .children((0..5).map(|_| skeleton_bar(WIDTH - 40., 40.)))
                 .into_any_element(),
             Load::Failed(message) => div()
                 .pt(px(40.))
-                .child(empty_state_body(
-                    palette,
-                    IconName::TriangleAlert,
+                .child(empty_state_body(IconName::TriangleAlert,
                     "Could not open the library",
                     Some(SharedString::from(message.clone())),
                     Some(
@@ -232,9 +230,7 @@ impl LibraryPanel {
                 .into_any_element(),
             Load::Ready if model.entries.is_empty() => div()
                 .pt(px(48.))
-                .child(empty_state_body(
-                    palette,
-                    IconName::Library,
+                .child(empty_state_body(IconName::Library,
                     "Nothing has been published yet",
                     model.publisher.then(|| {
                         SharedString::from(
@@ -290,7 +286,7 @@ impl Render for LibraryPanel {
             )
             .child(
                 div()
-                    .text_size(px(13.))
+                    .text_size(px(14.))
                     .line_height(px(20.))
                     .text_color(palette.ink_muted)
                     .child(label(subtitle).leading(LineHeight::Px(20.))),
@@ -302,7 +298,7 @@ impl Render for LibraryPanel {
                     .child(self.body(&palette, cx)),
             )
             .child(
-                dialog_footer(&palette).child(div().flex_1()).child(
+                dialog_footer().child(div().flex_1()).child(
                     button("library-close", "Close")
                         .primary()
                         .on_click(|_, window, cx| window.close_dialog(cx)),

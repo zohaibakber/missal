@@ -4,13 +4,11 @@ use std::rc::Rc;
 
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::menu::DropdownMenu as _;
-use gpui_kit::component::menu::PopupMenuItem;
-use gpui_kit::component::{StyledExt, h_flex, v_flex};
+use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 
 use gpui_kit::{
-    Anchor, App, AppContext, Bounds, Context, Entity, ExternalPaths, FocusHandle,
+    Anchor, App, AppContext, Bounds, Context, Entity, ExternalPaths, FocusHandle, FontWeight,
     InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Pixels, Render, ScrollStrategy,
     SharedString, StatefulInteractiveElement, Styled, Subscription, UniformListScrollHandle,
     Window, canvas, div, point, px, uniform_list,
@@ -35,12 +33,12 @@ use crate::theme::Palette;
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
 use crate::ui::input::{Kind, field, field_input, search_field};
 use crate::ui::library::open_library;
-use crate::ui::popup_menu::{Dismissed, Placement, PopupEntry, PopupList, PopupRow};
+use crate::ui::popup_menu::{Dismissed, MenuContent, MenuEntry, Placement, PopupList, menu};
 use crate::ui::print_preview::{PreviewDocument, PrintRequest};
 use crate::ui::titlebar::HeaderContent;
 use crate::ui::{
-    SaveState, empty_state, empty_state_body, ghost_sm, icon_button, isolate_urdu, kit_icon_button,
-    primary_sm, save_state, section_label, warn_box,
+    Intent, SaveState, alert, empty_state, empty_state_body, ghost_sm, icon_button, isolate_urdu,
+    primary_sm, save_state, section_label,
 };
 use crate::word::{WordImport, is_docx};
 
@@ -122,6 +120,17 @@ impl TemplatePage {
             review: None,
             _subscriptions: vec![editor_subscription, title_subscription],
         };
+        let weak = cx.weak_entity();
+        page.editor.update(cx, |editor, cx| {
+            editor.set_toolbar_end(
+                move |_, cx| {
+                    weak.update(cx, |page, cx| page.name_pill(cx))
+                        .ok()
+                        .flatten()
+                },
+                cx,
+            )
+        });
         page.load(window, cx);
         page
     }
@@ -620,7 +629,7 @@ impl TemplatePage {
         div()
             .id("template-title")
             .occlude()
-            .w(px(360.))
+            .w(px(280.))
             .on_action(cx.listener(|this, _: &BlurFocus, window, cx| {
                 if this.is_renaming() {
                     this.cancel_rename(window, cx);
@@ -628,14 +637,17 @@ impl TemplatePage {
                     cx.propagate();
                 }
             }))
-            .child(field("template-title-field", &self.title, Kind::Urdu).width(px(360.)))
+            .child(field("template-title-field", &self.title, Kind::Urdu).width(px(280.)))
             .into_any_element()
     }
 
-    fn title_strip(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+    fn name_pill(&self, cx: &mut Context<Self>) -> Option<gpui_kit::AnyElement> {
         let palette = *Palette::get(cx);
+        if self.state != PageState::Ready {
+            return None;
+        }
         if self.id.is_none() || self.renaming {
-            return self.title_field(cx);
+            return Some(self.title_field(cx));
         }
         let name = self.title.read(cx).text().trim().to_owned();
         let shown = if name.is_empty() {
@@ -643,30 +655,31 @@ impl TemplatePage {
         } else {
             name
         };
-        div()
-            .id("template-name")
-            .max_w(px(360.))
-            .h(px(28.))
-            .px(px(8.))
-            .flex()
-            .items_center()
-            .rounded(px(6.))
-            .hover(move |style| style.bg(palette.hover))
-            .active(move |s| s.bg(palette.pressed))
-            .on_click(cx.listener(|this, _, window, cx| this.begin_rename(window, cx)))
-            .child(
-                label(shown)
-                    .text_size(px(18.))
-                    .text_color(palette.ink)
-                    .rtl()
-                    .leading(missal_text::LineHeight::Px(30.))
-                    .truncate(),
-            )
-            .into_any_element()
+        Some(
+            div()
+                .id("template-name")
+                .max_w(px(280.))
+                .h(px(32.))
+                .px(px(12.))
+                .flex()
+                .items_center()
+                .rounded(px(crate::theme::RADIUS_LG))
+                .hover(move |style| style.bg(palette.hover))
+                .active(move |s| s.bg(palette.pressed))
+                .on_click(cx.listener(|this, _, window, cx| this.begin_rename(window, cx)))
+                .child(
+                    label(shown)
+                        .text_size(px(18.))
+                        .text_color(palette.ink)
+                        .rtl()
+                        .leading(missal_text::LineHeight::Px(30.))
+                        .truncate(),
+                )
+                .into_any_element(),
+        )
     }
 
     pub fn header(&mut self, cx: &mut Context<Self>) -> HeaderContent {
-        let palette = *Palette::get(cx);
         if self.state != PageState::Ready {
             return HeaderContent::new("Template");
         }
@@ -693,9 +706,9 @@ impl TemplatePage {
             let save_enabled = !name.is_empty() && !self.saving && !self.importing;
             return HeaderContent::element(
                 div()
-                    .text_size(px(15.))
+                    .text_size(px(14.))
                     .line_height(px(20.))
-                    .font_semibold()
+                    .font_weight(FontWeight::MEDIUM)
                     .whitespace_nowrap()
                     .child(label(format!("Import: {file}")).ltr().truncate()),
             )
@@ -710,8 +723,7 @@ impl TemplatePage {
                     .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
             );
         }
-        let mut content = HeaderContent::new(if is_new { "New template" } else { "Template" })
-            .meta_element(self.title_strip(cx));
+        let mut content = HeaderContent::new(if is_new { "New template" } else { "Template" });
         if is_new {
             let save_enabled = !name.is_empty() && !self.saving && !self.importing;
             content = content
@@ -738,7 +750,7 @@ impl TemplatePage {
             SaveState::Saved
         };
         content
-            .action(save_state(&palette, state))
+            .action(save_state(state))
             .action(
                 icon_button("template-print", IconName::Printer, "Preview")
                     .keys("Mod+P")
@@ -747,13 +759,13 @@ impl TemplatePage {
                     ),
             )
             .action(
-                kit_icon_button("template-more", IconName::Ellipsis)
-                    .tooltip("More actions")
-                    .dropdown_menu(move |menu, _, cx| {
-                        let replace = weak.clone();
-                        let duplicate = weak.clone();
-                        let delete = weak.clone();
-                        let publish = weak.clone();
+                menu("template-more")
+                    .trigger(icon_button(
+                        "template-more",
+                        IconName::Ellipsis,
+                        "More actions",
+                    ))
+                    .content(move |menu, _, cx| {
                         let template = weak.upgrade().and_then(|page| page.read(cx).id);
                         let library = LibraryModel::get(cx)
                             .map(|library| library.read(cx))
@@ -771,54 +783,59 @@ impl TemplatePage {
                             },
                             _ => None,
                         };
-                        let menu = match publishing {
-                            Some((text, enabled)) => menu
-                                .item(
-                                    PopupMenuItem::new(text)
-                                        .icon(IconName::CloudUpload)
-                                        .disabled(!enabled)
-                                        .on_click(move |_, window, cx| {
-                                            publish
-                                                .update(cx, |this, cx| this.publish(window, cx))
-                                                .ok();
-                                        }),
-                                )
-                                .item(PopupMenuItem::separator()),
-                            None => menu,
+                        let action = |id: &'static str,
+                                      text: &'static str,
+                                      icon: IconName,
+                                      run: fn(
+                            &mut TemplatePage,
+                            &mut Window,
+                            &mut Context<TemplatePage>,
+                        )| {
+                            let weak = weak.clone();
+                            MenuEntry::new(id, text, move |window, cx| {
+                                weak.update(cx, |this, cx| run(this, window, cx)).ok();
+                            })
+                            .icon(icon)
                         };
-                        menu.item(
-                            PopupMenuItem::new("Replace from Word file…")
-                                .icon(IconName::FileUp)
-                                .on_click(move |_, window, cx| {
-                                    replace
-                                        .update(cx, |this, cx| this.request_import(window, cx))
-                                        .ok();
-                                }),
-                        )
+                        menu.when_some(publishing, |menu, (text, enabled)| {
+                            menu.item(
+                                action(
+                                    "template-publish",
+                                    text,
+                                    IconName::CloudUpload,
+                                    |this, window, cx| this.publish(window, cx),
+                                )
+                                .disabled(!enabled),
+                            )
+                            .separator()
+                        })
+                        .item(action(
+                            "template-replace",
+                            "Replace from Word file…",
+                            IconName::FileUp,
+                            |this, window, cx| this.request_import(window, cx),
+                        ))
+                        .item(action(
+                            "template-duplicate",
+                            "Duplicate",
+                            IconName::Copy,
+                            |this, window, cx| this.duplicate(window, cx),
+                        ))
+                        .separator()
                         .item(
-                            PopupMenuItem::new("Duplicate")
-                                .icon(IconName::Copy)
-                                .on_click(move |_, window, cx| {
-                                    duplicate
-                                        .update(cx, |this, cx| this.duplicate(window, cx))
-                                        .ok();
-                                }),
-                        )
-                        .item(PopupMenuItem::separator())
-                        .item(
-                            PopupMenuItem::new("Delete").icon(IconName::Trash).on_click(
-                                move |_, window, cx| {
-                                    delete
-                                        .update(cx, |this, cx| this.request_delete(window, cx))
-                                        .ok();
-                                },
-                            ),
+                            action(
+                                "template-delete",
+                                "Delete",
+                                IconName::Trash,
+                                |this, window, cx| this.request_delete(window, cx),
+                            )
+                            .danger(),
                         )
                     }),
             )
     }
 
-    fn review_notes(&self, palette: &Palette) -> Option<gpui_kit::AnyElement> {
+    fn review_notes(&self) -> Option<gpui_kit::AnyElement> {
         let review = self.review.as_ref()?;
         if review.unrecognised.is_empty() && review.notices.is_empty() {
             return None;
@@ -855,8 +872,7 @@ impl TemplatePage {
                 .px_4()
                 .pt_3()
                 .pb_1()
-                .child(warn_box(
-                    palette,
+                .child(alert(Intent::Warning).child(
                     v_flex().gap(px(2.)).children(
                         lines.into_iter().map(|line| {
                             label(line).ltr().leading(missal_text::LineHeight::Px(20.))
@@ -873,18 +889,11 @@ impl Render for TemplatePage {
         let palette = *Palette::get(cx);
         match &self.state {
             PageState::NotFound => {
-                return empty_state(
-                    &palette,
-                    IconName::FileText,
-                    "Template not found",
-                    None,
-                    None,
-                )
-                .into_any_element();
+                return empty_state(IconName::FileText, "Template not found", None, None)
+                    .into_any_element();
             }
             PageState::Failed(message) => {
                 return empty_state(
-                    &palette,
                     IconName::TriangleAlert,
                     "Could not load this template",
                     Some(message.clone().into()),
@@ -897,7 +906,7 @@ impl Render for TemplatePage {
         v_flex()
             .size_full()
             .bg(palette.sunken)
-            .children(self.review_notes(&palette))
+            .children(self.review_notes())
             .child(
                 div()
                     .id("template-editor")
@@ -1150,26 +1159,21 @@ impl TemplatesScreen {
     fn open_sort_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let weak = cx.entity().downgrade();
         let current = self.sort;
-        let rows = TemplateSort::ALL
-            .into_iter()
-            .map(|sort| {
-                let weak = weak.clone();
-                PopupRow::Entry(
-                    PopupEntry::new(
-                        SharedString::from(format!("sort-{}", sort as usize)),
-                        sort.title(),
-                        move |_, cx| {
-                            weak.update(cx, |this, cx| {
-                                this.sort = sort;
-                                cx.notify();
-                            })
-                            .ok();
-                        },
-                    )
-                    .check(sort == current),
-                )
-            })
-            .collect();
+        let rows = MenuContent::new().items(TemplateSort::ALL.into_iter().map(|sort| {
+            let weak = weak.clone();
+            MenuEntry::new(
+                SharedString::from(format!("sort-{}", sort as usize)),
+                sort.title(),
+                move |_, cx| {
+                    weak.update(cx, |this, cx| {
+                        this.sort = sort;
+                        cx.notify();
+                    })
+                    .ok();
+                },
+            )
+            .check(sort == current)
+        }));
         let bounds = self.sort_bounds.get();
         let menu = PopupList::open(
             "template-sort-menu",
@@ -1206,7 +1210,7 @@ impl TemplatesScreen {
             .gap(px(2.))
             .pl(px(16.))
             .pr(px(8.))
-            .child(section_label(&palette, "Templates"))
+            .child(section_label("Templates"))
             .child(
                 div()
                     .ml(px(4.))
@@ -1284,7 +1288,7 @@ impl TemplatesScreen {
                                     .px(px(10.))
                                     .rounded(px(crate::theme::RADIUS_LG))
                                     .when(is_active, |this| {
-                                        this.bg(palette.floating()).shadow(palette.thumb_shadow())
+                                        this.bg(palette.hover).font_weight(FontWeight::MEDIUM)
                                     })
                                     .when(!is_active, |this| {
                                         this.hover(move |style| style.bg(palette.hover))
@@ -1339,11 +1343,10 @@ impl TemplatesScreen {
                         .id(("template-skeleton", index))
                         .h(px(ROW_HEIGHT - 12.))
                         .rounded(px(crate::theme::RADIUS_LG))
-                        .bg(crate::ui::muted_fill(&palette))
+                        .bg(palette.hover)
                 }))
                 .into_any_element(),
             Load::Failed(message) => empty_state(
-                &palette,
                 IconName::TriangleAlert,
                 "Could not load templates",
                 Some(message.into()),
@@ -1355,7 +1358,6 @@ impl TemplatesScreen {
                 .pt(px(48.))
                 .child(
                     v_flex().items_center().child(empty_state_body(
-                        &palette,
                         IconName::Search,
                         format!("No templates match “{}”", isolate_urdu(self.query.trim())),
                         None,
@@ -1444,7 +1446,6 @@ impl Render for TemplatesScreen {
         let main: gpui_kit::AnyElement = match &self.page {
             Some(page) => page.clone().into_any_element(),
             None => empty_state(
-                &palette,
                 IconName::FileText,
                 "No template open",
                 Some("Pick one from the list, or start a new one.".into()),
@@ -1469,7 +1470,6 @@ impl Render for TemplatesScreen {
         };
         let body = if nothing_at_all {
             empty_state(
-                &palette,
                 IconName::FileText,
                 "No templates yet",
                 Some("Import a Word document to make your first template.".into()),
@@ -1514,10 +1514,7 @@ impl Render for TemplatesScreen {
                 .into_any_element()
         };
         let body = if nothing_at_all {
-            crate::ui::card(&palette)
-                .size_full()
-                .child(body)
-                .into_any_element()
+            crate::ui::card().size_full().child(body).into_any_element()
         } else {
             body
         };

@@ -34,7 +34,7 @@ fn caption(palette: &Palette, text: impl Into<SharedString>) -> AnyElement {
 fn problem_line(palette: &Palette, problem: Option<SharedString>) -> Option<AnyElement> {
     problem.map(|problem| {
         div()
-            .text_size(px(13.))
+            .text_size(px(14.))
             .line_height(px(20.))
             .text_color(palette.danger_text)
             .child(problem)
@@ -169,7 +169,7 @@ impl Render for ChangePassword {
             .child(field("password-confirm", &self.confirm, Kind::Latin).width(width))
             .children(problem_line(&palette, self.problem.clone()))
             .child(
-                dialog_footer(&palette)
+                dialog_footer()
                     .mt(px(14.))
                     .child(div().flex_1())
                     .child(
@@ -445,7 +445,6 @@ impl UsersPanel {
 
     fn role_picker(
         &self,
-        palette: &Palette,
         id: &str,
         index: usize,
         current: Role,
@@ -482,7 +481,7 @@ impl UsersPanel {
             .iter()
             .position(|role| *role == current)
             .unwrap_or(0);
-        segmented(palette, items, selected).into_any_element()
+        segmented(items, selected).into_any_element()
     }
 
     fn row(
@@ -541,7 +540,7 @@ impl UsersPanel {
                                 },
                             )),
                     )
-                    .child(self.role_picker(palette, &user.id, index, user.role, busy || own, cx))
+                    .child(self.role_picker(&user.id, index, user.role, busy || own, cx))
                     .child(
                         ghost_sm(("user-reset", index), "Reset password")
                             .disabled(busy || own)
@@ -607,7 +606,7 @@ impl UsersPanel {
             Load::Loading => v_flex()
                 .gap(px(10.))
                 .pt(px(8.))
-                .children((0..4).map(|_| skeleton_bar(palette, USERS_WIDTH - 40., 40.)))
+                .children((0..4).map(|_| skeleton_bar(USERS_WIDTH - 40., 40.)))
                 .into_any_element(),
             Load::Failed(message) => v_flex()
                 .pt(px(24.))
@@ -666,7 +665,7 @@ impl UsersPanel {
             .gap(px(8.))
             .p(px(12.))
             .rounded(px(crate::theme::RADIUS_XL))
-            .bg(crate::ui::muted_fill(palette).opacity(0.72))
+            .bg(palette.hover.opacity(0.72))
             .child(caption(palette, "Add a person"))
             .child(
                 h_flex()
@@ -679,7 +678,7 @@ impl UsersPanel {
                 h_flex()
                     .gap(px(8.))
                     .items_center()
-                    .child(segmented(palette, roles, selected))
+                    .child(segmented(roles, selected))
                     .child(div().flex_1())
                     .child(
                         primary_sm("new-user-add", if self.adding { "Adding…" } else { "Add" })
@@ -705,7 +704,7 @@ impl Render for UsersPanel {
             .children(problem_line(&palette, self.problem.clone()))
             .child(div().h(px(LIST_HEIGHT)).child(self.list(&palette, cx)))
             .child(
-                dialog_footer(&palette)
+                dialog_footer()
                     .mt(px(12.))
                     .child(div().flex_1())
                     .child(

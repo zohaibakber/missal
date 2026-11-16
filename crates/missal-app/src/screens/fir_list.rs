@@ -23,15 +23,16 @@ use crate::shortcuts::*;
 use crate::state::firs::FirsEvent;
 
 use crate::state::{Load, Models, PrintTarget, Route, run_db_in, toast_error, toast_success};
-use crate::theme::{FILTER_ITEM, ICON_XS, PAGE_GUTTER, Palette, RADIUS, TABLE_HEAD, TABLE_ROW};
+use crate::theme::{ICON_XS, PAGE_GUTTER, Palette, TABLE_ROW};
 use crate::ui::dialogs::{Choice, Tone, open_choice};
 use crate::ui::input::{Hint, Kind, field_input, search_field};
-use crate::ui::popup_menu::{Dismissed, Placement, PopupEntry, PopupList, PopupRow};
-use crate::ui::status::status_dot;
+use crate::ui::popup_menu::{Dismissed, MenuContent, MenuEntry, Placement, PopupList};
+use crate::ui::status::{status_badge, status_dot};
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::{
-    ButtonKind, UrRole, button, checkbox, danger_outline, empty_state, icon_button, isolate_urdu,
-    sized_icon, skeleton_bar, tabular, ur_label,
+    BadgeVariant, ButtonKind, UrRole, badge, button, checkbox, danger_outline, empty_state,
+    icon_button, isolate_urdu, sized_icon, skeleton_bar, tab, tab_list, table, table_body,
+    table_head, table_header, tabular, ur_label,
 };
 
 const SELECT_WIDTH: f32 = 36.0;
@@ -592,14 +593,14 @@ impl FirListScreen {
 
     pub fn open_columns_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let weak = cx.entity().downgrade();
-        let rows = Column::ALL
-            .iter()
-            .filter(|column| **column != Column::FirNo)
-            .map(|column| {
-                let column = *column;
-                let weak = weak.clone();
-                PopupRow::Entry(
-                    PopupEntry::urdu(
+        let rows = MenuContent::new().items(
+            Column::ALL
+                .iter()
+                .filter(|column| **column != Column::FirNo)
+                .map(|column| {
+                    let column = *column;
+                    let weak = weak.clone();
+                    MenuEntry::urdu(
                         SharedString::from(format!("column-{}", column.key())),
                         column.title(),
                         move |_, cx| {
@@ -608,10 +609,9 @@ impl FirListScreen {
                         },
                     )
                     .check(!self.hidden.contains(&column))
-                    .keep_open(),
-                )
-            })
-            .collect();
+                    .keep_open()
+                }),
+        );
         let bounds = self.columns_bounds.get();
         let position = point(bounds.right(), bounds.bottom() + px(4.));
         let menu = PopupList::open(
@@ -642,32 +642,32 @@ impl FirListScreen {
         let weak = cx.entity().downgrade();
         let edit = weak.clone();
         let delete = weak.clone();
-        let rows = vec![
-            PopupRow::Entry(
-                PopupEntry::new("row-open", "Open", move |window, cx| {
+        let rows = MenuContent::new()
+            .item(
+                MenuEntry::new("row-open", "Open", move |window, cx| {
                     navigate(Route::Fir(id), window, cx)
                 })
                 .icon(IconName::FolderOpen)
                 .keys("Enter"),
-            ),
-            PopupRow::Entry(
-                PopupEntry::new("row-edit", "Edit details", move |window, cx| {
+            )
+            .item(
+                MenuEntry::new("row-edit", "Edit details", move |window, cx| {
                     edit.update(cx, |this, cx| this.edit_fir(id, window, cx))
                         .ok();
                 })
                 .icon(IconName::Pencil)
                 .keys("E"),
-            ),
-            PopupRow::Entry(
-                PopupEntry::new("row-print", "Print…", move |window, cx| {
+            )
+            .item(
+                MenuEntry::new("row-print", "Print…", move |window, cx| {
                     navigate(Route::Print(PrintTarget::Fir(id)), window, cx)
                 })
                 .icon(IconName::Printer)
                 .keys("Mod+P"),
-            ),
-            PopupRow::Separator,
-            PopupRow::Entry(
-                PopupEntry::new("row-delete", "Delete", move |window, cx| {
+            )
+            .separator()
+            .item(
+                MenuEntry::new("row-delete", "Delete", move |window, cx| {
                     delete
                         .update(cx, |this, cx| this.request_delete(vec![id], window, cx))
                         .ok();
@@ -675,8 +675,7 @@ impl FirListScreen {
                 .icon(IconName::Trash)
                 .keys("Delete")
                 .danger(),
-            ),
-        ];
+            );
         let menu = PopupList::open(
             "row-menu",
             rows,
@@ -721,37 +720,12 @@ impl FirListScreen {
             )
         };
         let item = |id: SharedString, on: bool, count: usize, content: Option<FirStatus>| {
-            let hover = crate::ui::accent_fill(&palette);
-            h_flex()
-                .id(id)
-                .test_support()
-                .flex_none()
-                .h(px(FILTER_ITEM))
-                .px(px(12.))
-                .gap(px(6.))
-                .items_center()
-                .rounded(px(crate::theme::RADIUS_PILL))
-                .text_size(px(13.))
-                .line_height(px(20.))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(if on { palette.ink } else { palette.ink_muted })
-                .when(on, |this| {
-                    this.bg(palette.floating()).shadow(palette.thumb_shadow())
-                })
-                .when(!on, |this| {
-                    let pressed = crate::ui::accent_fill_strong(&palette);
-                    this.hover(move |style| style.bg(hover).text_color(palette.ink))
-                        .active(move |style| style.bg(pressed))
-                })
+            tab(id, on)
                 .when(content.is_some(), |this| this.flex_row_reverse())
-                .when(count == 0 && !on, |this| this.opacity(0.5))
-                .role(gpui_kit::accesskit::Role::RadioButton)
-                .when(on, |this| {
-                    this.aria_toggled(gpui_kit::accesskit::Toggled::True)
-                })
+                .when(count == 0 && !on, |this| this.opacity(0.64))
                 .map(|this| match content {
                     None => this.child("All"),
-                    Some(status) => this.child(status_dot(&palette, status)).child(
+                    Some(status) => this.child(status_dot(status)).child(
                         div().font_weight(FontWeight::NORMAL).mt(px(-3.)).child(
                             label(status.label())
                                 .rtl()
@@ -764,25 +738,14 @@ impl FirListScreen {
                     div()
                         .font_weight(FontWeight::NORMAL)
                         .font_features(tabular())
-                        .text_color(if on {
-                            palette.ink_muted
-                        } else {
-                            palette.ink_faint
-                        })
+                        .text_color(palette.ink_faint)
                         .child(count.to_string()),
                 )
         };
-        let mut row = h_flex()
-            .id("status-filter")
-            .p(px(3.))
-            .gap(px(2.))
-            .items_center()
-            .rounded(px(crate::theme::RADIUS_PILL))
-            .bg(crate::ui::muted_fill(&palette))
-            .child(
-                item("status-all".into(), filter.is_none(), all_count, None)
-                    .on_click(cx.listener(|this, _, _, cx| this.set_status_filter(None, cx))),
-            );
+        let mut row = tab_list().id("status-filter").child(
+            item("status-all".into(), filter.is_none(), all_count, None)
+                .on_click(cx.listener(|this, _, _, cx| this.set_status_filter(None, cx))),
+        );
         for (position, status) in STATUS_ITEMS.into_iter().enumerate() {
             row = row.child(
                 item(
@@ -826,7 +789,7 @@ impl FirListScreen {
                     .child(
                         search_field("fir-search-field", &self.search, Kind::Search)
                             .width(px(SEARCH_WIDTH))
-                            .height(32.)
+                            .height(36.)
                             .hint(Hint::Slash),
                     ),
             )
@@ -858,15 +821,9 @@ impl FirListScreen {
     fn header_row(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let palette = *palette;
         let all_selected = self.all_visible_selected(cx);
-        h_flex()
+        table_header()
             .id("fir-table-head")
             .flex_row_reverse()
-            .flex_none()
-            .h(px(TABLE_HEAD))
-            .items_center()
-            .rounded(px(RADIUS))
-            .bg(crate::ui::muted_fill(&palette).opacity(0.6))
-            .text_color(palette.ink_muted)
             .child(
                 div()
                     .w(px(SELECT_WIDTH))
@@ -876,9 +833,8 @@ impl FirListScreen {
                     .items_center()
                     .justify_center()
                     .child(
-                        checkbox(&palette, "select-all", all_selected)
-                            .aria_label("Select all visible FIRs")
-                            .test_support()
+                        checkbox("select-all", all_selected)
+                            .accessibility_label("Select all visible FIRs")
                             .on_click(cx.listener(|this, _, _, cx| this.toggle_all(cx))),
                     ),
             )
@@ -896,14 +852,12 @@ impl FirListScreen {
                         };
                         let ink = palette.ink;
                         sized(
-                            h_flex()
+                            table_head()
                                 .id(("sort", column as usize))
                                 .test_support()
                                 .flex_row_reverse()
-                                .h_full()
-                                .px(px(8.))
                                 .gap(px(4.))
-                                .items_center()
+                                .cursor_pointer()
                                 .hover(move |style| style.text_color(ink))
                                 .when(sorted, |this| this.text_color(ink))
                                 .role(gpui_kit::accesskit::Role::ColumnHeader)
@@ -936,17 +890,16 @@ impl FirListScreen {
         let selected = self.selected.contains(&id);
         let focused = self.focused == Some(index);
         let palette = *palette;
-        let hover = palette.hover;
         let date_cell = |text: SharedString, column: Column| {
             sized(
                 div()
                     .h_full()
-                    .px(px(8.))
+                    .px(px(10.))
                     .pt(px(3.))
                     .flex()
                     .items_center()
                     .justify_end()
-                    .text_size(px(13.))
+                    .text_size(px(14.))
                     .text_color(palette.ink_muted)
                     .font_features(tabular())
                     .whitespace_nowrap()
@@ -966,7 +919,7 @@ impl FirListScreen {
                 Column::FirNo => sized(
                     div()
                         .h_full()
-                        .px(px(8.))
+                        .px(px(10.))
                         .pt(px(1.))
                         .flex()
                         .items_center()
@@ -981,7 +934,7 @@ impl FirListScreen {
                 Column::Offence => sized(
                     div()
                         .h_full()
-                        .px(px(8.))
+                        .px(px(10.))
                         .flex()
                         .items_center()
                         .text_color(palette.ink)
@@ -997,7 +950,7 @@ impl FirListScreen {
                 Column::Accused => sized(
                     h_flex()
                         .h_full()
-                        .px(px(8.))
+                        .px(px(10.))
                         .flex_row_reverse()
                         .items_center()
                         .gap(px(6.))
@@ -1010,19 +963,8 @@ impl FirListScreen {
                         )
                         .when(row.accused_more > 0, |this| {
                             this.child(
-                                div()
-                                    .flex_none()
-                                    .h(px(18.))
-                                    .px(px(5.))
-                                    .flex()
-                                    .items_center()
-                                    .rounded(px(crate::theme::RADIUS_PILL))
-                                    .bg(crate::ui::muted_fill(&palette))
-                                    .text_size(px(11.))
-                                    .line_height(px(16.))
-                                    .font_weight(FontWeight::MEDIUM)
+                                badge(BadgeVariant::Outline)
                                     .text_color(palette.ink_muted)
-                                    .font_features(tabular())
                                     .child(label(format!("+{}", row.accused_more)).ltr()),
                             )
                         }),
@@ -1032,13 +974,10 @@ impl FirListScreen {
                 Column::Status => sized(
                     h_flex()
                         .h_full()
-                        .px(px(8.))
+                        .px(px(10.))
                         .flex_row_reverse()
                         .items_center()
-                        .gap(px(8.))
-                        .text_color(palette.ink)
-                        .child(status_dot(&palette, row.status))
-                        .child(ur_label(row.status.label(), UrRole::Body)),
+                        .child(status_badge(row.status)),
                     *column,
                 )
                 .into_any_element(),
@@ -1047,16 +986,10 @@ impl FirListScreen {
                 Column::ArrestDate => date_cell(row.arrest.clone(), Column::ArrestDate),
             })
             .collect();
-        let neighbour_selected = |offset: isize| {
-            index
-                .checked_add_signed(offset)
-                .and_then(|neighbour| self.row_id(neighbour, cx))
-                .is_some_and(|neighbour| self.selected.contains(&neighbour))
-        };
-        let joins_above = selected && neighbour_selected(-1);
-        let joins_below = selected && neighbour_selected(1);
+        let last = index + 1 == self.visible.len();
         let show_check = any_selected || selected || focused;
         let focused_bounds = self.focused_bounds.clone();
+        let hover = palette.hover.opacity(0.5);
         let element = h_flex()
             .id(("fir-row", index))
             .test_support()
@@ -1066,20 +999,17 @@ impl FirListScreen {
             .flex_row_reverse()
             .h(px(TABLE_ROW))
             .items_center()
-            .rounded(px(RADIUS))
-            .when(joins_above, |this| this.rounded_t_none())
-            .when(joins_below, |this| this.rounded_b_none())
+            .when(!last, |this| this.border_b_1().border_color(palette.line))
+            .cursor_pointer()
             .role(gpui_kit::accesskit::Role::Row)
             .aria_label(SharedString::from(format!("FIR {}", row.no)))
             .map(|this| {
                 if selected {
-                    this.bg(palette.accent_wash)
+                    this.bg(palette.hover)
                 } else if focused {
                     this.bg(hover)
                 } else {
-                    let pressed = palette.pressed;
                     this.hover(move |style| style.bg(hover))
-                        .active(move |style| style.bg(pressed))
                 }
             })
             .on_click(cx.listener(move |this, _, window, cx| this.open_row(index, window, cx)))
@@ -1110,12 +1040,12 @@ impl FirListScreen {
                             .when(!show_check, |this| this.invisible())
                             .group_hover("fir-row", |style| style.visible())
                             .child(
-                                checkbox(&palette, ("row-select", index), selected)
-                                    .aria_label(SharedString::from(format!(
+                                checkbox(("row-select", index), selected)
+                                    .tab_stop(false)
+                                    .accessibility_label(SharedString::from(format!(
                                         "Select FIR {}",
                                         row.no
-                                    )))
-                                    .test_support(),
+                                    ))),
                             ),
                     ),
             )
@@ -1158,7 +1088,7 @@ impl FirListScreen {
                         .top_0()
                         .bottom_0()
                         .w(px(2.))
-                        .bg(palette.accent),
+                        .bg(palette.ring),
                 )
                 .child(
                     canvas(
@@ -1172,8 +1102,7 @@ impl FirListScreen {
         Some(element.into_any_element())
     }
 
-    fn skeleton_rows(&self, palette: &Palette) -> AnyElement {
-        let palette = *palette;
+    fn skeleton_rows(&self) -> AnyElement {
         let widths = [
             (Column::FirNo, 56.),
             (Column::Offence, 150.),
@@ -1202,7 +1131,7 @@ impl FirListScreen {
                                     h_flex()
                                         .px(px(8.))
                                         .flex_row_reverse()
-                                        .child(skeleton_bar(&palette, *width, 12.)),
+                                        .child(skeleton_bar(*width, 12.)),
                                     *column,
                                 )
                             }),
@@ -1212,11 +1141,10 @@ impl FirListScreen {
             .into_any_element()
     }
 
-    fn empty_body(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    fn empty_body(&self, cx: &mut Context<Self>) -> AnyElement {
         if self.query.trim().is_empty() {
             let status = self.status_filter();
             return empty_state(
-                palette,
                 IconName::ListFilter,
                 "No FIRs with this status",
                 status.map(|status| {
@@ -1236,7 +1164,6 @@ impl FirListScreen {
         }
         let query = self.query.trim();
         empty_state(
-            palette,
             IconName::Search,
             format!("No FIRs match “{}”", isolate_query(query)),
             None,
@@ -1262,15 +1189,18 @@ impl FirListScreen {
                 if !self.skeleton {
                     return div().size_full().into_any_element();
                 }
-                v_flex()
+                div()
                     .size_full()
                     .px(px(PAGE_GUTTER))
-                    .child(self.header_row(&palette, cx))
-                    .child(self.skeleton_rows(&palette))
+                    .pb(px(PAGE_GUTTER))
+                    .child(
+                        table()
+                            .child(self.header_row(&palette, cx))
+                            .child(table_body().child(self.skeleton_rows())),
+                    )
                     .into_any_element()
             }
             Load::Failed(message) => empty_state(
-                &palette,
                 IconName::TriangleAlert,
                 "Couldn't read your FIRs",
                 Some("Missal could not open its database.".into()),
@@ -1295,7 +1225,6 @@ impl FirListScreen {
             )
             .into_any_element(),
             Load::Ready if total == 0 => empty_state(
-                &palette,
                 IconName::Folder,
                 "No FIRs yet",
                 Some("Create the first FIR to start writing its documents.".into()),
@@ -1312,30 +1241,40 @@ impl FirListScreen {
             Load::Ready => {
                 self.ensure_derived(cx);
                 if self.visible.is_empty() {
-                    return self.empty_body(&palette, cx);
+                    return self.empty_body(cx);
                 }
                 let count = self.visible.len();
-                v_flex()
+                div()
                     .size_full()
                     .px(px(PAGE_GUTTER))
-                    .child(self.header_row(&palette, cx))
+                    .pb(px(PAGE_GUTTER))
                     .child(
-                        uniform_list(
-                            "fir-rows",
-                            count,
-                            cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
-                                let palette = *Palette::get(cx);
-                                let any_selected = !this.selected.is_empty();
-                                range
-                                    .filter_map(|index| {
-                                        this.render_row(index, &palette, any_selected, cx)
-                                    })
-                                    .collect::<Vec<_>>()
-                            }),
-                        )
-                        .track_scroll(&self.scroll)
-                        .flex_1()
-                        .min_h_0(),
+                        table().child(self.header_row(&palette, cx)).child(
+                            table_body().child(
+                                uniform_list(
+                                    "fir-rows",
+                                    count,
+                                    cx.processor(
+                                        move |this, range: std::ops::Range<usize>, _, cx| {
+                                            let palette = *Palette::get(cx);
+                                            let any_selected = !this.selected.is_empty();
+                                            range
+                                                .filter_map(|index| {
+                                                    this.render_row(
+                                                        index,
+                                                        &palette,
+                                                        any_selected,
+                                                        cx,
+                                                    )
+                                                })
+                                                .collect::<Vec<_>>()
+                                        },
+                                    ),
+                                )
+                                .track_scroll(&self.scroll)
+                                .size_full(),
+                            ),
+                        ),
                     )
                     .into_any_element()
             }
@@ -1377,7 +1316,7 @@ impl Render for FirListScreen {
             .size_full()
             .rounded(px(crate::theme::RADIUS_XL))
             .bg(palette.surface)
-            .shadow(palette.shadow_xs())
+            .shadow(palette.shadow_sm())
             .on_action(cx.listener(|this, _: &NextRow, _, cx| this.move_focus(1, cx)))
             .on_action(cx.listener(|this, _: &PreviousRow, _, cx| this.move_focus(-1, cx)))
             .on_action(cx.listener(|this, _: &ToggleRow, _, cx| {
@@ -1446,7 +1385,7 @@ impl HeaderSource for FirListScreen {
                 .child(
                     div()
                         .mr(px(4.))
-                        .text_size(px(13.))
+                        .text_size(px(14.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(palette.ink)
                         .font_features(tabular())

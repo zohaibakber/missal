@@ -17,7 +17,7 @@ use crate::state::{Models, Route};
 use crate::theme::{ICON, PALETTE_TOP, PALETTE_WIDTH, Palette, RADIUS, RADIUS_2XL, RADIUS_XL};
 use crate::ui::input::{Kind, field_input};
 use crate::ui::status::status_dot;
-use crate::ui::{KeyTone, UrRole, keycap, keycaps_toned, sized_icon, ur_inline};
+use crate::ui::{KeyTone, UrRole, sized_icon, ur_inline};
 
 pub struct Dismissed;
 
@@ -375,7 +375,7 @@ impl CommandPalette {
                 offence,
                 status,
             } => {
-                lead = status_dot(palette, *status).into_any_element();
+                lead = status_dot(*status).into_any_element();
                 body = h_flex()
                     .flex_1()
                     .min_w_0()
@@ -429,7 +429,11 @@ impl CommandPalette {
                 } else if let Some(keys) = keys
                     && !selected
                 {
-                    trail = Some(keycaps_toned(palette, keys, KeyTone::Bare).into_any_element());
+                    trail = Some(
+                        crate::ui::kbd_group(*keys)
+                            .tone(KeyTone::Bare)
+                            .into_any_element(),
+                    );
                 }
             }
         }
@@ -446,7 +450,7 @@ impl CommandPalette {
                     } else {
                         "Open"
                     })
-                    .child(keycap(palette, "↵"))
+                    .child(crate::ui::kbd("↵"))
                     .into_any_element(),
             );
         }
@@ -459,9 +463,7 @@ impl CommandPalette {
             .gap(px(10.))
             .items_center()
             .rounded(px(RADIUS))
-            .when(selected, |this| {
-                this.bg(crate::ui::accent_fill_strong(palette))
-            })
+            .when(selected, |this| this.bg(palette.hover))
             .on_mouse_move(cx.listener(move |this, _, _, cx| {
                 if this.selected != index {
                     this.selected = index;
@@ -581,7 +583,7 @@ impl Render for CommandPalette {
                     .w(px(PALETTE_WIDTH))
                     .max_w_full()
                     .rounded(px(RADIUS_2XL))
-                    .bg(palette.raised.blend(crate::ui::muted_fill(&palette).opacity(0.72)))
+                    .bg(palette.raised.blend(palette.hover.opacity(0.72)))
                     .shadow(palette.shadow_xl())
                     .text_color(palette.ink)
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -594,7 +596,7 @@ impl Render for CommandPalette {
                             .items_center()
                             .child(sized_icon(IconName::Search, ICON, palette.ink_muted))
                             .child(div().flex_1().min_w_0().child(self.input.clone()))
-                            .child(keycap(&palette, "Esc")),
+                            .child(crate::ui::kbd("Esc")),
                     )
                     .child(
                         v_flex()
@@ -612,7 +614,7 @@ impl Render for CommandPalette {
                                     div()
                                         .py_6()
                                         .text_center()
-                                        .text_size(px(13.))
+                                        .text_size(px(14.))
                                         .text_color(palette.ink_muted)
                                         .child("Nothing matches. Try a FIR number, an offence or a name."),
                                 )
@@ -630,15 +632,15 @@ impl Render for CommandPalette {
                                 h_flex()
                                     .items_center()
                                     .gap(px(4.))
-                                    .child(keycap(&palette, "↑"))
-                                    .child(keycap(&palette, "↓"))
+                                    .child(crate::ui::kbd("↑"))
+                                    .child(crate::ui::kbd("↓"))
                                     .child("Navigate"),
                             )
                             .child(
                                 h_flex()
                                     .items_center()
                                     .gap(px(4.))
-                                    .child(keycap(&palette, "↵"))
+                                    .child(crate::ui::kbd("↵"))
                                     .child("Open"),
                             )
                             .child(div().flex_1())

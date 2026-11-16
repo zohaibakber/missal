@@ -646,13 +646,13 @@ impl Render for AuthGate {
                         div()
                             .text_size(px(20.))
                             .line_height(px(28.))
-                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                            .font_weight(gpui_kit::FontWeight::MEDIUM)
                             .text_color(palette.ink)
                             .child(title),
                     )
                     .child(
                         div()
-                            .text_size(px(13.))
+                            .text_size(px(14.))
                             .line_height(px(20.))
                             .text_color(palette.ink_muted)
                             .child(message),
@@ -660,7 +660,7 @@ impl Render for AuthGate {
                     .children(fields)
                     .children(problem.map(|problem| {
                         div()
-                            .text_size(px(13.))
+                            .text_size(px(14.))
                             .line_height(px(20.))
                             .text_color(palette.danger_text)
                             .child(problem)

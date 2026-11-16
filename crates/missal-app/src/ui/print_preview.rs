@@ -28,8 +28,8 @@ use crate::packet::{LaidOut, PacketJob, distinct_empty};
 use crate::printing::{self, Handoff};
 use crate::shortcuts::*;
 use crate::state::{Models, PrintTarget, ToastKind, db, show_toast, toast_success};
-use crate::theme::{ICON_SM, ICON_XS, PANEL_PADDING, Palette, RADIUS, RADIUS_PAPER};
-use crate::ui::popup_menu::{Dismissed, Placement, PopupEntry, PopupList, PopupRow};
+use crate::theme::{ICON_SM, ICON_XS, Palette, RADIUS, RADIUS_PAPER};
+use crate::ui::popup_menu::{Dismissed, MenuContent, MenuEntry, Placement, PopupList};
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::toast::ToastSpec;
 use crate::ui::{
@@ -1055,7 +1055,7 @@ impl PrintPreview {
     fn open_zoom_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let weak = cx.entity().downgrade();
         let current = self.zoom;
-        let mut rows = Vec::new();
+        let mut rows = MenuContent::new();
         let options = [
             (Zoom::Fit, "Fit page".to_owned()),
             (Zoom::FitWidth, "Fit width".to_owned()),
@@ -1068,8 +1068,8 @@ impl PrintPreview {
         );
         for (option, text) in options {
             let weak = weak.clone();
-            rows.push(PopupRow::Entry(
-                PopupEntry::new(
+            rows = rows.item(
+                MenuEntry::new(
                     SharedString::from(format!("zoom-{}", text.to_lowercase().replace(' ', "-"))),
                     text,
                     move |_, cx| {
@@ -1077,7 +1077,7 @@ impl PrintPreview {
                     },
                 )
                 .check(option == current),
-            ));
+            );
         }
         let bounds = self.zoom_bounds.get();
         let menu = PopupList::open(
@@ -1138,24 +1138,25 @@ impl PrintPreview {
                 .id("print-warning")
                 .test_support()
                 .m(px(8.))
-                .px(px(12.))
-                .py(px(10.))
-                .gap(px(10.))
+                .px(px(14.))
+                .py(px(12.))
+                .gap(px(8.))
                 .items_start()
                 .rounded(px(crate::theme::RADIUS_XL))
-                .bg(palette.surface)
-                .shadow(palette.shadow_xs())
+                .border_1()
+                .border_color(palette.notice.opacity(0.32))
+                .bg(palette.notice.opacity(0.04))
                 .when(fill, |this| {
-                    let hover = palette.surface.blend(crate::ui::accent_fill(palette));
+                    let hover = palette.notice.opacity(0.08);
                     this.cursor_pointer()
                         .hover(move |s| s.bg(hover))
                         .role(gpui_kit::accesskit::Role::Link)
                         .aria_label(SharedString::from(format!("{lead} {link}")))
                         .on_click(cx.listener(|this, _, _, cx| this.fill_in(cx)))
                 })
-                .child(div().pt(px(2.)).child(sized_icon(
+                .child(div().pt(px(1.)).child(sized_icon(
                     IconName::TriangleAlert,
-                    ICON_SM,
+                    crate::theme::ICON,
                     palette.notice,
                 )))
                 .child(
@@ -1179,7 +1180,6 @@ impl PrintPreview {
             .as_ref()
             .map(|plan| plan.docs.clone())
             .unwrap_or_default();
-        let hover = palette.hover;
         let warning = self.warning(&palette, cx);
         let has_warning = warning.is_some();
         let failed = matches!(self.state, State::Failed(_));
@@ -1194,7 +1194,7 @@ impl PrintPreview {
                 missal_text::label(doc.title.clone())
                     .ltr()
                     .align(missal_text::Align::Right)
-                    .text_size(px(13.))
+                    .text_size(px(14.))
                     .truncate()
             } else {
                 ur_label(doc.title.clone(), UrRole::Body).truncate()
@@ -1213,9 +1213,8 @@ impl PrintPreview {
                     ))
                     .into_any_element()
             } else {
-                checkbox(&palette, ("print-include", index), doc.included)
-                    .aria_label(SharedString::from(format!("Print {}", doc.title)))
-                    .test_support()
+                checkbox(("print-include", index), doc.included)
+                    .accessibility_label(SharedString::from(format!("Print {}", doc.title)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.toggle_included(index, cx)
@@ -1226,20 +1225,16 @@ impl PrintPreview {
                 .id(("print-doc", index))
                 .test_support()
                 .flex_none()
-                .h(px(44.))
+                .h(px(40.))
                 .mx(px(8.))
-                .px(px(10.))
-                .gap(px(10.))
+                .px(px(8.))
+                .gap(px(8.))
                 .flex_row_reverse()
                 .items_center()
                 .rounded(px(crate::theme::RADIUS_LG))
-                .when(on, |this| {
-                    this.bg(palette.floating()).shadow(palette.thumb_shadow())
-                })
-                .when(!on, |this| {
-                    this.hover(move |style| style.bg(hover))
-                        .active(move |s| s.bg(palette.pressed))
-                })
+                .when(!failed, |this| this.cursor_pointer())
+                .when(on, |this| this.bg(palette.hover))
+                .when(!on, |this| this.hover(move |style| style.bg(palette.hover)))
                 .when(!failed, |this| {
                     this.on_click(cx.listener(move |this, _, _, cx| this.show_document(index, cx)))
                 })
@@ -1272,13 +1267,10 @@ impl PrintPreview {
             .children(warning)
             .child(
                 div()
-                    .h(px(32.))
                     .flex_none()
-                    .px(px(PANEL_PADDING))
-                    .flex()
-                    .items_center()
+                    .px(px(8.))
                     .when(!has_warning, |this| this.mt(px(8.)))
-                    .child(section_label(&palette, "Documents to print")),
+                    .child(section_label("Documents to print")),
             )
             .child(
                 v_flex()
@@ -1321,16 +1313,15 @@ impl PrintPreview {
                                 .p(px(48. * scale))
                                 .gap(px(14.))
                                 .items_end()
-                                .child(skeleton_bar(&palette, 160., 12.))
-                                .child(skeleton_bar(&palette, 260., 12.))
-                                .child(skeleton_bar(&palette, 220., 12.))
-                                .child(skeleton_bar(&palette, 300., 12.)),
+                                .child(skeleton_bar(160., 12.))
+                                .child(skeleton_bar(260., 12.))
+                                .child(skeleton_bar(220., 12.))
+                                .child(skeleton_bar(300., 12.)),
                         )
                     })
                     .into_any_element()
             }
             State::Failed(message) => empty_state(
-                &palette,
                 IconName::TriangleAlert,
                 "Couldn't prepare the preview",
                 Some(message.clone().into()),
@@ -1343,7 +1334,6 @@ impl PrintPreview {
             )
             .into_any_element(),
             State::Ready(_) if self.document_count() == 0 => empty_state(
-                &palette,
                 IconName::Printer,
                 "Nothing to print",
                 Some("Tick a document on the left to print it.".into()),
@@ -1433,10 +1423,10 @@ impl PrintPreview {
         let page_focused = self.page_input.focus_handle(cx).is_focused(window);
         let zoom_bounds = self.zoom_bounds.clone();
         let menu_open = self.menu.is_some();
-        let hover = crate::ui::accent_fill_strong(&palette);
+        let hover = palette.hover;
         let laying_out = matches!(self.state, State::Loading) && self.show_skeleton;
         let page_input = self.page_input.clone();
-        let pages = crate::ui::floating_bar(&palette)
+        let pages = crate::ui::floating_bar()
             .id("print-footer")
             .child(
                 icon_button("preview-previous", IconName::ChevronLeft, "Previous page")
@@ -1448,18 +1438,25 @@ impl PrintPreview {
             .child(
                 div()
                     .id("preview-page-input")
-                    .w(px(40.))
-                    .h(px(24.))
+                    .w(px(44.))
+                    .h(px(26.))
                     .flex_none()
                     .flex()
                     .items_center()
-                    .px(px(4.))
+                    .px(px(6.))
                     .rounded(px(RADIUS))
-                    .bg(crate::ui::muted_fill(&palette))
-                    .when(page_focused, |this| {
-                        this.bg(palette.control_fill())
-                            .shadow(crate::ui::control_shadows(&palette, true, false))
-                    })
+                    .border_1()
+                    .border_color(crate::ui::input::control_border(
+                        &palette,
+                        page_focused,
+                        false,
+                    ))
+                    .bg(palette.control_fill())
+                    .shadow(crate::ui::input::control_surface_shadows(
+                        &palette,
+                        page_focused,
+                        false,
+                    ))
                     .text_color(palette.ink)
                     .cursor_text()
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -1492,7 +1489,7 @@ impl PrintPreview {
                 )
             })
             .into_any_element();
-        let zoom = crate::ui::floating_bar(&palette)
+        let zoom = crate::ui::floating_bar()
             .id("print-zoom-bar")
             .child(
                 icon_button("preview-zoom-out", IconName::Minus, "Zoom out")
@@ -1507,12 +1504,13 @@ impl PrintPreview {
                     .test_support()
                     .relative()
                     .flex_none()
-                    .h(px(24.))
+                    .h(px(28.))
                     .pl(px(8.))
                     .pr(px(6.))
                     .gap(px(4.))
                     .items_center()
-                    .rounded(px(crate::theme::RADIUS_PILL))
+                    .rounded(px(RADIUS))
+                    .cursor_pointer()
                     .text_color(palette.ink)
                     .whitespace_nowrap()
                     .when(menu_open, |this| this.bg(hover))

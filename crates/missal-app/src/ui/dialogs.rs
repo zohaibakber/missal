@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui_kit::component::dialog::{Dialog, DialogEntrance};
-use gpui_kit::component::{WindowExt, h_flex, v_flex};
+use gpui_kit::component::{StyledExt as _, WindowExt, h_flex, v_flex};
 use gpui_kit::{
     AnyElement, App, FocusHandle, FontWeight, IntoElement, ParentElement, SharedString, Styled,
     Window, div, px,
@@ -9,6 +9,7 @@ use gpui_kit::{
 use missal_text::{LineHeight, label};
 
 use crate::theme::{DIALOG_WIDTH, Palette, RADIUS_2XL};
+use crate::ui::part::{Part, part};
 use crate::ui::{ButtonKind, button};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -55,23 +56,30 @@ pub fn dialog_surface(dialog: Dialog, palette: &Palette, width: f32) -> Dialog {
         .bg(palette.raised)
         .border_color(palette.hairline)
         .rounded(px(RADIUS_2XL))
-        .shadow(palette.shadow_xl())
+        .shadow(palette.shadow_lg())
         .p(px(DIALOG_PAD))
         .pb_0()
         .font_family(missal_text::UI_FAMILY)
         .text_color(palette.ink)
 }
 
-pub fn dialog_footer(palette: &Palette) -> gpui_kit::Div {
-    h_flex()
-        .mt(px(DIALOG_PAD))
-        .mx(px(-DIALOG_PAD))
-        .px(px(DIALOG_PAD))
-        .py(px(16.))
-        .items_center()
-        .gap(px(8.))
-        .rounded_b(px(RADIUS_2XL))
-        .bg(crate::ui::muted_fill(palette).opacity(0.8))
+pub fn dialog_footer() -> Part {
+    part(|base, palette| {
+        base.h_flex()
+            .mt(px(DIALOG_PAD))
+            .mx(px(-DIALOG_PAD))
+            .px(px(DIALOG_PAD))
+            .py(px(16.))
+            .gap(px(8.))
+            .rounded_b(px(RADIUS_2XL))
+            .border_t_1()
+            .border_color(palette.line)
+            .bg(palette.hover.opacity(0.72))
+    })
+}
+
+pub fn dialog_header() -> Part {
+    part(|base, _| base.v_flex().gap(px(8.)))
 }
 
 pub fn optical_top(window: &Window, height: f32) -> gpui_kit::Pixels {
@@ -79,23 +87,23 @@ pub fn optical_top(window: &Window, height: f32) -> gpui_kit::Pixels {
     px((viewport * 0.4 - height / 2.).max(viewport / 10.))
 }
 
-pub fn dialog_title(text: impl Into<SharedString>) -> AnyElement {
-    div()
-        .text_size(px(17.))
-        .line_height(px(24.))
-        .font_weight(FontWeight::SEMIBOLD)
-        .child(label(text.into()).leading(LineHeight::Px(24.)))
-        .into_any_element()
+pub fn dialog_title(text: impl Into<SharedString>) -> Part {
+    part(|base, palette| {
+        base.text_size(px(18.))
+            .line_height(px(24.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(palette.ink)
+    })
+    .child(label(text.into()).leading(LineHeight::Px(24.)))
 }
 
-pub fn dialog_body(palette: &Palette, text: impl Into<SharedString>) -> AnyElement {
-    div()
-        .mt(px(6.))
-        .text_size(px(13.))
-        .line_height(px(20.))
-        .text_color(palette.ink_muted)
-        .child(label(text.into()).leading(LineHeight::Px(20.)))
-        .into_any_element()
+pub fn dialog_description(text: impl Into<SharedString>) -> Part {
+    part(|base, palette| {
+        base.text_size(px(14.))
+            .line_height(px(20.))
+            .text_color(palette.ink_muted)
+    })
+    .child(label(text.into()).leading(LineHeight::Px(20.)))
 }
 
 fn choice_button(choice: &Choice, focus: Option<&FocusHandle>) -> AnyElement {
@@ -118,17 +126,13 @@ fn choice_button(choice: &Choice, focus: Option<&FocusHandle>) -> AnyElement {
         .into_any_element()
 }
 
-pub fn choice_row(
-    palette: &Palette,
-    choices: &[Choice],
-    focus: Option<(&'static str, &FocusHandle)>,
-) -> AnyElement {
+pub fn choice_row(choices: &[Choice], focus: Option<(&'static str, &FocusHandle)>) -> AnyElement {
     let focus_for = |choice: &Choice| {
         focus
             .filter(|(id, _)| *id == choice.id)
             .map(|(_, handle)| handle)
     };
-    dialog_footer(palette)
+    dialog_footer()
         .children(
             choices
                 .iter()
@@ -167,10 +171,12 @@ pub fn open_choice(
             .margin_top(optical_top(window, 152.))
             .child(
                 v_flex()
-                    .child(dialog_title(title.clone()))
-                    .child(dialog_body(&palette, description.clone()))
+                    .child(
+                        dialog_header()
+                            .child(dialog_title(title.clone()))
+                            .child(dialog_description(description.clone())),
+                    )
                     .child(choice_row(
-                        &palette,
                         &choices,
                         initial.map(|id| (id, &focus_for_dialog)),
                     )),
@@ -224,7 +230,7 @@ pub fn about(window: &mut Window, cx: &mut App, data_folder: Option<String>, can
             h_flex()
                 .items_start()
                 .gap(px(12.))
-                .text_size(px(13.))
+                .text_size(px(14.))
                 .line_height(px(20.))
                 .child(
                     div()
@@ -246,7 +252,7 @@ pub fn about(window: &mut Window, cx: &mut App, data_folder: Option<String>, can
                     .child(row("Version", version.into()))
                     .child(row("Data folder", folder.into()))
                     .child(
-                        dialog_footer(&palette)
+                        dialog_footer()
                             .mt(px(18.))
                             .child(div().flex_1())
                             .child(

@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::menu::{ContextMenuExt as _, PopupMenu, PopupMenuItem};
 use gpui_kit::component::popover::Popover;
 use gpui_kit::component::{Selectable, h_flex, v_flex};
 use gpui_kit::prelude::*;
@@ -33,14 +32,14 @@ use crate::state::catalog::CatalogEvent;
 use crate::state::firs::FirsEvent;
 use crate::state::rows::fold_for_search;
 use crate::state::{Models, Route, run_db_in, toast_error, toast_success, toast_warning};
-use crate::theme::{ICON_SM, Palette, RAIL_WIDTH};
+use crate::theme::{Palette, RAIL_WIDTH};
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
 use crate::ui::input::{Kind, field_input};
-use crate::ui::menu::{menu_item, menu_panel, menu_separator};
+use crate::ui::menu::{menu_item, menu_popup, menu_separator};
 use crate::ui::print_preview::{PreviewDocument, PrintRequest};
 use crate::ui::{
-    IconButton, SaveState, UrRole, button, checkbox, dirty_dot, empty_state, icon_button, keycap,
-    save_state, section_label, sized_icon, skeleton_bar, ur_label,
+    IconButton, SaveState, UrRole, button, checkbox, count_badge, dirty_dot, empty_state,
+    icon_button, save_state, section_label, sized_icon, skeleton_bar, ur_label,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -112,29 +111,33 @@ impl RenderOnce for AddRow {
         let ink = palette.ink;
         h_flex()
             .id("add-templates-trigger")
-            .h(px(32.))
+            .h(px(crate::theme::SIDEBAR_ITEM))
             .mx(px(8.))
             .my(px(4.))
-            .px(px(10.))
+            .px(px(8.))
             .gap(px(8.))
             .items_center()
             .rounded(px(crate::theme::RADIUS_LG))
-            .text_size(px(13.))
+            .text_size(px(14.))
             .line_height(px(20.))
-            .font_weight(FontWeight::MEDIUM)
             .text_color(if self.open {
                 palette.ink
             } else {
-                palette.ink_muted
+                palette.sidebar_ink
             })
-            .when(self.open, |this| this.bg(palette.pressed))
+            .cursor_pointer()
+            .when(self.open, |this| this.bg(palette.hover))
             .hover(move |s| s.bg(palette.hover).text_color(ink))
-            .active(move |s| s.bg(palette.pressed))
+            .active(move |s| s.bg(palette.hover))
             .role(gpui_kit::accesskit::Role::Button)
             .aria_label("Add document")
-            .child(sized_icon(IconName::Plus, ICON_SM, palette.ink_muted))
+            .child(sized_icon(
+                IconName::Plus,
+                crate::theme::ICON,
+                palette.ink.opacity(0.8),
+            ))
             .child(div().flex_1().child("Add document"))
-            .child(keycap(&palette, "A"))
+            .child(crate::ui::kbd("A"))
             .test_support()
     }
 }
@@ -967,7 +970,7 @@ impl WorkspaceScreen {
             this.menu = None;
             cx.notify();
         };
-        menu_panel(Palette::get(cx))
+        menu_popup()
             .w(px(200.))
             .child(
                 menu_item(("document-open", index), "Open")
@@ -977,7 +980,7 @@ impl WorkspaceScreen {
                         this.select_document(id, window, cx);
                     })),
             )
-            .child(menu_separator(Palette::get(cx)))
+            .child(menu_separator())
             .child(
                 menu_item(("document-up", index), "Move up")
                     .icon(IconName::ArrowUp)
@@ -998,7 +1001,7 @@ impl WorkspaceScreen {
                         this.move_document(id, 1, window, cx);
                     })),
             )
-            .child(menu_separator(Palette::get(cx)))
+            .child(menu_separator())
             .child(
                 menu_item(("document-remove", index), "Remove from FIR")
                     .icon(IconName::Trash)
@@ -1023,151 +1026,124 @@ impl WorkspaceScreen {
         let weak: WeakEntity<Self> = cx.entity().downgrade();
         let active_dirty = self.is_dirty(cx);
         let rail_focused = self.rail_focus.is_focused(window);
-        let rows: Vec<AnyElement> = self
-            .documents
-            .iter()
-            .enumerate()
-            .map(|(index, document)| {
-                let id = document.id;
-                let active = self.active == Some(id);
-                let title = document.title.clone();
-                let menu_open = self.menu == Some(Menu::Document(id));
-                let context = {
-                    let weak = weak.clone();
-                    let first = index == 0;
-                    let last = index + 1 == count;
-                    move |menu: PopupMenu| {
-                        let (select, up, down, remove) =
-                            (weak.clone(), weak.clone(), weak.clone(), weak.clone());
-                        menu.item(PopupMenuItem::new("Open").on_click(move |_, window, cx| {
-                            select
-                                .update(cx, |this, cx| this.select_document(id, window, cx))
+        let rows: Vec<AnyElement> =
+            self.documents
+                .iter()
+                .enumerate()
+                .map(|(index, document)| {
+                    let id = document.id;
+                    let active = self.active == Some(id);
+                    let title = document.title.clone();
+                    let menu_open = self.menu == Some(Menu::Document(id));
+                    let menu_screen = cx.entity();
+                    let more = Popover::new(("document-menu", index))
+                        .appearance(false)
+                        .anchor(gpui_kit::Anchor::TopLeft)
+                        .trigger(Trigger {
+                            button: icon_button(
+                                ("document-actions", index),
+                                IconName::Ellipsis,
+                                "More actions",
+                            )
+                            .dense(),
+                            open: menu_open,
+                        })
+                        .open(menu_open)
+                        .on_open_change({
+                            let weak = weak.clone();
+                            move |open, _, cx| {
+                                let open = *open;
+                                weak.update(cx, |this, cx| {
+                                    this.menu = open.then_some(Menu::Document(id));
+                                    cx.notify();
+                                })
                                 .ok();
+                            }
+                        })
+                        .content(move |_, _, cx| {
+                            menu_screen.update(cx, |this, cx| this.document_menu(id, index, cx))
+                        });
+                    let hover = palette.hover;
+                    h_flex()
+                        .id(("document-row", index))
+                        .test_support()
+                        .group("document-row")
+                        .flex_row_reverse()
+                        .h(px(36.))
+                        .mx(px(8.))
+                        .px(px(8.))
+                        .gap(px(8.))
+                        .items_center()
+                        .rounded(px(crate::theme::RADIUS_LG))
+                        .cursor_pointer()
+                        .when(active, |this| {
+                            this.bg(hover)
+                                .when(rail_focused, |this| this.shadow(palette.focus_ring()))
+                        })
+                        .when(!active, |this| {
+                            this.hover(move |style| style.bg(hover))
+                                .active(move |s| s.bg(hover))
+                        })
+                        .role(gpui_kit::accesskit::Role::ListItem)
+                        .aria_label(SharedString::from(title.clone()))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.select_document(id, window, cx)
                         }))
-                        .item(PopupMenuItem::separator())
-                        .item(PopupMenuItem::new("Move up").disabled(first).on_click(
-                            move |_, window, cx| {
-                                up.update(cx, |this, cx| this.move_document(id, -1, window, cx))
-                                    .ok();
-                            },
-                        ))
-                        .item(PopupMenuItem::new("Move down").disabled(last).on_click(
-                            move |_, window, cx| {
-                                down.update(cx, |this, cx| this.move_document(id, 1, window, cx))
-                                    .ok();
-                            },
-                        ))
-                        .item(PopupMenuItem::separator())
-                        .item(
-                            PopupMenuItem::new("Remove from FIR").on_click(move |_, window, cx| {
-                                remove
-                                    .update(cx, |this, cx| this.remove_document(id, window, cx))
-                                    .ok();
+                        .child(
+                            div()
+                                .flex_none()
+                                .w(px(14.))
+                                .pt(px(2.))
+                                .text_size(px(12.))
+                                .line_height(px(16.))
+                                .text_color(palette.ink_faint)
+                                .text_right()
+                                .child((index + 1).to_string()),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .text_color(if active {
+                                    palette.ink
+                                } else {
+                                    palette.sidebar_ink
+                                })
+                                .group_hover("document-row", |style| style.text_color(palette.ink))
+                                .child(ur_label(title, UrRole::Body).truncate()),
+                        )
+                        .children((active && active_dirty).then(|| {
+                            div()
+                                .flex_none()
+                                .size(px(24.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .group_hover("document-row", |style| style.invisible())
+                                .child(dirty_dot(true))
+                        }))
+                        .child(
+                            div()
+                                .flex_none()
+                                .when(!menu_open, |this| {
+                                    this.invisible()
+                                        .group_hover("document-row", |style| style.visible())
+                                })
+                                .when(active && active_dirty, |this| this.absolute().left(px(8.)))
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .child(more),
+                        )
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.menu = Some(Menu::Document(id));
+                                cx.notify();
                             }),
                         )
-                    }
-                };
-                let menu_screen = cx.entity();
-                let more = Popover::new(("document-menu", index))
-                    .appearance(false)
-                    .anchor(gpui_kit::Anchor::TopLeft)
-                    .trigger(Trigger {
-                        button: icon_button(
-                            ("document-actions", index),
-                            IconName::Ellipsis,
-                            "More actions",
-                        )
-                        .dense(),
-                        open: menu_open,
-                    })
-                    .open(menu_open)
-                    .on_open_change({
-                        let weak = weak.clone();
-                        move |open, _, cx| {
-                            let open = *open;
-                            weak.update(cx, |this, cx| {
-                                this.menu = open.then_some(Menu::Document(id));
-                                cx.notify();
-                            })
-                            .ok();
-                        }
-                    })
-                    .content(move |_, _, cx| {
-                        menu_screen.update(cx, |this, cx| this.document_menu(id, index, cx))
-                    });
-                let hover = crate::ui::accent_fill_strong(&palette);
-                h_flex()
-                    .id(("document-row", index))
-                    .test_support()
-                    .group("document-row")
-                    .flex_row_reverse()
-                    .h(px(40.))
-                    .mx(px(8.))
-                    .px(px(10.))
-                    .gap(px(8.))
-                    .items_center()
-                    .rounded(px(crate::theme::RADIUS_LG))
-                    .when(active, |this| {
-                        let mut shadows = palette.thumb_shadow();
-                        if rail_focused {
-                            shadows.extend(palette.focus_ring());
-                        }
-                        this.bg(palette.floating()).shadow(shadows)
-                    })
-                    .when(!active, |this| {
-                        this.hover(move |style| style.bg(hover))
-                            .active(move |s| s.bg(hover))
-                    })
-                    .role(gpui_kit::accesskit::Role::ListItem)
-                    .aria_label(SharedString::from(title.clone()))
-                    .on_click(
-                        cx.listener(move |this, _, window, cx| {
-                            this.select_document(id, window, cx)
-                        }),
-                    )
-                    .child(
-                        div()
-                            .flex_none()
-                            .w(px(14.))
-                            .pt(px(2.))
-                            .text_size(px(12.))
-                            .line_height(px(16.))
-                            .text_color(palette.ink_faint)
-                            .text_right()
-                            .child((index + 1).to_string()),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .text_color(palette.ink)
-                            .child(ur_label(title, UrRole::Body).truncate()),
-                    )
-                    .children((active && active_dirty).then(|| {
-                        div()
-                            .flex_none()
-                            .size(px(24.))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .group_hover("document-row", |style| style.invisible())
-                            .child(dirty_dot(&palette, true))
-                    }))
-                    .child(
-                        div()
-                            .flex_none()
-                            .when(!menu_open, |this| {
-                                this.invisible()
-                                    .group_hover("document-row", |style| style.visible())
-                            })
-                            .when(active && active_dirty, |this| this.absolute().left(px(8.)))
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .child(more),
-                    )
-                    .context_menu(move |popup, _, _| context(popup))
-                    .into_any_element()
-            })
-            .collect();
+                        .into_any_element()
+                })
+                .collect();
         let add = self.add_popover(&palette, cx);
         v_flex()
             .id("workspace-rail")
@@ -1192,18 +1168,10 @@ impl WorkspaceScreen {
                 h_flex()
                     .flex_none()
                     .h(px(40.))
-                    .pl(px(16.))
-                    .pr(px(8.))
-                    .gap(px(6.))
+                    .px(px(8.))
+                    .pt(px(8.))
                     .items_center()
-                    .child(section_label(&palette, "Documents"))
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .line_height(px(16.))
-                            .text_color(palette.ink_faint)
-                            .child(count.to_string()),
-                    ),
+                    .child(section_label("Documents").child(count_badge(count))),
             )
             .when(self.state == WorkspaceState::Loading, |this| {
                 this.when(self.slow, |this| {
@@ -1213,9 +1181,9 @@ impl WorkspaceScreen {
                             .gap(px(26.))
                             .pt(px(14.))
                             .items_end()
-                            .child(skeleton_bar(&palette, 160., 12.))
-                            .child(skeleton_bar(&palette, 132., 12.))
-                            .child(skeleton_bar(&palette, 148., 12.)),
+                            .child(skeleton_bar(160., 12.))
+                            .child(skeleton_bar(132., 12.))
+                            .child(skeleton_bar(148., 12.)),
                     )
                 })
             })
@@ -1226,7 +1194,7 @@ impl WorkspaceScreen {
                         .flex_1()
                         .min_h_0()
                         .overflow_y_scroll()
-                        .child(v_flex().gap(px(2.)).children(rows))
+                        .child(v_flex().gap(px(4.)).children(rows))
                         .child(add),
                 )
             })
@@ -1301,7 +1269,7 @@ impl WorkspaceScreen {
                     .id("add-document-card")
                     .w(px(360.))
                     .bg(palette.raised)
-                    .rounded(px(crate::theme::RADIUS_XL))
+                    .rounded(px(crate::theme::RADIUS_LG))
                     .shadow(palette.shadow_lg())
                     .text_color(palette.ink)
                     .font_family(missal_text::UI_FAMILY)
@@ -1359,13 +1327,19 @@ impl WorkspaceScreen {
                     })
                     .child(
                         h_flex()
-                            .h(px(48.))
-                            .px(px(14.))
+                            .h(px(44.))
+                            .px(px(12.))
                             .gap(px(8.))
                             .items_center()
-                            .child(keycap(&palette, "Esc"))
+                            .border_b_1()
+                            .border_color(palette.line)
+                            .child(crate::ui::kbd("Esc"))
                             .child(div().flex_1().min_w_0().mt(px(-1.)).child(search.clone()))
-                            .child(sized_icon(IconName::Search, ICON_SM, palette.ink_faint)),
+                            .child(sized_icon(
+                                IconName::Search,
+                                crate::theme::ICON,
+                                palette.ink_muted.opacity(0.8),
+                            )),
                     )
                     .child(
                         v_flex()
@@ -1383,44 +1357,29 @@ impl WorkspaceScreen {
                                         .id(("add-template", id.get() as usize))
                                         .test_support()
                                         .flex_row_reverse()
-                                        .h(px(40.))
-                                        .px(px(10.))
-                                        .gap(px(10.))
+                                        .h(px(36.))
+                                        .px(px(8.))
+                                        .gap(px(8.))
                                         .items_center()
-                                        .rounded(px(crate::theme::RADIUS))
-                                        .when(highlighted, |this| {
-                                            this.bg(crate::ui::accent_fill(&palette))
-                                        })
+                                        .rounded(px(crate::theme::RADIUS_SM))
+                                        .when(highlighted, |this| this.bg(palette.hover))
+                                        .when(added, |this| this.opacity(0.64))
                                         .when(!added, |this| {
-                                            this.hover(move |style| {
-                                                style.bg(crate::ui::accent_fill(&palette))
-                                            })
-                                            .active(move |s| {
-                                                s.bg(crate::ui::accent_fill_strong(&palette))
-                                            })
-                                            .on_click(
-                                                cx.listener(move |_, _, _, cx| {
+                                            this.cursor_pointer()
+                                                .hover(move |style| style.bg(palette.hover))
+                                                .on_click(cx.listener(move |_, _, _, cx| {
                                                     screen.update(cx, |this, cx| {
                                                         this.toggle_template(id, cx)
                                                     });
-                                                }),
-                                            )
+                                                }))
                                         })
                                         .child(if added {
-                                            checkbox(
-                                                &palette,
-                                                ("add-check", id.get() as usize),
-                                                true,
-                                            )
-                                            .opacity(0.5)
-                                            .into_any_element()
+                                            checkbox(("add-check", id.get() as usize), true)
+                                                .disabled(true)
+                                                .into_any_element()
                                         } else {
-                                            checkbox(
-                                                &palette,
-                                                ("add-check", id.get() as usize),
-                                                checked,
-                                            )
-                                            .into_any_element()
+                                            checkbox(("add-check", id.get() as usize), checked)
+                                                .into_any_element()
                                         })
                                         .child(
                                             div()
@@ -1450,7 +1409,7 @@ impl WorkspaceScreen {
                                     div()
                                         .px(px(12.))
                                         .py(px(10.))
-                                        .text_size(px(13.))
+                                        .text_size(px(14.))
                                         .text_color(palette.ink_muted)
                                         .child(if no_templates {
                                             "No templates exist yet."
@@ -1466,8 +1425,10 @@ impl WorkspaceScreen {
                             .px(px(12.))
                             .gap(px(8.))
                             .items_center()
-                            .rounded_b(px(crate::theme::RADIUS_XL))
-                            .bg(crate::ui::muted_fill(&palette).opacity(0.8))
+                            .rounded_b(px(crate::theme::RADIUS_LG))
+                            .border_t_1()
+                            .border_color(palette.line)
+                            .bg(palette.hover.opacity(0.72))
                             .child(
                                 div()
                                     .flex_1()
@@ -1519,7 +1480,6 @@ impl WorkspaceScreen {
                 .size_full()
                 .bg(palette.sunken)
                 .child(empty_state(
-                    &palette,
                     IconName::FileText,
                     "No documents yet",
                     Some("Add a template to start writing for this FIR.".into()),
@@ -1542,7 +1502,6 @@ impl WorkspaceScreen {
                 .size_full()
                 .bg(palette.sunken)
                 .child(empty_state(
-                    &palette,
                     IconName::TriangleAlert,
                     "Couldn't open this document",
                     Some(message.clone().into()),
@@ -1566,13 +1525,12 @@ impl WorkspaceScreen {
     }
 
     fn more_menu(&self, cx: &mut Context<Self>) -> AnyElement {
-        let palette = *Palette::get(cx);
         let names = self.mode == DisplayMode::Labels;
         let close = |this: &mut Self, cx: &mut Context<Self>| {
             this.menu = None;
             cx.notify();
         };
-        menu_panel(&palette)
+        menu_popup()
             .w(px(232.))
             .child(
                 menu_item("more-names", "Show field names")
@@ -1593,7 +1551,7 @@ impl WorkspaceScreen {
                             .update(cx, |panel, cx| panel.set_tab(FieldsTab::Details, cx));
                     })),
             )
-            .child(menu_separator(&palette))
+            .child(menu_separator())
             .child(
                 menu_item("more-delete", "Delete FIR")
                     .icon(IconName::Trash)
@@ -1613,7 +1571,6 @@ impl Render for WorkspaceScreen {
         match &self.state {
             WorkspaceState::NotFound => {
                 return empty_state(
-                    &palette,
                     IconName::Folder,
                     "FIR not found",
                     Some("This FIR doesn't exist or was deleted.".into()),
@@ -1628,7 +1585,6 @@ impl Render for WorkspaceScreen {
             }
             WorkspaceState::Failed(message) => {
                 return empty_state(
-                    &palette,
                     IconName::TriangleAlert,
                     "Couldn't open this FIR",
                     Some(format!("Your saved documents are safe. ({message})").into()),
@@ -1748,7 +1704,7 @@ impl crate::ui::titlebar::HeaderSource for WorkspaceScreen {
             .child(
                 div()
                     .flex_none()
-                    .text_size(px(15.))
+                    .text_size(px(14.))
                     .font_weight(FontWeight::MEDIUM)
                     .child(
                         missal_text::label(match number {
@@ -1758,7 +1714,7 @@ impl crate::ui::titlebar::HeaderSource for WorkspaceScreen {
                         .ltr(),
                     ),
             )
-            .children(status.map(|status| crate::ui::status::status_pill(&palette, status)));
+            .children(status.map(crate::ui::status::status_pill));
         let mut content = crate::ui::titlebar::HeaderContent::element(title);
         if let Some(offence) = offence {
             content = content.meta_element(
@@ -1798,7 +1754,7 @@ impl crate::ui::titlebar::HeaderSource for WorkspaceScreen {
             })
             .content(move |_, _, cx| more_screen.update(cx, |this, cx| this.more_menu(cx)));
         content
-            .action(div().mr(px(6.)).child(save_state(&palette, state)))
+            .action(div().mr(px(6.)).child(save_state(state)))
             .action(
                 icon_button("header-edit-details", IconName::Pencil, "Edit details")
                     .keys("E")

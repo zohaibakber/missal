@@ -10,8 +10,8 @@ use gpui_kit::{
 };
 use missal_text::{Align, Direction, LineHeight, TextInput};
 
-use crate::theme::{ICON_SM, INPUT_LATIN, INPUT_URDU, Palette, RADIUS_LG};
-use crate::ui::{icon_button, keycap, sized_icon};
+use crate::theme::{ICON, INPUT_LATIN, INPUT_URDU, Palette, RADIUS_LG};
+use crate::ui::{icon_button, sized_icon};
 
 pub const URDU_SIZE: f32 = 16.0;
 pub const LATIN_SIZE: f32 = 14.0;
@@ -226,8 +226,8 @@ impl RenderOnce for Field {
         let icon = self.search_icon.then(|| {
             sized_icon(
                 gpui_kit::assets::IconName::Search,
-                ICON_SM,
-                palette.ink_faint,
+                ICON,
+                palette.ink_muted.opacity(0.8),
             )
         });
         let input_entity = self.input.clone();
@@ -252,8 +252,8 @@ impl RenderOnce for Field {
             })
         });
         let hint = match self.hint {
-            Hint::Slash if empty && !focused => Some(keycap(&palette, "/")),
-            Hint::Escape => Some(keycap(&palette, "Esc")),
+            Hint::Slash if empty && !focused => Some(crate::ui::kbd("/")),
+            Hint::Escape => Some(crate::ui::kbd("Esc")),
             _ => None,
         };
         let calendar = self.on_calendar.clone().map(|handler| {
@@ -266,13 +266,8 @@ impl RenderOnce for Field {
             .dense()
             .on_click(move |_, window, cx| handler(window, cx))
         });
-        let shadows = match (focused, self.error) {
-            (true, false) => palette.input_focus_ring(),
-            (true, true) => palette.danger_ring(),
-            (false, true) => palette.danger_edge(),
-            (false, false) => Vec::new(),
-        };
-        let hover_fill = (!focused).then(|| palette.field_fill_hover());
+        let border = control_border(&palette, focused, self.error);
+        let shadows = control_surface_shadows(&palette, focused, self.error);
         let height = self.height.unwrap_or(self.kind.height());
         let focus_target = self.input.clone();
         let mut start: Vec<gpui_kit::AnyElement> = Vec::new();
@@ -303,12 +298,11 @@ impl RenderOnce for Field {
             .h(px(height))
             .items_center()
             .gap(px(8.))
-            .px(px(10.))
+            .px(px(11.))
             .rounded(px(RADIUS_LG))
-            .bg(palette.field_bg(focused))
-            .when_some(hover_fill, |this, hover| {
-                this.hover(move |style| style.bg(hover))
-            })
+            .border_1()
+            .border_color(border)
+            .bg(palette.control_fill())
             .shadow(shadows)
             .cursor_text()
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
@@ -323,5 +317,42 @@ impl RenderOnce for Field {
                     .child(self.input.clone()),
             )
             .children(end)
+    }
+}
+
+pub fn control_surface_shadows(
+    palette: &Palette,
+    focused: bool,
+    error: bool,
+) -> Vec<gpui_kit::BoxShadow> {
+    let ring = |color: gpui_kit::Hsla| gpui_kit::BoxShadow {
+        color,
+        offset: gpui_kit::point(px(0.), px(0.)),
+        blur_radius: px(0.),
+        spread_radius: px(3.),
+        inset: false,
+    };
+    match (focused, error) {
+        (true, false) => vec![ring(palette.ring.opacity(0.24))],
+        (true, true) => vec![ring(palette.danger.opacity(if palette.dark {
+            0.24
+        } else {
+            0.16
+        }))],
+        (false, true) => Vec::new(),
+        (false, false) => {
+            let mut shadows = vec![palette.edge()];
+            shadows.extend(palette.elevation_xs());
+            shadows
+        }
+    }
+}
+
+pub fn control_border(palette: &Palette, focused: bool, error: bool) -> gpui_kit::Hsla {
+    match (focused, error) {
+        (true, false) => palette.ring,
+        (true, true) => palette.danger.opacity(0.64),
+        (false, true) => palette.danger.opacity(0.36),
+        (false, false) => palette.line_input,
     }
 }

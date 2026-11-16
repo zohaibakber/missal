@@ -6,16 +6,14 @@ use gpui_kit::{
     ParentElement, Render, RenderOnce, SharedString, Styled, Window, WindowControlArea, div, px,
 };
 
-use gpui_kit::Anchor;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::avatar::Avatar;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 
 use crate::app::{navigate, navigate_back, navigate_forward, open_palette, toggle_nav_menu};
 use crate::auth::AuthModel;
 use crate::state::Route;
 use crate::theme::{HEADER_HEIGHT, Palette};
+use crate::ui::popup_menu::{MenuEntry, menu};
 use crate::ui::{UrRole, icon_button, ur_inline, window_controls};
 
 pub enum HeaderTitle {
@@ -126,7 +124,7 @@ pub fn title_element(palette: &Palette, title: HeaderTitle) -> AnyElement {
     match title {
         HeaderTitle::Latin(text) => div()
             .flex_none()
-            .text_size(px(15.))
+            .text_size(px(14.))
             .line_height(px(20.))
             .font_weight(FontWeight::MEDIUM)
             .text_color(palette.ink)
@@ -245,7 +243,7 @@ impl RenderOnce for Header {
                     .flex_shrink(1.)
                     .items_center()
                     .gap(px(8.))
-                    .text_size(px(13.))
+                    .text_size(px(14.))
                     .line_height(px(20.))
                     .text_color(palette.ink_muted)
                     .whitespace_nowrap()
@@ -287,45 +285,45 @@ fn account_menu(cx: &App) -> Option<AnyElement> {
         div()
             .mr(px(4.))
             .child(
-                Button::new("account-menu")
-                    .ghost()
-                    .compact()
-                    .rounded_full()
-                    .tooltip(name.clone())
-                    .child(Avatar::new().name(name.clone()).small())
-                    .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
-                        let menu = menu
-                            .item(PopupMenuItem::label(name.clone()))
-                            .item(PopupMenuItem::label(email.clone()))
-                            .item(PopupMenuItem::separator())
+                menu("account-menu")
+                    .trigger(
+                        icon_button("account-menu", IconName::User, name.clone())
+                            .content(Avatar::new().name(name.clone()).small()),
+                    )
+                    .content(move |menu, _, _| {
+                        menu.header(name.clone(), Some(email.clone()))
+                            .separator()
                             .item(
-                                PopupMenuItem::new("Change password…")
-                                    .icon(IconName::KeyRound)
-                                    .on_click(|_, window, cx| {
+                                MenuEntry::new(
+                                    "account-password",
+                                    "Change password…",
+                                    |window, cx| {
                                         crate::ui::account::open_change_password(window, cx)
-                                    }),
-                            );
-                        let menu = if admin {
-                            menu.item(
-                                PopupMenuItem::new("People…")
-                                    .icon(IconName::Users)
-                                    .on_click(|_, window, cx| {
-                                        crate::ui::account::open_users(window, cx)
-                                    }),
+                                    },
+                                )
+                                .icon(IconName::KeyRound),
                             )
-                        } else {
-                            menu
-                        };
-                        menu.item(
-                            PopupMenuItem::new("Settings")
-                                .icon(IconName::Settings)
-                                .on_click(|_, window, cx| navigate(Route::Settings, window, cx)),
-                        )
-                        .item(
-                            PopupMenuItem::new("Sign out")
-                                .icon(IconName::LogOut)
-                                .on_click(|_, window, cx| crate::auth::sign_out(window, cx)),
-                        )
+                            .when(admin, |menu| {
+                                menu.item(
+                                    MenuEntry::new("account-people", "People…", |window, cx| {
+                                        crate::ui::account::open_users(window, cx)
+                                    })
+                                    .icon(IconName::Users),
+                                )
+                            })
+                            .item(
+                                MenuEntry::new("account-settings", "Settings", |window, cx| {
+                                    navigate(Route::Settings, window, cx)
+                                })
+                                .icon(IconName::Settings),
+                            )
+                            .separator()
+                            .item(
+                                MenuEntry::new("account-sign-out", "Sign out", |window, cx| {
+                                    crate::auth::sign_out(window, cx)
+                                })
+                                .icon(IconName::LogOut),
+                            )
                     }),
             )
             .into_any_element(),

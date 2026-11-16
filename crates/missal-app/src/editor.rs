@@ -43,6 +43,8 @@ fn sync_theme(cx: &mut App) {
         ink_faint: palette.ink_faint,
         line: palette.line,
         line_strong: palette.line_strong,
+        input: palette.line_input,
+        ring: palette.ring,
         hover: palette.hover,
         pressed: palette.pressed,
         accent: palette.accent,
@@ -53,11 +55,7 @@ fn sync_theme(cx: &mut App) {
         selection: palette
             .accent
             .opacity(if palette.dark { 0.36 } else { 0.22 }),
-        shadow: if palette.dark {
-            gpui_kit::black().opacity(0.35)
-        } else {
-            gpui_kit::black().opacity(0.06)
-        },
+        shadow: gpui_kit::black().opacity(0.05),
     }
     .install(cx);
 }

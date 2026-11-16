@@ -1,11 +1,9 @@
 use std::time::{Duration, Instant};
 
+use crate::ui::popup_menu::{MenuEntry, menu};
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
-use gpui_kit::component::Sizable;
-use gpui_kit::component::button::{Button, ButtonVariants};
-use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
-use gpui_kit::component::{StyledExt, h_flex, v_flex};
+use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyElement, App, AppContext, Context, Entity, EntityId, FocusHandle, Focusable,
@@ -25,15 +23,17 @@ use crate::state::{Load, Models, run_db_in, toast_error, toast_warning};
 use crate::theme::{Palette, RADIUS, RADIUS_SM};
 use crate::ui::dialogs::confirm_delete;
 use crate::ui::input::{Kind, field, field_input, search_field};
+use crate::ui::part::Part;
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::{
-    SaveState, SegmentItem, UrRole, button, ghost_sm, icon_button, isolate_urdu, primary_sm,
-    save_state, segmented, ur_label,
+    SaveState, SegmentItem, UrRole, button, card_description, card_header, card_title, count_badge,
+    ghost_sm, icon_button, isolate_urdu, primary_sm, save_state, segmented, sidebar_group,
+    sidebar_group_label, sidebar_menu_button, ur_label,
 };
 use crate::update::controller::{self, UpdateState, UpdateStatus};
 
 const COLUMN_WIDTH: f32 = 680.0;
-const NAV_WIDTH: f32 = 220.0;
+const NAV_WIDTH: f32 = 240.0;
 const FILTER_THRESHOLD: usize = 12;
 const FLASH: Duration = Duration::from_secs(2);
 
@@ -929,7 +929,6 @@ impl SettingsScreen {
 
     fn section(
         &self,
-        palette: &Palette,
         index: usize,
         count: Option<usize>,
         flash: bool,
@@ -946,34 +945,16 @@ impl SettingsScreen {
             .flex_shrink_0()
             .when(!last, |this| this.mb(px(56.)))
             .child(
-                h_flex()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(
-                        div()
-                            .text_size(px(16.))
-                            .line_height(px(24.))
-                            .font_semibold()
-                            .child(title),
-                    )
-                    .children(count.map(|count| {
-                        div()
-                            .text_size(px(13.))
-                            .line_height(px(20.))
-                            .text_color(palette.ink_muted)
-                            .child(count.to_string())
-                    }))
-                    .child(div().flex_1())
-                    .children(flash.then(|| save_state(palette, SaveState::Saved))),
-            )
-            .child(
-                div()
-                    .mt(px(2.))
+                card_header()
                     .mb(px(16.))
-                    .text_size(px(13.))
-                    .line_height(px(20.))
-                    .text_color(palette.ink_muted)
-                    .child(description),
+                    .child(
+                        card_title()
+                            .child(title)
+                            .children(count.map(count_badge))
+                            .child(div().flex_1())
+                            .children(flash.then(|| save_state(SaveState::Saved))),
+                    )
+                    .child(card_description().child(description)),
             )
             .child(body)
     }
@@ -1003,7 +984,7 @@ impl SettingsScreen {
                 .gap(px(8.))
                 .child(
                     div()
-                        .text_size(px(13.))
+                        .text_size(px(14.))
                         .child("Could not load global values"),
                 )
                 .child(
@@ -1146,7 +1127,7 @@ impl SettingsScreen {
                     .child(div().w(px(1.)).h(px(24.)).mx(px(8.)).bg(palette.line))
                     .child(
                         div()
-                            .text_size(px(13.))
+                            .text_size(px(14.))
                             .text_color(palette.ink_muted)
                             .child("Example"),
                     )
@@ -1236,20 +1217,27 @@ impl SettingsScreen {
                                     .opacity(0.)
                                     .group_hover("custom-row", |style| style.opacity(1.))
                                     .child(
-                                        Button::new(("custom-more", index))
-                                            .ghost()
-                                            .xsmall()
-                                            .icon(IconName::Ellipsis)
-                                            .tooltip("More actions")
-                                            .dropdown_menu(move |menu, _, _| {
+                                        menu(gpui_kit::SharedString::from(format!(
+                                            "custom-more-{index}"
+                                        )))
+                                        .trigger(
+                                            icon_button(
+                                                ("custom-more", index),
+                                                IconName::Ellipsis,
+                                                "More actions",
+                                            )
+                                            .dense(),
+                                        )
+                                        .content(
+                                            move |menu, _, _| {
                                                 let rename = weak.clone();
                                                 let delete = weak.clone();
                                                 let name = name.clone();
                                                 menu.item(
-                                                    PopupMenuItem::new("Rename")
-                                                        .icon(IconName::Pencil)
-                                                        .disabled(id.is_none())
-                                                        .on_click(move |_, window, cx| {
+                                                    MenuEntry::new(
+                                                        "custom-rename",
+                                                        "Rename",
+                                                        move |window, cx| {
                                                             rename
                                                                 .update(cx, |this, cx| {
                                                                     this.rename_custom(
@@ -1257,14 +1245,17 @@ impl SettingsScreen {
                                                                     )
                                                                 })
                                                                 .ok();
-                                                        }),
+                                                        },
+                                                    )
+                                                    .icon(IconName::Pencil)
+                                                    .disabled(id.is_none()),
                                                 )
-                                                .item(PopupMenuItem::separator())
+                                                .separator()
                                                 .item(
-                                                    PopupMenuItem::new("Delete…")
-                                                        .icon(IconName::Trash)
-                                                        .disabled(id.is_none())
-                                                        .on_click(move |_, window, cx| {
+                                                    MenuEntry::new(
+                                                        "custom-delete",
+                                                        "Delete…",
+                                                        move |window, cx| {
                                                             let name = name.clone();
                                                             delete
                                                                 .update(cx, |this, cx| {
@@ -1275,9 +1266,14 @@ impl SettingsScreen {
                                                                     }
                                                                 })
                                                                 .ok();
-                                                        }),
+                                                        },
+                                                    )
+                                                    .icon(IconName::Trash)
+                                                    .danger()
+                                                    .disabled(id.is_none()),
                                                 )
-                                            }),
+                                            },
+                                        ),
                                     ),
                             ),
                     )
@@ -1363,7 +1359,7 @@ impl SettingsScreen {
             .into_any_element()
     }
 
-    fn appearance_body(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
+    fn appearance_body(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = self.models.prefs.read(cx).read().theme;
         let items = ThemeChoice::ALL
             .into_iter()
@@ -1383,7 +1379,7 @@ impl SettingsScreen {
             .position(|choice| *choice == theme)
             .unwrap_or(0);
         h_flex()
-            .child(segmented(palette, items, selected))
+            .child(segmented(items, selected))
             .into_any_element()
     }
 
@@ -1427,11 +1423,11 @@ impl SettingsScreen {
                     div()
                         .w(px(100.))
                         .flex_none()
-                        .text_size(px(13.))
+                        .text_size(px(14.))
                         .text_color(palette.ink_muted)
                         .child(name),
                 )
-                .child(div().flex_1().min_w_0().text_size(px(13.)).child(value))
+                .child(div().flex_1().min_w_0().text_size(px(14.)).child(value))
         };
         let path_text = folder
             .as_ref()
@@ -1546,36 +1542,16 @@ impl SettingsScreen {
             .into_any_element()
     }
 
-    fn nav(&self, palette: &Palette, cx: &mut Context<Self>) -> gpui_kit::Div {
-        let palette = *palette;
+    fn nav(&self, cx: &mut Context<Self>) -> Part {
         let active = self.active_section();
-        v_flex()
+        sidebar_group()
             .w(px(NAV_WIDTH))
             .flex_none()
             .h_full()
-            .px(px(4.))
-            .pt(px(12.))
-            .gap(px(2.))
+            .p(px(8.))
+            .child(sidebar_group_label().child("Settings"))
             .children(SECTIONS.iter().enumerate().map(|(index, title)| {
-                let on = index == active;
-                div()
-                    .id(("settings-nav", index))
-                    .test_support()
-                    .h(px(34.))
-                    .px(px(12.))
-                    .flex()
-                    .items_center()
-                    .rounded(px(crate::theme::RADIUS_LG))
-                    .text_size(px(13.5))
-                    .font_medium()
-                    .text_color(if on { palette.ink } else { palette.ink_muted })
-                    .when(on, |this| {
-                        this.bg(palette.floating()).shadow(palette.thumb_shadow())
-                    })
-                    .when(!on, |this| {
-                        this.hover(move |style| style.bg(palette.hover).text_color(palette.ink))
-                            .active(move |s| s.bg(palette.pressed))
-                    })
+                sidebar_menu_button(("settings-nav", index), index == active)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.scroll_to(index);
                         cx.notify();
@@ -1599,12 +1575,11 @@ impl Render for SettingsScreen {
         let markers_body = self.markers_body(&palette, cx);
         let customs_body = self.customs_body(&palette, cx);
         let built_in_body = self.built_in_body(&palette, cx);
-        let appearance_body = self.appearance_body(&palette, cx);
+        let appearance_body = self.appearance_body(cx);
         let about_body = self.about_body(&palette, cx);
-        let nav = self.nav(&palette, cx);
+        let nav = self.nav(cx);
         let sections = [
             self.section(
-                &palette,
                 0,
                 None,
                 flash == Some(Section::Globals),
@@ -1612,7 +1587,6 @@ impl Render for SettingsScreen {
                 globals_body,
             ),
             self.section(
-                &palette,
                 1,
                 None,
                 flash == Some(Section::Markers),
@@ -1620,7 +1594,6 @@ impl Render for SettingsScreen {
                 markers_body,
             ),
             self.section(
-                &palette,
                 2,
                 Some(custom_count),
                 flash == Some(Section::Customs),
@@ -1628,7 +1601,6 @@ impl Render for SettingsScreen {
                 customs_body,
             ),
             self.section(
-                &palette,
                 3,
                 None,
                 false,
@@ -1636,7 +1608,6 @@ impl Render for SettingsScreen {
                 built_in_body,
             ),
             self.section(
-                &palette,
                 4,
                 None,
                 false,
@@ -1644,7 +1615,6 @@ impl Render for SettingsScreen {
                 appearance_body,
             ),
             self.section(
-                &palette,
                 5,
                 None,
                 false,
@@ -1672,7 +1642,7 @@ impl Render for SettingsScreen {
                     .pt(px(20.))
                     .rounded(px(crate::theme::RADIUS_XL))
                     .bg(palette.surface)
-                    .shadow(palette.shadow_xs())
+                    .shadow(palette.shadow_sm())
                     .overflow_y_scroll()
                     .track_scroll(&self.scroll)
                     .on_scroll(cx.listener(|_, _, _, cx| cx.notify()))

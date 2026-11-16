@@ -1,17 +1,23 @@
+use std::cell::Cell;
 use std::rc::Rc;
 
 use gpui_kit::AnimationExt;
 use gpui_kit::assets::IconName;
+use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    Anchor, AnyElement, App, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, Pixels, Point,
-    Render, SharedString, Styled, Window, anchored, deferred, div, px,
+    Anchor, AnyElement, App, AppContext, Bounds, ClickEvent, Context, Entity, EventEmitter,
+    FocusHandle, Focusable, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
+    ParentElement, Pixels, Point, Render, RenderOnce, SharedString, Styled, Window, anchored,
+    canvas, deferred, div, point, px,
 };
 
 use crate::shortcuts::{BlurFocus, PreviewClose};
 use crate::theme::{Palette, motion_fast};
-use crate::ui::menu::{menu_item, menu_item_element, menu_panel, menu_separator};
-use crate::ui::{UrRole, ur_label};
+use crate::ui::menu::{
+    menu_group_label, menu_header, menu_header_detail, menu_item, menu_item_element, menu_popup,
+    menu_separator,
+};
+use crate::ui::{ActionButton, IconButton, UrRole, ur_label};
 
 pub struct Dismissed;
 
@@ -24,30 +30,32 @@ enum Label {
 }
 
 #[derive(Clone)]
-pub struct PopupEntry {
+pub struct MenuEntry {
     id: SharedString,
     label: Label,
     icon: Option<IconName>,
     check: Option<bool>,
     keys: Option<SharedString>,
     danger: bool,
+    disabled: bool,
     keep_open: bool,
     action: Action,
 }
 
-impl PopupEntry {
+impl MenuEntry {
     pub fn new(
         id: impl Into<SharedString>,
         label: impl Into<SharedString>,
         action: impl Fn(&mut Window, &mut App) + 'static,
-    ) -> PopupEntry {
-        PopupEntry {
+    ) -> MenuEntry {
+        MenuEntry {
             id: id.into(),
             label: Label::Text(label.into()),
             icon: None,
             check: None,
             keys: None,
             danger: false,
+            disabled: false,
             keep_open: false,
             action: Rc::new(action),
         }
@@ -57,10 +65,10 @@ impl PopupEntry {
         id: impl Into<SharedString>,
         label: impl Into<SharedString>,
         action: impl Fn(&mut Window, &mut App) + 'static,
-    ) -> PopupEntry {
-        PopupEntry {
+    ) -> MenuEntry {
+        MenuEntry {
             label: Label::Urdu(label.into()),
-            ..PopupEntry::new(id, "", action)
+            ..MenuEntry::new(id, "", action)
         }
     }
 
@@ -84,6 +92,11 @@ impl PopupEntry {
         self
     }
 
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     pub fn keep_open(mut self) -> Self {
         self.keep_open = true;
         self
@@ -98,15 +111,74 @@ pub struct Placement {
 }
 
 #[derive(Clone)]
-pub enum PopupRow {
-    Entry(PopupEntry),
+enum Row {
+    Entry(MenuEntry),
+    Label(SharedString),
+    Header(SharedString, Option<SharedString>),
     Separator,
+}
+
+#[derive(Clone, Default)]
+pub struct MenuContent {
+    rows: Vec<Row>,
+}
+
+impl FluentBuilder for MenuContent {}
+
+impl MenuContent {
+    pub fn new() -> Self {
+        MenuContent::default()
+    }
+
+    pub fn item(mut self, entry: MenuEntry) -> Self {
+        self.rows.push(Row::Entry(entry));
+        self
+    }
+
+    pub fn items(mut self, entries: impl IntoIterator<Item = MenuEntry>) -> Self {
+        self.rows.extend(entries.into_iter().map(Row::Entry));
+        self
+    }
+
+    pub fn separator(mut self) -> Self {
+        self.rows.push(Row::Separator);
+        self
+    }
+
+    pub fn label(mut self, text: impl Into<SharedString>) -> Self {
+        self.rows.push(Row::Label(text.into()));
+        self
+    }
+
+    pub fn header(mut self, title: impl Into<SharedString>, detail: Option<SharedString>) -> Self {
+        self.rows.push(Row::Header(title.into(), detail));
+        self
+    }
+
+    fn into_rows(self) -> Vec<Row> {
+        let mut rows: Vec<Row> = Vec::with_capacity(self.rows.len());
+        for row in self.rows {
+            let separator = matches!(row, Row::Separator);
+            if separator
+                && rows
+                    .last()
+                    .is_none_or(|last| matches!(last, Row::Separator))
+            {
+                continue;
+            }
+            rows.push(row);
+        }
+        if matches!(rows.last(), Some(Row::Separator)) {
+            rows.pop();
+        }
+        rows
+    }
 }
 
 pub struct PopupList {
     id: SharedString,
     focus: FocusHandle,
-    rows: Vec<PopupRow>,
+    rows: Vec<Row>,
     highlighted: Option<usize>,
     position: Point<Pixels>,
     corner: Anchor,
@@ -124,7 +196,7 @@ impl Focusable for PopupList {
 impl PopupList {
     pub fn open(
         id: impl Into<SharedString>,
-        rows: Vec<PopupRow>,
+        content: MenuContent,
         placement: Placement,
         window: &mut Window,
         cx: &mut App,
@@ -139,7 +211,7 @@ impl PopupList {
             let mut list = PopupList {
                 id: id.into(),
                 focus: cx.focus_handle(),
-                rows,
+                rows: content.into_rows(),
                 highlighted: None,
                 position,
                 corner,
@@ -160,7 +232,7 @@ impl PopupList {
         self.rows
             .iter()
             .enumerate()
-            .filter(|(_, row)| matches!(row, PopupRow::Entry(_)))
+            .filter(|(_, row)| matches!(row, Row::Entry(entry) if !entry.disabled))
             .map(|(index, _)| index)
     }
 
@@ -168,10 +240,10 @@ impl PopupList {
         self.rows
             .iter()
             .filter_map(|row| match row {
-                PopupRow::Entry(entry) => Some(match &entry.label {
+                Row::Entry(entry) => Some(match &entry.label {
                     Label::Text(text) | Label::Urdu(text) => text.to_string(),
                 }),
-                PopupRow::Separator => None,
+                Row::Label(..) | Row::Header(..) | Row::Separator => None,
             })
             .collect()
     }
@@ -195,9 +267,12 @@ impl PopupList {
     }
 
     fn run(&mut self, row: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(PopupRow::Entry(entry)) = self.rows.get_mut(row) else {
+        let Some(Row::Entry(entry)) = self.rows.get_mut(row) else {
             return;
         };
+        if entry.disabled {
+            return;
+        }
         let action = entry.action.clone();
         let keep_open = entry.keep_open;
         if keep_open && let Some(checked) = entry.check.as_mut() {
@@ -242,14 +317,14 @@ impl PopupList {
                 let found = (0..entries.len())
                     .map(|step| entries[(start + step) % entries.len()])
                     .find(|row| match &self.rows[*row] {
-                        PopupRow::Entry(entry) => match &entry.label {
+                        Row::Entry(entry) => match &entry.label {
                             Label::Text(text) | Label::Urdu(text) => {
                                 text.chars().next().is_some_and(|first| {
                                     first.to_lowercase().eq(letter.to_lowercase())
                                 })
                             }
                         },
-                        PopupRow::Separator => false,
+                        Row::Label(..) | Row::Header(..) | Row::Separator => false,
                     });
                 if let Some(row) = found {
                     self.highlighted = Some(row);
@@ -262,7 +337,7 @@ impl PopupList {
         cx.stop_propagation();
     }
 
-    fn item(&self, index: usize, entry: &PopupEntry, cx: &mut Context<Self>) -> AnyElement {
+    fn item(&self, index: usize, entry: &MenuEntry, cx: &mut Context<Self>) -> AnyElement {
         let content: AnyElement = match &entry.label {
             Label::Text(text) => div().child(text.clone()).into_any_element(),
             Label::Urdu(text) => div()
@@ -286,6 +361,7 @@ impl PopupList {
         if entry.danger {
             item = item.danger();
         }
+        item = item.disabled(entry.disabled);
         let weak = cx.weak_entity();
         item.highlighted(self.highlighted == Some(index))
             .on_hover(move |_, cx| {
@@ -304,14 +380,23 @@ impl PopupList {
 
 impl Render for PopupList {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = *Palette::get(cx);
-        let rows: Vec<PopupRow> = self.rows.clone();
+        let _palette = *Palette::get(cx);
+        let rows: Vec<Row> = self.rows.clone();
         let children: Vec<AnyElement> = rows
             .iter()
             .enumerate()
             .map(|(index, row)| match row {
-                PopupRow::Entry(entry) => self.item(index, entry, cx),
-                PopupRow::Separator => menu_separator(&palette).into_any_element(),
+                Row::Entry(entry) => self.item(index, entry, cx),
+                Row::Label(text) => menu_group_label().child(text.clone()).into_any_element(),
+                Row::Header(title, detail) => menu_header()
+                    .child(title.clone())
+                    .children(
+                        detail
+                            .clone()
+                            .map(|detail| menu_header_detail().child(detail)),
+                    )
+                    .into_any_element(),
+                Row::Separator => menu_separator().into_any_element(),
             })
             .collect();
         let rises = matches!(self.corner, Anchor::BottomLeft | Anchor::BottomRight);
@@ -321,7 +406,7 @@ impl Render for PopupList {
                 .anchor(self.corner)
                 .snap_to_window_with_margin(px(8.))
                 .child(
-                    menu_panel(&palette)
+                    menu_popup()
                         .id(self.id.clone())
                         .key_context("PopupList MissalTextInput")
                         .on_action(cx.listener(|_, _: &BlurFocus, _, cx| cx.emit(Dismissed)))
@@ -345,5 +430,172 @@ impl Render for PopupList {
                 ),
         )
         .with_priority(1)
+    }
+}
+
+pub trait MenuTrigger: IntoElement + 'static {
+    fn open(self, open: bool) -> Self;
+
+    fn on_activate(self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self;
+}
+
+impl MenuTrigger for IconButton {
+    fn open(self, open: bool) -> Self {
+        self.toggled(open)
+    }
+
+    fn on_activate(self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
+        self.on_click(handler)
+    }
+}
+
+impl MenuTrigger for ActionButton {
+    fn open(self, open: bool) -> Self {
+        if open { self.show_hover() } else { self }
+    }
+
+    fn on_activate(self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
+        self.on_click(handler)
+    }
+}
+
+type ContentBuilder = Rc<dyn Fn(MenuContent, &mut Window, &mut App) -> MenuContent>;
+
+struct MenuState {
+    list: Option<Entity<PopupList>>,
+    bounds: Rc<Cell<Bounds<Pixels>>>,
+    swallow_click: bool,
+}
+
+#[derive(IntoElement)]
+pub struct Menu<T: MenuTrigger> {
+    id: SharedString,
+    trigger: Option<T>,
+    content: Option<ContentBuilder>,
+    anchor: Anchor,
+    width: f32,
+}
+
+pub fn menu<T: MenuTrigger>(id: impl Into<SharedString>) -> Menu<T> {
+    Menu {
+        id: id.into(),
+        trigger: None,
+        content: None,
+        anchor: Anchor::TopRight,
+        width: 224.,
+    }
+}
+
+impl<T: MenuTrigger> Menu<T> {
+    pub fn trigger(mut self, trigger: T) -> Self {
+        self.trigger = Some(trigger);
+        self
+    }
+
+    pub fn content(
+        mut self,
+        content: impl Fn(MenuContent, &mut Window, &mut App) -> MenuContent + 'static,
+    ) -> Self {
+        self.content = Some(Rc::new(content));
+        self
+    }
+
+    pub fn anchor(mut self, anchor: Anchor) -> Self {
+        self.anchor = anchor;
+        self
+    }
+
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = width;
+        self
+    }
+}
+
+impl<T: MenuTrigger> RenderOnce for Menu<T> {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let state = window.use_keyed_state(
+            SharedString::from(format!("{}-state", self.id)),
+            cx,
+            |_, _| MenuState {
+                list: None,
+                bounds: Rc::new(Cell::new(Bounds::default())),
+                swallow_click: false,
+            },
+        );
+        let (list, bounds) = {
+            let state = state.read(cx);
+            (state.list.clone(), state.bounds.clone())
+        };
+        let painted = bounds.clone();
+        let Menu {
+            id,
+            trigger,
+            content,
+            anchor,
+            width,
+        } = self;
+        let press = state.clone();
+        let click = state.clone();
+        let close = |state: &Entity<MenuState>, cx: &mut App| {
+            state.update(cx, |state, cx| {
+                state.list = None;
+                cx.notify();
+            })
+        };
+        let trigger = trigger.map(|trigger| {
+            trigger
+                .open(list.is_some())
+                .on_activate(move |_, window, cx| {
+                    let swallow = click.update(cx, |state, _| {
+                        std::mem::take(&mut state.swallow_click) || state.list.is_some()
+                    });
+                    if swallow {
+                        close(&click, cx);
+                        return;
+                    }
+                    let Some(content) = content.clone() else {
+                        return;
+                    };
+                    let area = bounds.get();
+                    let position = match anchor {
+                        Anchor::TopRight => point(area.right(), area.bottom() + px(4.)),
+                        Anchor::BottomLeft => point(area.left(), area.top() - px(4.)),
+                        Anchor::BottomRight => point(area.right(), area.top() - px(4.)),
+                        _ => point(area.left(), area.bottom() + px(4.)),
+                    };
+                    let rows = content(MenuContent::new(), window, cx);
+                    let list = PopupList::open(
+                        format!("{id}-menu"),
+                        rows,
+                        Placement {
+                            position,
+                            anchor,
+                            width,
+                        },
+                        window,
+                        cx,
+                    );
+                    let dismiss = click.clone();
+                    cx.subscribe(&list, move |_, _: &Dismissed, cx| close(&dismiss, cx))
+                        .detach();
+                    click.update(cx, |state, cx| {
+                        state.list = Some(list);
+                        cx.notify();
+                    });
+                })
+        });
+        div()
+            .relative()
+            .flex_none()
+            .capture_any_mouse_down(move |_, _, cx| {
+                press.update(cx, |state, _| state.swallow_click = state.list.is_some());
+            })
+            .children(trigger)
+            .child(
+                canvas(move |area, _, _| painted.set(area), |_, _, _, _| {})
+                    .absolute()
+                    .size_full(),
+            )
+            .children(list)
     }
 }

@@ -4,11 +4,12 @@ mod theme;
 mod toolbar;
 
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::{
-    AnyView, App, AppContext, Bounds, ClipboardEntry, ClipboardItem, Context, Entity,
+    AnyElement, App, AppContext, Bounds, ClipboardEntry, ClipboardItem, Context, Entity,
     EntityInputHandler, EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement,
     MouseDownEvent, ParentElement, Pixels, Point, Render, ScrollEvent, Styled, Subscription, Task,
     UTF16Selection, Window, div, prelude::FluentBuilder, px,
@@ -31,6 +32,8 @@ use crate::model::{Change, EditorCore, Fragment, Selection, clip};
 pub use element::PagesElement;
 pub use keys::KEY_CONTEXT;
 pub use theme::EditorTheme;
+
+pub type ToolbarSlot = Rc<dyn Fn(&mut Window, &mut App) -> Option<AnyElement>>;
 
 pub const PAGE_GAP: f32 = 24.0;
 pub const CANVAS_PAD: f32 = 24.0;
@@ -145,7 +148,7 @@ pub struct Editor {
     packet: Packet,
     read_only: bool,
     mode_toggle: bool,
-    toolbar_trailing: Option<AnyView>,
+    toolbar_end: Option<ToolbarSlot>,
     zoom_override: Option<f32>,
     pub(crate) scroll: PagePoint,
     pub(crate) viewport: Option<Bounds<Pixels>>,
@@ -262,7 +265,7 @@ impl Editor {
             packet,
             read_only: false,
             mode_toggle: false,
-            toolbar_trailing: None,
+            toolbar_end: None,
             zoom_override,
             scroll: PagePoint::default(),
             viewport: None,
@@ -311,7 +314,7 @@ impl Editor {
     pub fn reset(&mut self, cx: &mut Context<Self>) {
         self.read_only = false;
         self.mode_toggle = false;
-        self.toolbar_trailing = None;
+        self.toolbar_end = None;
         self.autoscroll_task = None;
         self.menu_selection = None;
         self.field_query.clear();
@@ -373,8 +376,12 @@ impl Editor {
         cx.notify();
     }
 
-    pub fn set_toolbar_trailing(&mut self, view: Option<AnyView>, cx: &mut Context<Self>) {
-        self.toolbar_trailing = view;
+    pub fn set_toolbar_end(
+        &mut self,
+        slot: impl Fn(&mut Window, &mut App) -> Option<AnyElement> + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.toolbar_end = Some(Rc::new(slot));
         cx.notify();
     }
 

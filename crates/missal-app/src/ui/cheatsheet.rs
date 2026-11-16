@@ -11,7 +11,6 @@ use crate::state::rows::fold_for_search;
 use crate::theme::{CHEATSHEET_WIDTH, Palette};
 use crate::ui::dialogs::{dialog_surface, dialog_title};
 use crate::ui::input::{Kind, field, field_input};
-use crate::ui::keycaps_chord;
 
 pub struct CheatsheetOpen(pub bool);
 
@@ -93,11 +92,11 @@ impl Render for Cheatsheet {
                             .gap(px(12.))
                             .child(
                                 div()
-                                    .text_size(px(13.))
+                                    .text_size(px(14.))
                                     .text_color(palette.ink)
                                     .child(shortcut.label),
                             )
-                            .child(keycaps_chord(&palette, shortcut.keys))
+                            .child(crate::ui::kbd_group(shortcut.keys).chord())
                     }))
             })
         };

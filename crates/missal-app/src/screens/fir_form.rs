@@ -8,7 +8,7 @@ use gpui_kit::component::popover::Popover;
 use gpui_kit::component::{Selectable, h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, App, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable, FontWeight,
+    AnyElement, App, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
     InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, Render, RenderOnce,
     ScrollHandle, StatefulInteractiveElement, Styled, Subscription, Window, anchored, deferred,
     div, px,
@@ -25,7 +25,7 @@ use crate::state::{Models, Route, run_db_in, toast_error, toast_success};
 use crate::theme::{INPUT_URDU, Palette};
 use crate::ui::dialogs::confirm_discard;
 use crate::ui::input::{Kind, field, field_input};
-use crate::ui::menu::menu_panel;
+use crate::ui::menu::menu_popup;
 use crate::ui::status::status_dot;
 use crate::ui::{UrRole, button, icon_button, sized_icon, ur_label};
 
@@ -645,7 +645,7 @@ impl FirForm {
             )
             .children(required.then(|| {
                 div()
-                    .text_size(px(13.))
+                    .text_size(px(14.))
                     .line_height(px(20.))
                     .text_color(palette.danger)
                     .child("*")
@@ -778,12 +778,12 @@ impl FirForm {
                     .upgrade()
                     .map(|form| form.read(cx).status)
                     .unwrap_or(FirStatus::Open);
-                menu_panel(&palette)
+                menu_popup()
                     .w(px(240.))
                     .children(FirStatus::ALL.iter().map(|status| {
                         let status = *status;
                         let weak = weak.clone();
-                        let hover = crate::ui::accent_fill(&palette);
+                        let hover = palette.hover;
                         h_flex()
                             .id(("status-choice", status as usize))
                             .test_support()
@@ -796,11 +796,10 @@ impl FirForm {
                             .role(gpui_kit::accesskit::Role::MenuItemRadio)
                             .when(status == current, |this| this.bg(hover))
                             .hover(move |style| style.bg(hover))
-                            .active(move |s| s.bg(crate::ui::accent_fill_strong(&palette)))
                             .on_click(move |_, _, cx| {
                                 weak.update(cx, |this, cx| this.set_status(status, cx)).ok();
                             })
-                            .child(status_dot(&palette, status))
+                            .child(status_dot(status))
                             .child(
                                 div()
                                     .mt(px(-2.))
@@ -900,7 +899,6 @@ impl FirForm {
         let count = items.len();
         let weak = cx.entity().downgrade();
         let error = self.errors.get(kind.field()).copied();
-        let ink = palette.ink;
         v_flex()
             .gap(px(8.))
             .children(items.iter().enumerate().map(|(position, input)| {
@@ -960,28 +958,15 @@ impl FirForm {
             .children(error.map(|message| div().child(Self::error_line(&palette, message))))
             .child(
                 h_flex().flex_row_reverse().mr(px(-8.)).child(
-                    h_flex()
-                        .id(("add-entry", kind.index()))
-                        .h(px(28.))
-                        .px(px(8.))
-                        .gap(px(6.))
-                        .items_center()
-                        .rounded(px(crate::theme::RADIUS_PILL))
-                        .text_size(px(13.))
-                        .line_height(px(20.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(palette.ink_muted)
-                        .hover(move |s| s.bg(crate::ui::accent_fill(&palette)).text_color(ink))
-                        .active(move |s| s.bg(crate::ui::accent_fill_strong(&palette)))
-                        .role(gpui_kit::accesskit::Role::Button)
+                    crate::ui::button(("add-entry", kind.index()), kind.add_label())
+                        .ghost()
+                        .sm()
+                        .icon(IconName::Plus)
                         .on_click(
                             cx.listener(move |this, _, window, cx| {
                                 this.add_entry(kind, window, cx)
                             }),
-                        )
-                        .child(sized_icon(IconName::Plus, 14., palette.ink_muted))
-                        .child(kind.add_label())
-                        .test_support(),
+                        ),
                 ),
             )
             .into_any_element()
@@ -993,15 +978,15 @@ impl FirForm {
         div()
             .id("form-field-body")
             .w_full()
-            .px(px(10.))
+            .px(px(11.))
             .py(px(3.))
             .rounded(px(crate::theme::RADIUS_LG))
-            .bg(palette.field_bg(focused))
-            .when(!focused, |this| {
-                let hover = palette.field_fill_hover();
-                this.hover(move |s| s.bg(hover))
-            })
-            .shadow(crate::ui::control_shadows(palette, focused, false))
+            .border_1()
+            .border_color(crate::ui::input::control_border(palette, focused, false))
+            .bg(palette.control_fill())
+            .shadow(crate::ui::input::control_surface_shadows(
+                palette, focused, false,
+            ))
             .cursor_text()
             .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                 target.update(cx, |input, cx| input.focus(window, cx));
@@ -1039,20 +1024,21 @@ impl RenderOnce for StatusTrigger {
             .id("status-select")
             .w_full()
             .h(px(INPUT_URDU))
-            .px(px(10.))
+            .px(px(11.))
             .gap(px(8.))
             .flex_row_reverse()
             .items_center()
             .rounded(px(crate::theme::RADIUS_LG))
-            .bg(palette.field_bg(self.open))
-            .when(!self.open, |this| {
-                let hover = palette.field_fill_hover();
-                this.hover(move |s| s.bg(hover))
-            })
-            .shadow(crate::ui::control_shadows(&palette, self.open, false))
+            .border_1()
+            .border_color(crate::ui::input::control_border(&palette, self.open, false))
+            .bg(palette.control_fill())
+            .shadow(crate::ui::input::control_surface_shadows(
+                &palette, self.open, false,
+            ))
+            .cursor_pointer()
             .role(gpui_kit::accesskit::Role::ComboBox)
             .aria_label("Status")
-            .child(status_dot(&palette, self.status))
+            .child(status_dot(self.status))
             .child(
                 div()
                     .mt(px(-2.))
@@ -1060,7 +1046,11 @@ impl RenderOnce for StatusTrigger {
                     .child(ur_label(self.status.label(), UrRole::Body)),
             )
             .child(div().flex_1())
-            .child(sized_icon(IconName::ChevronsUpDown, 14., palette.ink_faint))
+            .child(sized_icon(
+                IconName::ChevronsUpDown,
+                crate::theme::ICON,
+                palette.ink.opacity(0.8),
+            ))
             .test_support()
     }
 }
@@ -1385,12 +1375,11 @@ impl NewFirScreen {
         let bar = h_flex()
             .id("fir-form-actions")
             .flex_none()
-            .h(px(48.))
-            .pl(px(if unsaved { 16. } else { 6. }))
-            .pr(px(6.))
-            .gap(px(6.))
+            .p(px(4.))
+            .pl(px(if unsaved { 12. } else { 4. }))
+            .gap(px(4.))
             .items_center()
-            .rounded(px(crate::theme::RADIUS_PILL))
+            .rounded(px(crate::theme::RADIUS_XL))
             .bg(palette.raised)
             .shadow(palette.shadow_lg())
             .occlude()
@@ -1400,8 +1389,8 @@ impl NewFirScreen {
                         .mr(px(10.))
                         .gap(px(6.))
                         .items_center()
-                        .text_size(px(13.))
-                        .line_height(px(16.))
+                        .text_size(px(14.))
+                        .line_height(px(20.))
                         .text_color(palette.ink_muted)
                         .child(div().size(px(6.)).rounded_full().bg(palette.notice))
                         .child("Unsaved changes"),
@@ -1446,7 +1435,6 @@ impl Render for NewFirScreen {
         let body: AnyElement = match (&self.state, self.form.clone()) {
             (FormState::Ready, Some(form)) => form.into_any_element(),
             (FormState::Failed(message), _) => crate::ui::empty_state(
-                &palette,
                 IconName::TriangleAlert,
                 "Couldn't open this FIR",
                 Some(message.clone().into()),

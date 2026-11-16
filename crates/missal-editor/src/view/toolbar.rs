@@ -57,7 +57,7 @@ impl Render for ToolTip {
                 .text_color(theme.ink)
                 .font_family(missal_text::UI_FAMILY)
                 .text_size(px(12.))
-                .line_height(px(18.))
+                .line_height(px(16.))
                 .child(self.label.clone())
                 .children(self.keys.as_ref().map(|keys| {
                     h_flex()
@@ -73,7 +73,7 @@ impl Render for ToolTip {
                                 .rounded(px(4.))
                                 .bg(theme.hover)
                                 .text_color(theme.ink_muted)
-                                .text_size(px(11.))
+                                .text_size(px(12.))
                                 .line_height(px(16.))
                                 .font_weight(FontWeight::MEDIUM)
                                 .child(cap)
@@ -173,15 +173,10 @@ impl Selectable for ToolButton {
 impl RenderOnce for ToolButton {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = EditorTheme::get(cx);
-        let size = if self.dense { 24. } else { 28. };
+        let size = if self.dense { 24. } else { 32. };
         let glyph = if self.dense { 14. } else { 16. };
-        let color = if self.toggled {
-            theme.ink
-        } else {
-            theme.ink_muted
-        };
+        let color = theme.ink.opacity(0.8);
         let disabled = self.disabled;
-        let ink = theme.ink;
         let hover = theme.hover;
         div()
             .id(self.id)
@@ -190,12 +185,13 @@ impl RenderOnce for ToolButton {
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(999.))
+            .rounded(px(if self.dense { 8. } else { 10. }))
             .text_color(color)
-            .when(self.toggled, |this| this.bg(theme.pressed))
-            .when(disabled, |this| this.opacity(0.4))
+            .cursor_pointer()
+            .when(self.toggled, |this| this.bg(theme.input.opacity(0.64)))
+            .when(disabled, |this| this.opacity(0.64))
             .when(!disabled && !self.toggled, |this| {
-                this.hover(move |s| s.bg(hover).text_color(ink))
+                this.hover(move |s| s.bg(hover))
             })
             .role(gpui_kit::accesskit::Role::Button)
             .aria_label(self.label.clone())
@@ -215,8 +211,14 @@ impl RenderOnce for ToolButton {
     }
 }
 
-fn separator() -> AnyElement {
-    div().flex_none().w(px(6.)).into_any_element()
+fn separator(line: gpui_kit::Hsla) -> AnyElement {
+    div()
+        .flex_none()
+        .w(px(1.))
+        .h(px(20.))
+        .mx(px(4.))
+        .bg(line)
+        .into_any_element()
 }
 
 impl Editor {
@@ -281,7 +283,8 @@ impl Editor {
                                 .test_support()
                                 .h(px(32.))
                                 .px(px(8.))
-                                .rounded(px(4.))
+                                .rounded(px(6.))
+                                .cursor_pointer()
                                 .hover(move |style| style.bg(theme.hover))
                                 .on_click(move |_, window, cx| {
                                     let reference = reference.clone();
@@ -330,17 +333,19 @@ impl Editor {
                         div().p(px(8.)).child(
                             h_flex()
                                 .h(px(36.))
-                                .px(px(10.))
+                                .px(px(11.))
                                 .gap(px(8.))
                                 .items_center()
                                 .rounded(px(10.))
-                                .bg(theme.hover)
+                                .border_1()
+                                .border_color(theme.input)
+                                .bg(theme.surface)
                                 .children(clear)
                                 .child(div().flex_1().min_w_0().mt(px(-1.)).child(search.clone()))
                                 .child(
                                     Icon::new(IconName::Search)
-                                        .size(px(14.))
-                                        .text_color(theme.ink_faint),
+                                        .size(px(16.))
+                                        .text_color(theme.ink_muted.opacity(0.8)),
                                 ),
                         ),
                     )
@@ -359,14 +364,15 @@ impl Editor {
             let ink = theme.ink;
             div()
                 .id(id)
-                .h(px(26.))
-                .px(px(10.))
+                .h(px(28.))
+                .px(px(9.))
                 .flex()
                 .items_center()
-                .rounded(px(999.))
-                .text_size(px(12.))
-                .line_height(px(16.))
+                .rounded(px(8.))
+                .text_size(px(14.))
+                .line_height(px(20.))
                 .font_weight(FontWeight::MEDIUM)
+                .cursor_pointer()
                 .role(gpui_kit::accesskit::Role::RadioButton)
                 .when(on, |this| {
                     this.bg(theme.surface)
@@ -375,7 +381,7 @@ impl Editor {
                         .aria_toggled(gpui_kit::accesskit::Toggled::True)
                 })
                 .when(!on, |this| {
-                    this.text_color(theme.ink_muted)
+                    this.text_color(theme.ink_faint)
                         .hover(move |s| s.text_color(ink))
                 })
                 .tooltip(tooltip(
@@ -397,7 +403,7 @@ impl Editor {
             .flex_none()
             .p(px(2.))
             .gap(px(2.))
-            .rounded(px(999.))
+            .rounded(px(10.))
             .bg(theme.hover)
             .child(item("editor-mode-values", "Values", DisplayMode::Values))
             .child(item("editor-mode-names", "Names", DisplayMode::Labels))
@@ -406,7 +412,7 @@ impl Editor {
 
     pub(crate) fn render_toolbar(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = EditorTheme::get(cx);
@@ -425,19 +431,20 @@ impl Editor {
                 entity.update(cx, |editor, cx| f(editor, window, cx));
             }
         };
-        let bar = h_flex()
-            .id("editor-toolbar")
+        let pill = |id: &'static str| {
+            h_flex()
+                .id(id)
+                .h(px(40.))
+                .px(px(4.))
+                .gap(px(2.))
+                .items_center()
+                .rounded(px(14.))
+                .bg(theme.raised)
+                .shadow(theme.bar_shadows().to_vec())
+                .occlude()
+        };
+        let history = pill("editor-history")
             .flex_none()
-            .max_w_full()
-            .overflow_hidden()
-            .h(px(40.))
-            .px(px(6.))
-            .gap(px(2.))
-            .items_center()
-            .rounded(px(999.))
-            .bg(theme.raised)
-            .shadow(theme.bar_shadows().to_vec())
-            .font_family(missal_text::UI_FAMILY)
             .child(
                 tool("editor-undo", IconName::Undo2, "Undo")
                     .keys("Mod+Z")
@@ -449,8 +456,11 @@ impl Editor {
                     .keys("Mod+Y")
                     .disabled(!can_redo)
                     .on_click(act(Editor::redo)),
-            )
-            .child(separator())
+            );
+        let bar = pill("editor-toolbar")
+            .flex_shrink(1.)
+            .min_w_0()
+            .overflow_hidden()
             .child(
                 tool("editor-bold", IconName::Bold, "Bold")
                     .keys("Mod+B")
@@ -471,7 +481,7 @@ impl Editor {
                         e.toggle_format(TextFormat::UNDERLINE, w, cx)
                     })),
             )
-            .child(separator())
+            .child(separator(theme.line))
             .child(
                 tool("editor-align-left", IconName::TextAlignStart, "Align left")
                     .keys("Mod+L")
@@ -500,7 +510,7 @@ impl Editor {
                 .toggled(align == Align::Justify)
                 .on_click(act(|e, w, cx| e.align(Align::Justify, w, cx))),
             )
-            .child(separator())
+            .child(separator(theme.line))
             .child(
                 tool("editor-bullets", IconName::List, "Bulleted list")
                     .toggled(list == Some(ListType::Bullet))
@@ -511,20 +521,29 @@ impl Editor {
                     .toggled(list == Some(ListType::Number))
                     .on_click(act(|e, w, cx| e.list(ListType::Number, w, cx))),
             )
-            .child(separator())
+            .child(separator(theme.line))
             .child(self.field_menu(theme, cx))
             .when(self.mode_toggle, |this| {
-                this.child(separator()).child(self.mode_toggle(theme, cx))
-            })
-            .children(self.toolbar_trailing.clone());
+                this.child(separator(theme.line))
+                    .child(self.mode_toggle(theme, cx))
+            });
+        let end = self
+            .toolbar_end
+            .clone()
+            .and_then(|slot| slot(window, cx))
+            .map(|content| pill("editor-toolbar-end").px(px(4.)).child(content));
         h_flex()
             .flex_none()
             .w_full()
-            .justify_center()
+            .items_center()
+            .gap(px(8.))
             .px(px(12.))
             .pt(px(10.))
             .pb(px(2.))
+            .font_family(missal_text::UI_FAMILY)
+            .child(h_flex().flex_1().justify_start().child(history))
             .child(bar)
+            .child(h_flex().flex_1().justify_end().children(end))
             .into_any_element()
     }
 
@@ -544,11 +563,11 @@ impl Editor {
             .absolute()
             .right(px(12.))
             .bottom(px(12.))
-            .h(px(32.))
+            .h(px(36.))
             .px(px(4.))
             .gap(px(2.))
             .items_center()
-            .rounded(px(999.))
+            .rounded(px(14.))
             .bg(theme.raised)
             .shadow(theme.bar_shadows().to_vec())
             .occlude()
@@ -566,12 +585,13 @@ impl Editor {
                 div()
                     .id("editor-zoom-fit")
                     .flex_none()
-                    .w(px(44.))
-                    .h(px(24.))
+                    .w(px(48.))
+                    .h(px(28.))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(999.))
+                    .rounded(px(8.))
+                    .cursor_pointer()
                     .text_size(px(12.))
                     .line_height(px(16.))
                     .text_color(theme.ink_muted)
@@ -580,7 +600,6 @@ impl Editor {
                         1,
                     )])))
                     .hover(move |s| s.bg(theme.hover).text_color(theme.ink))
-                    .active(move |s| s.bg(theme.pressed))
                     .role(gpui_kit::accesskit::Role::Button)
                     .aria_label("Fit width")
                     .tooltip(tooltip(
