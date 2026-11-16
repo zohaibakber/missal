@@ -10,7 +10,7 @@ Crates:
 - `missal-docx`: `.docx` import.
 - `missal-page`: paged layout and PDF output.
 - `missal-editor`: rich-text editor view and model.
-- `missal-auth`: self-serve email and password accounts against the Missal API (`MISSAL_API_URL`, compile time or run time): sign-up, emailed codes to verify an address or reset a password, sign-in, rotating refresh sessions through `SessionKeeper`, password changes, the account's licence (trial, licensed or expired) and the admin calls (list, update, grant a year). `MISSAL_PURCHASE_URL` (optional, compile time or run time) is the buy-a-licence link. The session is cached in the OS keyring, 30 days offline while the licence is active.
+- `missal-auth`: self-serve email and password accounts against the Missal API (`MISSAL_API_URL`, compile time or run time): sign-up, emailed codes to verify an address or reset a password, sign-in, rotating refresh sessions through `SessionKeeper`, password changes, the account's licence (trial, licensed, trial ended or expired) and the admin calls (list, update, grant a year). `MISSAL_PURCHASE_URL` (optional, compile time or run time) is the buy-a-licence link. The session is cached in the OS keyring, 30 days offline while the licence is active.
 - `missal-library`: client for the shared template library on the same API. Calls carry the access token from `SessionKeeper`.
 - `missal-app`: the `missal` binary: shell, screens, preferences, printing, updates.
 
