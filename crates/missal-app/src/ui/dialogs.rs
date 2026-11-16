@@ -68,7 +68,7 @@ pub fn dialog_title(text: impl Into<SharedString>) -> AnyElement {
     div()
         .text_size(px(16.))
         .line_height(px(24.))
-        .font_weight(FontWeight::SEMIBOLD)
+        .font_weight(FontWeight::MEDIUM)
         .child(label(text.into()).leading(LineHeight::Px(24.)))
         .into_any_element()
 }

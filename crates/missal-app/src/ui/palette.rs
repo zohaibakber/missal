@@ -493,7 +493,7 @@ fn highlight_number(palette: &Palette, no: &SharedString, query: &str) -> AnyEle
                 range,
                 HighlightStyle {
                     color: Some(palette.accent),
-                    font_weight: Some(FontWeight::SEMIBOLD),
+                    font_weight: Some(FontWeight::MEDIUM),
                     ..Default::default()
                 },
             )])

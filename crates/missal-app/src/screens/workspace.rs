@@ -1729,7 +1729,7 @@ impl crate::ui::titlebar::HeaderSource for WorkspaceScreen {
                 div()
                     .flex_none()
                     .text_size(px(15.))
-                    .font_weight(FontWeight::SEMIBOLD)
+                    .font_weight(FontWeight::MEDIUM)
                     .child(
                         missal_text::label(match number {
                             Some(number) => format!("FIR {number}"),

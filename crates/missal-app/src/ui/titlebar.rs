@@ -128,7 +128,7 @@ pub fn title_element(palette: &Palette, title: HeaderTitle) -> AnyElement {
             .flex_none()
             .text_size(px(15.))
             .line_height(px(20.))
-            .font_weight(FontWeight::SEMIBOLD)
+            .font_weight(FontWeight::MEDIUM)
             .text_color(palette.ink)
             .whitespace_nowrap()
             .child(text)
