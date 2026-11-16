@@ -24,6 +24,7 @@ use missal_text::{
 
 use crate::app::{import_word_file, navigate, navigate_replace, open_print_preview};
 use crate::editor;
+use crate::library::LibraryModel;
 use crate::shortcuts::*;
 use crate::state::rows::fold_for_search;
 use crate::state::templates::TemplatesEvent;
@@ -33,6 +34,7 @@ use crate::state::{
 use crate::theme::{Palette, RADIUS};
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
 use crate::ui::input::{Kind, field, field_input, search_field};
+use crate::ui::library::open_library;
 use crate::ui::popup_menu::{Dismissed, Placement, PopupEntry, PopupList, PopupRow};
 use crate::ui::print_preview::{PreviewDocument, PrintRequest};
 use crate::ui::titlebar::HeaderContent;
@@ -462,6 +464,23 @@ impl TemplatePage {
         );
     }
 
+    pub fn publish(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (Some(id), Some(library)) = (self.id, LibraryModel::get(cx)) else {
+            return;
+        };
+        if self.state != PageState::Ready || self.saving || self.review.is_some() {
+            return;
+        }
+        let publish: Continuation = Box::new(move |window, cx| {
+            library.update(cx, |library, cx| library.publish(id, window, cx));
+        });
+        if self.is_dirty(cx) {
+            self.save_then(Some(publish), window, cx);
+        } else {
+            publish(window, cx);
+        }
+    }
+
     fn dropped(&mut self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
         let Some(path) = paths.paths().first().cloned() else {
             return;
@@ -730,10 +749,43 @@ impl TemplatePage {
             .action(
                 kit_icon_button("template-more", IconName::Ellipsis)
                     .tooltip("More actions")
-                    .dropdown_menu(move |menu, _, _| {
+                    .dropdown_menu(move |menu, _, cx| {
                         let replace = weak.clone();
                         let duplicate = weak.clone();
                         let delete = weak.clone();
+                        let publish = weak.clone();
+                        let template = weak.upgrade().and_then(|page| page.read(cx).id);
+                        let library = LibraryModel::get(cx)
+                            .map(|library| library.read(cx))
+                            .filter(|library| library.can_publish(cx));
+                        let publishing = match (library, template) {
+                            (Some(library), Some(id)) if library.is_publishing(id) => {
+                                Some(("Publishing to library…", false))
+                            }
+                            (Some(library), Some(id)) => match library.link_for_template(id) {
+                                None => Some(("Publish to library", true)),
+                                Some(_) if library.has_unpublished_changes(id, cx) => {
+                                    Some(("Publish changes to library", true))
+                                }
+                                Some(_) => Some(("Published to library", false)),
+                            },
+                            _ => None,
+                        };
+                        let menu = match publishing {
+                            Some((text, enabled)) => menu
+                                .item(
+                                    PopupMenuItem::new(text)
+                                        .icon(IconName::CloudUpload)
+                                        .disabled(!enabled)
+                                        .on_click(move |_, window, cx| {
+                                            publish
+                                                .update(cx, |this, cx| this.publish(window, cx))
+                                                .ok();
+                                        }),
+                                )
+                                .item(PopupMenuItem::separator()),
+                            None => menu,
+                        };
                         menu.item(
                             PopupMenuItem::new("Replace from Word file…")
                                 .icon(IconName::FileUp)
@@ -1144,6 +1196,7 @@ impl TemplatesScreen {
     fn list_header(&self, cx: &mut Context<Self>) -> gpui_kit::Div {
         let palette = *Palette::get(cx);
         let total = self.models.templates.read(cx).items.len();
+        let library = LibraryModel::get(cx).is_some_and(|library| library.read(cx).available(cx));
         let sort_bounds = self.sort_bounds.clone();
         let open = self.menu.is_some();
         h_flex()
@@ -1180,6 +1233,10 @@ impl TemplatesScreen {
                             ),
                     ),
             )
+            .children(library.then(|| {
+                icon_button("template-library", IconName::Library, "Template library")
+                    .on_click(|_, window, cx| open_library(window, cx))
+            }))
             .child(
                 icon_button("template-import", IconName::FileUp, "Import Word file")
                     .keys("Mod+O")
@@ -1383,6 +1440,7 @@ impl Render for TemplatesScreen {
         let templates = self.models.templates.read(cx);
         let nothing_at_all =
             templates.load.is_ready() && templates.items.is_empty() && self.page.is_none();
+        let library = LibraryModel::get(cx).is_some_and(|library| library.read(cx).available(cx));
         let main: gpui_kit::AnyElement = match &self.page {
             Some(page) => page.clone().into_any_element(),
             None => empty_state(
@@ -1423,6 +1481,11 @@ impl Render for TemplatesScreen {
                                 .icon(IconName::FileUp)
                                 .on_click(|_, window, cx| import_word_file(window, cx)),
                         )
+                        .children(library.then(|| {
+                            ghost_sm("empty-template-library", "Browse library")
+                                .icon(IconName::Library)
+                                .on_click(|_, window, cx| open_library(window, cx))
+                        }))
                         .child(
                             ghost_sm("empty-new-template", "New blank template")
                                 .on_click(|_, window, cx| navigate(Route::NewTemplate, window, cx)),

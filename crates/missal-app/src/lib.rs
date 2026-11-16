@@ -3,6 +3,7 @@ pub mod auth;
 pub mod db;
 pub mod editor;
 pub mod launch;
+pub mod library;
 pub mod packet;
 pub mod paths;
 pub mod platform;

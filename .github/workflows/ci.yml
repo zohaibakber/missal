@@ -20,6 +20,7 @@ env:
   RUST_BACKTRACE: short
   VPK_VERSION: 1.3.39-g8d2844f
   WORKOS_CLIENT_ID: ${{ vars.WORKOS_CLIENT_ID }}
+  MISSAL_LIBRARY_URL: ${{ vars.MISSAL_LIBRARY_URL }}
 
 jobs:
   check:

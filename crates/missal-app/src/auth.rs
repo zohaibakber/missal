@@ -8,7 +8,9 @@ use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyElement, App, AppContext, Context, Entity, Global, SharedString, Task, Window, div, px,
 };
-use missal_auth::{Account, AuthError, Config, Session, SessionStore, begin_sign_in};
+use missal_auth::{
+    Account, AuthError, Config, Session, SessionKeeper, SessionStore, begin_sign_in,
+};
 
 use crate::state::{Models, toast_warning};
 use crate::theme::Palette;
@@ -33,6 +35,7 @@ pub struct AuthModel {
     config: Option<Config>,
     store: Option<Arc<SessionStore>>,
     session: Option<Session>,
+    keeper: Option<Arc<SessionKeeper>>,
     state: AuthState,
     refresh_loop: Option<Task<()>>,
 }
@@ -57,10 +60,14 @@ impl AuthModel {
             None => AuthState::Disabled,
             Some(_) => AuthState::Restoring,
         };
+        let keeper = config
+            .clone()
+            .map(|config| Arc::new(SessionKeeper::new(config, store.clone())));
         let entity = cx.new(|_| AuthModel {
             config,
             store,
             session: None,
+            keeper,
             state,
             refresh_loop: None,
         });
@@ -86,6 +93,17 @@ impl AuthModel {
             AuthState::SignedIn { account, .. } => Some(account),
             _ => None,
         }
+    }
+
+    pub fn keeper(&self) -> Option<Arc<SessionKeeper>> {
+        self.keeper.clone()
+    }
+
+    fn keep(&mut self, session: Option<Session>) {
+        if let Some(keeper) = &self.keeper {
+            keeper.replace(session.clone());
+        }
+        self.session = session;
     }
 
     fn set(&mut self, state: AuthState, cx: &mut Context<Self>) {
@@ -125,7 +143,7 @@ impl AuthModel {
                             cx,
                         );
                     }
-                    this.session = Some(session);
+                    this.keep(Some(session));
                     this.refresh(cx);
                     this.schedule_refresh(cx);
                 }
@@ -154,20 +172,15 @@ impl AuthModel {
         }));
     }
 
+    pub fn check(&mut self, cx: &mut Context<Self>) {
+        self.refresh(cx);
+    }
+
     fn refresh(&mut self, cx: &mut Context<Self>) {
-        let (Some(config), Some(session)) = (self.config.clone(), self.session.clone()) else {
+        let (Some(keeper), true) = (self.keeper.clone(), self.session.is_some()) else {
             return;
         };
-        let store = self.store.clone();
-        let task = cx.background_spawn(async move {
-            let refreshed = missal_auth::refresh(&config, &session);
-            if let (Ok(fresh), Some(store)) = (&refreshed, store.as_deref())
-                && let Err(error) = store.save(fresh)
-            {
-                eprintln!("missal: could not save the session: {error}");
-            }
-            refreshed
-        });
+        let task = cx.background_spawn(async move { keeper.refresh() });
         cx.spawn(async move |this, cx| {
             let refreshed = task.await;
             this.update(cx, |this, cx| this.refreshed(refreshed, cx))
@@ -230,7 +243,7 @@ impl AuthModel {
     }
 
     fn forget(&mut self, cx: &mut Context<Self>) {
-        self.session = None;
+        self.keep(None);
         if let Some(store) = self.store.clone() {
             cx.background_spawn(async move {
                 if let Err(error) = store.clear() {
@@ -300,7 +313,7 @@ impl AuthModel {
                             },
                             cx,
                         );
-                        this.session = Some(session);
+                        this.keep(Some(session));
                         this.schedule_refresh(cx);
                     }
                     Err(AuthError::Cancelled) => {}
@@ -336,6 +349,14 @@ impl AuthModel {
             self.signed_out(notice, cx);
             self.session = session;
         }
+    }
+
+    pub fn end_session(&mut self, cx: &mut Context<Self>) {
+        if self.session.is_none() {
+            return;
+        }
+        self.forget(cx);
+        self.signed_out(Some(ENDED), cx);
     }
 
     pub fn sign_out(&mut self, cx: &mut Context<Self>) {

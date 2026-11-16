@@ -32,6 +32,7 @@ pub(crate) fn session_from(response: &AuthenticateResponse) -> Session {
         response.refresh_token.expose().to_owned(),
         SystemTime::now(),
     )
+    .with_access_token(response.access_token.expose().to_owned())
 }
 
 pub fn refresh(config: &Config, session: &Session) -> Result<Session, AuthError> {

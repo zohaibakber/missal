@@ -1,6 +1,8 @@
 use std::fmt;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde::{Deserialize, Serialize};
 
 pub const OFFLINE_GRACE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
@@ -37,11 +39,28 @@ impl Account {
     }
 }
 
+const ACCESS_MARGIN: u64 = 30;
+const ACCESS_FALLBACK: u64 = 60;
+
+#[derive(Clone, PartialEq, Eq)]
+struct AccessToken {
+    token: String,
+    expires_at: u64,
+}
+
+fn token_expiry(token: &str) -> Option<u64> {
+    let payload = URL_SAFE_NO_PAD.decode(token.split('.').nth(1)?).ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&payload).ok()?;
+    claims.get("exp")?.as_u64()
+}
+
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Session {
     pub account: Account,
     refresh_token: String,
     verified_at: u64,
+    #[serde(skip)]
+    access: Option<AccessToken>,
 }
 
 impl fmt::Debug for Session {
@@ -64,7 +83,21 @@ impl Session {
             account,
             refresh_token,
             verified_at: seconds(at),
+            access: None,
         }
+    }
+
+    pub(crate) fn with_access_token(mut self, token: String) -> Session {
+        let expires_at = token_expiry(&token).unwrap_or(self.verified_at + ACCESS_FALLBACK);
+        self.access = Some(AccessToken { token, expires_at });
+        self
+    }
+
+    pub fn access_token(&self, now: SystemTime) -> Option<&str> {
+        self.access
+            .as_ref()
+            .filter(|access| access.expires_at > seconds(now) + ACCESS_MARGIN)
+            .map(|access| access.token.as_str())
     }
 
     pub(crate) fn refresh_token(&self) -> &str {
@@ -114,6 +147,40 @@ mod tests {
         let verified = UNIX_EPOCH + Duration::from_secs(1_800_000_000);
         let session = session_at(verified);
         assert!(!session.usable_offline(verified - Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn an_access_token_is_used_until_shortly_before_it_expires() {
+        let issued = UNIX_EPOCH + Duration::from_secs(1_800_000_000);
+        let claims = URL_SAFE_NO_PAD.encode(br#"{"sub":"user_1","exp":1800000300}"#);
+        let session = session_at(issued).with_access_token(format!("e30.{claims}.sig"));
+        assert!(session.access_token(issued).is_some());
+        assert!(
+            session
+                .access_token(issued + Duration::from_secs(280))
+                .is_none()
+        );
+        let opaque = session_at(issued).with_access_token("opaque".into());
+        assert!(
+            opaque
+                .access_token(issued + Duration::from_secs(20))
+                .is_some()
+        );
+        assert!(
+            opaque
+                .access_token(issued + Duration::from_secs(40))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn the_access_token_is_never_written_to_the_keyring() {
+        let session = session_at(UNIX_EPOCH).with_access_token("secret-access".into());
+        assert!(
+            !serde_json::to_string(&session)
+                .unwrap()
+                .contains("secret-access")
+        );
     }
 
     #[test]

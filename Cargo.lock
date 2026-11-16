@@ -4511,6 +4511,7 @@ dependencies = [
  "missal-core",
  "missal-docx",
  "missal-editor",
+ "missal-library",
  "missal-page",
  "missal-store",
  "missal-text",
@@ -4525,6 +4526,7 @@ dependencies = [
 name = "missal-auth"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "dotenvy",
  "keyring",
  "serde",
@@ -4565,6 +4567,17 @@ dependencies = [
  "missal-store",
  "missal-text",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "missal-library"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "dotenvy",
+ "serde",
+ "serde_json",
+ "ureq",
 ]
 
 [[package]]
