@@ -323,6 +323,7 @@ pub struct ActionButton {
     show_hover: bool,
     show_focus: bool,
     focus: Option<FocusHandle>,
+    tab_index: isize,
     tooltip: Option<(SharedString, Option<SharedString>)>,
     on_click: Option<ClickHandler>,
 }
@@ -339,6 +340,7 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Actio
         show_hover: false,
         show_focus: false,
         focus: None,
+        tab_index: 0,
         tooltip: None,
         on_click: None,
     }
@@ -412,6 +414,11 @@ impl ActionButton {
         self
     }
 
+    pub fn tab_index(mut self, tab_index: isize) -> Self {
+        self.tab_index = tab_index;
+        self
+    }
+
     pub fn tooltip(mut self, label: impl Into<SharedString>, keys: Option<&str>) -> Self {
         self.tooltip = Some((
             label.into(),
@@ -467,6 +474,7 @@ impl RenderOnce for ActionButton {
         let hover_border = look.hover_border;
         BaseButton::new(self.id)
             .disabled(disabled)
+            .tab_index(self.tab_index)
             .when_some(self.focus.as_ref(), |this, focus| this.track_focus(focus))
             .accessibility_label(self.label.clone())
             .flex_none()

@@ -338,7 +338,11 @@ impl Palette {
     }
 }
 
-fn shadow(color: Hsla, y: f32, blur: f32, spread: f32) -> BoxShadow {
+pub fn outline(color: Hsla) -> BoxShadow {
+    shadow(color, 0., 0., 1.)
+}
+
+pub fn shadow(color: Hsla, y: f32, blur: f32, spread: f32) -> BoxShadow {
     BoxShadow {
         color,
         offset: point(px(0.), px(y)),
@@ -348,7 +352,7 @@ fn shadow(color: Hsla, y: f32, blur: f32, spread: f32) -> BoxShadow {
     }
 }
 
-fn inset(color: Hsla, y: f32, blur: f32) -> BoxShadow {
+pub fn inset(color: Hsla, y: f32, blur: f32) -> BoxShadow {
     BoxShadow {
         color,
         offset: point(px(0.), px(y)),
@@ -416,10 +420,27 @@ pub const DETAILS_RAIL_WIDTH: f32 = 320.0;
 pub const MOTION_FAST: Duration = Duration::from_millis(120);
 pub const MOTION_BASE: Duration = Duration::from_millis(180);
 pub const MOTION_EXIT: Duration = Duration::from_millis(100);
+pub const MOTION_ENTRANCE: Duration = Duration::from_millis(720);
+pub const MOTION_STAGGER: Duration = Duration::from_millis(70);
 pub const TOOLTIP_DELAY: Duration = Duration::from_millis(400);
 
 pub fn ease_out_cubic(t: f32) -> f32 {
     1.0 - (1.0 - t).powi(3)
+}
+
+pub fn ease_out_expo(t: f32) -> f32 {
+    if t >= 1.0 {
+        1.0
+    } else {
+        1.0 - 2f32.powf(-10.0 * t)
+    }
+}
+
+pub fn motion_entrance(step: u32) -> Animation {
+    let delay = MOTION_STAGGER * step;
+    let total = MOTION_ENTRANCE + delay;
+    let lead = delay.as_secs_f32() / total.as_secs_f32();
+    Animation::new(total).with_easing(move |t| ease_out_expo(((t - lead) / (1.0 - lead)).max(0.0)))
 }
 
 pub fn motion_fast() -> Animation {

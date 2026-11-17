@@ -516,7 +516,8 @@ fn run_gate(dark: bool, out: &Path, api: &str) {
     h.click("auth-back");
     h.wait_flow(|flow| *flow == Flow::SignIn);
     h.replace("sign-in-email", "expired@example.com");
-    h.fill("sign-in-password", "correct horse battery");
+    h.press("tab");
+    h.with_window(|window, cx| window.input("correct horse battery", cx));
     h.click("auth-submit");
     h.wait_auth(|state| matches!(state, AuthState::LicenceExpired { busy: false, .. }));
     h.shot("47-gate-licence-expired");

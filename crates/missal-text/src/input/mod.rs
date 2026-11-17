@@ -59,6 +59,8 @@ actions!(
         Redo,
         Enter,
         InsertNewline,
+        FocusNext,
+        FocusPrevious,
     ]
 );
 
@@ -84,6 +86,8 @@ pub(crate) fn bind_keys(cx: &mut App) {
         KeyBinding::new("delete", Delete, c),
         KeyBinding::new("enter", Enter, c),
         KeyBinding::new("shift-enter", InsertNewline, c),
+        KeyBinding::new("tab", FocusNext, c),
+        KeyBinding::new("shift-tab", FocusPrevious, c),
     ];
     if cfg!(target_os = "macos") {
         bindings.extend([
@@ -217,7 +221,7 @@ impl Focusable for TextInput {
 
 impl TextInput {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let focus_handle = cx.focus_handle();
+        let focus_handle = cx.focus_handle().tab_stop(true);
         let subscriptions = vec![
             cx.on_focus(&focus_handle, window, |this, _, cx| {
                 this.restart_blink(cx);
@@ -982,6 +986,17 @@ impl TextInput {
             cx.emit(TextInputEvent::Submit);
         }
     }
+    fn on_action_focus_next(&mut self, _: &FocusNext, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus_next(cx);
+    }
+    fn on_action_focus_previous(
+        &mut self,
+        _: &FocusPrevious,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        window.focus_prev(cx);
+    }
     fn on_action_insert_newline(
         &mut self,
         _: &InsertNewline,
@@ -1353,6 +1368,8 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::on_action_redo))
             .on_action(cx.listener(Self::on_action_enter))
             .on_action(cx.listener(Self::on_action_insert_newline))
+            .on_action(cx.listener(Self::on_action_focus_next))
+            .on_action(cx.listener(Self::on_action_focus_previous))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .child(TextInputElement::new(entity))
     }

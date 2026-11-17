@@ -2,11 +2,14 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use gpui_kit::assets::IconName;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, App, AppContext, Context, Entity, Global, IntoElement, ParentElement, Render,
-    SharedString, Styled, Subscription, Task, Window, div, px,
+    AnimationExt, AnyElement, App, AppContext, Context, ElementId, Entity, FontWeight, Global,
+    Hsla, InteractiveElement, IntoElement, ParentElement, Render, SharedString,
+    StatefulInteractiveElement, Styled, Subscription, Task, Window, div, linear_color_stop,
+    linear_gradient, px, relative,
 };
 use missal_auth::{
     Account, AuthError, CodePurpose, Config, LicenceStatus, Session, SessionKeeper, SessionStore,
@@ -14,13 +17,26 @@ use missal_auth::{
 use missal_text::{TextInput, TextInputEvent};
 
 use crate::state::{Models, toast_warning};
-use crate::theme::{Palette, RADIUS_XL};
+use crate::theme::{
+    BUTTON_XS, Palette, SHELL_INSET, hex, hex_alpha, inset, motion_entrance, outline, shadow,
+};
 use crate::ui::input::{Kind, field, field_input, secret_input};
-use crate::ui::{ButtonKind, button};
+use crate::ui::{ButtonKind, UrRole, button, sized_icon, ur_label};
 
 const REFRESH_EVERY: Duration = Duration::from_secs(60 * 60);
 pub const MIN_PASSWORD: usize = 10;
 const CODE_LENGTH: usize = 6;
+
+const BEZEL: f32 = 6.0;
+const SHELL_RADIUS: f32 = 28.0;
+const CORE_RADIUS: f32 = SHELL_RADIUS - BEZEL;
+const FORM_WIDTH: f32 = 360.0;
+const SPLIT_FROM: f32 = 980.0;
+const RISE: f32 = 14.0;
+const PAGE_WIDTH: f32 = 340.0;
+const PAGE_HEIGHT: f32 = 380.0;
+const PAGE_OFFSET: f32 = 16.0;
+const FADE_BLEED: f32 = 96.0;
 
 const ENDED: &str = "Your session has ended. Sign in again to continue.";
 const STALE: &str =
@@ -622,6 +638,7 @@ pub struct AuthGate {
 }
 
 struct Screen {
+    key: &'static str,
     title: String,
     message: String,
     notice: Option<Notice>,
@@ -818,15 +835,27 @@ impl AuthGate {
         }
     }
 
-    fn labelled(palette: &Palette, text: &'static str, element: impl IntoElement) -> AnyElement {
+    fn labelled(
+        palette: &Palette,
+        text: &'static str,
+        trailing: Option<AnyElement>,
+        element: impl IntoElement,
+    ) -> AnyElement {
         v_flex()
             .gap(px(6.))
             .child(
-                div()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .text_color(palette.ink_muted)
-                    .child(text),
+                h_flex()
+                    .h(px(BUTTON_XS))
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .line_height(px(16.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(palette.ink)
+                            .child(text),
+                    )
+                    .children(trailing.map(|trailing| div().mr(px(-7.)).child(trailing))),
             )
             .child(element)
             .into_any_element()
@@ -873,9 +902,8 @@ impl AuthGate {
         palette: &Palette,
         cx: &mut Context<Self>,
     ) -> Screen {
-        let width = px(340.);
         let input = |label: &'static str, id: &'static str, input: &Entity<TextInput>| {
-            Self::labelled(palette, label, field(id, input, Kind::Latin).width(width))
+            Self::labelled(palette, label, None, field(id, input, Kind::Latin))
         };
         let new_password = |label: &'static str| {
             [
@@ -892,7 +920,8 @@ impl AuthGate {
                 Self::go(Flow::SignIn),
             )
         };
-        let (title, message, fields, action, links): (
+        let (key, title, message, fields, action, links): (
+            &'static str,
             &str,
             String,
             Vec<AnyElement>,
@@ -900,29 +929,36 @@ impl AuthGate {
             Vec<AnyElement>,
         ) = match flow {
             Flow::SignIn => (
+                "sign-in",
                 "Sign in to Missal",
                 "Use the email and password of your Missal account.".to_owned(),
                 vec![
                     input("Email", "sign-in-email", &self.email),
-                    input("Password", "sign-in-password", &self.password),
+                    Self::labelled(
+                        palette,
+                        "Password",
+                        Some(
+                            button("auth-forgot", "Forgot password?")
+                                .kind(ButtonKind::GhostMuted)
+                                .xs()
+                                .tab_index(1)
+                                .disabled(busy)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    Self::go(Flow::ForgotPassword)(this, window, cx)
+                                }))
+                                .into_any_element(),
+                        ),
+                        field("sign-in-password", &self.password, Kind::Latin),
+                    ),
                 ],
                 "Sign in",
-                vec![
-                    Self::link(
-                        "auth-sign-up",
-                        "Create an account",
-                        busy,
-                        cx,
-                        Self::go(Flow::SignUp),
-                    ),
-                    Self::link(
-                        "auth-forgot",
-                        "Forgot password?",
-                        busy,
-                        cx,
-                        Self::go(Flow::ForgotPassword),
-                    ),
-                ],
+                vec![Self::link(
+                    "auth-sign-up",
+                    "Create an account",
+                    busy,
+                    cx,
+                    Self::go(Flow::SignUp),
+                )],
             ),
             Flow::SignUp => {
                 let mut fields = vec![
@@ -931,6 +967,7 @@ impl AuthGate {
                 ];
                 fields.extend(new_password("Password"));
                 (
+                    "sign-up",
                     "Create your Missal account",
                     "Your first week is free. We will email you a code to confirm the address."
                         .to_owned(),
@@ -946,6 +983,7 @@ impl AuthGate {
                 )
             }
             Flow::VerifyEmail { email } => (
+                "verify",
                 "Check your email",
                 format!("Enter the 6-digit code we sent to {email}. It expires in 10 minutes."),
                 vec![input("Code", "verify-code", &self.code)],
@@ -968,6 +1006,7 @@ impl AuthGate {
                 ],
             ),
             Flow::ForgotPassword => (
+                "forgot",
                 "Reset your password",
                 "Enter the email of your account and we will send you a code.".to_owned(),
                 vec![input("Email", "forgot-email", &self.email)],
@@ -978,6 +1017,7 @@ impl AuthGate {
                 let mut fields = vec![input("Code", "reset-code", &self.code)];
                 fields.extend(new_password("New password"));
                 (
+                    "reset",
                     "Choose a new password",
                     format!(
                         "Enter the code we sent to {email} and a new password. Other computers signed in to this account are signed out."
@@ -998,6 +1038,7 @@ impl AuthGate {
             }
         };
         Screen {
+            key,
             title: title.to_owned(),
             message,
             notice,
@@ -1027,7 +1068,7 @@ impl AuthGate {
                 button("licence-buy", "Buy a licence")
                     .kind(ButtonKind::Ghost)
                     .sm()
-                    .icon(gpui_kit::assets::IconName::ExternalLink)
+                    .icon(IconName::ExternalLink)
                     .on_click(|_, _, cx| open_purchase(cx))
                     .into_any_element(),
             );
@@ -1040,18 +1081,12 @@ impl AuthGate {
             |_, window, cx| sign_out(window, cx),
         ));
         Screen {
+            key: "licence",
             title: expired_title(account),
             message,
             notice,
             busy,
-            fields: vec![
-                div()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .text_color(palette.ink_muted)
-                    .child(format!("Signed in as {}", account.email))
-                    .into_any_element(),
-            ],
+            fields: vec![account_chip(palette, &account.email)],
             action: "I've bought a licence, check again",
             links,
         }
@@ -1059,11 +1094,12 @@ impl AuthGate {
 }
 
 impl Render for AuthGate {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
         let state = self.auth.read(cx).state().clone();
         let screen = match &state {
             AuthState::Restoring => Screen {
+                key: "restoring",
                 title: "Missal".to_owned(),
                 message: "Checking your session…".to_owned(),
                 notice: None,
@@ -1084,93 +1120,399 @@ impl Render for AuthGate {
                 return div().into_any_element();
             }
         };
+        let still = cx.reduce_motion();
+        let split = window.viewport_size().width >= px(SPLIT_FROM);
         let notice = self.problem.clone().map(Notice::Problem).or(screen.notice);
+        let key = screen.key;
         let busy = screen.busy;
         let action = screen.action;
-        let button_label = if busy && !action.is_empty() {
+        let label = if busy && !action.is_empty() {
             "Please wait…"
         } else {
             action
         };
-        v_flex()
+        let step = |index: u32| ElementId::Name(format!("auth-{key}-{index}").into());
+        let header = v_flex()
+            .items_center()
+            .gap(px(8.))
+            .text_center()
+            .child(
+                div()
+                    .text_size(px(24.))
+                    .line_height(px(30.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(palette.ink)
+                    .child(screen.title),
+            )
+            .child(
+                div()
+                    .text_size(px(14.))
+                    .line_height(px(21.))
+                    .text_color(palette.ink_muted)
+                    .child(screen.message),
+            );
+        let mut parts = vec![rise(header, step(0), 0, still)];
+        if !screen.fields.is_empty() {
+            parts.push(rise(
+                v_flex().gap(px(14.)).children(screen.fields),
+                step(1),
+                1,
+                still,
+            ));
+        }
+        if let Some(notice) = notice {
+            parts.push(rise(callout(&palette, notice), step(2), 0, still));
+        }
+        if !action.is_empty() {
+            parts.push(rise(
+                button("auth-submit", label)
+                    .primary()
+                    .disabled(busy)
+                    .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
+                step(3),
+                2,
+                still,
+            ));
+        }
+        if !screen.links.is_empty() {
+            parts.push(rise(
+                h_flex()
+                    .flex_wrap()
+                    .justify_center()
+                    .gap(px(4.))
+                    .children(screen.links),
+                step(4),
+                3,
+                still,
+            ));
+        }
+        let form = v_flex().w(px(FORM_WIDTH)).gap(px(24.)).children(parts);
+        h_flex()
             .id("sign-in-gate")
             .size_full()
-            .items_center()
-            .justify_center()
+            .p(px(SHELL_INSET))
+            .gap(px(SHELL_INSET))
             .bg(palette.canvas)
+            .when(split, |this| this.child(case_file(&palette, still)))
             .child(
-                v_flex()
-                    .w(px(400.))
-                    .p(px(32.))
-                    .gap(px(14.))
-                    .rounded(px(crate::theme::RADIUS_2XL))
-                    .bg(palette.raised)
-                    .shadow(palette.shadow_lg())
+                div()
+                    .id("auth-form-scroll")
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .overflow_y_scroll()
                     .child(
-                        div()
-                            .mb(px(6.))
-                            .size(px(40.))
-                            .rounded(px(RADIUS_XL))
-                            .bg(palette.action)
-                            .shadow(palette.primary_shadow())
-                            .flex()
+                        v_flex()
+                            .min_h_full()
                             .items_center()
                             .justify_center()
-                            .child(crate::ui::sized_icon(
-                                gpui_kit::assets::IconName::FileText,
-                                20.,
-                                palette.on_action,
-                            )),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(20.))
-                            .line_height(px(28.))
-                            .font_weight(gpui_kit::FontWeight::MEDIUM)
-                            .text_color(palette.ink)
-                            .child(screen.title),
-                    )
-                    .child(
-                        div()
-                            .text_size(px(14.))
-                            .line_height(px(20.))
-                            .text_color(palette.ink_muted)
-                            .child(screen.message),
-                    )
-                    .children(screen.fields)
-                    .children(notice.map(|notice| {
-                        let (color, text) = match notice {
-                            Notice::Problem(text) => (palette.danger_text, text),
-                            Notice::Info(text) => (palette.ink, text),
-                        };
-                        div()
-                            .text_size(px(14.))
-                            .line_height(px(20.))
-                            .text_color(color)
-                            .child(text)
-                    }))
-                    .when(!action.is_empty(), |this| {
-                        this.child(
-                            div().mt(px(6.)).child(
-                                button("auth-submit", button_label)
-                                    .primary()
-                                    .disabled(busy)
-                                    .on_click(
-                                        cx.listener(|this, _, window, cx| this.submit(window, cx)),
-                                    ),
-                            ),
-                        )
-                    })
-                    .when(!screen.links.is_empty(), |this| {
-                        this.child(
-                            h_flex()
-                                .flex_wrap()
-                                .gap(px(4.))
-                                .ml(px(-10.))
-                                .children(screen.links),
-                        )
-                    }),
+                            .p(px(16.))
+                            .child(form),
+                    ),
             )
             .into_any_element()
     }
+}
+
+fn rise(element: impl IntoElement + 'static, id: ElementId, step: u32, still: bool) -> AnyElement {
+    let holder = div().w_full().relative().child(element);
+    if still {
+        return holder.into_any_element();
+    }
+    holder
+        .with_animation(id, motion_entrance(step), |this, delta| {
+            this.opacity(delta).top(px(RISE * (1. - delta)))
+        })
+        .into_any_element()
+}
+
+fn callout(palette: &Palette, notice: Notice) -> impl IntoElement + use<> {
+    let (icon, fill, edge, tint, ink, text) = match notice {
+        Notice::Problem(text) => (
+            IconName::CircleAlert,
+            palette.danger_wash,
+            palette.danger.opacity(0.2),
+            palette.danger_text,
+            palette.danger_text,
+            text,
+        ),
+        Notice::Info(text) => (
+            IconName::Info,
+            palette.accent_wash,
+            palette.accent.opacity(0.2),
+            palette.accent,
+            palette.ink,
+            text,
+        ),
+    };
+    h_flex()
+        .items_start()
+        .gap(px(10.))
+        .p(px(12.))
+        .rounded(px(14.))
+        .bg(fill)
+        .border_1()
+        .border_color(edge)
+        .child(
+            div()
+                .flex_none()
+                .mt(px(1.))
+                .child(sized_icon(icon, 16., tint)),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .text_size(px(13.))
+                .line_height(px(19.))
+                .text_color(ink)
+                .child(text),
+        )
+}
+
+fn account_chip(palette: &Palette, email: &str) -> AnyElement {
+    h_flex()
+        .gap(px(10.))
+        .p(px(6.))
+        .pr(px(16.))
+        .rounded(px(16.))
+        .bg(palette.sunken)
+        .shadow(palette.ring_only())
+        .child(
+            div()
+                .flex_none()
+                .size(px(32.))
+                .rounded_full()
+                .bg(palette.raised)
+                .shadow(palette.shadow_xs())
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(sized_icon(IconName::CircleUser, 16., palette.ink_muted)),
+        )
+        .child(
+            v_flex()
+                .min_w_0()
+                .child(
+                    div()
+                        .text_size(px(11.))
+                        .line_height(px(14.))
+                        .text_color(palette.ink_muted)
+                        .child("Signed in as"),
+                )
+                .child(
+                    div()
+                        .text_size(px(13.))
+                        .line_height(px(18.))
+                        .text_color(palette.ink)
+                        .truncate()
+                        .child(email.to_owned()),
+                ),
+        )
+        .into_any_element()
+}
+
+struct Slab {
+    fill: Hsla,
+    ink: Hsla,
+    muted: Hsla,
+    wash: Hsla,
+}
+
+impl Slab {
+    fn new(palette: &Palette) -> Slab {
+        Slab {
+            fill: hex(if palette.dark { 0x0b0b0b } else { 0x1b1b1b }),
+            ink: hex(0xf5f5f5),
+            muted: hex_alpha(0xffffff, 0.56),
+            wash: hex_alpha(0xffffff, 0.06),
+        }
+    }
+}
+
+fn case_file(palette: &Palette, still: bool) -> impl IntoElement + use<> {
+    let slab = Slab::new(palette);
+    div()
+        .flex_none()
+        .w(relative(0.46))
+        .h_full()
+        .p(px(BEZEL))
+        .rounded(px(SHELL_RADIUS))
+        .bg(palette.hover)
+        .shadow(palette.ring_only())
+        .child(
+            v_flex()
+                .size_full()
+                .p(px(40.))
+                .gap(px(32.))
+                .rounded(px(CORE_RADIUS))
+                .bg(slab.fill)
+                .shadow(vec![inset(slab.wash, 1., 0.)])
+                .child(
+                    div()
+                        .text_size(px(15.))
+                        .line_height(px(20.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(slab.ink)
+                        .child("Missal"),
+                )
+                .child(
+                    h_flex()
+                        .flex_1()
+                        .min_h_0()
+                        .items_center()
+                        .justify_center()
+                        .child(form_pages(palette, &slab, still)),
+                )
+                .child(
+                    v_flex()
+                        .gap(px(12.))
+                        .child(
+                            div()
+                                .max_w(px(420.))
+                                .text_size(px(34.))
+                                .line_height(px(40.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(slab.ink)
+                                .child("First Information Reports, written in Urdu."),
+                        )
+                        .child(
+                            div()
+                                .max_w(px(380.))
+                                .text_size(px(14.))
+                                .line_height(px(21.))
+                                .text_color(slab.muted)
+                                .child(
+                                    "Templates, fields and print-ready pages, kept together on this computer.",
+                                ),
+                        ),
+                ),
+        )
+}
+
+fn form_row(palette: &Palette, label: &'static str) -> gpui_kit::Div {
+    h_flex()
+        .flex_1()
+        .items_end()
+        .gap(px(10.))
+        .child(
+            div()
+                .flex_1()
+                .h(px(1.))
+                .mb(px(7.))
+                .bg(palette.ink.opacity(0.16)),
+        )
+        .child(
+            div()
+                .flex_none()
+                .text_color(palette.ink_muted)
+                .child(ur_label(label, UrRole::Label)),
+        )
+}
+
+fn form_page(palette: &Palette) -> gpui_kit::Div {
+    let ink = palette.ink;
+    let status = palette.st_investigating;
+    v_flex()
+        .size_full()
+        .px(px(28.))
+        .pt(px(24.))
+        .gap(px(14.))
+        .child(
+            h_flex().child(
+                div()
+                    .px(px(10.))
+                    .rounded_full()
+                    .bg(status.opacity(0.12))
+                    .text_color(status)
+                    .child(ur_label("زیر تفتیش", UrRole::Label)),
+            ),
+        )
+        .child(
+            v_flex()
+                .items_center()
+                .text_color(ink)
+                .child(ur_label("ابتدائی اطلاعی رپورٹ", UrRole::Display))
+                .child(
+                    div()
+                        .text_color(palette.ink_muted)
+                        .child(ur_label("زیر دفعہ 154 ضابطہ فوجداری", UrRole::Label)),
+                ),
+        )
+        .child(div().h(px(1.)).bg(ink.opacity(0.1)))
+        .child(
+            h_flex()
+                .gap(px(20.))
+                .child(form_row(palette, "تاریخ ایف آئی آر"))
+                .child(form_row(palette, "ایف آئی آر نمبر")),
+        )
+        .children(
+            [
+                "تھانہ نام",
+                "جرم",
+                "تاریخ ووقت وقوعہ",
+                "تفتیشی افسر",
+                "تحریر کنندہ",
+            ]
+            .map(|label| h_flex().child(form_row(palette, label))),
+        )
+}
+
+fn form_pages(palette: &Palette, slab: &Slab, still: bool) -> impl IntoElement + use<> {
+    let page_shadow = vec![
+        outline(palette.ink.opacity(if palette.dark { 0.08 } else { 0.0 })),
+        shadow(hex_alpha(0x000000, 0.45), 30., 60., -18.),
+        shadow(hex_alpha(0x000000, 0.2), 2., 6., -2.),
+    ];
+    let page = |index: u32, content: Option<gpui_kit::Div>| {
+        let depth = 2 - index;
+        let left = PAGE_OFFSET * depth as f32;
+        let top = PAGE_OFFSET * index as f32;
+        let fill = palette
+            .paper
+            .blend(slab.fill.opacity([0.62, 0.34, 0.0][index as usize]));
+        let sheet = div()
+            .absolute()
+            .left(px(left))
+            .top(px(top))
+            .w(px(PAGE_WIDTH))
+            .h(px(PAGE_HEIGHT))
+            .rounded(px(4.))
+            .overflow_hidden()
+            .bg(fill)
+            .shadow(page_shadow.clone())
+            .children(content);
+        if still {
+            return sheet.into_any_element();
+        }
+        sheet
+            .with_animation(
+                ElementId::Name(format!("auth-page-{index}").into()),
+                motion_entrance(index * 2),
+                move |this, delta| this.opacity(delta).top(px(top + RISE * 2. * (1. - delta))),
+            )
+            .into_any_element()
+    };
+    let width = PAGE_WIDTH + PAGE_OFFSET * 2.;
+    let height = PAGE_HEIGHT + PAGE_OFFSET * 2.;
+    div()
+        .relative()
+        .w(px(width))
+        .h(px(height))
+        .child(page(0, None))
+        .child(page(1, None))
+        .child(page(2, Some(form_page(palette))))
+        .child(
+            div()
+                .absolute()
+                .left(px(-FADE_BLEED))
+                .bottom(px(-FADE_BLEED))
+                .w(px(width + FADE_BLEED * 2.))
+                .h(px(height * 0.42 + FADE_BLEED))
+                .bg(linear_gradient(
+                    180.,
+                    linear_color_stop(slab.fill.opacity(0.), 0.),
+                    linear_color_stop(slab.fill, 0.55),
+                )),
+        )
 }
