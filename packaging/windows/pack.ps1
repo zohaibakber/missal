@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)][string]$Version,
-    [string]$Output = "dist-native"
+    [string]$Output = "dist"
 )
 $ErrorActionPreference = "Stop"
 $root = Resolve-Path (Join-Path $PSScriptRoot "../..")

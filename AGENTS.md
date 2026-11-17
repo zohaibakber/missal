@@ -29,6 +29,6 @@ Commands:
 
 Releases (CI in `.github/workflows/ci.yml`, Velopack `vpk` version pinned there):
 
-- Tags are `native-v*` and must equal the `missal-app` version. Old `v*` tags and the latest release belong to retired Electron installs, so never mark a native release as latest.
+- Tags are `v*` and must equal the `missal-app` version. CI publishes the tagged release as latest.
 - Installers and updaters must never delete or move the data directory (`%APPDATA%\Missal`, `~/.config/Missal`).
 - Restart for an update is allowed only when `Navigator::has_unsaved_changes` is false.

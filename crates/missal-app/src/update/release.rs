@@ -2,7 +2,7 @@ use semver::Version;
 use serde_json::Value;
 
 pub const REPOSITORY: &str = "zohaibakber/missal";
-pub const TAG_PREFIX: &str = "native-v";
+pub const TAG_PREFIX: &str = "v";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Release {
@@ -87,38 +87,38 @@ mod tests {
 
     const LIST: &str = r#"[
         {"tag_name":"v1.9.0","draft":false,"prerelease":false,"assets":[{"name":"Missal-1.9.0-Setup.exe"},{"name":"latest.yml"}]},
-        {"tag_name":"native-v0.3.0","draft":true,"prerelease":false,"assets":[{"name":"releases.win.json"}]},
-        {"tag_name":"native-v0.3.0-beta.1","draft":false,"prerelease":true,"assets":[{"name":"releases.win.json"}]},
-        {"tag_name":"native-v0.2.0","draft":false,"prerelease":false,"assets":[{"name":"releases.win.json"},{"name":"releases.linux.json"},{"name":"Missal-0.2.0-full.nupkg"}]},
-        {"tag_name":"native-v0.10.0","draft":false,"prerelease":false,"assets":[{"name":"releases.linux.json"}]},
-        {"tag_name":"native-v0.1.0","draft":false,"prerelease":false,"assets":[{"name":"releases.win.json"}]},
-        {"tag_name":"native-vnext","draft":false,"prerelease":false,"assets":[]}
+        {"tag_name":"v0.3.0","draft":true,"prerelease":false,"assets":[{"name":"releases.win.json"}]},
+        {"tag_name":"v0.3.0-beta.1","draft":false,"prerelease":true,"assets":[{"name":"releases.win.json"}]},
+        {"tag_name":"v0.2.0","draft":false,"prerelease":false,"assets":[{"name":"releases.win.json"},{"name":"releases.linux.json"},{"name":"Missal-0.2.0-full.nupkg"}]},
+        {"tag_name":"v0.10.0","draft":false,"prerelease":false,"assets":[{"name":"releases.linux.json"}]},
+        {"tag_name":"v0.1.0","draft":false,"prerelease":false,"assets":[{"name":"releases.win.json"}]},
+        {"tag_name":"vnext","draft":false,"prerelease":false,"assets":[]}
     ]"#;
 
     #[test]
-    fn electron_tags_never_match() {
-        assert_eq!(tag_version("v1.9.0"), None);
-        assert_eq!(tag_version("native-v1.2.3"), Some(Version::new(1, 2, 3)));
-        assert_eq!(tag_version("native-vnext"), None);
+    fn tags_parse_as_versions() {
+        assert_eq!(tag_version("1.2.3"), None);
+        assert_eq!(tag_version("v1.2.3"), Some(Version::new(1, 2, 3)));
+        assert_eq!(tag_version("vnext"), None);
     }
 
     #[test]
-    fn drafts_prereleases_and_foreign_tags_are_dropped() {
+    fn drafts_prereleases_and_malformed_tags_are_dropped() {
         let releases = parse_releases(LIST).unwrap();
         let tags: Vec<_> = releases
             .iter()
             .map(|release| release.tag.as_str())
             .collect();
-        assert_eq!(tags, ["native-v0.2.0", "native-v0.10.0", "native-v0.1.0"]);
+        assert_eq!(tags, ["v1.9.0", "v0.2.0", "v0.10.0", "v0.1.0"]);
     }
 
     #[test]
     fn newest_is_chosen_by_version_not_list_order() {
         let releases = parse_releases(LIST).unwrap();
         let linux = newest_update(&releases, &Version::new(0, 1, 0), "linux").unwrap();
-        assert_eq!(linux.tag, "native-v0.10.0");
+        assert_eq!(linux.tag, "v0.10.0");
         let windows = newest_update(&releases, &Version::new(0, 1, 0), "win").unwrap();
-        assert_eq!(windows.tag, "native-v0.2.0");
+        assert_eq!(windows.tag, "v0.2.0");
     }
 
     #[test]
@@ -139,8 +139,8 @@ mod tests {
     #[test]
     fn urls_are_built_from_the_repository_and_tag() {
         assert_eq!(
-            download_base(REPOSITORY, "native-v0.2.0"),
-            "https://github.com/zohaibakber/missal/releases/download/native-v0.2.0"
+            download_base(REPOSITORY, "v0.2.0"),
+            "https://github.com/zohaibakber/missal/releases/download/v0.2.0"
         );
         assert!(
             releases_url(REPOSITORY)

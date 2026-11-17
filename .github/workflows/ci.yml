@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: ["**"]
-    tags: ["native-v*"]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -58,11 +58,11 @@ jobs:
         run: cargo build -p missal-app --features headless --examples
 
       - name: Tag matches the crate version
-        if: startsWith(github.ref, 'refs/tags/native-v')
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "missal-app") | .version')"
-          if [ "native-v${version}" != "${GITHUB_REF_NAME}" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match the missal-app version native-v${version}"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match the missal-app version v${version}"
             exit 1
           fi
 
@@ -93,7 +93,7 @@ jobs:
   package-windows:
     name: Package (Windows installer)
     timeout-minutes: 60
-    if: startsWith(github.ref, 'refs/tags/native-v')
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: [check, windows]
     runs-on: windows-2025
     steps:
@@ -116,20 +116,20 @@ jobs:
 
       - name: Pack installer
         run: |
-          $version = $env:GITHUB_REF_NAME.Substring("native-v".Length)
-          ./packaging/windows/pack.ps1 -Version $version -Output dist-native
+          $version = $env:GITHUB_REF_NAME.Substring("v".Length)
+          ./packaging/windows/pack.ps1 -Version $version -Output dist
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: native-windows
-          path: dist-native/*
+          name: windows
+          path: dist/*
           if-no-files-found: error
           retention-days: 14
 
   package-linux:
     name: Package (Linux AppImage and deb)
     timeout-minutes: 60
-    if: startsWith(github.ref, 'refs/tags/native-v')
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: [check, windows]
     runs-on: ubuntu-24.04
     steps:
@@ -160,22 +160,22 @@ jobs:
       - name: Pack AppImage
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"
-          ./packaging/linux/pack.sh "${GITHUB_REF_NAME#native-v}" dist-native
+          ./packaging/linux/pack.sh "${GITHUB_REF_NAME#v}" dist
 
       - name: Build deb
-        run: ./packaging/linux/build-deb.sh target/release/missal "${GITHUB_REF_NAME#native-v}" dist-native
+        run: ./packaging/linux/build-deb.sh target/release/missal "${GITHUB_REF_NAME#v}" dist
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: native-linux
-          path: dist-native/*
+          name: linux
+          path: dist/*
           if-no-files-found: error
           retention-days: 14
 
-  draft-release:
-    name: Draft release
+  release:
+    name: Release
     timeout-minutes: 30
-    if: startsWith(github.ref, 'refs/tags/native-v')
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: [package-windows, package-linux]
     runs-on: ubuntu-24.04
     permissions:
@@ -183,15 +183,14 @@ jobs:
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          path: dist-native
+          path: dist
           merge-multiple: true
 
-      - name: Create draft release
+      - name: Create release
         run: |
-          gh release create "$GITHUB_REF_NAME" dist-native/* \
-            --draft --latest=false --verify-tag \
-            --title "Missal native ${GITHUB_REF_NAME#native-v}" \
-            --notes "Native (Rust and GPUI) build. Publish this draft, then confirm it is not marked as the latest release: the retired Electron installs read the latest release."
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --latest --verify-tag --generate-notes \
+            --title "Missal ${GITHUB_REF_NAME#v}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}

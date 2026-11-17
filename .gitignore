@@ -1,5 +1,5 @@
 target/
-dist-native/
+dist/
 .DS_Store
 .env
 *.local

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 version="${1:?usage: pack.sh <version> [output directory]}"
-output="${2:-dist-native}"
+output="${2:-dist}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$root"
 
