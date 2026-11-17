@@ -176,7 +176,7 @@ export class Accounts extends Context.Service<
     ) => Effectful<Account, UserNotFound | StorageFailure>;
     readonly purgeExpired: Effectful<void, StorageFailure>;
   }
->()("missal/Accounts") {
+>()("Accounts") {
   static readonly layer = Layer.effect(
     Accounts,
     Effect.gen(function* () {

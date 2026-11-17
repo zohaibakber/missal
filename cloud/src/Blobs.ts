@@ -21,7 +21,7 @@ export class Blobs extends Context.Service<
     readonly removePrefix: (prefix: string) => Effect.Effect<void, BlobError, RuntimeContext>;
     readonly remove: (key: string) => Effect.Effect<void, BlobError, RuntimeContext>;
   }
->()("missal/Blobs") {
+>()("Blobs") {
   static readonly layerR2 = (bucket: ReadWriteBucketClient) =>
     Layer.succeed(
       Blobs,

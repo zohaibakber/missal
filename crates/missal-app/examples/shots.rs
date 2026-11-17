@@ -461,7 +461,7 @@ fn noticed(state: &AuthState) -> bool {
 fn run_gate(dark: bool, out: &Path, api: &str) {
     let config = missal_auth::Config {
         base_url: api.to_owned(),
-        purchase_url: Some("https://missal.example/buy".to_owned()),
+        purchase_url: Some("https://example.com/buy".to_owned()),
     };
     let (mut h, _directory) = build(dark, out, 1280.0, 800.0, Some(config));
     h.wait_flow(|flow| *flow == Flow::SignIn);

@@ -36,7 +36,7 @@ export default Cloudflare.Worker(
       (key) => Redacted.value(key).trim() !== "",
     );
     const mailFrom = Option.filter(
-      yield* Config.option(Config.String("MISSAL_MAIL_FROM")),
+      yield* Config.option(Config.String("MAIL_FROM")),
       (from) => from.trim() !== "",
     );
     const database = yield* Cloudflare.D1.QueryDatabase(Catalog);

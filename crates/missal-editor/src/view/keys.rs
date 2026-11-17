@@ -1,7 +1,7 @@
 use gpui_kit::{App, KeyBinding, actions};
 
 actions!(
-    missal_editor,
+    editor,
     [
         NextCell,
         PreviousCell,
@@ -29,7 +29,7 @@ actions!(
     ]
 );
 
-pub const KEY_CONTEXT: &str = "MissalEditor";
+pub const KEY_CONTEXT: &str = "Editor";
 
 fn key(keys: &str, action: impl gpui_kit::Action, cx: &App) -> KeyBinding {
     let predicate = gpui_kit::KeyBindingContextPredicate::parse(KEY_CONTEXT)

@@ -408,7 +408,7 @@ impl Render for PopupList {
                 .child(
                     menu_popup()
                         .id(self.id.clone())
-                        .key_context("PopupList MissalTextInput")
+                        .key_context("PopupList TextInput")
                         .on_action(cx.listener(|_, _: &BlurFocus, _, cx| cx.emit(Dismissed)))
                         .on_action(cx.listener(|_, _: &PreviewClose, _, cx| cx.emit(Dismissed)))
                         .track_focus(&self.focus)

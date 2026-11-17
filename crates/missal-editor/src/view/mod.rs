@@ -1582,8 +1582,8 @@ impl Render for Editor {
         let entity = cx.entity();
         let canvas = EditorTheme::get(cx).canvas;
         let root = div()
-            .id("missal-editor")
-            .key_context("MissalEditor MissalTextInput")
+            .id("editor")
+            .key_context("Editor TextInput")
             .track_focus(&self.focus)
             .size_full()
             .flex()
@@ -1594,7 +1594,7 @@ impl Render for Editor {
         let zoom = self.render_zoom(cx);
         root.children(toolbar).child(
             div()
-                .id("missal-editor-canvas")
+                .id("editor-canvas")
                 .relative()
                 .flex_1()
                 .min_h_0()

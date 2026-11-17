@@ -3,7 +3,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as Layer from "effect/Layer";
-import { canPublish, MissalApi, Viewer } from "./Api.ts";
+import { canPublish, Api, Viewer } from "./Api.ts";
 import { Accounts } from "./Accounts.ts";
 import { Library } from "./Library.ts";
 
@@ -13,7 +13,7 @@ const clientAddress = Effect.map(
 );
 
 const AuthHandlers = HttpApiBuilder.group(
-  MissalApi,
+  Api,
   "auth",
   Effect.fn(function* (handlers) {
     const accounts = yield* Accounts;
@@ -43,7 +43,7 @@ const AuthHandlers = HttpApiBuilder.group(
 );
 
 const AccountHandlers = HttpApiBuilder.group(
-  MissalApi,
+  Api,
   "account",
   Effect.fn(function* (handlers) {
     const accounts = yield* Accounts;
@@ -58,7 +58,7 @@ const AccountHandlers = HttpApiBuilder.group(
 );
 
 const CatalogHandlers = HttpApiBuilder.group(
-  MissalApi,
+  Api,
   "catalog",
   Effect.fn(function* (handlers) {
     const library = yield* Library;
@@ -83,7 +83,7 @@ const CatalogHandlers = HttpApiBuilder.group(
 );
 
 const PublishingHandlers = HttpApiBuilder.group(
-  MissalApi,
+  Api,
   "publishing",
   Effect.fn(function* (handlers) {
     const library = yield* Library;
@@ -98,7 +98,7 @@ const PublishingHandlers = HttpApiBuilder.group(
 );
 
 const UsersHandlers = HttpApiBuilder.group(
-  MissalApi,
+  Api,
   "users",
   Effect.fn(function* (handlers) {
     const accounts = yield* Accounts;
@@ -111,7 +111,7 @@ const UsersHandlers = HttpApiBuilder.group(
   }),
 );
 
-const HealthHandlers = HttpApiBuilder.group(MissalApi, "health", (handlers) =>
+const HealthHandlers = HttpApiBuilder.group(Api, "health", (handlers) =>
   handlers.handleAll({ health: () => Effect.succeed("ok") }),
 );
 

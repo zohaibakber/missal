@@ -44,7 +44,7 @@ fn parse_args() -> Result<Args, String> {
             other => return Err(format!("unknown argument {other}")),
         }
     }
-    if let Ok(directory) = std::env::var("MISSAL_DATA_DIR")
+    if let Ok(directory) = std::env::var("DATA_DIR")
         && args.data_dir.is_none()
         && !directory.is_empty()
     {

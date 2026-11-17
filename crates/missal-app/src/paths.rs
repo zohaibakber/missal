@@ -44,7 +44,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_location_is_the_shared_missal_directory_with_its_own_database() {
+    fn default_location_is_the_shared_app_directory_with_its_own_database() {
         let paths = Paths::resolve(None);
         assert!(paths.is_default);
         assert_eq!(paths.directory.file_name().unwrap(), "Missal");

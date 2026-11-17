@@ -5,7 +5,7 @@ use gpui_kit::{Action, App, KeyBinding, KeyBindingContextPredicate, actions};
 use crate::platform::primary_modifier_label;
 
 actions!(
-    missal,
+    app,
     [
         ToggleCommandPalette,
         ShowShortcuts,
@@ -51,17 +51,17 @@ actions!(
     ]
 );
 
-pub const SHELL: &str = "Missal";
+pub const SHELL: &str = "App";
 pub const FIR_LIST: &str = "FirList";
 pub const WORKSPACE: &str = "Workspace";
 pub const TEMPLATES: &str = "Templates";
-pub const TEXT_INPUT: &str = "MissalTextInput";
+pub const TEXT_INPUT: &str = "TextInput";
 pub const PRINT_PREVIEW: &str = "PrintPreview";
-pub const PRINT_PREVIEW_CONTEXT: &str = "PrintPreview MissalTextInput";
-pub const NOT_TYPING: &str = "Missal && !MissalTextInput && !NavMenu";
-const FIR_LIST_NOT_TYPING: &str = "FirList && !MissalTextInput";
-const WORKSPACE_NOT_TYPING: &str = "Workspace && !MissalTextInput";
-const TEMPLATES_NOT_TYPING: &str = "Templates && !MissalTextInput";
+pub const PRINT_PREVIEW_CONTEXT: &str = "PrintPreview TextInput";
+pub const NOT_TYPING: &str = "App && !TextInput && !NavMenu";
+const FIR_LIST_NOT_TYPING: &str = "FirList && !TextInput";
+const WORKSPACE_NOT_TYPING: &str = "Workspace && !TextInput";
+const TEMPLATES_NOT_TYPING: &str = "Templates && !TextInput";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Group {

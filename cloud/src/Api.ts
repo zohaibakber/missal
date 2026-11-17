@@ -31,7 +31,7 @@ export class Viewer extends Context.Service<
     readonly role: Role;
     readonly licensedUntil: DateTime.Utc;
   }
->()("missal/Viewer") {}
+>()("Viewer") {}
 
 export class Unauthorized extends Schema.TaggedError<Unauthorized>()(
   "Unauthorized",
@@ -113,13 +113,13 @@ export class AccountLocked extends Schema.TaggedError<AccountLocked>()(
 export class Authentication extends HttpApiMiddleware.Service<
   Authentication,
   { provides: Viewer }
->()("missal/Authentication", {
+>()("Authentication", {
   security: { bearer: HttpApiSecurity.bearer },
   error: Unauthorized,
 }) {}
 
 export class Licensed extends HttpApiMiddleware.Service<Licensed, { requires: Viewer }>()(
-  "missal/Licensed",
+  "Licensed",
   {
     error: LicenceRequired,
   },
@@ -128,12 +128,12 @@ export class Licensed extends HttpApiMiddleware.Service<Licensed, { requires: Vi
 export class PublishersOnly extends HttpApiMiddleware.Service<
   PublishersOnly,
   { requires: Viewer }
->()("missal/PublishersOnly", {
+>()("PublishersOnly", {
   error: NotPublisher,
 }) {}
 
 export class AdminsOnly extends HttpApiMiddleware.Service<AdminsOnly, { requires: Viewer }>()(
-  "missal/AdminsOnly",
+  "AdminsOnly",
   {
     error: NotAdmin,
   },
@@ -354,7 +354,7 @@ export class HealthGroup extends HttpApiGroup.make("health").add(
   }),
 ) {}
 
-export class MissalApi extends HttpApi.make("missal")
+export class Api extends HttpApi.make("api")
   .add(AuthGroup)
   .add(AccountGroup)
   .add(CatalogGroup)

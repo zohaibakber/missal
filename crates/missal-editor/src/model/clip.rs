@@ -7,7 +7,7 @@ use super::inline::{self, len};
 use super::selection::{block_len, pos};
 use super::tree::{self, HostKind, anatomy, container, container_mut, host_kind, inlines};
 
-pub const FRAGMENT_TAG: &str = "missal-fragment";
+pub const FRAGMENT_TAG: &str = "editor-fragment";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Fragment {

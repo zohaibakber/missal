@@ -20,7 +20,7 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as TestClock from "effect/testing/TestClock";
 import { Accounts } from "../src/Accounts.ts";
-import { Authentication, MissalApi } from "../src/Api.ts";
+import { Authentication, Api } from "../src/Api.ts";
 import { CryptoLive, ServicesLive } from "../src/App.ts";
 import { AuthorizationLive } from "../src/Auth.ts";
 import { Blobs } from "../src/Blobs.ts";
@@ -30,8 +30,8 @@ import { Mailer, Outbox } from "../src/Mailer.ts";
 import { Email } from "../src/Models.ts";
 import { AuthThrottle } from "../src/Throttle.ts";
 
-const ADMIN = "admin@missal.test";
-const READER = "reader@missal.test";
+const ADMIN = "admin@example.test";
+const READER = "reader@example.test";
 const PASSWORD = "first-secret-123";
 
 class CurrentToken extends Context.Service<CurrentToken, Ref.Ref<string | undefined>>()(
@@ -85,13 +85,13 @@ const testLayer = (throttleLimit = 1_000) => {
     Layer.provideMerge(CurrentToken.layer),
     Layer.provideMerge(Http.Platform),
     Layer.provide(
-      ConfigProvider.layer(ConfigProvider.fromUnknown({ MISSAL_TOKEN_SECRET: "ab".repeat(32) })),
+      ConfigProvider.layer(ConfigProvider.fromUnknown({ TOKEN_SECRET: "ab".repeat(32) })),
     ),
     Layer.provide(RuntimeContext.phantom),
   );
 };
 
-const client = HttpApiTest.groups(MissalApi, ["auth", "account", "catalog", "publishing", "users"]);
+const client = HttpApiTest.groups(Api, ["auth", "account", "catalog", "publishing", "users"]);
 
 const useToken = Effect.fn(function* (token: string | undefined) {
   yield* Ref.set(yield* CurrentToken, token);
@@ -190,8 +190,8 @@ describe("accounts", () => {
       const before = (yield* mailTo(READER)).length;
       yield* api.auth.requestCode({ payload: { email: READER, purpose: "verify" } });
       expect(yield* mailTo(READER)).toHaveLength(before);
-      yield* api.auth.requestCode({ payload: { email: "nobody@missal.test", purpose: "reset" } });
-      expect(yield* mailTo("nobody@missal.test")).toHaveLength(0);
+      yield* api.auth.requestCode({ payload: { email: "nobody@example.test", purpose: "reset" } });
+      expect(yield* mailTo("nobody@example.test")).toHaveLength(0);
     }).pipe(Effect.provide(testLayer())),
   );
 
@@ -302,7 +302,7 @@ describe("accounts", () => {
       expect(own._tag).toBe("OwnAccess");
 
       const reader = yield* register(READER);
-      yield* signUp("pending@missal.test");
+      yield* signUp("pending@example.test");
       expect((yield* api.users.list().pipe(Effect.flip))._tag).toBe("NotAdmin");
       const upload = { name: "x", fieldCount: 0, preview: "", content: new Uint8Array([1, 2, 3]) };
       expect((yield* api.publishing.create({ payload: upload }).pipe(Effect.flip))._tag).toBe(
@@ -353,7 +353,7 @@ describe("accounts", () => {
       const locked = yield* signIn(READER).pipe(Effect.flip);
       expect(locked._tag).toBe("AccountLocked");
       expect(locked._tag === "AccountLocked" && locked.retryAfter).toBeGreaterThan(800);
-      expect((yield* signIn("nobody@missal.test", "anything").pipe(Effect.flip))._tag).toBe(
+      expect((yield* signIn("nobody@example.test", "anything").pipe(Effect.flip))._tag).toBe(
         "InvalidCredentials",
       );
     }).pipe(Effect.provide(testLayer())),
@@ -364,15 +364,15 @@ describe("accounts", () => {
       yield* signUp(READER);
       yield* signIn(READER).pipe(Effect.flip);
       yield* verify(READER, "000000").pipe(Effect.flip);
-      expect((yield* signUp("someone@missal.test").pipe(Effect.flip))._tag).toBe("AccountLocked");
-      expect(yield* mailTo("someone@missal.test")).toHaveLength(0);
+      expect((yield* signUp("someone@example.test").pipe(Effect.flip))._tag).toBe("AccountLocked");
+      expect(yield* mailTo("someone@example.test")).toHaveLength(0);
     }).pipe(Effect.provide(testLayer(3))),
   );
 
   it.effect("the nightly purge removes expired sessions, codes and stale sign-ups", () =>
     Effect.gen(function* () {
       const session = yield* register(READER);
-      yield* signUp("pending@missal.test");
+      yield* signUp("pending@example.test");
       const sql = yield* SqlClient.SqlClient;
       yield* sql`UPDATE sessions SET expires_at = 0`;
       yield* TestClock.adjust(Duration.days(8));
@@ -388,7 +388,7 @@ describe("accounts", () => {
   );
 
   it("emails are trimmed and lowercased at the boundary", () => {
-    expect(Schema.decodeUnknownSync(Email)("  Reader@Missal.TEST ")).toBe(READER);
+    expect(Schema.decodeUnknownSync(Email)("  Reader@Example.TEST ")).toBe(READER);
     expect(() => Schema.decodeUnknownSync(Email)("not an email")).toThrow();
   });
 });

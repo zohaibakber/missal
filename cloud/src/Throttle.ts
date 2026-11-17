@@ -16,7 +16,7 @@ const slowDown = () =>
 export class AuthThrottle extends Context.Service<
   AuthThrottle,
   { readonly check: (client: string) => Effect.Effect<void, AccountLocked, RuntimeContext> }
->()("missal/AuthThrottle") {
+>()("AuthThrottle") {
   static readonly layer = (limiter: RateLimitClient) =>
     Layer.succeed(
       AuthThrottle,

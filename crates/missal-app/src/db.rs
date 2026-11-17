@@ -93,7 +93,7 @@ impl Db {
     pub fn spawn(path: PathBuf) -> Db {
         let (sender, receiver) = channel::<Job>();
         let started = std::thread::Builder::new()
-            .name("missal-database".into())
+            .name("database".into())
             .spawn(move || {
                 let mut opened = Store::open(&path);
                 while let Ok(job) = receiver.recv() {

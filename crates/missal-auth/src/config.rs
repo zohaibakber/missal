@@ -1,21 +1,21 @@
-const URL_VARIABLE: &str = "MISSAL_API_URL";
-const PURCHASE_VARIABLE: &str = "MISSAL_PURCHASE_URL";
-const BUILT_PURCHASE_URL: Option<&str> = option_env!("MISSAL_PURCHASE_URL");
+const URL_VARIABLE: &str = "API_URL";
+const PURCHASE_VARIABLE: &str = "PURCHASE_URL";
+const BUILT_PURCHASE_URL: Option<&str> = option_env!("PURCHASE_URL");
 
 #[cfg(not(debug_assertions))]
 const BUILT_URL: Option<&str> = Some(env!(
-    "MISSAL_API_URL",
-    "release builds need MISSAL_API_URL set to the Missal API URL"
+    "API_URL",
+    "release builds need API_URL set to the Missal API URL"
 ));
 
 #[cfg(not(debug_assertions))]
 const _: () = assert!(
-    !env!("MISSAL_API_URL").is_empty(),
-    "release builds need a non-empty MISSAL_API_URL"
+    !env!("API_URL").is_empty(),
+    "release builds need a non-empty API_URL"
 );
 
 #[cfg(debug_assertions)]
-const BUILT_URL: Option<&str> = option_env!("MISSAL_API_URL");
+const BUILT_URL: Option<&str> = option_env!("API_URL");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
@@ -72,10 +72,10 @@ mod tests {
     #[test]
     fn the_purchase_link_must_be_https() {
         assert_eq!(
-            https(" https://missal.example/buy ").as_deref(),
-            Some("https://missal.example/buy")
+            https(" https://example.com/buy ").as_deref(),
+            Some("https://example.com/buy")
         );
-        assert!(https("http://missal.example/buy").is_none());
+        assert!(https("http://example.com/buy").is_none());
         assert!(https("https://").is_none());
         assert!(https("").is_none());
     }

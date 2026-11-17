@@ -51,7 +51,7 @@ export class Library extends Context.Service<
     ) => Effectful<Published, TemplateNotFound | PublishConflict | StorageFailure>;
     readonly remove: (id: string) => Effectful<void, TemplateNotFound | StorageFailure>;
   }
->()("missal/Library") {
+>()("Library") {
   static readonly layer = Layer.effect(
     Library,
     Effect.gen(function* () {

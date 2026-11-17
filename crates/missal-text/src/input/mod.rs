@@ -25,7 +25,7 @@ use crate::{
 };
 
 actions!(
-    missal_text_input,
+    text_input,
     [
         MoveLeft,
         MoveRight,
@@ -62,7 +62,7 @@ actions!(
     ]
 );
 
-pub const KEY_CONTEXT: &str = "MissalTextInput";
+pub const KEY_CONTEXT: &str = "TextInput";
 
 pub(crate) fn bind_keys(cx: &mut App) {
     let c = Some(KEY_CONTEXT);
@@ -1305,7 +1305,7 @@ impl Render for TextInput {
         let radius = theme.radius;
         let entity = cx.entity();
         div()
-            .id(("missal-text-input", cx.entity_id()))
+            .id(("text-input", cx.entity_id()))
             .key_context(KEY_CONTEXT)
             .when(!self.disabled, |this| this.track_focus(&self.focus_handle))
             .cursor_text()

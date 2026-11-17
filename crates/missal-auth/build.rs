@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-const FORWARDED: [&str; 2] = ["MISSAL_API_URL", "MISSAL_PURCHASE_URL"];
+const FORWARDED: [&str; 2] = ["API_URL", "PURCHASE_URL"];
 
 fn main() {
     let manifest = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap_or_default());

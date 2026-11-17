@@ -12,7 +12,7 @@ const START_DELAY: Duration = Duration::from_secs(60);
 
 pub fn enabled(data_dir_overridden: bool) -> bool {
     static OPTED_OUT: OnceLock<bool> = OnceLock::new();
-    let opted_out = *OPTED_OUT.get_or_init(|| std::env::var_os("MISSAL_NO_UPDATE_CHECK").is_some());
+    let opted_out = *OPTED_OUT.get_or_init(|| std::env::var_os("NO_UPDATE_CHECK").is_some());
     !cfg!(debug_assertions) && !data_dir_overridden && !opted_out
 }
 

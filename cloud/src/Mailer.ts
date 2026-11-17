@@ -24,13 +24,13 @@ export interface ResendOptions {
 export class MailFailure extends Data.TaggedError("MailFailure")<{ readonly reason: string }> {}
 
 export class Outbox extends Context.Service<Outbox, Ref.Ref<ReadonlyArray<MailMessage>>>()(
-  "missal/Outbox",
+  "Outbox",
 ) {}
 
 export class Mailer extends Context.Service<
   Mailer,
   { readonly send: (message: MailMessage) => Effect.Effect<void, MailFailure> }
->()("missal/Mailer") {
+>()("Mailer") {
   static readonly layerResend = (options: ResendOptions) =>
     Layer.effect(
       Mailer,

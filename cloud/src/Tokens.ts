@@ -15,7 +15,7 @@ import { Unauthorized, Viewer } from "./Api.ts";
 import { type Licence, Role, SessionId, UserId } from "./Models.ts";
 
 export const ACCESS_SECONDS = 15 * 60;
-export const SECRET_VARIABLE = "MISSAL_TOKEN_SECRET";
+export const SECRET_VARIABLE = "TOKEN_SECRET";
 const ISSUER = "missal";
 const TYPE = "at+jwt";
 const MIN_SECRET_BYTES = 32;
@@ -59,7 +59,7 @@ export class Tokens extends Context.Service<
       token: Redacted.Redacted<string>,
     ) => Effect.Effect<Viewer["Service"], Unauthorized>;
   }
->()("missal/Tokens") {
+>()("Tokens") {
   static readonly layer = Layer.effect(
     Tokens,
     Effect.gen(function* () {

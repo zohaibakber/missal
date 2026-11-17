@@ -54,7 +54,7 @@ pub fn init(cx: &mut App) {
         .map(|f| f.data)
         .collect();
     std::thread::Builder::new()
-        .name("missal-font-prefetch".into())
+        .name("font-prefetch".into())
         .spawn(move || {
             for data in deferred {
                 black_box(data.iter().step_by(4096).fold(0u8, |a, &b| a ^ b));

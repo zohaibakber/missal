@@ -108,7 +108,7 @@ impl AuthModel {
     pub fn install(data_directory: Option<&Path>, cx: &mut App) -> Entity<AuthModel> {
         let config = Config::resolve();
         if config.is_none() {
-            eprintln!("missal: sign-in is off because MISSAL_API_URL is not set");
+            eprintln!("missal: sign-in is off because API_URL is not set");
         }
         Self::install_with(config, data_directory, cx)
     }

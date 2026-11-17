@@ -31,7 +31,7 @@ export class Passwords extends Context.Service<
     ) => Effect.Effect<boolean>;
     readonly decoy: Effect.Effect<StoredPassword>;
   }
->()("missal/Passwords") {
+>()("Passwords") {
   static readonly layer = Layer.effect(
     Passwords,
     Effect.gen(function* () {

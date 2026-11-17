@@ -19,7 +19,7 @@ export class Atomic extends Context.Service<
       statements: ReadonlyArray<Statement.Statement<unknown>>,
     ) => Effect.Effect<void, SqlError>;
   }
->()("missal/Atomic") {
+>()("Atomic") {
   static readonly layerD1 = Layer.effect(
     Atomic,
     Effect.map(D1Client.D1Client, (client) =>
