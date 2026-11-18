@@ -9,6 +9,7 @@ use missal_page::{Affinity, BlockPath, Edit, Position};
 
 use super::clip::{self, Fragment};
 use super::edit::{self, Backward};
+use super::find::{self, Match, Query};
 use super::history::{Entry, History, Kind};
 use super::inline;
 use super::lists;
@@ -49,6 +50,7 @@ pub struct EditorCore {
     saved: u64,
     saved_doc: Document,
     snapshot_state: Cell<u64>,
+    transition: (u64, u64),
 }
 
 fn caret_of(doc: &Document) -> Selection {
@@ -75,6 +77,7 @@ impl EditorCore {
             saved: 0,
             saved_doc: Document::empty(),
             snapshot_state: Cell::new(0),
+            transition: (0, 0),
         };
         core.load(document);
         core
@@ -90,6 +93,7 @@ impl EditorCore {
         self.marked = None;
         self.pending_token = None;
         self.state = self.fresh_state();
+        self.transition = (0, 0);
         self.saved = self.state;
         self.snapshot_state.set(0);
     }
@@ -132,6 +136,10 @@ impl EditorCore {
 
     pub fn state(&self) -> u64 {
         self.state
+    }
+
+    pub fn transition(&self) -> (u64, u64) {
+        self.transition
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -195,6 +203,7 @@ impl EditorCore {
         let saved = self.saved;
         self.load(document);
         self.state = saved;
+        self.transition = (0, 0);
         self.saved = saved;
     }
 
@@ -246,6 +255,7 @@ impl EditorCore {
                 at: Instant::now(),
             });
         }
+        self.transition = (self.state, state);
         self.state = state;
         self.selection = selection;
         if kind != Kind::Typing && kind != Kind::Compose {
@@ -333,6 +343,7 @@ impl EditorCore {
             }),
         }
         self.history.break_coalescing();
+        self.transition = (self.state, state);
         self.state = state;
         Some(Change {
             edit: Edit::Splice {
@@ -892,6 +903,7 @@ impl EditorCore {
             removed: entry.len,
             inserted: entry.blocks.len(),
         };
+        self.transition = (self.state, entry.state_before);
         self.state = entry.state_before;
         self.selection = clamp_selection(&self.doc, &entry.before);
         self.history.push_redo(Entry {
@@ -920,6 +932,7 @@ impl EditorCore {
             removed: entry.len,
             inserted: entry.blocks.len(),
         };
+        self.transition = (self.state, entry.state_after);
         self.state = entry.state_after;
         self.selection = clamp_selection(&self.doc, &entry.after);
         self.history.push_undo_keep_redo(Entry {
@@ -995,6 +1008,53 @@ impl EditorCore {
 
     pub fn is_valid(&self, position: &Position) -> bool {
         selection::is_valid(&self.doc, position)
+    }
+
+    pub fn find(&self, query: &Query) -> Vec<Match> {
+        find::find_all(&self.doc, query)
+    }
+
+    pub fn replace_matches(&mut self, matches: &[Match], with: &str) -> Option<Change> {
+        let with = inline::strip_objects(&with.replace(['\r', '\n'], " "));
+        let mut plan: Vec<(Match, usize)> = Vec::with_capacity(matches.len());
+        let mut cached: Option<(BlockPath, String)> = None;
+        for found in matches {
+            if cached.as_ref().is_none_or(|(path, _)| path != &found.path) {
+                cached = self
+                    .block_text(&found.path)
+                    .map(|text| (found.path.clone(), text));
+            }
+            let Some((_, text)) = &cached else { continue };
+            let Some(slice) = text.get(found.range.clone()) else {
+                continue;
+            };
+            let Some(first) = slice.chars().next() else {
+                continue;
+            };
+            plan.push((found.clone(), first.len_utf8()));
+        }
+        let first = plan.first()?.0.clone();
+        let lo = plan.iter().map(|(m, _)| m.path.top_index()).min()?;
+        let hi = plan.iter().map(|(m, _)| m.path.top_index()).max()?;
+        let touch_one = plan.iter().all(|(m, _)| m.path == first.path);
+        self.marked = None;
+        self.transact(lo..hi + 1, Kind::Paste, None, move |doc, _, _| {
+            let mut caret = None;
+            for (found, first_len) in plan.iter().rev() {
+                let start = found.start();
+                let template = inlines(doc, &found.path)
+                    .and_then(|v| inline::template_at(&v, found.range.start + first_len))
+                    .unwrap_or_else(|| edit::template(doc, &start, None));
+                let at = edit::delete_range(doc, &start, &found.end());
+                caret = Some(edit::insert_text(doc, &at, &with, &template));
+            }
+            let touch = if touch_one {
+                Touch::Hosts(vec![first.path.clone()])
+            } else {
+                Touch::Structure
+            };
+            Some((Selection::caret(caret?), touch))
+        })
     }
 
     pub fn field_count(&self) -> usize {

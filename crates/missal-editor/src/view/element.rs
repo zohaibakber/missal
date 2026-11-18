@@ -36,6 +36,8 @@ struct Scene {
     pages: Vec<(Page, Bounds<Pixels>)>,
     selection: Vec<Bounds<Pixels>>,
     cells: Vec<Bounds<Pixels>>,
+    found: Vec<Bounds<Pixels>>,
+    current: Vec<Bounds<Pixels>>,
     marked: Vec<Bounds<Pixels>>,
     caret: Option<Bounds<Pixels>>,
     zoom: f32,
@@ -68,9 +70,30 @@ fn scene(editor: &Editor, bounds: Bounds<Pixels>, caret_on: bool) -> Scene {
         }
     }
     let selection_state = editor.core.selection().clone();
+    let mut found = Vec::new();
+    let mut current = Vec::new();
+    let matches = editor.find_matches();
+    let current_index = editor.current_match();
+    if !matches.is_empty() {
+        for &page in &shown {
+            for (index, rect) in editor
+                .packet
+                .page_ranges(page, matches, |m| (&m.path, m.range.clone()))
+            {
+                if let Some(canvas) = editor.page_rect_to_canvas(page, rect) {
+                    let target = if Some(index) == current_index {
+                        &mut current
+                    } else {
+                        &mut found
+                    };
+                    target.push(to_screen(origin, scroll, canvas));
+                }
+            }
+        }
+    }
     let mut selection = Vec::new();
     let mut cells = Vec::new();
-    if !selection_state.is_collapsed() {
+    if !selection_state.is_collapsed() && current_index.is_none() {
         let document = editor.core.document();
         let (s, e) = effective_range(document, &selection_state);
         let covered = covered_cells(document, &selection_state);
@@ -139,6 +162,8 @@ fn scene(editor: &Editor, bounds: Bounds<Pixels>, caret_on: bool) -> Scene {
         pages,
         selection,
         cells,
+        found,
+        current,
         marked,
         caret,
         zoom,
@@ -229,6 +254,13 @@ impl Element for PagesElement {
                 let radius = gpui_kit::Corners::all(px(2.));
                 window.paint_drop_shadows(*page_bounds, radius, &paper_shadows);
                 window.paint_quad(fill(*page_bounds, theme.paper).corner_radii(radius));
+            }
+            let radius = gpui_kit::Corners::all(px((2.0 * scene.zoom).clamp(1.0, 3.0)));
+            for rect in &scene.found {
+                window.paint_quad(fill(*rect, theme.find_match).corner_radii(radius));
+            }
+            for rect in &scene.current {
+                window.paint_quad(fill(*rect, theme.find_current).corner_radii(radius));
             }
             for rect in scene.cells.iter().chain(&scene.selection) {
                 window.paint_quad(fill(*rect, selection_color));

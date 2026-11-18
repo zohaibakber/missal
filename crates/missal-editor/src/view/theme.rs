@@ -22,6 +22,8 @@ pub struct EditorTheme {
     pub notice_text: Hsla,
     pub notice_wash: Hsla,
     pub selection: Hsla,
+    pub find_match: Hsla,
+    pub find_current: Hsla,
     pub shadow: Hsla,
 }
 
@@ -53,6 +55,8 @@ impl EditorTheme {
             notice_text: theme.warning,
             notice_wash: theme.warning.opacity(0.15),
             selection: theme.selection,
+            find_match: gpui_kit::yellow().opacity(0.35),
+            find_current: theme.warning.opacity(0.5),
             shadow: gpui_kit::black().opacity(0.05),
         }
     }
