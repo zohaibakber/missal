@@ -64,7 +64,7 @@ const migrate = Layer.effectDiscard(
   }),
 );
 
-const testLayer = (throttleLimit = 1_000) => {
+const testLayer = (throttleLimit = 1_000, verifyEmails = true) => {
   const database = Layer.mergeAll(Atomic.layerTransaction, migrate).pipe(
     Layer.provideMerge(SqliteClient.layer({ filename: ":memory:", ...columnNames })),
   );
@@ -85,7 +85,12 @@ const testLayer = (throttleLimit = 1_000) => {
     Layer.provideMerge(CurrentToken.layer),
     Layer.provideMerge(Http.Platform),
     Layer.provide(
-      ConfigProvider.layer(ConfigProvider.fromUnknown({ TOKEN_SECRET: "ab".repeat(32) })),
+      ConfigProvider.layer(
+        ConfigProvider.fromUnknown({
+          TOKEN_SECRET: "ab".repeat(32),
+          VERIFY_EMAILS: String(verifyEmails),
+        }),
+      ),
     ),
     Layer.provide(RuntimeContext.phantom),
   );
@@ -169,6 +174,39 @@ describe("accounts", () => {
       expect((yield* api.catalog.list()).publisher).toBe(false);
       expect((yield* signIn(READER)).account.licence.status).toBe("trial");
     }).pipe(Effect.provide(testLayer())),
+  );
+
+  it.effect("with verification off, signing up creates the account and sends no email", () =>
+    Effect.gen(function* () {
+      yield* signUp(READER);
+      expect(yield* mailTo(READER)).toHaveLength(0);
+      const session = yield* signIn(READER);
+      expect(session.account.email).toBe(READER);
+      expect(session.account.licence.status).toBe("trial");
+      expect(millis(session.account.licence.until)).toBe(Duration.toMillis(Duration.days(7)));
+
+      yield* signUp(READER, "someone-else-123");
+      expect(yield* mailTo(READER)).toHaveLength(0);
+      expect((yield* signIn(READER, "someone-else-123").pipe(Effect.flip))._tag).toBe(
+        "InvalidCredentials",
+      );
+      yield* signIn(READER);
+    }).pipe(Effect.provide(testLayer(1_000, false))),
+  );
+
+  it.effect(
+    "with verification off, an account left unconfirmed signs in and starts its trial",
+    () =>
+      Effect.gen(function* () {
+        yield* signUp(READER);
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`UPDATE users SET email_verified_at = NULL, trial_ends_at = NULL`;
+        yield* TestClock.adjust(Duration.days(1));
+        const session = yield* signIn(READER);
+        expect(session.account.licence.status).toBe("trial");
+        expect(millis(session.account.licence.until)).toBe(Duration.toMillis(Duration.days(8)));
+        expect(yield* mailTo(READER)).toHaveLength(0);
+      }).pipe(Effect.provide(testLayer(1_000, false))),
   );
 
   it.effect("sign-up and code requests never reveal whether an email has an account", () =>

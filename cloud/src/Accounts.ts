@@ -1,4 +1,5 @@
 import type { RuntimeContext } from "alchemy/RuntimeContext";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
 import * as Mac from "effect/crypto/Mac";
@@ -96,6 +97,12 @@ const millis = DateTime.toEpochMillis;
 
 const isVerified = (user: User) => Option.isSome(user.emailVerifiedAt);
 
+/**
+ * When false (the default), sign-up confirms the email at once and starts the trial, so no
+ * email is sent to create an account. Set it to "true" once mail delivery works.
+ */
+export const VERIFY_EMAILS_VARIABLE = "VERIFY_EMAILS";
+
 const expired = () => new SessionExpired({ error: "your session has ended; sign in again" });
 const invalid = () => new InvalidCredentials({ error: "wrong email or password" });
 const missing = () => new UserNotFound({ error: "no such user" });
@@ -188,6 +195,10 @@ export class Accounts extends Context.Service<
       const mailer = yield* Mailer;
       const random = yield* SecureRandom.SecureRandom;
       const digest = yield* Digest.Digest;
+      const verifyEmails = Option.exists(
+        yield* Config.option(Config.String(VERIFY_EMAILS_VARIABLE)).pipe(Effect.orDie),
+        (value) => value.trim().toLowerCase() === "true",
+      );
 
       const users = yield* SqlModel.makeRepository(User, {
         tableName: "users",
@@ -395,17 +406,28 @@ export class Accounts extends Context.Service<
               failures = CASE WHEN failures + 1 >= ${MAX_FAILURES} THEN 0 ELSE failures + 1 END,
               locked_until = CASE WHEN failures + 1 >= ${MAX_FAILURES} THEN ${now + Duration.toMillis(LOCK_LIFETIME)} ELSE locked_until END`;
 
+      const confirm = Effect.fnUntraced(function* (id: User["id"]) {
+        const now = yield* DateTime.now;
+        yield* sql`UPDATE users SET
+            email_verified_at = COALESCE(email_verified_at, ${millis(now)}),
+            trial_ends_at = COALESCE(trial_ends_at, ${millis(DateTime.add(now, TRIAL_LENGTH))}),
+            updated_at = ${millis(now)}
+          WHERE id = ${id}`.pipe(storage("confirm the email"));
+      });
+
       const signUp = Effect.fn("Accounts.signUp")(function* (client: string, request: SignUp) {
         yield* throttle.check(client);
         const fields = yield* passwordFields(request.password);
         const found = yield* userByEmail(request.email).pipe(storage("sign up"));
         const now = yield* DateTime.now;
         if (Option.isSome(found) && isVerified(found.value)) {
-          return yield* sendNotice(request.email);
+          if (verifyEmails) yield* sendNotice(request.email);
+          return;
         }
         if (Option.isSome(found)) {
           yield* sql`UPDATE users SET ${sql.update({ ...fields, name: request.name })}
             WHERE id = ${found.value.id} AND email_verified_at IS NULL`.pipe(storage("sign up"));
+          if (!verifyEmails) return yield* confirm(found.value.id);
         } else {
           const row = yield* Schema.encodeEffect(User.insert)(
             User.insert.make({
@@ -417,8 +439,10 @@ export class Accounts extends Context.Service<
               passwordSalt: fields.password_salt,
               passwordIterations: fields.password_iterations,
               disabled: false,
-              emailVerifiedAt: Option.none(),
-              trialEndsAt: Option.none(),
+              emailVerifiedAt: verifyEmails ? Option.none() : Option.some(now),
+              trialEndsAt: verifyEmails
+                ? Option.none()
+                : Option.some(DateTime.add(now, TRIAL_LENGTH)),
               paidUntil: Option.none(),
               createdAt: Model.Override(now),
               updatedAt: Model.Override(now),
@@ -428,7 +452,7 @@ export class Accounts extends Context.Service<
             storage("sign up"),
           );
         }
-        yield* sendCode(request.email, "verify");
+        if (verifyEmails) yield* sendCode(request.email, "verify");
       });
 
       const requestCode = Effect.fn("Accounts.requestCode")(function* (
@@ -454,12 +478,7 @@ export class Accounts extends Context.Service<
         yield* redeem(email, "verify", code);
         const found = yield* userByEmail(email).pipe(storage("confirm the email"));
         if (Option.isNone(found) || found.value.disabled) return yield* wrongCode();
-        const now = yield* DateTime.now;
-        yield* sql`UPDATE users SET
-            email_verified_at = COALESCE(email_verified_at, ${millis(now)}),
-            trial_ends_at = COALESCE(trial_ends_at, ${millis(DateTime.add(now, TRIAL_LENGTH))}),
-            updated_at = ${millis(now)}
-          WHERE id = ${found.value.id}`.pipe(storage("confirm the email"));
+        yield* confirm(found.value.id);
         const user = yield* existing(found.value.id).pipe(
           Effect.catchTag("UserNotFound", () => Effect.fail(wrongCode())),
         );
@@ -506,8 +525,15 @@ export class Accounts extends Context.Service<
         }
         yield* sql`DELETE FROM sign_in_failures WHERE email = ${email}`.pipe(storage("sign in"));
         if (!isVerified(found.value)) {
-          yield* sendCode(email, "verify");
-          return yield* new EmailNotVerified({ error: "confirm your email first" });
+          if (verifyEmails) {
+            yield* sendCode(email, "verify");
+            return yield* new EmailNotVerified({ error: "confirm your email first" });
+          }
+          yield* confirm(found.value.id);
+          const user = yield* existing(found.value.id).pipe(
+            Effect.catchTag("UserNotFound", () => Effect.fail(invalid())),
+          );
+          return yield* openSession(user).pipe(storage("open a session"));
         }
         return yield* openSession(found.value).pipe(storage("open a session"));
       });
