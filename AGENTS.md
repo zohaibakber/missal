@@ -7,7 +7,7 @@ Crates:
 - `missal-core`: domain types, fields, dates, repository traits.
 - `missal-store`: SQLite storage, migrations, embedded templates, seed data.
 - `missal-text`: text layout and shaping on parley, embedded fonts, input widgets.
-- `missal-docx`: `.docx` import.
+- `missal-docx`: `.docx` import and export.
 - `missal-page`: paged layout and PDF output.
 - `missal-editor`: rich-text editor view and model.
 - `missal-auth`: self-serve email and password accounts against the Missal API (`API_URL`, compile time or run time): sign-up, emailed codes to verify an address or reset a password, sign-in, rotating refresh sessions through `SessionKeeper`, password changes, the account's licence (trial, licensed, trial ended or expired) and the admin calls (list, update, grant a year). `PURCHASE_URL` (optional, compile time or run time) is the buy-a-licence link. The session is cached in the OS keyring, 30 days offline while the licence is active.
