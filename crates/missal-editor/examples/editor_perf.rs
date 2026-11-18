@@ -12,9 +12,9 @@ use missal_editor::model::tree;
 use missal_editor::{Editor, EditorFields, Selection};
 
 fn largest() -> (String, Document) {
-    missal_store::TemplateBundle::embedded()
-        .templates()
+    missal_docx::import_folder(&missal_docx::repository_templates())
         .unwrap()
+        .documents()
         .into_iter()
         .max_by_key(|(_, d)| d.encode().len())
         .unwrap()

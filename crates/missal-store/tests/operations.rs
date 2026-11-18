@@ -7,14 +7,10 @@ use missal_core::{
     FieldReference, FirDocumentId, FirId, GlobalPlaceholderDraft, Invalid, PlaceholderId,
     PlaceholderSource, RepositoryError, Revision, TemplateId,
 };
-use missal_store::{Store, TemplateBundle};
-
-fn empty_bundle() -> TemplateBundle {
-    TemplateBundle::decode(&TemplateBundle::encode(1, &[], &[], &[])).unwrap()
-}
+use missal_store::{DraftKey, Store, TemplateBundle};
 
 fn store(scratch: &Scratch) -> Store {
-    Store::open_with(scratch.path("test.sqlite"), &empty_bundle()).unwrap()
+    Store::open(scratch.path("test.sqlite")).unwrap()
 }
 
 fn document(text: &str, reference: Option<FieldReference>) -> Document {
@@ -556,15 +552,41 @@ fn settings_round_trip() {
         markers
     );
     drop(store);
-    let reopened = Store::open_with(scratch.path("test.sqlite"), &empty_bundle()).unwrap();
+    let reopened = Store::open(scratch.path("test.sqlite")).unwrap();
     assert_eq!(reopened.settings().unwrap().field_markers, markers);
 }
 
 #[test]
-fn bundled_templates_install_once_with_bound_fields() {
+fn new_databases_start_without_templates_until_the_library_seeds_them() {
+    let scratch = Scratch::new();
+    let path = scratch.path("fresh.db");
+    let mut store = Store::open(&path).unwrap();
+    assert!(store.templates().unwrap().is_empty());
+    assert!(!store.library_seeded().unwrap());
+    store.mark_library_seeded().unwrap();
+    drop(store);
+    let reopened = Store::open(&path).unwrap();
+    assert!(reopened.templates().unwrap().is_empty());
+    assert!(reopened.library_seeded().unwrap());
+}
+
+#[test]
+fn repository_templates_install_from_library_uploads_with_bound_fields() {
     let scratch = Scratch::new();
     let path = scratch.path("bundle.db");
-    let store = Store::open(&path).unwrap();
+    let folder = missal_docx::import_folder(&missal_docx::repository_templates()).unwrap();
+    let mut store = Store::open(&path).unwrap();
+    for (index, template) in folder.templates.into_iter().enumerate() {
+        let content = TemplateBundle::encode(
+            1,
+            &template.global,
+            &template.custom,
+            &[(template.name, template.document)],
+        );
+        store
+            .install_library_template(&format!("remote-{index}"), 1, &content)
+            .unwrap();
+    }
     let templates = store.templates().unwrap();
     assert_eq!(templates.len(), 36);
     let mut unresolved = Vec::new();
@@ -599,18 +621,18 @@ fn foreign_and_newer_databases_are_refused() {
         .unwrap()
         .execute_batch("CREATE TABLE fir_records (id INTEGER PRIMARY KEY)")
         .unwrap();
-    assert!(Store::open_with(&foreign, &empty_bundle()).is_err());
+    assert!(Store::open(&foreign).is_err());
     let newer = scratch.path("newer.db");
     drop(store_at(&newer));
     rusqlite::Connection::open(&newer)
         .unwrap()
         .execute_batch("PRAGMA user_version = 99")
         .unwrap();
-    assert!(Store::open_with(&newer, &empty_bundle()).is_err());
+    assert!(Store::open(&newer).is_err());
 }
 
 fn store_at(path: &std::path::Path) -> Store {
-    Store::open_with(path, &empty_bundle()).unwrap()
+    Store::open(path).unwrap()
 }
 
 fn field_references(document: &Document) -> Vec<FieldReference> {
@@ -623,9 +645,8 @@ fn field_references(document: &Document) -> Vec<FieldReference> {
 #[test]
 fn a_published_template_installs_with_its_fields_and_updates_in_place() {
     let scratch = Scratch::new();
-    let mut publisher =
-        Store::open_with(scratch.path("publisher.sqlite"), &empty_bundle()).unwrap();
-    let mut reader = Store::open_with(scratch.path("reader.sqlite"), &empty_bundle()).unwrap();
+    let mut publisher = Store::open(scratch.path("publisher.sqlite")).unwrap();
+    let mut reader = Store::open(scratch.path("reader.sqlite")).unwrap();
     reader.create_placeholder("تھانہ").unwrap();
     let station = publisher.create_placeholder("تھانہ").unwrap();
     let vehicle = publisher.create_placeholder("گاڑی").unwrap();
@@ -668,4 +689,116 @@ fn a_published_template_installs_with_its_fields_and_updates_in_place() {
             .install_library_template("tpl_2", 1, b"junk")
             .is_err()
     );
+}
+
+#[test]
+fn drafts_survive_reopening_and_clear_on_save() {
+    let scratch = Scratch::new();
+    let (document_id, template_id) = {
+        let mut store = store(&scratch);
+        let template = store.create_template("چالان", &document("x", None)).unwrap();
+        let fir_record = store.create_fir(&fir("1/26")).unwrap();
+        let document_id = store
+            .add_templates_to_fir(fir_record.id, &[template.id])
+            .unwrap()[0]
+            .id;
+        let key = DraftKey::FirDocument(document_id);
+        assert_eq!(store.draft(key).unwrap(), None);
+        assert!(
+            store
+                .put_draft(key, Revision::FIRST, &document("پہلا", None))
+                .unwrap()
+        );
+        assert!(
+            store
+                .put_draft(key, Revision::FIRST, &document("دوسرا", None))
+                .unwrap()
+        );
+        assert!(
+            store
+                .put_draft(
+                    DraftKey::Template(template.id),
+                    Revision::FIRST,
+                    &document("سانچہ", None)
+                )
+                .unwrap()
+        );
+        (document_id, template.id)
+    };
+
+    let mut store = store(&scratch);
+    let key = DraftKey::FirDocument(document_id);
+    let recovered = store.draft(key).unwrap().unwrap();
+    assert_eq!(recovered.key, key);
+    assert_eq!(recovered.base_revision, Revision::FIRST);
+    assert_eq!(recovered.document, document("دوسرا", None));
+    let template_key = DraftKey::Template(template_id);
+    assert_eq!(
+        store.draft(template_key).unwrap().unwrap().document,
+        document("سانچہ", None)
+    );
+
+    store
+        .save_fir_document(document_id, Revision::FIRST, &document("محفوظ", None))
+        .unwrap();
+    assert_eq!(store.draft(key).unwrap(), None);
+    store
+        .save_template(template_id, Revision::FIRST, "چالان", &document("y", None))
+        .unwrap();
+    assert_eq!(store.draft(template_key).unwrap(), None);
+}
+
+#[test]
+fn stale_drafts_are_ignored_and_discarded_drafts_are_gone() {
+    let scratch = Scratch::new();
+    let mut store = store(&scratch);
+    let template = store.create_template("چالان", &document("x", None)).unwrap();
+    let fir_record = store.create_fir(&fir("1/26")).unwrap();
+    let document_id = store
+        .add_templates_to_fir(fir_record.id, &[template.id])
+        .unwrap()[0]
+        .id;
+    let key = DraftKey::FirDocument(document_id);
+    store
+        .save_fir_document(document_id, Revision::FIRST, &document("محفوظ", None))
+        .unwrap();
+    assert!(
+        !store
+            .put_draft(key, Revision::FIRST, &document("پرانا", None))
+            .unwrap(),
+        "a draft based on an older revision is not written"
+    );
+    assert_eq!(store.draft(key).unwrap(), None);
+    let current = Revision::FIRST.next();
+    assert!(
+        store
+            .put_draft(key, current, &document("نیا", None))
+            .unwrap()
+    );
+    store.discard_draft(key).unwrap();
+    assert_eq!(store.draft(key).unwrap(), None);
+    store.discard_draft(key).unwrap();
+
+    let missing = FirDocumentId::new(9_999).unwrap();
+    assert!(
+        !store
+            .put_draft(
+                DraftKey::FirDocument(missing),
+                Revision::FIRST,
+                &Document::empty()
+            )
+            .unwrap()
+    );
+
+    store
+        .put_draft(key, current, &document("نیا", None))
+        .unwrap();
+    store.remove_fir_document(document_id).unwrap();
+    assert_eq!(store.draft(key).unwrap(), None);
+    let template_key = DraftKey::Template(template.id);
+    store
+        .put_draft(template_key, Revision::FIRST, &document("سانچہ", None))
+        .unwrap();
+    store.remove_template(template.id).unwrap();
+    assert_eq!(store.draft(template_key).unwrap(), None);
 }

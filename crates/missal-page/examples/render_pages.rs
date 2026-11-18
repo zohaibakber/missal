@@ -39,9 +39,9 @@ fn main() {
         .unwrap_or_else(|| vec![0]);
     let zoom: f32 = opt("--zoom").map(|z| z.parse().unwrap()).unwrap_or(1.0);
     let editor = args.iter().any(|a| a == "--editor");
-    let (_, document) = missal_store::TemplateBundle::embedded()
-        .templates()
+    let (_, document) = missal_docx::import_folder(&missal_docx::repository_templates())
         .unwrap()
+        .documents()
         .into_iter()
         .find(|(template, _)| template.starts_with(name.as_str()))
         .expect("template");

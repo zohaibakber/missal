@@ -19,7 +19,7 @@ image = { workspace = true, optional = true }
 [dev-dependencies]
 gpui-kit = { workspace = true, features = ["test-support"] }
 missal-text = { workspace = true, features = ["test-support"] }
-missal-store.workspace = true
+missal-docx.workspace = true
 
 [features]
 headless = ["gpui-kit/test-support", "missal-page/headless", "dep:gpui-pre-wgpu", "dep:image"]

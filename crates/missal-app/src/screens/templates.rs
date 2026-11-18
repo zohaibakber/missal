@@ -15,12 +15,13 @@ use gpui_kit::{
 };
 use missal_core::{DisplayMode, Document, Revision, TemplateId};
 use missal_editor::{Editor, EditorEvent, EditorFields};
-use missal_store::TemplateSummary;
+use missal_store::{DraftKey, TemplateSummary};
 use missal_text::{
     Attr, AttributedText, FontFamily, Label, TextInput, TextInputEvent, TextStyle, label, to_rgba,
 };
 
 use crate::app::{import_word_file, navigate, navigate_replace, open_print_preview};
+use crate::autosave::{self, Autosave, Autosaving};
 use crate::editor;
 use crate::library::LibraryModel;
 use crate::shortcuts::*;
@@ -65,6 +66,7 @@ pub struct TemplatePage {
     editor: Entity<Editor>,
     editor_dirty: bool,
     saving: bool,
+    autosave: Autosave,
     picking: bool,
     importing: bool,
     renaming: bool,
@@ -88,12 +90,15 @@ impl TemplatePage {
     ) -> TemplatePage {
         let title = field_input(window, cx, Kind::Urdu, "Template name", "");
         let editor = crate::editor::shared(window, cx);
-        let editor_subscription = cx.subscribe(&editor, |this, _, event: &EditorEvent, cx| {
-            if let EditorEvent::DirtyChanged(dirty) = event {
-                this.editor_dirty = *dirty;
-                cx.notify();
-            }
-        });
+        let editor_subscription =
+            cx.subscribe(&editor, |this, _, event: &EditorEvent, cx| match event {
+                EditorEvent::DirtyChanged(dirty) => {
+                    this.editor_dirty = *dirty;
+                    cx.notify();
+                }
+                EditorEvent::Edited => autosave::edited(this, cx),
+                _ => {}
+            });
         let title_subscription = cx.subscribe_in(
             &title,
             window,
@@ -114,6 +119,7 @@ impl TemplatePage {
             editor,
             editor_dirty: false,
             saving: false,
+            autosave: Autosave::default(),
             picking: false,
             importing: false,
             renaming: id.is_none(),
@@ -154,23 +160,36 @@ impl TemplatePage {
                 self.title.update(cx, |input, cx| input.focus(window, cx));
             }
             Some(id) => {
+                let key = DraftKey::Template(id);
                 run_db_in(
                     window,
                     cx,
-                    move |store| store.template(id),
-                    move |this, result, _window, cx| {
+                    move |store| Ok((store.template(id)?, store.draft(key)?)),
+                    move |this, result, window, cx| {
                         match result {
-                            Ok(record) => {
+                            Ok((record, draft)) => {
                                 this.revision = Some(record.revision);
                                 this.initial_name = record.name.clone();
                                 this.title.update(cx, |input, cx| {
                                     input.set_text(record.name.clone(), cx)
                                 });
                                 let fields = this.field_context(cx);
-                                this.editor.update(cx, |editor, cx| {
-                                    editor.load(record.document, fields, false, cx)
+                                this.autosave.track(key, record.revision, draft.is_some());
+                                let recovered = draft.is_some();
+                                this.editor.update(cx, |editor, cx| match draft {
+                                    Some(draft) => {
+                                        editor.restore(record.document, draft.document, fields, cx)
+                                    }
+                                    None => editor.load(record.document, fields, false, cx),
                                 });
+                                this.editor_dirty = this.editor.read(cx).is_dirty();
                                 this.state = PageState::Ready;
+                                if recovered {
+                                    let weak = cx.entity().downgrade();
+                                    autosave::announce_recovered(window, cx, move |_, cx| {
+                                        weak.update(cx, |this, cx| this.discard_recovered(cx)).ok();
+                                    });
+                                }
                             }
                             Err(missal_core::RepositoryError::NotFound { .. }) => {
                                 this.state = PageState::NotFound
@@ -384,10 +403,25 @@ impl TemplatePage {
         self.review.is_some()
     }
 
+    pub fn discard_draft(&mut self, cx: &mut Context<Self>) {
+        self.autosave.discard(cx);
+    }
+
+    fn discard_recovered(&mut self, cx: &mut Context<Self>) {
+        if self.state != PageState::Ready || self.saving || self.review.is_some() {
+            return;
+        }
+        self.editor.update(cx, |editor, cx| editor.discard(cx));
+        self.editor_dirty = false;
+        self.autosave.discard(cx);
+        cx.notify();
+    }
+
     pub fn discard_import(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.review.take().is_none() {
             return;
         }
+        self.autosave.discard(cx);
         self.editor_dirty = false;
         if self.id.is_none() {
             self.title.update(cx, |input, cx| input.set_text("", cx));
@@ -549,6 +583,13 @@ impl TemplatePage {
                         this.initial_name = name.clone();
                         this.editor
                             .update(cx, |editor, cx| editor.mark_saved(revision_token, cx));
+                        this.editor_dirty = this.editor.read(cx).is_dirty();
+                        this.autosave.saved(ack.revision);
+                        if this.editor_dirty {
+                            autosave::edited(this, cx);
+                        } else {
+                            this.autosave.cancel();
+                        }
                         let created_at = this.id.and_then(|id| {
                             this.models
                                 .templates
@@ -574,6 +615,7 @@ impl TemplatePage {
                     }
                     Ok(_) => {}
                     Err(error) => {
+                        autosave::resume(this, cx);
                         toast_error(window, cx, error.message());
                         cx.notify();
                         return;
@@ -884,6 +926,20 @@ impl TemplatePage {
     }
 }
 
+impl Autosaving for TemplatePage {
+    fn autosave(&mut self) -> &mut Autosave {
+        &mut self.autosave
+    }
+
+    fn autosave_ready(&self, _: &App) -> bool {
+        self.state == PageState::Ready && !self.saving && !self.importing
+    }
+
+    fn autosave_editor(&self) -> &Entity<Editor> {
+        &self.editor
+    }
+}
+
 impl Render for TemplatePage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
@@ -1086,6 +1142,12 @@ impl TemplatesScreen {
         match &self.page {
             Some(page) => page.update(cx, |page, cx| page.save_then(Some(then), window, cx)),
             None => then(window, cx),
+        }
+    }
+
+    pub fn discard_draft(&mut self, cx: &mut Context<Self>) {
+        if let Some(page) = &self.page {
+            page.update(cx, |page, cx| page.discard_draft(cx));
         }
     }
 

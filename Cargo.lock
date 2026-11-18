@@ -4486,8 +4486,11 @@ dependencies = [
 name = "missal-docx"
 version = "0.7.0"
 dependencies = [
+ "dotenvy",
  "flate2",
+ "missal-auth",
  "missal-core",
+ "missal-library",
  "missal-store",
  "roxmltree 0.21.2",
  "serde_json",
@@ -4502,8 +4505,8 @@ dependencies = [
  "gpui-pre-wgpu",
  "image",
  "missal-core",
+ "missal-docx",
  "missal-page",
- "missal-store",
  "missal-text",
  "unicode-segmentation",
 ]
@@ -4527,7 +4530,7 @@ dependencies = [
  "gpui-pre-wgpu",
  "image",
  "missal-core",
- "missal-store",
+ "missal-docx",
  "missal-text",
  "pdf-writer",
  "subsetter",
@@ -4540,6 +4543,7 @@ version = "0.7.0"
 dependencies = [
  "flate2",
  "missal-core",
+ "missal-docx",
  "rusqlite",
  "tempfile",
 ]

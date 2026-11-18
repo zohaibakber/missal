@@ -1,5 +1,6 @@
 mod bundle;
 mod documents;
+mod drafts;
 mod firs;
 mod library;
 mod placeholders;
@@ -20,6 +21,7 @@ use missal_core::{
 use rusqlite::{Connection, Row};
 
 pub use bundle::TemplateBundle;
+pub use drafts::{Draft, DraftKey};
 pub use library::{LibraryExport, LibraryInstall, LibraryLink};
 
 pub type Result<T, E = RepositoryError> = std::result::Result<T, E>;
@@ -95,24 +97,25 @@ pub struct Store {
 
 impl Store {
     pub fn open(path: impl AsRef<Path>) -> Result<Store> {
-        Store::open_with(path, &TemplateBundle::embedded())
+        let connection = Connection::open(path).map_err(|_| open_error(STORAGE_FAILED))?;
+        Store::from_connection(connection)
     }
 
     pub fn open_with(path: impl AsRef<Path>, bundle: &TemplateBundle) -> Result<Store> {
-        let connection = Connection::open(path).map_err(|_| open_error(STORAGE_FAILED))?;
-        Store::from_connection(connection, bundle)
+        let mut store = Store::open(path)?;
+        bundle::install(&mut store.connection, bundle)?;
+        Ok(store)
     }
 
     pub fn in_memory() -> Result<Store> {
         let connection = Connection::open_in_memory().map_err(|_| open_error(STORAGE_FAILED))?;
-        Store::from_connection(connection, &TemplateBundle::embedded())
+        Store::from_connection(connection)
     }
 
-    fn from_connection(mut connection: Connection, bundle: &TemplateBundle) -> Result<Store> {
+    fn from_connection(mut connection: Connection) -> Result<Store> {
         schema::configure(&connection)?;
         schema::migrate(&mut connection)?;
         schema::ensure_indexes(&connection)?;
-        bundle::install(&mut connection, bundle)?;
         Ok(Store { connection })
     }
 }

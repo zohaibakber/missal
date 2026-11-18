@@ -434,11 +434,18 @@ impl AuthModel {
         cx: &mut Context<Self>,
     ) {
         let address = email.clone();
+        // The service creates the account at once unless it is set to confirm emails first;
+        // then signing in reports EmailNotVerified and the code screen takes over.
         self.attempt(
-            move |keeper| keeper.sign_up(&email, &name, &password),
+            move |keeper| {
+                keeper.sign_up(&email, &name, &password)?;
+                keeper.sign_in(&email, &password)
+            },
             move |this, flow, outcome, cx| match outcome {
-                Ok(()) => this.signed_out(Flow::VerifyEmail { email: address }, None, cx),
-                Err(error) => this.signed_out(flow, Notice::problem(error), cx),
+                Err(AuthError::EmailNotVerified) => {
+                    this.signed_out(Flow::VerifyEmail { email: address }, None, cx)
+                }
+                outcome => this.opened(flow, outcome, cx),
             },
             cx,
         );

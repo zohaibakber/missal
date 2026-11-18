@@ -96,6 +96,25 @@ CREATE TABLE library_links (
     revision INTEGER NOT NULL
 );
 "#,
+    r#"
+CREATE TABLE document_drafts (
+    document_id INTEGER PRIMARY KEY REFERENCES documents (id) ON DELETE CASCADE,
+    base_revision INTEGER NOT NULL,
+    saved_at INTEGER NOT NULL,
+    body BLOB NOT NULL
+);
+
+CREATE TABLE template_drafts (
+    template_id INTEGER PRIMARY KEY REFERENCES templates (id) ON DELETE CASCADE,
+    base_revision INTEGER NOT NULL,
+    saved_at INTEGER NOT NULL,
+    body BLOB NOT NULL
+);
+"#,
+    r#"
+ALTER TABLE settings ADD COLUMN library_seeded INTEGER NOT NULL DEFAULT 0;
+UPDATE settings SET library_seeded = bundle_version > 0;
+"#,
 ];
 
 pub(crate) fn configure(connection: &Connection) -> Result<()> {

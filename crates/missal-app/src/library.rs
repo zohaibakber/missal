@@ -68,6 +68,7 @@ pub struct LibraryModel {
     pub load: Load,
     loaded: bool,
     fetching: bool,
+    seeding: bool,
     busy: HashSet<String>,
 }
 
@@ -112,6 +113,7 @@ impl LibraryModel {
                 load: Load::Loading,
                 loaded: false,
                 fetching: false,
+                seeding: false,
                 busy: HashSet::new(),
             }
         });
@@ -148,7 +150,7 @@ impl LibraryModel {
     }
 
     pub fn is_fetching(&self) -> bool {
-        self.fetching
+        self.fetching || self.seeding
     }
 
     pub fn link_for_template(&self, id: TemplateId) -> Option<&LibraryLink> {
@@ -249,6 +251,7 @@ impl LibraryModel {
                         this.publisher = catalog.publisher;
                         this.loaded = true;
                         this.load = Load::Ready;
+                        this.seed(cx);
                     }
                     Err(failure) => {
                         let message = this.failed(&failure, cx);
@@ -256,6 +259,83 @@ impl LibraryModel {
                             this.load = Load::Failed(message.to_string());
                         }
                     }
+                }
+                this.reload_links(cx);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn seed(&mut self, cx: &mut Context<Self>) {
+        let Some(access) = self.access(cx) else {
+            return;
+        };
+        if self.seeding {
+            return;
+        }
+        self.seeding = true;
+        let entries = self.entries.clone();
+        let db = db(cx);
+        let state = db.run(|store| {
+            Ok((
+                store.library_seeded()?,
+                store.library_links()?,
+                store.templates()?,
+            ))
+        });
+        cx.spawn(async move |this, cx| {
+            let outcome: Result<(), Failure> = async {
+                let (seeded, links, templates) = state
+                    .await
+                    .map_err(|error| Failure::Store(error.message()))?;
+                if seeded {
+                    return Ok(());
+                }
+                let wanted = entries.into_iter().filter(|entry| {
+                    !links.iter().any(|link| link.remote_id == entry.id)
+                        && !templates.iter().any(|template| template.name == entry.name)
+                });
+                for entry in wanted {
+                    let download = cx
+                        .background_spawn({
+                            let access = access.clone();
+                            let id = entry.id.clone();
+                            async move {
+                                let token = access.token()?;
+                                access
+                                    .client
+                                    .download(&token, &id)
+                                    .map_err(Failure::Library)
+                            }
+                        })
+                        .await?;
+                    let install = db
+                        .run(move |store| {
+                            store.install_library_template(
+                                &entry.id,
+                                download.version,
+                                &download.content,
+                            )
+                        })
+                        .await
+                        .map_err(|error| Failure::Store(error.message()))?;
+                    this.update(cx, |this, cx| {
+                        this.installed(&install, cx);
+                        cx.notify();
+                    })
+                    .ok();
+                }
+                db.run(|store| store.mark_library_seeded())
+                    .await
+                    .map_err(|error| Failure::Store(error.message()))
+            }
+            .await;
+            this.update(cx, |this, cx| {
+                this.seeding = false;
+                if let Err(failure) = outcome {
+                    this.failed(&failure, cx);
                 }
                 this.reload_links(cx);
                 cx.notify();

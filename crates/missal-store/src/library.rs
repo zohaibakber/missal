@@ -99,6 +99,23 @@ impl Store {
         links(&self.connection, "", [], "library.links")
     }
 
+    pub fn library_seeded(&self) -> Result<bool> {
+        self.connection
+            .query_row(
+                "SELECT library_seeded FROM settings WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(failed("library.seeded"))
+    }
+
+    pub fn mark_library_seeded(&mut self) -> Result<()> {
+        self.connection
+            .execute("UPDATE settings SET library_seeded = 1 WHERE id = 1", [])
+            .map(|_| ())
+            .map_err(failed("library.seeded"))
+    }
+
     pub fn export_template(&self, template: TemplateId) -> Result<LibraryExport> {
         let record = self.template(template)?;
         let catalog = placeholders::list(&self.connection, "library.export")?;

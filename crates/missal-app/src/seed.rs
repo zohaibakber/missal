@@ -1,7 +1,8 @@
 use std::path::Path;
+use std::sync::OnceLock;
 
 use missal_core::{CalendarDate, Fir, FirStatus, RepositoryError, TemplateId};
-use missal_store::Store;
+use missal_store::{Store, TemplateBundle};
 
 const OFFENCES: [&str; 12] = [
     "چوری ۳۷۹ ت پ",
@@ -120,8 +121,17 @@ fn sample_fir(index: usize, random: &mut Random) -> Fir {
     }
 }
 
+pub fn repository_bundle() -> &'static TemplateBundle {
+    static BUNDLE: OnceLock<TemplateBundle> = OnceLock::new();
+    BUNDLE.get_or_init(|| {
+        let folder = missal_docx::import_folder(&missal_docx::repository_templates())
+            .unwrap_or_else(|error| panic!("{error}"));
+        TemplateBundle::pack(1, &folder.global, &folder.custom, &folder.documents())
+    })
+}
+
 pub fn seed_firs(database: &Path, count: usize) -> Result<usize, RepositoryError> {
-    let mut store = Store::open(database)?;
+    let mut store = Store::open_with(database, repository_bundle())?;
     let mut random = Random(0x9E37_79B9_7F4A_7C15);
     let first = count.min(6);
     let templates = store.templates()?;
