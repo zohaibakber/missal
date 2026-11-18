@@ -37,6 +37,7 @@ pub enum NavEvent {
 }
 
 pub type Guard = Rc<dyn Fn(&App) -> bool>;
+pub type Discarder = Rc<dyn Fn(&mut App)>;
 pub type Saver = Rc<dyn Fn(&mut Window, &mut App, Box<dyn FnOnce(&mut Window, &mut App)>)>;
 
 pub struct Navigator {
@@ -44,6 +45,7 @@ pub struct Navigator {
     index: usize,
     guard: Option<Guard>,
     saver: Option<Saver>,
+    discarder: Option<Discarder>,
 }
 
 impl EventEmitter<NavEvent> for Navigator {}
@@ -55,6 +57,7 @@ impl Navigator {
             index: 0,
             guard: None,
             saver: None,
+            discarder: None,
         }
     }
 
@@ -80,6 +83,16 @@ impl Navigator {
 
     pub fn set_saver(&mut self, saver: Option<Saver>) {
         self.saver = saver;
+    }
+
+    pub fn set_discarder(&mut self, discarder: Option<Discarder>) {
+        self.discarder = discarder;
+    }
+
+    fn discard_changes(&mut self, cx: &mut App) {
+        if let Some(discarder) = self.discarder.take() {
+            discarder(cx);
+        }
     }
 
     pub fn has_unsaved_changes(&self, cx: &App) -> bool {
@@ -116,6 +129,7 @@ impl Navigator {
                 vec![
                     Choice::new("discard", "Don't save", Tone::Ghost, move |_, cx| {
                         discard.update(cx, |navigator, cx| {
+                            navigator.discard_changes(cx);
                             navigator.guard = None;
                             navigator.commit(request, cx);
                         });
@@ -140,6 +154,7 @@ impl Navigator {
         }
         confirm_discard(window, cx, move |_, cx| {
             navigator.update(cx, |navigator, cx| {
+                navigator.discard_changes(cx);
                 navigator.guard = None;
                 navigator.commit(request, cx);
             });
@@ -181,6 +196,7 @@ impl Navigator {
             }
         }
         self.guard = None;
+        self.discarder = None;
         cx.emit(NavEvent::Changed);
         cx.notify();
     }

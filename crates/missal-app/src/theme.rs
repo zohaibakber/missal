@@ -380,6 +380,7 @@ pub const TAB_HEIGHT: f32 = 40.0;
 pub const FILTER_ITEM: f32 = 32.0;
 pub const TABLE_HEAD: f32 = 40.0;
 pub const TABLE_ROW: f32 = 40.0;
+pub const TABLE_FOOT: f32 = 36.0;
 pub const ROW_HEIGHT: f32 = TABLE_ROW;
 pub const LIST_ITEM: f32 = 40.0;
 pub const LIST_ITEM_META: f32 = 44.0;

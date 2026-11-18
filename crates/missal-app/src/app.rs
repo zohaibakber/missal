@@ -128,6 +128,24 @@ impl Screen {
         }
     }
 
+    fn discarder(&self) -> Option<crate::state::nav::Discarder> {
+        match self {
+            Screen::Workspace(view) => {
+                let view = view.clone();
+                Some(Rc::new(move |cx| {
+                    view.update(cx, |screen, cx| screen.discard_draft(cx))
+                }))
+            }
+            Screen::Templates(view) => {
+                let view = view.clone();
+                Some(Rc::new(move |cx| {
+                    view.update(cx, |screen, cx| screen.discard_draft(cx))
+                }))
+            }
+            _ => None,
+        }
+    }
+
     fn focus(&self, window: &mut Window, cx: &mut App) {
         match self {
             Screen::Firs(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
@@ -508,9 +526,14 @@ impl AppShell {
             Some(_) => None,
             None => self.screen.saver(),
         };
+        let discarder = match (&self.screen, &self.parked) {
+            (Screen::Print(_), Some((_, parked))) => parked.discarder(),
+            _ => self.screen.discarder(),
+        };
         self.models.nav.update(cx, |nav, _| {
             nav.set_guard(Some(guard));
             nav.set_saver(saver);
+            nav.set_discarder(discarder);
         });
         self.screen.focus(window, cx);
     }

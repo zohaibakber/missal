@@ -71,41 +71,59 @@ pub type Checkbox = Themed<BaseCheckbox>;
 
 pub fn checkbox(id: impl Into<ElementId>, checked: bool) -> Checkbox {
     Themed::new(
-        BaseCheckbox::new(id)
+        checkbox_base(id)
             .checked(checked)
-            .flex_none()
-            .size(px(CHECKBOX))
-            .flex()
-            .items_center()
-            .justify_center()
-            .rounded(px(RADIUS_CHIP))
-            .border_1()
-            .cursor_pointer()
-            .when(checked, |this| this.child(check_mark())),
-        |checkbox, palette| {
-            let palette = *palette;
-            let focus = palette.focus_ring();
-            checkbox
-                .border_color(palette.line_input)
-                .bg(palette.control_fill())
-                .shadow({
-                    let mut shadows = vec![palette.edge()];
-                    shadows.extend(palette.elevation_xs());
-                    shadows
-                })
-                .focus_visible(move |style| style.shadow(focus))
-                .styles(|styles| {
-                    styles
-                        .checked(|style| {
-                            style
-                                .bg(palette.action)
-                                .border_color(palette.action)
-                                .shadow(Vec::new())
-                        })
-                        .disabled(|style| style.opacity(0.64))
-                })
-        },
+            .when(checked, |this| this.child(mark(IconName::Check))),
+        |checkbox, palette| checkbox_theme(checkbox, palette, false),
     )
+}
+
+pub fn checkbox_mixed(id: impl Into<ElementId>) -> Checkbox {
+    Themed::new(
+        checkbox_base(id).child(mark(IconName::Minus)),
+        |checkbox, palette| checkbox_theme(checkbox, palette, true),
+    )
+}
+
+fn checkbox_base(id: impl Into<ElementId>) -> BaseCheckbox {
+    BaseCheckbox::new(id)
+        .flex_none()
+        .size(px(CHECKBOX))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(RADIUS_CHIP))
+        .border_1()
+        .cursor_pointer()
+}
+
+fn checkbox_theme(checkbox: BaseCheckbox, palette: &Palette, filled: bool) -> BaseCheckbox {
+    let palette = *palette;
+    let focus = palette.focus_ring();
+    let checkbox = if filled {
+        checkbox.border_color(palette.action).bg(palette.action)
+    } else {
+        checkbox
+            .border_color(palette.line_input)
+            .bg(palette.control_fill())
+            .shadow({
+                let mut shadows = vec![palette.edge()];
+                shadows.extend(palette.elevation_xs());
+                shadows
+            })
+    };
+    checkbox
+        .focus_visible(move |style| style.shadow(focus))
+        .styles(|styles| {
+            styles
+                .checked(|style| {
+                    style
+                        .bg(palette.action)
+                        .border_color(palette.action)
+                        .shadow(Vec::new())
+                })
+                .disabled(|style| style.opacity(0.64))
+        })
 }
 
 impl Checkbox {
@@ -123,12 +141,12 @@ impl Checkbox {
     }
 }
 
-fn check_mark() -> Part {
-    part(|base, palette| {
+fn mark(icon: IconName) -> Part {
+    part(move |base, palette| {
         base.flex()
             .items_center()
             .justify_center()
-            .child(sized_icon(IconName::Check, ICON_XS, palette.on_action))
+            .child(sized_icon(icon, ICON_XS, palette.on_action))
     })
 }
 

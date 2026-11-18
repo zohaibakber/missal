@@ -5,9 +5,9 @@ Rust 1.100.0 (`rust-toolchain.toml`), edition 2024, `unsafe` forbidden. No code 
 Crates:
 
 - `missal-core`: domain types, fields, dates, repository traits.
-- `missal-store`: SQLite storage, migrations, template bundles, seed data. No template ships in the binary: a new data directory starts empty and, on its first library sync, installs every library template whose name it does not already have (`library_seeded` in `settings`).
+- `missal-store`: SQLite storage, migrations, template bundles, seed data. No template ships in the binary: a new data directory starts empty and, on its first library sync, installs every library template whose name it does not already have (`library_seeded` in `settings`). Unsaved editor work is kept as drafts (`document_drafts`, `template_drafts`): `missal-app/src/autosave.rs` writes one 1.2 s after typing stops (at most every 8 s while typing), saving or Don't save removes it, and reopening the document restores it as one undoable step. A draft only counts while its base revision is current.
 - `missal-text`: text layout and shaping on parley, embedded fonts, input widgets.
-- `missal-docx`: `.docx` import.
+- `missal-docx`: `.docx` import and export.
 - `missal-page`: paged layout and PDF output.
 - `missal-editor`: rich-text editor view and model.
 - `missal-auth`: self-serve email and password accounts against the Missal API (`API_URL`, compile time or run time): sign-up, emailed codes to verify an address or reset a password, sign-in, rotating refresh sessions through `SessionKeeper`, password changes, the account's licence (trial, licensed, trial ended or expired) and the admin calls (list, update, grant a year). `PURCHASE_URL` (optional, compile time or run time) is the buy-a-licence link. The session is cached in the OS keyring, 30 days offline while the licence is active.

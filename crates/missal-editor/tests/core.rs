@@ -783,3 +783,27 @@ fn saving_an_older_snapshot_while_typing_continues() {
     dirty.mark_saved(revision);
     assert!(!dirty.is_dirty());
 }
+
+#[test]
+fn a_restored_draft_is_unsaved_and_one_undo_returns_to_the_saved_document() {
+    let saved = doc(vec![p("محفوظ")]);
+    let mut core = core(doc(vec![p("")]));
+    core.restore(saved.clone(), doc(vec![p("مسودہ"), p("دوسرا")]));
+    assert_eq!(texts(&core), ["مسودہ", "دوسرا"]);
+    assert!(core.is_dirty());
+    core.insert_text("ا");
+    assert_eq!(
+        core.undo_depth(),
+        2,
+        "typing after a restore is its own step"
+    );
+    core.undo();
+    core.undo();
+    assert_eq!(core.document().encode(), saved.encode());
+    assert!(!core.is_dirty());
+    core.redo();
+    assert_eq!(texts(&core), ["مسودہ", "دوسرا"]);
+    core.discard();
+    assert_eq!(core.document().encode(), saved.encode());
+    assert!(!core.is_dirty());
+}

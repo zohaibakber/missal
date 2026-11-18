@@ -1,5 +1,6 @@
 mod bundle;
 mod documents;
+mod drafts;
 mod firs;
 mod library;
 mod placeholders;
@@ -20,6 +21,7 @@ use missal_core::{
 use rusqlite::{Connection, Row};
 
 pub use bundle::TemplateBundle;
+pub use drafts::{Draft, DraftKey};
 pub use library::{LibraryExport, LibraryInstall, LibraryLink};
 
 pub type Result<T, E = RepositoryError> = std::result::Result<T, E>;

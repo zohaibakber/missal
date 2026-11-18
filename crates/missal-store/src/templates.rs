@@ -312,6 +312,10 @@ impl Store {
                 ])
             })
             .map_err(failed(operation))?;
+        transaction
+            .prepare_cached("DELETE FROM template_drafts WHERE template_id = ?1")
+            .and_then(|mut statement| statement.execute([template.get()]))
+            .map_err(failed(operation))?;
         transaction.commit().map_err(failed(operation))?;
         Ok(SaveAck {
             id: template,

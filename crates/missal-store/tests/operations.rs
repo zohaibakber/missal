@@ -7,7 +7,7 @@ use missal_core::{
     FieldReference, FirDocumentId, FirId, GlobalPlaceholderDraft, Invalid, PlaceholderId,
     PlaceholderSource, RepositoryError, Revision, TemplateId,
 };
-use missal_store::{Store, TemplateBundle};
+use missal_store::{DraftKey, Store, TemplateBundle};
 
 fn store(scratch: &Scratch) -> Store {
     Store::open(scratch.path("test.sqlite")).unwrap()
@@ -689,4 +689,116 @@ fn a_published_template_installs_with_its_fields_and_updates_in_place() {
             .install_library_template("tpl_2", 1, b"junk")
             .is_err()
     );
+}
+
+#[test]
+fn drafts_survive_reopening_and_clear_on_save() {
+    let scratch = Scratch::new();
+    let (document_id, template_id) = {
+        let mut store = store(&scratch);
+        let template = store.create_template("چالان", &document("x", None)).unwrap();
+        let fir_record = store.create_fir(&fir("1/26")).unwrap();
+        let document_id = store
+            .add_templates_to_fir(fir_record.id, &[template.id])
+            .unwrap()[0]
+            .id;
+        let key = DraftKey::FirDocument(document_id);
+        assert_eq!(store.draft(key).unwrap(), None);
+        assert!(
+            store
+                .put_draft(key, Revision::FIRST, &document("پہلا", None))
+                .unwrap()
+        );
+        assert!(
+            store
+                .put_draft(key, Revision::FIRST, &document("دوسرا", None))
+                .unwrap()
+        );
+        assert!(
+            store
+                .put_draft(
+                    DraftKey::Template(template.id),
+                    Revision::FIRST,
+                    &document("سانچہ", None)
+                )
+                .unwrap()
+        );
+        (document_id, template.id)
+    };
+
+    let mut store = store(&scratch);
+    let key = DraftKey::FirDocument(document_id);
+    let recovered = store.draft(key).unwrap().unwrap();
+    assert_eq!(recovered.key, key);
+    assert_eq!(recovered.base_revision, Revision::FIRST);
+    assert_eq!(recovered.document, document("دوسرا", None));
+    let template_key = DraftKey::Template(template_id);
+    assert_eq!(
+        store.draft(template_key).unwrap().unwrap().document,
+        document("سانچہ", None)
+    );
+
+    store
+        .save_fir_document(document_id, Revision::FIRST, &document("محفوظ", None))
+        .unwrap();
+    assert_eq!(store.draft(key).unwrap(), None);
+    store
+        .save_template(template_id, Revision::FIRST, "چالان", &document("y", None))
+        .unwrap();
+    assert_eq!(store.draft(template_key).unwrap(), None);
+}
+
+#[test]
+fn stale_drafts_are_ignored_and_discarded_drafts_are_gone() {
+    let scratch = Scratch::new();
+    let mut store = store(&scratch);
+    let template = store.create_template("چالان", &document("x", None)).unwrap();
+    let fir_record = store.create_fir(&fir("1/26")).unwrap();
+    let document_id = store
+        .add_templates_to_fir(fir_record.id, &[template.id])
+        .unwrap()[0]
+        .id;
+    let key = DraftKey::FirDocument(document_id);
+    store
+        .save_fir_document(document_id, Revision::FIRST, &document("محفوظ", None))
+        .unwrap();
+    assert!(
+        !store
+            .put_draft(key, Revision::FIRST, &document("پرانا", None))
+            .unwrap(),
+        "a draft based on an older revision is not written"
+    );
+    assert_eq!(store.draft(key).unwrap(), None);
+    let current = Revision::FIRST.next();
+    assert!(
+        store
+            .put_draft(key, current, &document("نیا", None))
+            .unwrap()
+    );
+    store.discard_draft(key).unwrap();
+    assert_eq!(store.draft(key).unwrap(), None);
+    store.discard_draft(key).unwrap();
+
+    let missing = FirDocumentId::new(9_999).unwrap();
+    assert!(
+        !store
+            .put_draft(
+                DraftKey::FirDocument(missing),
+                Revision::FIRST,
+                &Document::empty()
+            )
+            .unwrap()
+    );
+
+    store
+        .put_draft(key, current, &document("نیا", None))
+        .unwrap();
+    store.remove_fir_document(document_id).unwrap();
+    assert_eq!(store.draft(key).unwrap(), None);
+    let template_key = DraftKey::Template(template.id);
+    store
+        .put_draft(template_key, Revision::FIRST, &document("سانچہ", None))
+        .unwrap();
+    store.remove_template(template.id).unwrap();
+    assert_eq!(store.draft(template_key).unwrap(), None);
 }
