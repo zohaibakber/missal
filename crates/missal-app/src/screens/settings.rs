@@ -458,7 +458,7 @@ impl SettingsScreen {
             self.scroll.scroll_to_item(section);
             return;
         };
-        let top = self.scroll.bounds().origin.y + px(20.);
+        let top = self.scroll.bounds().origin.y + px(28.);
         let maximum = self.scroll.max_offset().y;
         let target = (top - bounds.origin.y).clamp(-maximum, px(0.));
         self.scroll
@@ -957,6 +957,7 @@ impl SettingsScreen {
                     .child(card_description().child(description)),
             )
             .child(body)
+            .when(!last, |this| this.child(crate::ui::separator().mt(px(40.))))
     }
 
     fn error_line(&self, palette: &Palette, text: &'static str) -> gpui_kit::Div {
@@ -1651,24 +1652,7 @@ impl Render for SettingsScreen {
                     .track_scroll(&self.scroll)
                     .on_scroll(cx.listener(|_, _, _, cx| cx.notify()))
                     .items_center()
-                    .children(
-                        sections
-                            .into_iter()
-                            .enumerate()
-                            .flat_map(|(index, section)| {
-                                let divider = (index > 0).then(|| {
-                                    div()
-                                        .w(px(COLUMN_WIDTH))
-                                        .max_w_full()
-                                        .flex_shrink_0()
-                                        .px(px(24.))
-                                        .mb(px(40.))
-                                        .child(crate::ui::separator())
-                                        .into_any_element()
-                                });
-                                divider.into_iter().chain([section.into_any_element()])
-                            }),
-                    )
+                    .children(sections)
                     .child(div().h(px(420.)).flex_none()),
             )
     }

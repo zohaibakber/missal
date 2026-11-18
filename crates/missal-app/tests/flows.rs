@@ -603,7 +603,7 @@ fn fir_defaults_are_a_valid_draft(_: &mut TestAppContext) {
 #[gpui_kit::test]
 fn the_menu_dropdown_navigates_with_the_mouse_and_the_keyboard(cx: &mut TestAppContext) {
     let fixture = boot(cx, 2);
-    fixture.click(cx, "nav-menu");
+    fixture.press(cx, "f10");
     let menu = cx
         .update(|cx| fixture.shell.read(cx).nav_menu())
         .expect("menu open");
@@ -645,9 +645,27 @@ fn the_menu_dropdown_navigates_with_the_mouse_and_the_keyboard(cx: &mut TestAppC
         missal_app::prefs::ThemeChoice::Dark
     );
 
-    fixture.click(cx, "nav-menu");
+    fixture.press(cx, "f10");
     fixture.click(cx, "nav-new-fir");
     assert_eq!(fixture.route(cx), Route::NewFir);
+}
+
+#[gpui_kit::test]
+fn the_sidebar_navigates_and_hides(cx: &mut TestAppContext) {
+    let fixture = boot(cx, 3);
+    fixture.click(cx, "sidebar-nav-templates");
+    assert_eq!(fixture.route(cx), Route::Templates);
+    fixture.click(cx, "sidebar-nav-settings");
+    assert_eq!(fixture.route(cx), Route::Settings);
+    fixture.click(cx, "sidebar-theme-dark");
+    assert_eq!(
+        cx.update(|cx| fixture.models.prefs.read(cx).read().theme),
+        missal_app::prefs::ThemeChoice::Dark
+    );
+    fixture.click(cx, "sidebar-toggle");
+    assert!(cx.update(|cx| fixture.models.prefs.read(cx).read().sidebar_hidden));
+    fixture.press(cx, "secondary-\\");
+    assert!(!cx.update(|cx| fixture.models.prefs.read(cx).read().sidebar_hidden));
 }
 
 #[gpui_kit::test]

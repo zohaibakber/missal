@@ -1,3 +1,4 @@
+use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
@@ -64,6 +65,7 @@ fn compact_item(
                 palette.sidebar_ink
             },
         ))
+        .test_support()
         .into_any_element()
 }
 
@@ -198,6 +200,7 @@ fn nav_item(
             .text_color(palette.ink_faint)
             .child(count.to_string())
     }))
+    .test_support()
     .into_any_element()
 }
 
@@ -213,7 +216,8 @@ fn plain_item(
         .on_click(move |_, window, cx| on_click(window, cx))
         .child(sized_icon(icon, ICON, palette.sidebar_ink))
         .child(div().flex_1().min_w_0().child(text))
-        .children(keys.map(|keys| kbd_group(keys)))
+        .children(keys.map(kbd_group))
+        .test_support()
         .into_any_element()
 }
 
@@ -276,6 +280,7 @@ fn theme_switch(current: ThemeChoice, palette: &Palette) -> AnyElement {
                         palette.ink_muted
                     },
                 ))
+                .test_support()
         }))
         .into_any_element()
 }
@@ -324,6 +329,7 @@ impl RenderOnce for Sidebar {
                             .group_hover("sidebar-recent", move |style| style.text_color(ink))
                             .child(ur_inline(row.offence.clone(), UrRole::Label).truncate()),
                     )
+                    .test_support()
                     .into_any_element()
             })
             .collect();
