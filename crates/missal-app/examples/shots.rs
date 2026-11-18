@@ -239,6 +239,14 @@ fn run(dark: bool, out: &Path, only_wp0: bool) {
     h.click("select-all");
     h.shot("03-selection");
     h.click("select-all");
+    h.with_window(|window, cx| {
+        window.click(("row-select-cell", 0usize), cx);
+        window.click(("row-select-cell", 2usize), cx);
+    });
+    h.press("j");
+    h.shot("03b-partial-selection");
+    h.press("escape");
+    h.press("escape");
     h.click("status-Open");
     h.shot("04-status-filter");
     h.press("escape");

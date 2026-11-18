@@ -30,9 +30,9 @@ use crate::ui::popup_menu::{Dismissed, MenuContent, MenuEntry, Placement, PopupL
 use crate::ui::status::{status_badge, status_dot};
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::{
-    BadgeVariant, ButtonKind, UrRole, badge, button, checkbox, danger_outline, empty_state,
-    icon_button, isolate_urdu, sized_icon, skeleton_bar, tab, tab_list, table, table_body,
-    table_head, table_header, tabular, ur_label,
+    BadgeVariant, ButtonKind, UrRole, badge, button, checkbox, checkbox_mixed, danger_outline,
+    empty_state, icon_button, isolate_urdu, kbd_group, sized_icon, skeleton_bar, tab, tab_list,
+    table, table_body, table_footer, table_head, table_header, tabular, ur_label,
 };
 
 const SELECT_WIDTH: f32 = 36.0;
@@ -376,6 +376,16 @@ impl FirListScreen {
                 .visible
                 .iter()
                 .all(|&index| self.selected.contains(&rows[index as usize].id))
+    }
+
+    fn any_visible_selected(&self, cx: &App) -> bool {
+        if self.selected.is_empty() {
+            return false;
+        }
+        let rows = self.models.firs.read(cx).rows();
+        self.visible
+            .iter()
+            .any(|&index| self.selected.contains(&rows[index as usize].id))
     }
 
     pub fn toggle_all(&mut self, cx: &mut Context<Self>) {
@@ -821,6 +831,7 @@ impl FirListScreen {
     fn header_row(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let palette = *palette;
         let all_selected = self.all_visible_selected(cx);
+        let some_selected = !all_selected && self.any_visible_selected(cx);
         table_header()
             .id("fir-table-head")
             .flex_row_reverse()
@@ -833,9 +844,13 @@ impl FirListScreen {
                     .items_center()
                     .justify_center()
                     .child(
-                        checkbox("select-all", all_selected)
-                            .accessibility_label("Select all visible FIRs")
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_all(cx))),
+                        if some_selected {
+                            checkbox_mixed("select-all")
+                        } else {
+                            checkbox("select-all", all_selected)
+                        }
+                        .accessibility_label("Select all visible FIRs")
+                        .on_click(cx.listener(|this, _, _, cx| this.toggle_all(cx))),
                     ),
             )
             .children(
@@ -845,16 +860,18 @@ impl FirListScreen {
                     .map(|column| {
                         let column = *column;
                         let sorted = self.sort.column == column;
-                        let icon = if self.sort.descending {
-                            IconName::ArrowDown
-                        } else {
-                            IconName::ArrowUp
+                        let icon = match (sorted, self.sort.descending) {
+                            (false, _) => IconName::ChevronsUpDown,
+                            (true, true) => IconName::ChevronDown,
+                            (true, false) => IconName::ChevronUp,
                         };
                         let ink = palette.ink;
+                        let group = SharedString::from(format!("sort-{}", column.key()));
                         sized(
                             table_head()
                                 .id(("sort", column as usize))
                                 .test_support()
+                                .group(group.clone())
                                 .flex_row_reverse()
                                 .gap(px(4.))
                                 .cursor_pointer()
@@ -869,7 +886,23 @@ impl FirListScreen {
                                         ur_label(column.title(), UrRole::InputLabel).truncate(),
                                     ),
                                 )
-                                .children(sorted.then(|| sized_icon(icon, ICON_XS, palette.ink))),
+                                .child(
+                                    div()
+                                        .flex_none()
+                                        .when(!sorted, |this| {
+                                            this.invisible()
+                                                .group_hover(group, |style| style.visible())
+                                        })
+                                        .child(sized_icon(
+                                            icon,
+                                            ICON_XS,
+                                            if sorted {
+                                                palette.ink_muted
+                                            } else {
+                                                palette.ink_faint
+                                            },
+                                        )),
+                                ),
                             column,
                         )
                     }),
@@ -1102,6 +1135,60 @@ impl FirListScreen {
         Some(element.into_any_element())
     }
 
+    fn footer(&self, total: usize, palette: &Palette) -> AnyElement {
+        let palette = *palette;
+        let shown = self.visible.len();
+        let selected = self.selected.len();
+        let summary = if shown == total {
+            format!("{total} {}", if total == 1 { "FIR" } else { "FIRs" })
+        } else {
+            format!("Showing {shown} of {total} FIRs")
+        };
+        let hint = |keys: &'static str, text: &'static str| {
+            h_flex()
+                .flex_none()
+                .items_center()
+                .gap(px(6.))
+                .child(kbd_group(keys))
+                .child(div().text_color(palette.ink_faint).child(text))
+        };
+        let hints = if selected > 0 {
+            h_flex()
+                .items_center()
+                .gap(px(16.))
+                .child(hint("Space", "Toggle"))
+                .child(hint("Delete", "Delete"))
+                .child(hint("Escape", "Clear"))
+        } else {
+            h_flex()
+                .items_center()
+                .gap(px(16.))
+                .child(hint("J", "Next"))
+                .child(hint("K", "Previous"))
+                .child(hint("Enter", "Open"))
+                .child(hint("Space", "Select"))
+        };
+        table_footer()
+            .id("fir-table-foot")
+            .child(
+                h_flex()
+                    .min_w_0()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(summary)
+                    .when(selected > 0, |this| {
+                        this.child(div().text_color(palette.ink_faint).child("·"))
+                            .child(
+                                div()
+                                    .text_color(palette.ink)
+                                    .child(format!("{selected} selected")),
+                            )
+                    }),
+            )
+            .child(hints)
+            .into_any_element()
+    }
+
     fn skeleton_rows(&self) -> AnyElement {
         let widths = [
             (Column::FirNo, 56.),
@@ -1249,32 +1336,35 @@ impl FirListScreen {
                     .px(px(PAGE_GUTTER))
                     .pb(px(PAGE_GUTTER))
                     .child(
-                        table().child(self.header_row(&palette, cx)).child(
-                            table_body().child(
-                                uniform_list(
-                                    "fir-rows",
-                                    count,
-                                    cx.processor(
-                                        move |this, range: std::ops::Range<usize>, _, cx| {
-                                            let palette = *Palette::get(cx);
-                                            let any_selected = !this.selected.is_empty();
-                                            range
-                                                .filter_map(|index| {
-                                                    this.render_row(
-                                                        index,
-                                                        &palette,
-                                                        any_selected,
-                                                        cx,
-                                                    )
-                                                })
-                                                .collect::<Vec<_>>()
-                                        },
-                                    ),
-                                )
-                                .track_scroll(&self.scroll)
-                                .size_full(),
-                            ),
-                        ),
+                        table()
+                            .child(self.header_row(&palette, cx))
+                            .child(
+                                table_body().child(
+                                    uniform_list(
+                                        "fir-rows",
+                                        count,
+                                        cx.processor(
+                                            move |this, range: std::ops::Range<usize>, _, cx| {
+                                                let palette = *Palette::get(cx);
+                                                let any_selected = !this.selected.is_empty();
+                                                range
+                                                    .filter_map(|index| {
+                                                        this.render_row(
+                                                            index,
+                                                            &palette,
+                                                            any_selected,
+                                                            cx,
+                                                        )
+                                                    })
+                                                    .collect::<Vec<_>>()
+                                            },
+                                        ),
+                                    )
+                                    .track_scroll(&self.scroll)
+                                    .size_full(),
+                                ),
+                            )
+                            .child(self.footer(total, &palette)),
                     )
                     .into_any_element()
             }
