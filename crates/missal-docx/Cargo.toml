@@ -12,10 +12,13 @@ missal-core.workspace = true
 zip.workspace = true
 flate2.workspace = true
 roxmltree.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
+dotenvy.workspace = true
+missal-auth.workspace = true
+missal-library.workspace = true
 missal-store.workspace = true
-serde_json.workspace = true
 
 [lints]
 workspace = true

@@ -148,9 +148,14 @@ pub fn head(core: &EditorCore) -> (Vec<u32>, usize) {
 }
 
 pub fn bundle() -> Vec<(String, Document)> {
-    missal_store::TemplateBundle::embedded()
-        .templates()
-        .unwrap()
+    static TEMPLATES: std::sync::OnceLock<Vec<(String, Document)>> = std::sync::OnceLock::new();
+    TEMPLATES
+        .get_or_init(|| {
+            missal_docx::import_folder(&missal_docx::repository_templates())
+                .unwrap()
+                .documents()
+        })
+        .clone()
 }
 
 pub fn largest_template() -> (String, Document) {

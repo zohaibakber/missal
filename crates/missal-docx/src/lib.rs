@@ -1,5 +1,6 @@
 mod convert;
 mod export;
+mod folder;
 mod format;
 mod package;
 mod props;
@@ -21,6 +22,7 @@ use crate::xml::{child, is_w, w_name};
 
 pub use crate::convert::merge_field_name;
 pub use crate::export::export;
+pub use crate::folder::{Folder, FolderTemplate, import_folder, repository_templates};
 pub use crate::format::URDU_FONT_WINDOWS_LINE_RATIO;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
