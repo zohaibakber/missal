@@ -10,11 +10,12 @@ fn main() {
         .unwrap_or(2000);
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("bench.db");
-    let bundle = TemplateBundle::embedded();
     let started = Instant::now();
-    let documents: Vec<_> = bundle.templates().unwrap();
+    let folder = missal_docx::import_folder(&missal_docx::repository_templates()).unwrap();
+    let documents = folder.documents();
+    let bundle = TemplateBundle::pack(1, &folder.global, &folder.custom, &documents);
     println!(
-        "bundle decode: {:.1}ms ({} templates)",
+        "docx import: {:.1}ms ({} templates)",
         started.elapsed().as_secs_f64() * 1e3,
         documents.len()
     );
@@ -38,7 +39,7 @@ fn main() {
         started.elapsed().as_secs_f64() * 1e3
     );
     let started = Instant::now();
-    let mut store = Store::open(&path).unwrap();
+    let mut store = Store::open_with(&path, &bundle).unwrap();
     println!(
         "first open + install: {:.1}ms",
         started.elapsed().as_secs_f64() * 1e3

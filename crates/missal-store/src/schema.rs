@@ -96,6 +96,10 @@ CREATE TABLE library_links (
     revision INTEGER NOT NULL
 );
 "#,
+    r#"
+ALTER TABLE settings ADD COLUMN library_seeded INTEGER NOT NULL DEFAULT 0;
+UPDATE settings SET library_seeded = bundle_version > 0;
+"#,
 ];
 
 pub(crate) fn configure(connection: &Connection) -> Result<()> {

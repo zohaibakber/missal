@@ -13,6 +13,7 @@ rusqlite.workspace = true
 flate2.workspace = true
 
 [dev-dependencies]
+missal-docx.workspace = true
 rusqlite.workspace = true
 tempfile.workspace = true
 

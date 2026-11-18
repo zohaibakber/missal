@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
@@ -13,12 +12,11 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::{Result, failed, placeholders, templates};
 
 const MAGIC: &[u8; 4] = b"MSB\x01";
-const EMBEDDED: &[u8] = include_bytes!("../bundle/templates.bin");
 
 #[derive(Debug, Clone)]
 pub struct TemplateBundle {
     version: i64,
-    packed: Cow<'static, [u8]>,
+    packed: Vec<u8>,
 }
 
 pub(crate) struct Contents {
@@ -82,22 +80,16 @@ fn put_count(out: &mut Vec<u8>, count: usize) {
 }
 
 impl TemplateBundle {
-    pub fn embedded() -> TemplateBundle {
-        TemplateBundle::read(Cow::Borrowed(EMBEDDED))
-            .expect("the embedded template bundle is valid")
-    }
-
     pub fn decode(packed: &[u8]) -> Result<TemplateBundle> {
-        TemplateBundle::read(Cow::Owned(packed.to_vec()))
-    }
-
-    fn read(packed: Cow<'static, [u8]>) -> Result<TemplateBundle> {
-        let version = header(&mut DeflateDecoder::new(packed.as_ref()))?;
-        Ok(TemplateBundle { version, packed })
+        let version = header(&mut DeflateDecoder::new(packed))?;
+        Ok(TemplateBundle {
+            version,
+            packed: packed.to_vec(),
+        })
     }
 
     pub(crate) fn contents(&self) -> Result<Contents> {
-        let mut decoder = DeflateDecoder::new(self.packed.as_ref());
+        let mut decoder = DeflateDecoder::new(self.packed.as_slice());
         header(&mut decoder)?;
         let mut raw = Vec::new();
         decoder.read_to_end(&mut raw).map_err(|_| invalid())?;
@@ -142,6 +134,16 @@ impl TemplateBundle {
             .write_all(&raw)
             .and_then(|()| encoder.finish())
             .expect("compressing into memory cannot fail")
+    }
+
+    pub fn pack(
+        version: u32,
+        global: &[String],
+        custom: &[String],
+        templates: &[(String, Document)],
+    ) -> TemplateBundle {
+        TemplateBundle::decode(&TemplateBundle::encode(version, global, custom, templates))
+            .expect("a freshly encoded bundle decodes")
     }
 
     pub fn version(&self) -> i64 {
