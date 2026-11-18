@@ -6,9 +6,9 @@ use missal_page::pdf::{PdfOptions, write_packet};
 use missal_page::{BlockPath, DocSource, Edit, FieldSource, LayoutCache, PageEngine, TokenFields};
 
 fn bundle() -> Vec<(String, Document)> {
-    missal_store::TemplateBundle::embedded()
-        .templates()
+    missal_docx::import_folder(&missal_docx::repository_templates())
         .unwrap()
+        .documents()
 }
 
 fn text_of(block: &mut Block) -> Option<&mut String> {

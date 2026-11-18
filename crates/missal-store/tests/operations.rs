@@ -9,12 +9,8 @@ use missal_core::{
 };
 use missal_store::{DraftKey, Store, TemplateBundle};
 
-fn empty_bundle() -> TemplateBundle {
-    TemplateBundle::decode(&TemplateBundle::encode(1, &[], &[], &[])).unwrap()
-}
-
 fn store(scratch: &Scratch) -> Store {
-    Store::open_with(scratch.path("test.sqlite"), &empty_bundle()).unwrap()
+    Store::open(scratch.path("test.sqlite")).unwrap()
 }
 
 fn document(text: &str, reference: Option<FieldReference>) -> Document {
@@ -556,15 +552,41 @@ fn settings_round_trip() {
         markers
     );
     drop(store);
-    let reopened = Store::open_with(scratch.path("test.sqlite"), &empty_bundle()).unwrap();
+    let reopened = Store::open(scratch.path("test.sqlite")).unwrap();
     assert_eq!(reopened.settings().unwrap().field_markers, markers);
 }
 
 #[test]
-fn bundled_templates_install_once_with_bound_fields() {
+fn new_databases_start_without_templates_until_the_library_seeds_them() {
+    let scratch = Scratch::new();
+    let path = scratch.path("fresh.db");
+    let mut store = Store::open(&path).unwrap();
+    assert!(store.templates().unwrap().is_empty());
+    assert!(!store.library_seeded().unwrap());
+    store.mark_library_seeded().unwrap();
+    drop(store);
+    let reopened = Store::open(&path).unwrap();
+    assert!(reopened.templates().unwrap().is_empty());
+    assert!(reopened.library_seeded().unwrap());
+}
+
+#[test]
+fn repository_templates_install_from_library_uploads_with_bound_fields() {
     let scratch = Scratch::new();
     let path = scratch.path("bundle.db");
-    let store = Store::open(&path).unwrap();
+    let folder = missal_docx::import_folder(&missal_docx::repository_templates()).unwrap();
+    let mut store = Store::open(&path).unwrap();
+    for (index, template) in folder.templates.into_iter().enumerate() {
+        let content = TemplateBundle::encode(
+            1,
+            &template.global,
+            &template.custom,
+            &[(template.name, template.document)],
+        );
+        store
+            .install_library_template(&format!("remote-{index}"), 1, &content)
+            .unwrap();
+    }
     let templates = store.templates().unwrap();
     assert_eq!(templates.len(), 36);
     let mut unresolved = Vec::new();
@@ -599,18 +621,18 @@ fn foreign_and_newer_databases_are_refused() {
         .unwrap()
         .execute_batch("CREATE TABLE fir_records (id INTEGER PRIMARY KEY)")
         .unwrap();
-    assert!(Store::open_with(&foreign, &empty_bundle()).is_err());
+    assert!(Store::open(&foreign).is_err());
     let newer = scratch.path("newer.db");
     drop(store_at(&newer));
     rusqlite::Connection::open(&newer)
         .unwrap()
         .execute_batch("PRAGMA user_version = 99")
         .unwrap();
-    assert!(Store::open_with(&newer, &empty_bundle()).is_err());
+    assert!(Store::open(&newer).is_err());
 }
 
 fn store_at(path: &std::path::Path) -> Store {
-    Store::open_with(path, &empty_bundle()).unwrap()
+    Store::open(path).unwrap()
 }
 
 fn field_references(document: &Document) -> Vec<FieldReference> {
@@ -623,9 +645,8 @@ fn field_references(document: &Document) -> Vec<FieldReference> {
 #[test]
 fn a_published_template_installs_with_its_fields_and_updates_in_place() {
     let scratch = Scratch::new();
-    let mut publisher =
-        Store::open_with(scratch.path("publisher.sqlite"), &empty_bundle()).unwrap();
-    let mut reader = Store::open_with(scratch.path("reader.sqlite"), &empty_bundle()).unwrap();
+    let mut publisher = Store::open(scratch.path("publisher.sqlite")).unwrap();
+    let mut reader = Store::open(scratch.path("reader.sqlite")).unwrap();
     reader.create_placeholder("تھانہ").unwrap();
     let station = publisher.create_placeholder("تھانہ").unwrap();
     let vehicle = publisher.create_placeholder("گاڑی").unwrap();

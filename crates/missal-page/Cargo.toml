@@ -19,7 +19,7 @@ subsetter.workspace = true
 gpui-pre-wgpu = { workspace = true, optional = true }
 
 [dev-dependencies]
-missal-store.workspace = true
+missal-docx.workspace = true
 
 [features]
 headless = ["missal-text/headless", "dep:gpui-pre-wgpu"]

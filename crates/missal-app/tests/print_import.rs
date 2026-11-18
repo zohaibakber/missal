@@ -27,9 +27,7 @@ struct Fixture {
 fn boot(cx: &mut TestAppContext, count: usize) -> Fixture {
     let directory = tempfile::tempdir().unwrap();
     let database = directory.path().join("missal.db");
-    if count > 0 {
-        seed_firs(&database, count).unwrap();
-    }
+    seed_firs(&database, count).unwrap();
     let store = Store::open(&database).unwrap();
     let printed = Rc::new(std::cell::RefCell::new(Vec::new()));
     let (handle, shell, models) = cx.update(|cx| {

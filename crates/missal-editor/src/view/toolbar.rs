@@ -512,7 +512,19 @@ impl Editor {
                     .on_click(act(|e, w, cx| e.list(ListType::Number, w, cx))),
             )
             .child(separator(theme.line))
-            .child(self.field_menu(theme, cx));
+            .child(self.field_menu(theme, cx))
+            .child(
+                tool("editor-find-trigger", IconName::Search, "Find and replace")
+                    .keys("Mod+F")
+                    .toggled(self.find.open)
+                    .on_click(act(|e, w, cx| {
+                        if e.find.open {
+                            e.close_find(w, cx)
+                        } else {
+                            e.open_find(false, w, cx)
+                        }
+                    })),
+            );
         let mode = self.mode_toggle.then(|| self.mode_toggle(theme, cx));
         let end = self
             .toolbar_end

@@ -485,3 +485,171 @@ fn zoom_keys_and_read_only(cx: &mut TestAppContext) {
     cx.simulate_input("x");
     assert_eq!(text_at(&editor, cx, &[0]), "متن");
 }
+
+fn selected(editor: &Entity<Editor>, cx: &mut VisualTestContext) -> (Vec<u32>, usize, usize) {
+    editor.read_with(cx, |e, _| {
+        let (s, t) = e.selection().ordered();
+        (s.path.steps().to_vec(), s.offset, t.offset)
+    })
+}
+
+fn editor_focused(editor: &Entity<Editor>, cx: &mut VisualTestContext) -> bool {
+    cx.update(|window, cx| editor.read(cx).focus_handle_ref().is_focused(window))
+}
+
+#[gpui_kit::test]
+fn find_bar_types_steps_and_closes(cx: &mut TestAppContext) {
+    let (_, editor, cx) = setup(cx, doc(vec![p("مقدمہ اول"), p("دوسرا مقدمہ اور مقدمہ")]));
+    cx.simulate_keystrokes(&mod_key("f"));
+    assert!(editor.read_with(cx, |e, _| e.is_find_open()));
+    assert!(
+        !editor_focused(&editor, cx),
+        "focus moves to the find field"
+    );
+    cx.simulate_input("مقدمہ");
+    cx.run_until_parked();
+    let word = "مقدمہ".len();
+    assert_eq!(editor.read_with(cx, |e, _| e.find_matches().len()), 3);
+    assert_eq!(selected(&editor, cx), (vec![0], 0, word));
+    cx.simulate_keystrokes("enter");
+    let second = "دوسرا ".len();
+    assert_eq!(selected(&editor, cx), (vec![1], second, second + word));
+    cx.simulate_keystrokes("enter enter");
+    assert_eq!(
+        selected(&editor, cx),
+        (vec![0], 0, word),
+        "wraps to the first"
+    );
+    cx.simulate_keystrokes("shift-enter");
+    let third = "دوسرا مقدمہ اور ".len();
+    assert_eq!(selected(&editor, cx), (vec![1], third, third + word));
+    assert_eq!(editor.read_with(cx, |e, _| e.current_match()), Some(2));
+    cx.update(|window, cx| window.render_frame(cx));
+    cx.simulate_keystrokes("escape");
+    assert!(!editor.read_with(cx, |e, _| e.is_find_open()));
+    assert!(editor_focused(&editor, cx));
+    assert_eq!(selected(&editor, cx), (vec![1], third, third + word));
+}
+
+#[gpui_kit::test]
+fn find_seeds_from_selection_and_replaces(cx: &mut TestAppContext) {
+    let (_, editor, cx) = setup(cx, doc(vec![p("زید نے زید کو"), p("زید")]));
+    cx.update(|window, cx| {
+        editor.update(cx, |e, cx| {
+            e.set_selection(
+                missal_editor::Selection::new(
+                    missal_editor::model::selection::pos(BlockPath::top(0), 0),
+                    missal_editor::model::selection::pos(BlockPath::top(0), "زید".len()),
+                ),
+                window,
+                cx,
+            )
+        })
+    });
+    let replace = if cfg!(target_os = "macos") {
+        "cmd-alt-f".to_owned()
+    } else {
+        "ctrl-h".to_owned()
+    };
+    cx.simulate_keystrokes(&replace);
+    cx.run_until_parked();
+    assert!(editor.read_with(cx, |e, _| e.is_replace_open()));
+    assert_eq!(
+        editor.read_with(cx, |e, _| e.find_query().to_owned()),
+        "زید"
+    );
+    assert_eq!(editor.read_with(cx, |e, _| e.current_match()), Some(0));
+    cx.update(|window, cx| {
+        editor.update(cx, |e, cx| {
+            e.set_replacement("بکر", cx);
+            e.replace_current(window, cx);
+        })
+    });
+    assert_eq!(text_at(&editor, cx, &[0]), "بکر نے زید کو");
+    assert_eq!(editor.read_with(cx, |e, _| e.current_match()), Some(0));
+    cx.simulate_keystrokes(&mod_key("alt-enter"));
+    assert_eq!(text_at(&editor, cx, &[0]), "بکر نے بکر کو");
+    assert_eq!(text_at(&editor, cx, &[1]), "بکر");
+    assert!(editor.read_with(cx, |e, _| e.find_matches().is_empty()));
+    cx.simulate_keystrokes("escape");
+    cx.simulate_keystrokes(&mod_key("z"));
+    assert_eq!(text_at(&editor, cx, &[0]), "بکر نے زید کو");
+    assert_eq!(text_at(&editor, cx, &[1]), "زید");
+}
+
+#[gpui_kit::test]
+fn match_case_and_read_only_find(cx: &mut TestAppContext) {
+    let (_, editor, cx) = setup(cx, doc(vec![p("FIR fir")]));
+    cx.update(|_, cx| editor.update(cx, |e, cx| e.set_read_only(true, cx)));
+    cx.update(|window, cx| {
+        editor.update(cx, |e, cx| {
+            e.open_find(true, window, cx);
+            e.set_find_query("fir", window, cx);
+        })
+    });
+    assert!(!editor.read_with(cx, |e, _| e.is_replace_open()));
+    assert_eq!(editor.read_with(cx, |e, _| e.find_matches().len()), 2);
+    cx.simulate_keystrokes("alt-c");
+    assert!(editor.read_with(cx, |e, _| e.find_match_case()));
+    assert_eq!(editor.read_with(cx, |e, _| e.find_matches().len()), 1);
+    assert_eq!(selected(&editor, cx), (vec![0], 4, 7));
+    cx.update(|window, cx| editor.update(cx, |e, cx| e.replace_all(window, cx)));
+    assert_eq!(text_at(&editor, cx, &[0]), "FIR fir");
+}
+
+#[gpui_kit::test]
+fn find_matches_follow_edits_without_rescanning(cx: &mut TestAppContext) {
+    let (_, editor, cx) = setup(
+        cx,
+        doc(vec![
+            p("مقدمہ درج"),
+            grid(2, 2),
+            p("دوسرا مقدمہ"),
+            p("آخری"),
+        ]),
+    );
+    cx.update(|window, cx| {
+        editor.update(cx, |e, cx| {
+            e.open_find(false, window, cx);
+            e.set_find_query("مقدمہ", window, cx);
+            e.focus(window, cx);
+        })
+    });
+    let mut rng = Rng(0x5eed_f1d0);
+    for step in 0..160 {
+        cx.update(|window, cx| {
+            editor.update(cx, |e, cx| {
+                let paths = missal_editor::model::tree::all_text_paths(e.document());
+                let path = paths[rng.below(paths.len())].clone();
+                let len = e.core().block_len(&path).unwrap_or(0);
+                let text = e.core().block_text(&path).unwrap_or_default();
+                let mut offset = rng.below(len + 1);
+                while !text.is_char_boundary(offset) {
+                    offset -= 1;
+                }
+                let at = missal_editor::model::selection::pos(path, offset);
+                e.set_selection(missal_editor::Selection::caret(at), window, cx);
+                match rng.below(8) {
+                    0 | 1 => e.insert_text_command("مقدمہ ", window, cx),
+                    2 => e.insert_text_command("د", window, cx),
+                    3 => {
+                        e.run(window, cx, |core| core.split());
+                    }
+                    4 => {
+                        let word = rng.chance(30);
+                        e.run(window, cx, |core| core.delete(false, word));
+                    }
+                    5 => e.undo(window, cx),
+                    6 => e.redo(window, cx),
+                    _ => {
+                        e.run(window, cx, |core| core.paste_text("اول مقدمہ\nدوم مقدمہ"));
+                    }
+                }
+            })
+        });
+        editor.read_with(cx, |e, _| {
+            let fresh = e.core().find(&missal_editor::Query::new("مقدمہ", false));
+            assert_eq!(e.find_matches(), fresh.as_slice(), "step {step}");
+        });
+    }
+}
