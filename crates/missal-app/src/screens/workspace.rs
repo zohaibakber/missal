@@ -18,10 +18,11 @@ use missal_core::{
     DisplayMode, FieldCatalog, FirDocumentId, FirId, FirValues, Revision, TemplateId,
 };
 use missal_editor::{Editor, EditorEvent, EditorFields};
-use missal_store::{FirDocumentSummary, FirWorkspace};
+use missal_store::{DraftKey, FirDocumentSummary, FirWorkspace};
 use missal_text::{TextInput, TextInputEvent};
 
 use crate::app::{navigate, navigate_replace, open_print_preview};
+use crate::autosave::{self, Autosave, Autosaving};
 use crate::editor;
 use crate::packet;
 use crate::screens::fields_panel::{
@@ -157,6 +158,7 @@ pub struct WorkspaceScreen {
     editor: Entity<Editor>,
     editor_dirty: bool,
     saving: bool,
+    autosave: Autosave,
     slow: bool,
     add_open: bool,
     add_selected: HashSet<TemplateId>,
@@ -199,7 +201,10 @@ impl WorkspaceScreen {
                         this.toggle_field_names(cx);
                     }
                 }
-                EditorEvent::Edited => this.schedule_references(cx),
+                EditorEvent::Edited => {
+                    this.schedule_references(cx);
+                    autosave::edited(this, cx);
+                }
                 EditorEvent::SaveRequested => {}
             });
         let add_search = field_input(window, cx, Kind::SearchRtl, "تلاش", "");
@@ -270,6 +275,7 @@ impl WorkspaceScreen {
             editor,
             editor_dirty: false,
             saving: false,
+            autosave: Autosave::default(),
             slow: false,
             add_open: false,
             add_selected: HashSet::new(),
@@ -511,28 +517,43 @@ impl WorkspaceScreen {
     }
 
     fn open_document(&mut self, id: FirDocumentId, window: &mut Window, cx: &mut Context<Self>) {
+        autosave::flush(self, cx);
+        self.autosave.untrack();
         self.active = Some(id);
         self.document_state = DocumentState::Loading;
         cx.notify();
+        let key = DraftKey::FirDocument(id);
         run_db_in(
             window,
             cx,
-            move |store| store.fir_document(id),
+            move |store| Ok((store.fir_document(id)?, store.draft(key)?)),
             move |this, result, window, cx| {
                 if this.active != Some(id) {
                     return;
                 }
                 match result {
-                    Ok(record) => {
+                    Ok((record, draft)) => {
                         let Some(fields) = this.field_context(cx) else {
                             return;
                         };
                         this.loaded = Some((record.id, record.revision));
                         this.document_state = DocumentState::Idle;
-                        this.editor.update(cx, |editor, cx| {
-                            editor.load(record.document, fields, false, cx)
+                        this.autosave.track(key, record.revision, draft.is_some());
+                        let recovered = draft.is_some();
+                        this.editor.update(cx, |editor, cx| match draft {
+                            Some(draft) => {
+                                editor.restore(record.document, draft.document, fields, cx)
+                            }
+                            None => editor.load(record.document, fields, false, cx),
                         });
-                        this.editor_dirty = false;
+                        this.editor_dirty = this.editor.read(cx).is_dirty();
+                        if recovered {
+                            let weak = cx.entity().downgrade();
+                            autosave::announce_recovered(window, cx, move |_, cx| {
+                                weak.update(cx, |this, cx| this.discard_recovered(id, cx))
+                                    .ok();
+                            });
+                        }
                         this.refresh_references(cx);
                         this.take_pending_fields(window, cx);
                         this.ensure_prewarmed(cx);
@@ -602,6 +623,7 @@ impl WorkspaceScreen {
                         .update(cx, |this, cx| {
                             this.editor.update(cx, |editor, cx| editor.discard(cx));
                             this.editor_dirty = false;
+                            this.autosave.discard(cx);
                             this.open_document(id, window, cx);
                         })
                         .ok();
@@ -671,6 +693,12 @@ impl WorkspaceScreen {
                         this.editor
                             .update(cx, |editor, cx| editor.mark_saved(token, cx));
                         this.editor_dirty = this.editor.read(cx).is_dirty();
+                        this.autosave.saved(ack.revision);
+                        if this.editor_dirty {
+                            autosave::edited(this, cx);
+                        } else {
+                            this.autosave.cancel();
+                        }
                         if let Some(summary) =
                             this.documents.iter_mut().find(|document| document.id == id)
                         {
@@ -683,11 +711,28 @@ impl WorkspaceScreen {
                             then(this, window, cx);
                         }
                     }
-                    Err(error) => toast_error(window, cx, error.message()),
+                    Err(error) => {
+                        autosave::resume(this, cx);
+                        toast_error(window, cx, error.message());
+                    }
                 }
                 cx.notify();
             },
         );
+    }
+
+    pub fn discard_draft(&mut self, cx: &mut Context<Self>) {
+        self.autosave.discard(cx);
+    }
+
+    fn discard_recovered(&mut self, id: FirDocumentId, cx: &mut Context<Self>) {
+        if self.autosave.target().map(|(key, _)| key) != Some(DraftKey::FirDocument(id)) {
+            return;
+        }
+        self.editor.update(cx, |editor, cx| editor.discard(cx));
+        self.editor_dirty = false;
+        self.autosave.discard(cx);
+        cx.notify();
     }
 
     pub fn toggle_field_names(&mut self, cx: &mut Context<Self>) {
@@ -760,6 +805,7 @@ impl WorkspaceScreen {
                                 .map(|document| document.id);
                             this.active = None;
                             this.loaded = None;
+                            this.autosave.untrack();
                             match next {
                                 Some(next) => this.open_document(next, window, cx),
                                 None => {
@@ -1772,5 +1818,22 @@ impl crate::ui::titlebar::HeaderSource for WorkspaceScreen {
                     .on_click(cx.listener(|this, _, window, cx| this.toggle_panel(window, cx))),
             )
             .action(more)
+    }
+}
+
+impl Autosaving for WorkspaceScreen {
+    fn autosave(&mut self) -> &mut Autosave {
+        &mut self.autosave
+    }
+
+    fn autosave_ready(&self, _: &App) -> bool {
+        self.state == WorkspaceState::Ready
+            && self.document_state == DocumentState::Idle
+            && !self.saving
+            && self.loaded.is_some_and(|(id, _)| Some(id) == self.active)
+    }
+
+    fn autosave_editor(&self) -> &Entity<Editor> {
+        &self.editor
     }
 }

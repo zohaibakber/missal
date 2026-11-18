@@ -99,6 +99,18 @@ impl EditorCore {
         self.saved = 0;
     }
 
+    pub fn restore(&mut self, saved: Document, mut draft: Document) -> Option<Change> {
+        self.load(saved);
+        edit::ensure_text_block(&mut draft);
+        let total = self.doc.blocks.len();
+        let change = self.transact(0..total, Kind::Paste, None, move |doc, _, _| {
+            *doc = draft;
+            Some((caret_of(doc), Touch::Structure))
+        });
+        self.history.break_coalescing();
+        change
+    }
+
     fn fresh_state(&mut self) -> u64 {
         let state = self.next_state;
         self.next_state += 1;

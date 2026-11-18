@@ -212,6 +212,10 @@ impl Store {
             .prepare_cached("UPDATE document_bodies SET body = ?1 WHERE document_id = ?2")
             .and_then(|mut statement| statement.execute(params![pack(document), document_id.get()]))
             .map_err(failed(operation))?;
+        transaction
+            .prepare_cached("DELETE FROM document_drafts WHERE document_id = ?1")
+            .and_then(|mut statement| statement.execute([document_id.get()]))
+            .map_err(failed(operation))?;
         transaction.commit().map_err(failed(operation))?;
         Ok(SaveAck {
             id: document_id,
