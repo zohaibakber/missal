@@ -33,7 +33,7 @@ use crate::ui::{
 use crate::update::controller::{self, UpdateState, UpdateStatus};
 
 const COLUMN_WIDTH: f32 = 680.0;
-const NAV_WIDTH: f32 = 240.0;
+const NAV_WIDTH: f32 = 208.0;
 const FILTER_THRESHOLD: usize = 12;
 const FLASH: Duration = Duration::from_secs(2);
 
@@ -943,7 +943,7 @@ impl SettingsScreen {
             .max_w_full()
             .px(px(24.))
             .flex_shrink_0()
-            .when(!last, |this| this.mb(px(56.)))
+            .when(!last, |this| this.mb(px(40.)))
             .child(
                 card_header()
                     .mb(px(16.))
@@ -1630,27 +1630,45 @@ impl Render for SettingsScreen {
             .key_context("Settings")
             .track_focus(&self.focus)
             .size_full()
-            .gap(px(crate::theme::SHELL_INSET))
+            .rounded(px(crate::theme::RADIUS_XL))
+            .overflow_hidden()
+            .bg(palette.surface)
+            .shadow(palette.shadow_xs())
             .on_action(cx.listener(|this, _: &Save, window, cx| this.save_all(window, cx)))
             .on_action(
                 cx.listener(|this, _: &RenameTemplate, window, cx| this.rename_focused(window, cx)),
             )
             .child(nav)
+            .child(crate::ui::pane_divider())
             .child(
                 v_flex()
                     .id("settings-body")
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .pt(px(20.))
-                    .rounded(px(crate::theme::RADIUS_XL))
-                    .bg(palette.surface)
-                    .shadow(palette.shadow_sm())
+                    .pt(px(28.))
                     .overflow_y_scroll()
                     .track_scroll(&self.scroll)
                     .on_scroll(cx.listener(|_, _, _, cx| cx.notify()))
                     .items_center()
-                    .children(sections)
+                    .children(
+                        sections
+                            .into_iter()
+                            .enumerate()
+                            .flat_map(|(index, section)| {
+                                let divider = (index > 0).then(|| {
+                                    div()
+                                        .w(px(COLUMN_WIDTH))
+                                        .max_w_full()
+                                        .flex_shrink_0()
+                                        .px(px(24.))
+                                        .mb(px(40.))
+                                        .child(crate::ui::separator())
+                                        .into_any_element()
+                                });
+                                divider.into_iter().chain([section.into_any_element()])
+                            }),
+                    )
                     .child(div().h(px(420.)).flex_none()),
             )
     }

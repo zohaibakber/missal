@@ -432,12 +432,14 @@ impl FieldsPanel {
                         .child(count.to_string())
                 }))
         };
+        let line = Palette::get(cx).line;
         h_flex()
             .flex_none()
-            .h(px(TAB_HEIGHT + 8.))
-            .px(px(12.))
-            .pt(px(8.))
+            .h(px(TAB_HEIGHT + 4.))
+            .px(px(8.))
             .items_center()
+            .border_b_1()
+            .border_color(line)
             .child(
                 crate::ui::tab_list()
                     .flex_1()
@@ -971,9 +973,7 @@ impl Render for FieldsPanel {
             .w(px(DETAILS_RAIL_WIDTH))
             .flex_none()
             .h_full()
-            .rounded(px(crate::theme::RADIUS_XL))
             .bg(palette.surface)
-            .shadow(palette.shadow_sm())
             .child(self.tabs(empty, cx))
             .child(
                 v_flex()

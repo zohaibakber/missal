@@ -396,6 +396,7 @@ fn main() {
         .map(|index| args[index + 1].clone());
     let only_wp0 = args.iter().any(|argument| argument == "--wp0");
     let only_gate = args.iter().any(|argument| argument == "--gate");
+    let skip_gate = args.iter().any(|argument| argument == "--no-gate");
     let api = fake_api::start();
     for dark in [false, true] {
         if only.as_deref().is_some_and(|only| (only == "dark") != dark) {
@@ -404,7 +405,7 @@ fn main() {
         if !only_gate {
             run(dark, &out, only_wp0);
         }
-        if !only_wp0 {
+        if !only_wp0 && !skip_gate {
             run_gate(dark, &out, &api);
         }
     }

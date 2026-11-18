@@ -145,6 +145,7 @@ pub struct Preferences {
     pub window: Option<WindowPrefs>,
     pub table: TablePrefs,
     pub recent_firs: Vec<RecentFir>,
+    pub sidebar_hidden: bool,
 }
 
 impl Default for Preferences {
@@ -154,6 +155,7 @@ impl Default for Preferences {
             window: None,
             table: TablePrefs::default(),
             recent_firs: Vec::new(),
+            sidebar_hidden: false,
         }
     }
 }
@@ -182,6 +184,10 @@ impl Preferences {
         {
             preferences.theme = theme;
         }
+        preferences.sidebar_hidden = value
+            .get("sidebar_hidden")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         if let Some(recent) = value.get("recent_firs").and_then(Value::as_array) {
             preferences.recent_firs = recent
                 .iter()
@@ -244,6 +250,7 @@ impl Preferences {
     pub fn to_json(&self) -> Value {
         let mut object = serde_json::Map::new();
         object.insert("theme".into(), json!(self.theme.as_str()));
+        object.insert("sidebar_hidden".into(), json!(self.sidebar_hidden));
         object.insert(
             "recent_firs".into(),
             json!(

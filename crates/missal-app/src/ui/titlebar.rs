@@ -9,7 +9,7 @@ use gpui_kit::{
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::avatar::Avatar;
 
-use crate::app::{navigate, navigate_back, navigate_forward, open_palette, toggle_nav_menu};
+use crate::app::{navigate, navigate_back, navigate_forward, open_palette, toggle_sidebar};
 use crate::auth::AuthModel;
 use crate::state::Route;
 use crate::theme::{HEADER_HEIGHT, Palette};
@@ -84,17 +84,22 @@ pub struct Header {
     content: HeaderContent,
     can_back: bool,
     can_forward: bool,
-    menu_open: bool,
+    sidebar_open: bool,
     navigation: bool,
 }
 
 impl Header {
-    pub fn new(content: HeaderContent, can_back: bool, can_forward: bool, menu_open: bool) -> Self {
+    pub fn new(
+        content: HeaderContent,
+        can_back: bool,
+        can_forward: bool,
+        sidebar_open: bool,
+    ) -> Self {
         Header {
             content,
             can_back,
             can_forward,
-            menu_open,
+            sidebar_open,
             navigation: true,
         }
     }
@@ -104,7 +109,7 @@ impl Header {
             content,
             can_back: false,
             can_forward: false,
-            menu_open: false,
+            sidebar_open: false,
             navigation: false,
         }
     }
@@ -203,27 +208,35 @@ impl RenderOnce for Header {
             }))
             .when(self.navigation, |this| {
                 this.child(
-                    icon_button("nav-menu", IconName::Menu, "Menu")
-                        .keys("F10")
-                        .toggled(self.menu_open)
-                        .on_click(|_, window, cx| toggle_nav_menu(window, cx)),
-                )
-                .child(
-                    icon_button("history-back", IconName::ArrowLeft, "Back")
-                        .keys("Alt+Left")
-                        .disabled(!self.can_back)
-                        .on_click(|_, window, cx| navigate_back(window, cx)),
-                )
-                .child(
-                    icon_button("history-forward", IconName::ArrowRight, "Forward")
-                        .keys("Alt+Right")
-                        .disabled(!self.can_forward)
-                        .on_click(|_, window, cx| navigate_forward(window, cx)),
-                )
-                .child(
-                    icon_button("header-search", IconName::Search, "Search")
-                        .keys("Mod+K")
-                        .on_click(|_, window, cx| open_palette(window, cx)),
+                    h_flex()
+                        .flex_none()
+                        .items_center()
+                        .gap(px(2.))
+                        .when(self.sidebar_open, |this| {
+                            this.w(px(crate::theme::SIDEBAR_WIDTH) - inset - px(8.))
+                        })
+                        .child(
+                            icon_button("sidebar-toggle", IconName::PanelLeft, "Sidebar")
+                                .keys("Mod+\\")
+                                .on_click(|_, _, cx| toggle_sidebar(cx)),
+                        )
+                        .child(
+                            icon_button("history-back", IconName::ArrowLeft, "Back")
+                                .keys("Alt+Left")
+                                .disabled(!self.can_back)
+                                .on_click(|_, window, cx| navigate_back(window, cx)),
+                        )
+                        .child(
+                            icon_button("history-forward", IconName::ArrowRight, "Forward")
+                                .keys("Alt+Right")
+                                .disabled(!self.can_forward)
+                                .on_click(|_, window, cx| navigate_forward(window, cx)),
+                        )
+                        .child(
+                            icon_button("header-search", IconName::Search, "Search")
+                                .keys("Mod+K")
+                                .on_click(|_, window, cx| open_palette(window, cx)),
+                        ),
                 )
             })
             .child(

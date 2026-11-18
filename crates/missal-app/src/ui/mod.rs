@@ -11,6 +11,7 @@ pub mod part;
 pub mod parts;
 pub mod popup_menu;
 pub mod print_preview;
+pub mod sidebar;
 pub mod status;
 pub mod titlebar;
 pub mod toast;

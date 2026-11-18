@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use gpui_kit::component::v_flex;
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyView, App, AppContext, Context, Entity, FocusHandle, Focusable, Global, InteractiveElement,
     IntoElement, ParentElement, Render, StyleRefinement, Styled, Subscription, WeakEntity, Window,
@@ -207,6 +208,7 @@ impl AppShell {
             cx.observe(&models.nav, |_, _, cx| cx.notify()),
             cx.observe(&models.firs, |_, _, cx| cx.notify()),
             cx.observe(&models.templates, |_, _, cx| cx.notify()),
+            cx.observe(&models.prefs, |_, _, cx| cx.notify()),
             cx.observe_window_bounds(window, |this, window, cx| this.remember_bounds(window, cx)),
             cx.observe_window_appearance(window, |this, window, cx| {
                 let choice = this.models.prefs.read(cx).read().theme;
@@ -724,6 +726,13 @@ pub fn toggle_nav_menu(window: &mut Window, cx: &mut App) {
     });
 }
 
+pub fn toggle_sidebar(cx: &mut App) {
+    let prefs = Models::get(cx).prefs;
+    prefs.update(cx, |prefs, cx| {
+        prefs.update(cx, |p| p.sidebar_hidden = !p.sidebar_hidden)
+    });
+}
+
 pub fn import_word_file(window: &mut Window, cx: &mut App) {
     window.defer(cx, |window, cx| {
         with_shell(window, cx, |shell, window, cx| {
@@ -805,7 +814,13 @@ impl Render for AppShell {
             (nav.can_go_back(), nav.can_go_forward())
         };
         let content = self.screen.header(window, cx);
-        let header = Header::new(content, can_back, can_forward, self.nav_menu.is_some());
+        let sidebar_open = !self.models.prefs.read(cx).read().sidebar_hidden;
+        let header = Header::new(
+            content,
+            can_back,
+            can_forward,
+            sidebar_open && !crate::ui::sidebar::compact_for(self.route),
+        );
         v_flex()
             .id("app-shell")
             .key_context(SHELL)
@@ -822,6 +837,7 @@ impl Render for AppShell {
             .on_action(
                 cx.listener(|this, _: &ToggleNavMenu, window, cx| this.toggle_nav_menu(window, cx)),
             )
+            .on_action(cx.listener(|_, _: &ToggleSidebar, _, cx| toggle_sidebar(cx)))
             .on_action(cx.listener(|_, _: &ShowShortcuts, window, cx| show_shortcuts(window, cx)))
             .on_action(cx.listener(|_, _: &GoFirs, window, cx| navigate(Route::Firs, window, cx)))
             .on_action(
@@ -860,17 +876,30 @@ impl Render for AppShell {
             .on_action(cx.listener(|this, _: &ImportWord, window, cx| this.import_word(window, cx)))
             .child(header)
             .child(
-                div()
-                    .id("content")
+                gpui_kit::component::h_flex()
                     .flex_1()
                     .min_h_0()
                     .w_full()
-                    .px(px(crate::theme::SHELL_INSET))
-                    .pb(px(crate::theme::SHELL_INSET))
+                    .when(sidebar_open, |this| {
+                        this.child(crate::ui::sidebar::sidebar(
+                            self.route,
+                            crate::ui::sidebar::compact_for(self.route),
+                        ))
+                    })
                     .child(
-                        self.screen
-                            .view()
-                            .cached(StyleRefinement::default().size_full()),
+                        div()
+                            .id("content")
+                            .flex_1()
+                            .min_w_0()
+                            .h_full()
+                            .when(!sidebar_open, |this| this.pl(px(crate::theme::SHELL_INSET)))
+                            .pr(px(crate::theme::SHELL_INSET))
+                            .pb(px(crate::theme::SHELL_INSET))
+                            .child(
+                                self.screen
+                                    .view()
+                                    .cached(StyleRefinement::default().size_full()),
+                            ),
                     ),
             )
             .children(self.nav_menu.clone().map(|menu| menu.into_any_element()))

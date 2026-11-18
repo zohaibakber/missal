@@ -10,6 +10,7 @@ actions!(
         ToggleCommandPalette,
         ShowShortcuts,
         ToggleNavMenu,
+        ToggleSidebar,
         FocusSearch,
         Save,
         BlurFocus,
@@ -108,6 +109,7 @@ const fn shortcut(keys: &'static str, label: &'static str, group: Group) -> Shor
 
 pub const SHORTCUTS: &[Shortcut] = &[
     shortcut("Mod+K", "Search and commands", Group::General),
+    shortcut("Mod+\\", "Show or hide the sidebar", Group::General),
     shortcut("F10", "Open the menu", Group::General),
     shortcut("?", "Keyboard shortcuts", Group::General),
     shortcut("G then H", "Go to FIRs", Group::General),
@@ -184,6 +186,7 @@ pub fn bind_keys(cx: &mut App) {
         binding(cx, "?", ShowShortcuts, Some(NOT_TYPING)),
         binding(cx, "shift-/", ShowShortcuts, Some(NOT_TYPING)),
         binding(cx, "f10", ToggleNavMenu, Some(SHELL)),
+        binding(cx, "secondary-\\", ToggleSidebar, Some(SHELL)),
         binding(cx, "/", FocusSearch, Some(NOT_TYPING)),
         binding(cx, "secondary-s", Save, None),
         binding(cx, "escape", BlurFocus, Some(SHELL)),
