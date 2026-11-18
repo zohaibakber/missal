@@ -1,6 +1,6 @@
 [package]
 name = "missal-docx"
-description = "Imports Word (.docx) documents as Missal documents"
+description = "Imports and exports Word (.docx) documents as Missal documents"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
