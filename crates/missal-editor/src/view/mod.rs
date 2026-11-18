@@ -311,6 +311,27 @@ impl Editor {
         cx.notify();
     }
 
+    pub fn restore(
+        &mut self,
+        saved: Document,
+        draft: Document,
+        fields: EditorFields,
+        cx: &mut Context<Self>,
+    ) {
+        self.fields = fields;
+        self.core
+            .set_fields(self.fields.catalog.clone(), self.fields.markers.clone());
+        self.core.restore(saved, draft);
+        self.relayout_all();
+        self.scroll = PagePoint::default();
+        self.goal_x = None;
+        self.drag = None;
+        self.field_menu_open = false;
+        self.refresh_dirty(cx);
+        cx.emit(EditorEvent::Edited);
+        cx.notify();
+    }
+
     pub fn reset(&mut self, cx: &mut Context<Self>) {
         self.read_only = false;
         self.mode_toggle = false;
