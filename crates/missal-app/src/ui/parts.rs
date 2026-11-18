@@ -9,7 +9,7 @@ use missal_text::{Align, LineHeight, label};
 
 use crate::theme::{
     ICON, ICON_XS, KEYCAP, Palette, RADIUS, RADIUS_2XL, RADIUS_CHIP, RADIUS_SM, RADIUS_XL,
-    SIDEBAR_ITEM, TABLE_HEAD,
+    SIDEBAR_ITEM, TABLE_FOOT, TABLE_HEAD,
 };
 use crate::ui::part::{Part, part};
 use crate::ui::{sized_icon, tabular};
@@ -145,6 +145,23 @@ pub fn table_body() -> Part {
             .rounded(px(RADIUS_XL))
             .bg(palette.surface)
             .shadow(palette.shadow_xs())
+    })
+}
+
+pub fn table_footer() -> Part {
+    part(|base, palette| {
+        base.h_flex()
+            .flex_none()
+            .h(px(TABLE_FOOT))
+            .px(px(10.))
+            .pt(px(4.))
+            .gap(px(12.))
+            .items_center()
+            .justify_between()
+            .text_size(px(13.))
+            .line_height(px(18.))
+            .text_color(palette.ink_muted)
+            .font_features(tabular())
     })
 }
 
