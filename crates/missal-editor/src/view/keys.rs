@@ -1,5 +1,7 @@
 use gpui_kit::{App, KeyBinding, actions};
 
+use super::find::{FIND_CONTEXT, QUERY_CONTEXT};
+
 actions!(
     editor,
     [
@@ -26,13 +28,24 @@ actions!(
         InsertField,
         ParagraphUp,
         ParagraphDown,
+        Find,
+        FindReplace,
+        FindNext,
+        FindPrevious,
+        CloseFind,
+        ReplaceAll,
+        ToggleMatchCase,
     ]
 );
 
 pub const KEY_CONTEXT: &str = "Editor";
 
 fn key(keys: &str, action: impl gpui_kit::Action, cx: &App) -> KeyBinding {
-    let predicate = gpui_kit::KeyBindingContextPredicate::parse(KEY_CONTEXT)
+    key_in(keys, action, KEY_CONTEXT, cx)
+}
+
+fn key_in(keys: &str, action: impl gpui_kit::Action, context: &str, cx: &App) -> KeyBinding {
+    let predicate = gpui_kit::KeyBindingContextPredicate::parse(context)
         .ok()
         .map(std::rc::Rc::new);
     KeyBinding::load(keys, Box::new(action), predicate, false, None, cx).expect("a valid keystroke")
@@ -64,8 +77,22 @@ pub fn bind_keys(cx: &mut App) {
         key("secondary--", ZoomOut, cx),
         key("secondary-0", ZoomReset, cx),
         key("secondary-shift-f", InsertField, cx),
+        key("secondary-f", Find, cx),
+        key("f3", FindNext, cx),
+        key("shift-f3", FindPrevious, cx),
+        key("secondary-g", FindNext, cx),
+        key("secondary-shift-g", FindPrevious, cx),
+        key_in("escape", CloseFind, FIND_CONTEXT, cx),
+        key_in("shift-enter", FindPrevious, QUERY_CONTEXT, cx),
+        key_in("secondary-alt-enter", ReplaceAll, FIND_CONTEXT, cx),
+        key_in("alt-c", ToggleMatchCase, FIND_CONTEXT, cx),
     ];
     cx.bind_keys(bindings);
+    if cfg!(target_os = "macos") {
+        cx.bind_keys([key("cmd-alt-f", FindReplace, cx)]);
+    } else {
+        cx.bind_keys([key("ctrl-h", FindReplace, cx)]);
+    }
     if !cfg!(target_os = "macos") {
         cx.bind_keys([
             KeyBinding::new("ctrl-up", ParagraphUp, c),

@@ -55,6 +55,8 @@ fn sync_theme(cx: &mut App) {
         selection: palette
             .accent
             .opacity(if palette.dark { 0.36 } else { 0.22 }),
+        find_match: crate::theme::hex_alpha(0xfacc15, if palette.dark { 0.3 } else { 0.42 }),
+        find_current: crate::theme::hex_alpha(0xf97316, if palette.dark { 0.55 } else { 0.5 }),
         shadow: gpui_kit::black().opacity(0.05),
     }
     .install(cx);

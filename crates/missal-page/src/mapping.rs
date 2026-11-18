@@ -204,6 +204,36 @@ impl Packet {
         rects
     }
 
+    pub fn page_ranges<T>(
+        &self,
+        page: usize,
+        ranges: &[T],
+        key: impl Fn(&T) -> (&BlockPath, std::ops::Range<usize>),
+    ) -> Vec<(usize, Rect)> {
+        let mut rects = Vec::new();
+        if ranges.is_empty() {
+            return rects;
+        }
+        for piece in self.page_text_pieces(page) {
+            let first = ranges.partition_point(|r| key(r).0 < &piece.path);
+            for (index, item) in ranges.iter().enumerate().skip(first) {
+                let (path, range) = key(item);
+                if path != &piece.path {
+                    break;
+                }
+                if range.start >= range.end {
+                    continue;
+                }
+                for (line, rect) in piece.node.selection_local(range) {
+                    if piece.lines.contains(&line) {
+                        rects.push((index, rect.translate(piece.dx, piece.dy)));
+                    }
+                }
+            }
+        }
+        rects
+    }
+
     pub fn hit_test(&self, page: usize, point: Point) -> Option<Position> {
         let (document, _) = self.locate_page(page)?;
         let mut best: Option<(f32, f32, &TextPiece, usize)> = None;

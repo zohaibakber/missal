@@ -205,6 +205,33 @@ fn run(dark: bool, out: &Path) {
         h.shot("04-caret-in-table-cell");
     }
 
+    h.select(&editor, Selection::caret(pos(start.clone(), 0)));
+    {
+        let editor = editor.clone();
+        h.with(move |window, cx| {
+            editor.update(cx, |e, cx| {
+                e.open_find(false, window, cx);
+                e.set_find_query("مقدمہ", window, cx);
+                e.find_next(window, cx);
+            })
+        });
+    }
+    h.shot("07-find");
+    {
+        let editor = editor.clone();
+        h.with(move |window, cx| {
+            editor.update(cx, |e, cx| {
+                e.open_find(true, window, cx);
+                e.set_replacement("کیس", cx);
+            })
+        });
+    }
+    h.shot("08-find-replace");
+    {
+        let editor = editor.clone();
+        h.with(move |window, cx| editor.update(cx, |e, cx| e.close_find(window, cx)));
+    }
+
     h.with(|window, cx| window.close_all_dialogs(cx));
     let editor_dirty = h.cx.update(|cx| editor.read(cx).is_dirty());
     if editor_dirty {

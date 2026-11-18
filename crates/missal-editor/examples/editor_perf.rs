@@ -225,4 +225,74 @@ fn main() {
         samples.push((t.elapsed(), edit));
     }
     report("select all then bold", samples);
+
+    let mut big = document.clone();
+    for _ in 0..19 {
+        big.blocks.extend(document.blocks.iter().cloned());
+    }
+    cx.update(|cx| editor.update(cx, |e, cx| e.load(big, fields.clone(), false, cx)));
+    draw(&mut cx, handle);
+    let pages = cx.update(|cx| editor.read(cx).packet().page_count());
+    println!("find: document repeated 20 times ({pages} pages)");
+    cx.update_window(handle, |_, window, cx| {
+        editor.update(cx, |e, cx| e.open_find(true, window, cx))
+    })
+    .unwrap();
+    draw(&mut cx, handle);
+    let query = "مقدمہ";
+    let mut samples = Vec::new();
+    for end in query.char_indices().map(|(i, c)| i + c.len_utf8()) {
+        let t = Instant::now();
+        cx.update_window(handle, |_, window, cx| {
+            editor.update(cx, |e, cx| e.set_find_query(&query[..end], window, cx))
+        })
+        .unwrap();
+        let edit = t.elapsed();
+        draw(&mut cx, handle);
+        samples.push((t.elapsed(), edit));
+    }
+    let found = cx.update(|cx| editor.read(cx).find_matches().len());
+    report(&format!("typing the query ({found} matches)"), samples);
+    let mut samples = Vec::new();
+    for _ in 0..40 {
+        let t = Instant::now();
+        cx.update_window(handle, |_, window, cx| {
+            editor.update(cx, |e, cx| e.find_next(window, cx))
+        })
+        .unwrap();
+        let edit = t.elapsed();
+        draw(&mut cx, handle);
+        samples.push((t.elapsed(), edit));
+    }
+    report("next match", samples);
+    place(&mut cx, outside[outside.len() / 2].clone(), true);
+    keystrokes(&mut cx, "keystroke with find open");
+    let mut samples = Vec::new();
+    for with in ["مقدمہ نمبر", "مقدمہ"] {
+        cx.update_window(handle, |_, window, cx| {
+            editor.update(cx, |e, cx| {
+                e.set_find_query(
+                    if with == "مقدمہ" {
+                        "مقدمہ نمبر"
+                    } else {
+                        "مقدمہ"
+                    },
+                    window,
+                    cx,
+                );
+                e.set_replacement(with, cx);
+            })
+        })
+        .unwrap();
+        draw(&mut cx, handle);
+        let t = Instant::now();
+        cx.update_window(handle, |_, window, cx| {
+            editor.update(cx, |e, cx| e.replace_all(window, cx))
+        })
+        .unwrap();
+        let edit = t.elapsed();
+        draw(&mut cx, handle);
+        samples.push((t.elapsed(), edit));
+    }
+    report("replace all", samples);
 }

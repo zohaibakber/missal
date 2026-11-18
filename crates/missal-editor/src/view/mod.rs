@@ -1,4 +1,5 @@
 mod element;
+mod find;
 pub mod keys;
 mod theme;
 mod toolbar;
@@ -30,6 +31,7 @@ use crate::model::selection::{document_end, document_start, effective_range, end
 use crate::model::{Change, EditorCore, Fragment, Selection, clip};
 
 pub use element::PagesElement;
+pub use find::FIND_CONTEXT;
 pub use keys::KEY_CONTEXT;
 pub use theme::EditorTheme;
 
@@ -166,6 +168,7 @@ pub struct Editor {
     field_search: Entity<TextInput>,
     menu_selection: Option<Selection>,
     clipboard: Option<(String, Fragment)>,
+    pub(crate) find: find::FindState,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -209,7 +212,8 @@ impl Editor {
                 .text_size(16.0)
         });
         let zoom_override = cx.try_global::<SessionZoom>().and_then(|zoom| zoom.0);
-        let subscriptions = vec![
+        let find = find::FindState::new(window, cx);
+        let mut subscriptions = vec![
             cx.on_focus(&focus, window, |this, _, cx| {
                 this.restart_blink(cx);
                 cx.notify();
@@ -246,6 +250,7 @@ impl Editor {
                 },
             ),
         ];
+        subscriptions.extend(find.subscribe(window, cx));
         let fields = EditorFields::default();
         let core = EditorCore::new(
             Document::empty(),
@@ -283,6 +288,7 @@ impl Editor {
             field_search,
             menu_selection: None,
             clipboard: None,
+            find,
             _subscriptions: subscriptions,
         }
     }
@@ -307,6 +313,7 @@ impl Editor {
         self.goal_x = None;
         self.drag = None;
         self.field_menu_open = false;
+        self.find_on_load();
         self.refresh_dirty(cx);
         cx.notify();
     }
@@ -341,6 +348,7 @@ impl Editor {
         self.field_query.clear();
         self.field_search
             .update(cx, |input, cx| input.set_text("", cx));
+        self.find_on_reset(cx);
         self.load(Document::empty(), EditorFields::default(), false, cx);
     }
 
@@ -514,6 +522,7 @@ impl Editor {
 
     pub fn apply(&mut self, change: Option<Change>, _window: &mut Window, cx: &mut Context<Self>) {
         if let Some(change) = change {
+            self.find_after_change(&change.edit);
             let presentation = self.fields.presentation();
             let total = self.core.document().blocks.len();
             let edit = match change.edit {
@@ -624,6 +633,7 @@ impl Editor {
 
     pub(crate) fn layout_frame(&mut self, bounds: Bounds<Pixels>) {
         self.viewport = Some(bounds);
+        self.refresh_find();
         let width = f32::from(bounds.size.width);
         let height = f32::from(bounds.size.height);
         let zoom = self.zoom_override.unwrap_or_else(|| self.fit_zoom(width));
@@ -1432,6 +1442,10 @@ handlers! {
     keys::InsertField => |this, window, cx| this.open_field_menu(true, window, cx);
     keys::ParagraphUp => |this, window, cx| this.paragraph_move(false, false, window, cx);
     keys::ParagraphDown => |this, window, cx| this.paragraph_move(true, false, window, cx);
+    keys::Find => |this, window, cx| this.open_find(false, window, cx);
+    keys::FindReplace => |this, window, cx| this.open_find(true, window, cx);
+    keys::FindNext => |this, window, cx| this.find_next(window, cx);
+    keys::FindPrevious => |this, window, cx| this.find_previous(window, cx);
 }
 
 impl EntityInputHandler for Editor {
@@ -1613,6 +1627,7 @@ impl Render for Editor {
         let root = self.register_actions(root, cx);
         let toolbar = (!self.read_only).then(|| self.render_toolbar(window, cx));
         let zoom = self.render_zoom(cx);
+        let find = self.render_find_bar(cx);
         root.children(toolbar).child(
             div()
                 .id("editor-canvas")
@@ -1622,6 +1637,7 @@ impl Render for Editor {
                 .w_full()
                 .when(self.read_only, |this| this.opacity(1.0))
                 .child(PagesElement::new(entity))
+                .children(find)
                 .child(zoom),
         )
     }

@@ -147,6 +147,19 @@ pub const SHORTCUTS: &[Shortcut] = &[
     shortcut("Mod+R", "Align right", Group::Editor),
     shortcut("Mod+J", "Justify", Group::Editor),
     shortcut("Mod+Shift+F", "Insert field", Group::Editor),
+    shortcut("Mod+F", "Find", Group::Editor),
+    shortcut(
+        if cfg!(target_os = "macos") {
+            "Mod+Alt+F"
+        } else {
+            "Mod+H"
+        },
+        "Find and replace",
+        Group::Editor,
+    ),
+    shortcut("Enter", "Next match", Group::Editor),
+    shortcut("Shift+Enter", "Previous match", Group::Editor),
+    shortcut("Mod+Alt+Enter", "Replace all", Group::Editor),
     shortcut("Shift+N", "New template", Group::Templates),
     shortcut("F2", "Rename template", Group::Templates),
     shortcut("Alt+Down", "Next template", Group::Templates),
