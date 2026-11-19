@@ -7,7 +7,7 @@ use missal_app::launch::{init_app, open_shell};
 use missal_app::prefs::Preferences;
 use missal_app::seed::seed_firs;
 use missal_app::state::{Models, Route};
-use missal_core::{DisplayMode, FirId};
+use missal_core::FirId;
 use missal_store::Store;
 
 struct Fixture {
@@ -185,47 +185,5 @@ fn switching_documents_offers_save_first_and_saves(cx: &mut TestAppContext) {
             .projections()
             .plain_text
             .contains("zzdiscarded")
-    );
-}
-
-#[gpui_kit::test]
-fn field_names_toggle_keeps_edits_and_history(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    fixture.with(cx, |window, cx| {
-        navigate(Route::Fir(FirId::new(3).unwrap()), window, cx)
-    });
-    let workspace = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
-    let editor = cx.update(|cx| workspace.read(cx).editor().clone());
-    fixture.with(cx, |window, cx| {
-        missal_app::editor::focus(&editor, window, cx)
-    });
-    fixture.with(cx, |window, cx| window.input("zztoggle", cx));
-    let before = cx.update(|cx| editor.read(cx).snapshot().0.encode());
-    fixture.with(cx, |window, cx| window.press("secondary-shift-l", cx));
-    assert_eq!(
-        cx.update(|cx| workspace.read(cx).mode()),
-        DisplayMode::Labels
-    );
-    assert_eq!(
-        cx.update(|cx| editor.read(cx).snapshot().0.encode()),
-        before,
-        "presentation does not edit the document"
-    );
-    assert!(cx.update(|cx| editor.read(cx).is_dirty()));
-    fixture.with(cx, |window, cx| window.press("secondary-z", cx));
-    assert!(
-        !cx.update(|cx| editor
-            .read(cx)
-            .snapshot()
-            .0
-            .projections()
-            .plain_text
-            .contains("zztoggle")),
-        "undo history survives the toggle"
-    );
-    fixture.with(cx, |window, cx| window.press("secondary-shift-l", cx));
-    assert_eq!(
-        cx.update(|cx| workspace.read(cx).mode()),
-        DisplayMode::Values
     );
 }

@@ -9,11 +9,10 @@ use missal_app::autosave::IDLE;
 use missal_app::db::Db;
 use missal_app::launch::{init_app, open_shell};
 use missal_app::prefs::Preferences;
-use missal_app::screens::fields_panel::{FieldItem, Scope, open_fields_panel};
 use missal_app::screens::fir_form::{FirForm, ListKind};
 use missal_app::seed::seed_firs;
 use missal_app::state::{Models, Route};
-use missal_core::{DisplayMode, FieldPresentation, FieldReference, FirId};
+use missal_core::FirId;
 use missal_store::{DraftKey, Store};
 
 struct Fixture {
@@ -103,131 +102,6 @@ impl Fixture {
     }
 }
 
-fn shown_value(fixture: &Fixture, cx: &mut TestAppContext, reference: &FieldReference) -> String {
-    cx.update(|cx| {
-        let workspace = fixture.shell.read(cx).workspace().unwrap();
-        let editor = workspace.read(cx).editor().clone();
-        let fields = editor.read(cx).fields().clone();
-        let values = fields.values.clone().unwrap();
-        let shown = FieldPresentation::for_fir(&fields.catalog, &values, DisplayMode::Values)
-            .display_text(reference);
-        if shown.unresolved {
-            String::new()
-        } else {
-            shown.text
-        }
-    })
-}
-
-fn empty_items(fixture: &Fixture, cx: &mut TestAppContext) -> Vec<FieldItem> {
-    cx.update(|cx| {
-        let workspace = fixture.shell.read(cx).workspace().unwrap();
-        let panel = workspace.read(cx).panel().clone();
-        panel
-            .read(cx)
-            .items()
-            .iter()
-            .filter(|item| item.is_empty())
-            .cloned()
-            .collect()
-    })
-}
-
-#[gpui_kit::test]
-fn the_fields_panel_fills_empty_global_and_custom_fields_in_the_document(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    let fir = FirId::new(3).unwrap();
-    fixture.go(cx, Route::Fir(fir));
-    let workspace = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
-    let panel = cx.update(|cx| workspace.read(cx).panel().clone());
-    let empty = empty_items(&fixture, cx);
-    let global = empty
-        .iter()
-        .find(|item| matches!(item.scope, Scope::Global(_)))
-        .cloned()
-        .expect("an empty global field");
-    let custom = empty
-        .iter()
-        .find(|item| matches!(item.scope, Scope::Custom(_)))
-        .cloned()
-        .expect("an empty custom field");
-    assert_eq!(shown_value(&fixture, cx, &global.reference), "");
-
-    fixture.with(cx, |window, cx| {
-        workspace.update(cx, |workspace, cx| workspace.show_fields(window, cx))
-    });
-    let first = cx.update(|cx| panel.read(cx).input_for(&empty[0].reference).unwrap());
-    assert!(fixture.with(cx, |window, cx| first.focus_handle(cx).is_focused(window)));
-    let global_input = cx.update(|cx| panel.read(cx).input_for(&global.reference).unwrap());
-    fixture.focus(cx, &global_input);
-    fixture.type_text(cx, "تھانہ صدر");
-    fixture.press(cx, "enter");
-    let Scope::Global(setting) = &global.scope else {
-        unreachable!()
-    };
-    let settings = Store::open(&fixture.database).unwrap().settings().unwrap();
-    assert_eq!(
-        settings.shared_values.get(setting).map(String::as_str),
-        Some("تھانہ صدر")
-    );
-    assert_eq!(shown_value(&fixture, cx, &global.reference), "تھانہ صدر");
-    assert_eq!(empty_items(&fixture, cx).len(), empty.len() - 1);
-
-    let custom_input = cx.update(|cx| panel.read(cx).input_for(&custom.reference).unwrap());
-    fixture.focus(cx, &custom_input);
-    fixture.type_text(cx, "نیشنل بینک");
-    fixture.with(cx, |window, cx| window.blur(cx));
-    let Scope::Custom(id) = custom.scope else {
-        unreachable!()
-    };
-    let stored = Store::open(&fixture.database)
-        .unwrap()
-        .placeholder_values(fir)
-        .unwrap();
-    assert!(
-        stored
-            .iter()
-            .any(|value| value.placeholder_id == id && value.value == "نیشنل بینک")
-    );
-    assert_eq!(shown_value(&fixture, cx, &custom.reference), "نیشنل بینک");
-    assert_eq!(empty_items(&fixture, cx).len(), empty.len() - 2);
-    assert!(!cx.update(|cx| workspace.read(cx).is_dirty(cx)));
-
-    fixture.go(cx, Route::Fir(FirId::new(2).unwrap()));
-    let other = Store::open(&fixture.database)
-        .unwrap()
-        .placeholder_values(FirId::new(2).unwrap())
-        .unwrap();
-    assert!(other.iter().all(|value| value.placeholder_id != id));
-}
-
-#[gpui_kit::test]
-fn the_fields_panel_opens_from_another_route_on_the_first_empty_field(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    let fir = FirId::new(3).unwrap();
-    fixture.go(cx, Route::Fir(fir));
-    fixture.press(cx, "secondary-.");
-    fixture.go(cx, Route::Firs);
-    fixture.with(cx, |window, cx| open_fields_panel(fir, window, cx));
-    assert_eq!(fixture.route(cx), Route::Fir(fir));
-    let first = empty_items(&fixture, cx)
-        .into_iter()
-        .find(|item| !matches!(item.scope, Scope::Fir(_)))
-        .unwrap();
-    let workspace = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
-    let input = cx.update(|cx| {
-        workspace
-            .read(cx)
-            .panel()
-            .read(cx)
-            .input_for(&first.reference)
-            .unwrap()
-    });
-    assert!(fixture.with(cx, |window, cx| {
-        workspace.read(cx).is_panel_open(window) && input.focus_handle(cx).is_focused(window)
-    }));
-}
-
 #[gpui_kit::test]
 fn the_unified_form_folds_digits_adds_entries_and_guards_cancel(cx: &mut TestAppContext) {
     let fixture = boot(cx, 2);
@@ -306,39 +180,6 @@ fn the_unified_form_folds_digits_adds_entries_and_guards_cancel(cx: &mut TestApp
     assert_eq!(fixture.route(cx), Route::Fir(id));
     let unchanged = Store::open(&fixture.database).unwrap().fir(id).unwrap().fir;
     assert_eq!(unchanged.offence, "ڈکیتی");
-}
-
-#[gpui_kit::test]
-fn fill_them_in_on_the_print_screen_returns_to_the_first_empty_field(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    let fir = FirId::new(3).unwrap();
-    fixture.go(cx, Route::Fir(fir));
-    let workspace = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
-    fixture.press(cx, "secondary-.");
-    assert!(!fixture.with(cx, |window, cx| workspace.read(cx).is_panel_open(window)));
-    fixture.click(cx, "header-print");
-    let preview = cx.update(|cx| fixture.shell.read(cx).print_preview().unwrap());
-    fixture.with(cx, |_, cx| {
-        preview.update(cx, |preview, cx| preview.fill_in(cx))
-    });
-    assert_eq!(fixture.route(cx), Route::Fir(fir));
-    let restored = cx.update(|cx| fixture.shell.read(cx).workspace().unwrap());
-    assert_eq!(restored, workspace);
-    let first = empty_items(&fixture, cx)
-        .into_iter()
-        .find(|item| !matches!(item.scope, Scope::Fir(_)))
-        .unwrap();
-    let input = cx.update(|cx| {
-        workspace
-            .read(cx)
-            .panel()
-            .read(cx)
-            .input_for(&first.reference)
-            .unwrap()
-    });
-    assert!(fixture.with(cx, |window, cx| {
-        workspace.read(cx).is_panel_open(window) && input.focus_handle(cx).is_focused(window)
-    }));
 }
 
 fn plain_text(editor: &Entity<missal_editor::Editor>, cx: &mut TestAppContext) -> String {

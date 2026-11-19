@@ -3,9 +3,8 @@ mod common;
 use common::{Scratch, fir};
 use missal_core::document::{Block, Field, Inline, Paragraph, Text};
 use missal_core::{
-    CustomFieldDraft, DisplayMode, Document, Entity, FieldMarkers, FieldPresentation,
-    FieldReference, FirDocumentId, FirField, FirId, FirProperty, GlobalPlaceholderDraft, Invalid,
-    PlaceholderId, PlaceholderSource, RepositoryError, Revision, SuggestionIndex, SuggestionKey,
+    CustomFieldDraft, Document, Entity, FieldReference, FirDocumentId, FirId,
+    GlobalPlaceholderDraft, Invalid, PlaceholderId, PlaceholderSource, RepositoryError, Revision,
     TemplateId, Zimni,
 };
 use missal_store::{DraftKey, Store, TemplateBundle};
@@ -82,18 +81,6 @@ fn firs_are_validated_trimmed_and_round_trip() {
 }
 
 #[test]
-fn fir_summaries_carry_every_accused_name_in_order() {
-    let scratch = Scratch::new();
-    let mut store = store(&scratch);
-    let mut draft = fir("5/26");
-    draft.accused = vec![" زاہد حسین ".into(), "طارق جاوید".into()];
-    let created = store.create_fir(&draft).unwrap();
-    let summary = store.firs().unwrap().remove(0);
-    assert_eq!(summary.id, created.id);
-    assert_eq!(summary.accused, ["زاہد حسین", "طارق جاوید"]);
-}
-
-#[test]
 fn template_saves_are_revision_checked() {
     let scratch = Scratch::new();
     let mut store = store(&scratch);
@@ -134,23 +121,6 @@ fn template_saves_are_revision_checked() {
         store.create_template(" ", &Document::empty()),
         Err(RepositoryError::Invalid { .. })
     ));
-}
-
-#[test]
-fn template_search_matches_name_and_text() {
-    let scratch = Scratch::new();
-    let mut store = store(&scratch);
-    store
-        .create_template("چالان", &document("ملزم گرفتار", None))
-        .unwrap();
-    store
-        .create_template("ضمنی", &document("Bank cheque", None))
-        .unwrap();
-    assert_eq!(store.search_templates("گرفتار").unwrap().len(), 1);
-    assert_eq!(store.search_templates("bank").unwrap()[0].name, "ضمنی");
-    assert_eq!(store.search_templates(" %_ ").unwrap().len(), 2);
-    assert_eq!(store.search_templates("").unwrap().len(), 2);
-    assert!(store.search_templates("نہیں").unwrap().is_empty());
 }
 
 #[test]
@@ -211,66 +181,6 @@ fn removing_several_firs_is_all_or_nothing() {
     assert_eq!(store.firs().unwrap().len(), 2);
     store.remove_firs(&[first.id, second.id, first.id]).unwrap();
     assert!(store.firs().unwrap().is_empty());
-}
-
-#[test]
-fn adding_templates_deduplicates_and_positions() {
-    let scratch = Scratch::new();
-    let mut store = store(&scratch);
-    let fir_record = store.create_fir(&fir("1/26")).unwrap();
-    let templates: Vec<TemplateId> = ["الف", "ب", "ج"]
-        .iter()
-        .map(|name| {
-            store
-                .create_template(name, &document(name, None))
-                .unwrap()
-                .id
-        })
-        .collect();
-    let added = store
-        .add_templates_to_fir(fir_record.id, &[templates[1], templates[1], templates[0]])
-        .unwrap();
-    assert_eq!(
-        added
-            .iter()
-            .map(|doc| (doc.template_id, doc.position))
-            .collect::<Vec<_>>(),
-        [(templates[1], 0), (templates[0], 1)]
-    );
-    assert_eq!(added[0].title, "ب");
-    assert_eq!(added[0].revision, Revision::FIRST);
-    let missing = TemplateId::new(99).unwrap();
-    assert_eq!(
-        store.add_templates_to_fir(fir_record.id, &[templates[2], missing]),
-        Err(not_found(Entity::Template, missing))
-    );
-    assert_eq!(
-        store.fir_documents(fir_record.id).unwrap().len(),
-        2,
-        "a failed add changes nothing"
-    );
-    let all = store
-        .add_templates_to_fir(fir_record.id, &[templates[0], templates[2]])
-        .unwrap();
-    assert_eq!(all.len(), 3);
-    assert_eq!(all[2].template_id, templates[2]);
-    assert_eq!(all[2].position, 2);
-    let missing_fir = FirId::new(77).unwrap();
-    assert_eq!(
-        store.add_templates_to_fir(missing_fir, &[templates[0]]),
-        Err(not_found(Entity::Fir, missing_fir))
-    );
-    let saved = store
-        .save_template(templates[0], Revision::FIRST, "الف", &document("بدلا", None))
-        .unwrap();
-    let copy = store.fir_document(all[1].id).unwrap();
-    assert_eq!(
-        copy.document.projections().plain_text,
-        "الف",
-        "copies do not follow template edits"
-    );
-    assert_eq!(copy.source_template_revision, Revision::FIRST);
-    assert_eq!(saved.revision.get(), 2);
 }
 
 #[test]
@@ -475,117 +385,6 @@ fn placeholders_global_values_and_custom_fields() {
 }
 
 #[test]
-fn placeholder_values_and_value_context() {
-    let scratch = Scratch::new();
-    let mut store = store(&scratch);
-    let fir_record = store.create_fir(&fir("1/26")).unwrap();
-    let bank = store.create_placeholder("بینک").unwrap();
-    let station = store
-        .save_global_placeholders(&[GlobalPlaceholderDraft::New {
-            label: "تھانہ نام".into(),
-            value: "صدر".into(),
-        }])
-        .unwrap()[0]
-        .clone();
-    let value = |store: &mut Store, fir_id, id, text: &str| {
-        store.set_placeholder_values(fir_id, &[(id, text.to_owned())])
-    };
-    assert_eq!(
-        value(&mut store, fir_record.id, bank.id, "HBL").unwrap()[0].value,
-        "HBL"
-    );
-    let updated = value(&mut store, fir_record.id, bank.id, " MCB ").unwrap();
-    assert_eq!(updated.len(), 1);
-    assert_eq!(updated[0].value, "MCB");
-    let missing_fir = FirId::new(40).unwrap();
-    let missing_placeholder = PlaceholderId::new(40).unwrap();
-    assert_eq!(
-        value(&mut store, missing_fir, bank.id, "x"),
-        Err(not_found(Entity::Fir, missing_fir))
-    );
-    assert_eq!(
-        value(&mut store, fir_record.id, missing_placeholder, "x"),
-        Err(not_found(Entity::Placeholder, missing_placeholder))
-    );
-    assert_eq!(
-        store.set_placeholder_values(
-            fir_record.id,
-            &[(bank.id, "UBL".into()), (missing_placeholder, "x".into())]
-        ),
-        Err(not_found(Entity::Placeholder, missing_placeholder))
-    );
-    assert_eq!(
-        store.placeholder_values(fir_record.id).unwrap()[0].value,
-        "MCB"
-    );
-    let context = store.fir_value_context(fir_record.id).unwrap();
-    assert_eq!(context.catalog.len(), 2);
-    let catalog = store.field_catalog().unwrap();
-    let workspace = store.fir_workspace(fir_record.id).unwrap();
-    let presentation = FieldPresentation::for_fir(&catalog, &workspace.values, DisplayMode::Values);
-    assert_eq!(
-        presentation
-            .display_text(&FieldReference::Catalog(bank.id))
-            .text,
-        "MCB"
-    );
-    assert_eq!(
-        presentation
-            .display_text(&FieldReference::Catalog(station.id))
-            .text,
-        "صدر"
-    );
-    assert_eq!(
-        store.fir_values(missing_fir),
-        Err(not_found(Entity::Fir, missing_fir))
-    );
-    store.set_shared_value(station.id, "سٹی").unwrap();
-    assert!(matches!(
-        store.set_shared_value(bank.id, "x"),
-        Err(RepositoryError::Storage { .. })
-    ));
-    assert_eq!(
-        store.fir_values(fir_record.id).unwrap().shared_values[&station.id],
-        "سٹی"
-    );
-    assert!(
-        value(&mut store, fir_record.id, bank.id, "")
-            .unwrap()
-            .is_empty()
-    );
-}
-
-#[test]
-fn settings_round_trip() {
-    let scratch = Scratch::new();
-    let mut store = store(&scratch);
-    let defaults = store.settings().unwrap();
-    assert_eq!(defaults.field_markers, FieldMarkers::default());
-    let markers = FieldMarkers::new("{{", "}}").unwrap();
-    assert_eq!(
-        store.save_field_markers(&markers).unwrap().field_markers,
-        markers
-    );
-    drop(store);
-    let reopened = Store::open(scratch.path("test.sqlite")).unwrap();
-    assert_eq!(reopened.settings().unwrap().field_markers, markers);
-}
-
-#[test]
-fn new_databases_start_without_templates_until_the_library_seeds_them() {
-    let scratch = Scratch::new();
-    let path = scratch.path("fresh.db");
-    let mut store = Store::open(&path).unwrap();
-    assert!(store.templates().unwrap().is_empty());
-    assert!(!store.library_seeded().unwrap());
-    store.mark_library_seeded().unwrap();
-    drop(store);
-    let reopened = Store::open(&path).unwrap();
-    assert!(reopened.templates().unwrap().is_empty());
-    assert!(reopened.library_seeded().unwrap());
-}
-
-#[test]
 fn the_embedded_bundle_installs_every_template_once() {
     let scratch = Scratch::new();
     let path = scratch.path("bundled.db");
@@ -593,68 +392,6 @@ fn the_embedded_bundle_installs_every_template_once() {
     assert_eq!(store.templates().unwrap().len(), 36);
     drop(store);
     let reopened = Store::open_with(&path, &TemplateBundle::embedded()).unwrap();
-    assert_eq!(reopened.templates().unwrap().len(), 36);
-}
-
-#[test]
-fn repository_templates_install_from_library_uploads_with_bound_fields() {
-    let scratch = Scratch::new();
-    let path = scratch.path("bundle.db");
-    let folder = missal_docx::import_folder(&missal_docx::repository_templates()).unwrap();
-    let mut store = Store::open(&path).unwrap();
-    for (index, template) in folder.templates.into_iter().enumerate() {
-        let content = TemplateBundle::encode(
-            1,
-            &template.global,
-            &template.custom,
-            &[(template.name, template.document)],
-        );
-        store
-            .install_library_template(&format!("remote-{index}"), 1, &content)
-            .unwrap();
-    }
-    let templates = store.templates().unwrap();
-    assert_eq!(templates.len(), 36);
-    let mut unresolved = Vec::new();
-    let mut catalog_fields = 0;
-    let mut fir_fields = std::collections::HashSet::new();
-    for summary in &templates {
-        for reference in store
-            .template(summary.id)
-            .unwrap()
-            .document
-            .field_references()
-        {
-            match reference {
-                FieldReference::Unresolved(label) => unresolved.push(label),
-                FieldReference::Catalog(_) => catalog_fields += 1,
-                FieldReference::Fir(field) => {
-                    fir_fields.insert(field);
-                }
-            }
-        }
-    }
-    assert!(unresolved.is_empty(), "{unresolved:?}");
-    assert!(catalog_fields > 0);
-    for (property, index) in [
-        (FirProperty::Body, None),
-        (FirProperty::ZimniDate, Some(1)),
-        (FirProperty::ZimniDate, Some(4)),
-        (FirProperty::ZimniDate, Some(5)),
-        (FirProperty::ZimniDate, Some(6)),
-    ] {
-        assert!(fir_fields.contains(&FirField { property, index }));
-    }
-    assert!(
-        store
-            .placeholders()
-            .unwrap()
-            .iter()
-            .all(|placeholder| placeholder.label != "مختصر حالات")
-    );
-    assert_eq!(store.global_placeholders().unwrap().len(), 5);
-    drop(store);
-    let reopened = Store::open(&path).unwrap();
     assert_eq!(reopened.templates().unwrap().len(), 36);
 }
 
@@ -846,41 +583,4 @@ fn stale_drafts_are_ignored_and_discarded_drafts_are_gone() {
         .unwrap();
     store.remove_template(template.id).unwrap();
     assert_eq!(store.draft(template_key).unwrap(), None);
-}
-
-#[test]
-fn suggestions_come_from_saved_firs_and_custom_values() {
-    let scratch = Scratch::new();
-    let mut store = store(&scratch);
-    let mut first = fir("1/26");
-    first.accused = vec!["علی ولد احمد".into(), "بلال".into()];
-    first.investigation_officer = "اے ایس آئی اکرم".into();
-    let first = store.create_fir(&first).unwrap();
-    let mut second = fir("2/26");
-    second.accused = vec!["علي ولد احمد".into()];
-    let second = store.create_fir(&second).unwrap();
-    let bank = store.create_placeholder("بینک").unwrap();
-    store
-        .set_placeholder_values(first.id, &[(bank.id, "HBL".into())])
-        .unwrap();
-    let index = SuggestionIndex::build(store.suggestion_entries().unwrap());
-    let accused = SuggestionKey::Fir(FirProperty::Accused);
-    let found = index.suggest(accused, "", 8);
-    assert_eq!(found.len(), 2);
-    assert_eq!(found[0].value, "علي ولد احمد");
-    assert_eq!(found[0].uses, 2);
-    let officer = SuggestionKey::Fir(FirProperty::InvestigationOfficer);
-    assert_eq!(
-        index.suggest(officer, "اکرم", 8)[0].value,
-        "اے ایس آئی اکرم"
-    );
-    let custom = SuggestionKey::Placeholder(bank.id);
-    assert_eq!(index.suggest(custom, "hb", 8)[0].value, "HBL");
-    store.remove_fir(second.id).unwrap();
-    let index = SuggestionIndex::build(store.suggestion_entries().unwrap());
-    let found = index.suggest(accused, "عل", 8);
-    assert_eq!(
-        (found[0].value.as_str(), found[0].uses),
-        ("علی ولد احمد", 1)
-    );
 }

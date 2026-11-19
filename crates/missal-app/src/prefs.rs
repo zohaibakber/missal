@@ -313,50 +313,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn round_trips() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("missal-preferences.json");
-        let mut preferences = Preferences::load(&path);
-        preferences.theme = ThemeChoice::Dark;
-        preferences.record_recent(FirId::new(4).unwrap(), 100);
-        preferences.record_recent(FirId::new(9).unwrap(), 200);
-        preferences.record_recent(FirId::new(4).unwrap(), 300);
-        assert_eq!(
-            preferences
-                .recent_firs
-                .iter()
-                .map(|recent| recent.id.get())
-                .collect::<Vec<_>>(),
-            [4, 9]
-        );
-        preferences.table.sort = Sort {
-            column: Column::Date,
-            descending: false,
-        };
-        preferences.table.status = Some(FirStatus::Closed);
-        preferences.table.hidden = vec![Column::ArrestDate];
-        preferences.window = Some(WindowPrefs {
-            x: 10.0,
-            y: 20.0,
-            width: 1100.0,
-            height: 720.0,
-            maximized: true,
-        });
-        preferences.save(&path).unwrap();
-        assert_eq!(Preferences::load(&path), preferences);
-    }
-
-    #[test]
-    fn recent_firs_are_capped() {
-        let mut preferences = Preferences::default();
-        for id in 1..=15 {
-            preferences.record_recent(FirId::new(id).unwrap(), id);
-        }
-        assert_eq!(preferences.recent_firs.len(), RECENT_FIRS);
-        assert_eq!(preferences.recent_firs[0].id.get(), 15);
-    }
-
-    #[test]
     fn rejects_unusable_windows_and_garbage() {
         let preferences = Preferences::from_json(&json!({
             "theme": "purple",

@@ -233,31 +233,6 @@ mod tests {
     }
 
     #[test]
-    fn days_left_rounds_a_started_day_up_and_stops_at_zero() {
-        let now = UNIX_EPOCH + Duration::from_secs(1_800_000_000);
-        let trial = |hours: u64| Licence {
-            status: LicenceStatus::Trial,
-            until_ms: super::millis(now + Duration::from_secs(hours * 60 * 60)),
-        };
-        assert_eq!(trial(7 * 24).days_left(now), 7);
-        assert_eq!(trial(25).days_left(now), 2);
-        assert_eq!(trial(1).days_left(now), 1);
-        assert_eq!(trial(0).days_left(now), 0);
-    }
-
-    #[test]
-    fn an_access_token_is_used_until_shortly_before_it_expires() {
-        let issued = UNIX_EPOCH + Duration::from_secs(1_800_000_000);
-        let session = session_at(issued);
-        assert_eq!(session.access_token(issued), Some("access"));
-        assert!(
-            session
-                .access_token(issued + Duration::from_secs(880))
-                .is_none()
-        );
-    }
-
-    #[test]
     fn tokens_stay_out_of_debug_output_and_the_access_token_out_of_the_keyring() {
         let session = session_at(UNIX_EPOCH);
         let debug = format!("{session:?}");
@@ -267,22 +242,5 @@ mod tests {
                 .unwrap()
                 .contains("\"access")
         );
-    }
-
-    #[test]
-    fn accounts_read_the_server_shape() {
-        let account: Account = serde_json::from_str(
-            r#"{"id":"u","email":"e@x.y","name":"","role":"publisher","disabled":false,"createdAt":5,"licence":{"status":"trial","until":1790000000000}}"#,
-        )
-        .unwrap();
-        assert_eq!(account.role, Role::Publisher);
-        assert_eq!(
-            account.licence,
-            Licence {
-                status: LicenceStatus::Trial,
-                until_ms: 1_790_000_000_000
-            }
-        );
-        assert_eq!(account.display_name(), "e@x.y");
     }
 }

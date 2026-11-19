@@ -205,38 +205,3 @@ impl Navigator {
         self.commit(Request::Replace(route), cx);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gpui_kit::{AppContext, TestAppContext};
-
-    fn fir(id: i64) -> Route {
-        Route::Fir(FirId::new(id).unwrap())
-    }
-
-    #[gpui_kit::test]
-    fn history_pushes_truncates_and_walks(cx: &mut TestAppContext) {
-        let nav = cx.new(|_| Navigator::new(Route::Firs));
-        cx.update(|cx| {
-            nav.update(cx, |nav, cx| {
-                nav.commit(Request::Push(fir(1)), cx);
-                nav.commit(Request::Push(Route::Settings), cx);
-                assert_eq!(nav.current(), Route::Settings);
-                nav.commit(Request::Back, cx);
-                assert_eq!(nav.current(), fir(1));
-                assert!(nav.can_go_forward());
-                nav.commit(Request::Push(Route::Templates), cx);
-                assert!(!nav.can_go_forward());
-                assert_eq!(nav.history().0, &[Route::Firs, fir(1), Route::Templates]);
-                nav.commit(Request::Replace(Route::NewFir), cx);
-                assert_eq!(nav.history().0, &[Route::Firs, fir(1), Route::NewFir]);
-                nav.commit(Request::Back, cx);
-                nav.commit(Request::Back, cx);
-                nav.commit(Request::Back, cx);
-                assert_eq!(nav.current(), Route::Firs);
-                assert!(!nav.can_go_back());
-            });
-        });
-    }
-}

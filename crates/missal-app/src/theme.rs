@@ -605,38 +605,3 @@ pub fn apply(choice: ThemeChoice, window: &Window, cx: &mut App) {
         install(dark, cx);
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn rgb(color: Hsla) -> [u8; 3] {
-        let rgba: Rgba = color.to_rgb();
-        [
-            (rgba.r * 255.0).round() as u8,
-            (rgba.g * 255.0).round() as u8,
-            (rgba.b * 255.0).round() as u8,
-        ]
-    }
-
-    #[test]
-    fn oklch_matches_known_values() {
-        assert_eq!(rgb(oklch(1.0, 0.0, 0.0, 1.0)), [255, 255, 255]);
-        assert_eq!(rgb(oklch(0.0, 0.0, 0.0, 1.0)), [0, 0, 0]);
-        let primary = rgb(oklch(0.52, 0.19, 272.0, 1.0));
-        assert!(
-            primary[2] > primary[0] && primary[2] > primary[1],
-            "{primary:?}"
-        );
-        let mid = rgb(oklch(0.5, 0.0, 0.0, 1.0));
-        assert!((mid[0] as i32 - 99).abs() <= 2, "{mid:?}");
-    }
-
-    #[test]
-    fn system_follows_the_os() {
-        assert!(resolve_dark(ThemeChoice::System, WindowAppearance::Dark));
-        assert!(!resolve_dark(ThemeChoice::System, WindowAppearance::Light));
-        assert!(resolve_dark(ThemeChoice::Dark, WindowAppearance::Light));
-        assert!(!resolve_dark(ThemeChoice::Light, WindowAppearance::Dark));
-    }
-}

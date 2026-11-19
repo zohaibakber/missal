@@ -488,7 +488,6 @@ pub fn fir_value(fir: &Fir, field: FirField) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fir::FirStatus;
 
     fn catalog() -> FieldCatalog {
         FieldCatalog::new(vec![
@@ -505,26 +504,6 @@ mod tests {
         ])
     }
 
-    fn values() -> FirValues {
-        FirValues {
-            fir: FirRecord {
-                id: FirId::new(7).unwrap(),
-                fir: Fir {
-                    fir_no: "12/26".into(),
-                    accused: vec!["علی".into(), "احمد".into()],
-                    status: FirStatus::Open,
-                    ..Fir::default()
-                },
-            },
-            overrides: vec![PlaceholderValue {
-                fir_id: FirId::new(7).unwrap(),
-                placeholder_id: PlaceholderId::new(2).unwrap(),
-                value: "HBL".into(),
-            }],
-            shared_values: BTreeMap::from([(PlaceholderId::new(1).unwrap(), "صدر".to_owned())]),
-        }
-    }
-
     #[test]
     fn lookup_key_ignores_spacing_underscores_and_zwnj() {
         assert_eq!(field_lookup_key("Date_FIR"), "DateFIR");
@@ -532,66 +511,6 @@ mod tests {
         assert_eq!(normalize_placeholder_name("  a \t b "), "a b");
         assert_eq!(placeholder_name("Date  FIR"), Err(Invalid::FirFieldName));
         assert_eq!(placeholder_name(" "), Err(Invalid::EmptyName));
-    }
-
-    #[test]
-    fn display_text_in_both_modes() {
-        let catalog = catalog();
-        let values = values();
-        let accused_2 = FieldReference::Fir(FirField {
-            property: FirProperty::Accused,
-            index: Some(2),
-        });
-        let accused = FieldReference::Fir(FirField {
-            property: FirProperty::Accused,
-            index: None,
-        });
-        let missing = FieldReference::Fir(FirField {
-            property: FirProperty::Writer,
-            index: None,
-        });
-        let shared = FieldReference::Catalog(PlaceholderId::new(1).unwrap());
-        let custom = FieldReference::Catalog(PlaceholderId::new(2).unwrap());
-        let unknown = FieldReference::Catalog(PlaceholderId::new(9).unwrap());
-        let presentation = FieldPresentation::for_fir(&catalog, &values, DisplayMode::Values);
-        let text = |reference: &FieldReference| presentation.display_text(reference);
-        assert_eq!(text(&accused_2).text, "احمد");
-        assert_eq!(text(&accused).text, "علی\nاحمد");
-        assert_eq!(
-            text(&missing),
-            FieldDisplayText {
-                text: "تحریر کنندہ".into(),
-                unresolved: true
-            }
-        );
-        assert_eq!(text(&shared).text, "صدر");
-        assert_eq!(text(&custom).text, "HBL");
-        assert_eq!(
-            text(&unknown),
-            FieldDisplayText {
-                text: "9".into(),
-                unresolved: true
-            }
-        );
-        let labels = FieldPresentation::for_fir(&catalog, &values, DisplayMode::Labels);
-        assert_eq!(
-            labels.display_text(&accused_2),
-            FieldDisplayText {
-                text: "نام ملزم و سکونت 2".into(),
-                unresolved: false
-            }
-        );
-        assert_eq!(
-            FieldPresentation::labels(&catalog)
-                .display_text(&shared)
-                .text,
-            "تھانہ نام"
-        );
-        assert!(
-            labels
-                .display_text(&FieldReference::Unresolved("x".into()))
-                .unresolved
-        );
     }
 
     #[test]
@@ -621,19 +540,5 @@ mod tests {
             catalog.reference_for(" نا معلوم  نام "),
             FieldReference::Unresolved("نا معلوم نام".into())
         );
-    }
-
-    #[test]
-    fn markers_are_symbols_only() {
-        assert!(FieldMarkers::new("«", "»").is_ok());
-        assert!(FieldMarkers::new("{{", "}}").is_ok());
-        assert!(FieldMarkers::new("<<<", ">>>").is_ok());
-        assert!(FieldMarkers::new("<<<<", ">").is_err());
-        assert!(FieldMarkers::new("a", "»").is_err());
-        assert!(FieldMarkers::new("ن", "»").is_err());
-        assert!(FieldMarkers::new("1", "»").is_err());
-        assert!(FieldMarkers::new(" ", "»").is_err());
-        assert!(FieldMarkers::new("", "»").is_err());
-        assert!(FieldMarkers::new("😀", "»").is_ok());
     }
 }

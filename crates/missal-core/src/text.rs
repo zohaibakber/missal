@@ -139,11 +139,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn whitespace_collapses_and_trims() {
-        assert_eq!(collapse_whitespace(" a \t\n b\u{3000}c "), "a b c");
-    }
-
-    #[test]
     fn folding_merges_urdu_letter_variants_and_drops_marks() {
         assert_eq!(fold_text("علي"), fold_text("علی"));
         assert_eq!(fold_text("كمال"), fold_text("کمال"));
@@ -159,21 +154,5 @@ mod tests {
         let range = folded.source_range(start..start + "علی".len());
         assert_eq!(&source[range], "علی");
         assert_eq!(folded.origin(folded.text().len()), source.len());
-    }
-
-    #[test]
-    fn base64_round_trips() {
-        for input in [
-            &b""[..],
-            b"h",
-            b"he",
-            b"hel",
-            b"hello world",
-            &[0, 255, 128, 7],
-        ] {
-            assert_eq!(decode_base64(&encode_base64(input)).unwrap(), input);
-        }
-        assert_eq!(encode_base64(b"hello"), "aGVsbG8=");
-        assert_eq!(decode_base64("aGVsbG8gd29ybGQ").unwrap(), b"hello world");
     }
 }

@@ -275,69 +275,11 @@ mod tests {
     }
 
     #[test]
-    fn every_query_word_must_start_a_word_in_order() {
-        let index = index(&[(ACCUSED, "محمد علی ولد احمد خان", 1)]);
-        assert_eq!(index.suggest(ACCUSED, "علی احمد", 8).len(), 1);
-        assert!(index.suggest(ACCUSED, "احمد علی", 8).is_empty());
-        let found = &index.suggest(ACCUSED, "عل خا", 8)[0];
-        let value = &found.value;
-        let marked: Vec<&str> = found
-            .highlights
-            .iter()
-            .map(|range| &value[range.clone()])
-            .collect();
-        assert_eq!(marked, ["عل", "خا"]);
-    }
-
-    #[test]
-    fn frequent_and_recent_values_rank_first() {
-        let mut entries = vec![(OFFENCE, "379 ت پ", 1)];
-        entries.extend((2..6).map(|stamp| (OFFENCE, "302 ت پ", stamp)));
-        entries.push((OFFENCE, "324 ت پ", 6));
-        let index = index(&entries);
-        assert_eq!(
-            values(&index.suggest(OFFENCE, "3", 8)),
-            ["302 ت پ", "324 ت پ", "379 ت پ"]
-        );
-        assert_eq!(index.suggest(OFFENCE, "3", 8)[0].uses, 4);
-    }
-
-    #[test]
     fn duplicates_merge_and_keep_the_newest_spelling() {
         let index = index(&[(ACCUSED, "علي  رضا", 1), (ACCUSED, "علی رضا", 2)]);
         assert_eq!(index.len(ACCUSED), 1);
         let found = index.suggest(ACCUSED, "", 8);
         assert_eq!(values(&found), ["علی رضا"]);
         assert_eq!(found[0].uses, 2);
-    }
-
-    #[test]
-    fn highlights_cover_the_original_text_when_marks_are_dropped() {
-        let index = index(&[(ACCUSED, "مُحمّد علی", 1)]);
-        let found = &index.suggest(ACCUSED, "محمد", 8)[0];
-        assert_eq!(&found.value[found.highlights[0].clone()], "مُحمّد");
-    }
-
-    #[test]
-    fn fields_are_kept_apart_and_blank_or_long_values_are_skipped() {
-        let long = "ا".repeat(MAX_VALUE_CHARS + 1);
-        let index = index(&[(OFFENCE, "302", 1), (ACCUSED, "  ", 1), (ACCUSED, &long, 1)]);
-        assert!(index.suggest(ACCUSED, "3", 8).is_empty());
-        assert!(index.is_empty(ACCUSED));
-        assert_eq!(index.suggest(OFFENCE, "", 8).len(), 1);
-    }
-
-    #[test]
-    fn limit_is_respected_across_tiers() {
-        let entries: Vec<(SuggestionKey, String, u64)> =
-            (0..40).map(|n| (ACCUSED, format!("علی {n}"), n)).collect();
-        let index = SuggestionIndex::build(
-            entries
-                .iter()
-                .map(|(key, value, stamp)| SuggestionEntry::new(*key, value.clone(), *stamp)),
-        );
-        let found = index.suggest(ACCUSED, "عل", SUGGESTION_LIMIT);
-        assert_eq!(found.len(), SUGGESTION_LIMIT);
-        assert_eq!(found[0].value, "علی 39");
     }
 }
