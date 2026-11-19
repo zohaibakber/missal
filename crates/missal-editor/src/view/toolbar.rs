@@ -357,59 +357,29 @@ impl Editor {
             .into_any_element()
     }
 
-    fn mode_toggle(&self, theme: EditorTheme, cx: &mut Context<Self>) -> AnyElement {
+    fn mode_toggle(&self, _theme: EditorTheme, cx: &mut Context<Self>) -> AnyElement {
         let entity = cx.entity();
-        let current = self.fields.mode;
-        let item = |id: &'static str, text: &'static str, mode: DisplayMode| {
-            let on = current == mode;
-            let entity = entity.clone();
-            let ink = theme.ink;
-            div()
-                .id(id)
-                .h(px(24.))
-                .px(px(8.))
-                .flex()
-                .items_center()
-                .rounded(px(6.))
-                .text_size(px(13.))
-                .line_height(px(20.))
-                .font_weight(FontWeight::MEDIUM)
-                .cursor_pointer()
-                .role(gpui_kit::accesskit::Role::RadioButton)
-                .when(on, |this| {
-                    this.bg(theme.surface)
-                        .text_color(theme.ink)
-                        .shadow(vec![theme.control_shadow()])
-                        .aria_toggled(gpui_kit::accesskit::Toggled::True)
-                })
-                .when(!on, |this| {
-                    this.text_color(theme.ink_faint)
-                        .hover(move |s| s.text_color(ink))
-                })
-                .tooltip(tooltip(
-                    if mode == DisplayMode::Values {
-                        "Show values"
-                    } else {
-                        "Show field names"
-                    },
-                    Some("Mod+Shift+L"),
-                ))
-                .tooltip_show_delay(TOOLTIP_DELAY)
-                .on_click(move |_, _, cx| {
-                    entity.update(cx, |editor, cx| editor.request_mode(mode, cx));
-                })
-                .child(text)
-                .test_support()
-        };
-        h_flex()
-            .flex_none()
-            .p(px(2.))
-            .gap(px(2.))
-            .rounded(px(8.))
-            .bg(theme.hover)
-            .child(item("editor-mode-values", "Values", DisplayMode::Values))
-            .child(item("editor-mode-names", "Names", DisplayMode::Labels))
-            .into_any_element()
+        let names = self.fields.mode == DisplayMode::Labels;
+        tool(
+            "editor-mode-names",
+            IconName::Tag,
+            if names {
+                "Show values"
+            } else {
+                "Show field names"
+            },
+        )
+        .keys("Mod+Shift+L")
+        .toggled(names)
+        .on_click(move |_, _, cx| {
+            let mode = if names {
+                DisplayMode::Values
+            } else {
+                DisplayMode::Labels
+            };
+            entity.update(cx, |editor, cx| editor.request_mode(mode, cx));
+        })
+        .into_any_element()
     }
 
     pub(crate) fn render_toolbar(

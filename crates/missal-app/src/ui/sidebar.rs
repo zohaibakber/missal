@@ -3,7 +3,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, App, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    Anchor, AnyElement, App, ElementId, FontWeight, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, px,
 };
 
@@ -14,8 +14,9 @@ use crate::theme::{
     ICON, Palette, RADIUS, SIDEBAR_COMPACT_WIDTH, SIDEBAR_ITEM, SIDEBAR_WIDTH, TOOLTIP_DELAY,
 };
 use crate::ui::nav_menu::NavEntry;
+use crate::ui::popup_menu::{MenuEntry, menu};
 use crate::ui::status::status_dot;
-use crate::ui::{UrRole, kbd_group, sized_icon, tabular, tooltip, ur_inline};
+use crate::ui::{UrRole, icon_button, sized_icon, tabular, tooltip, ur_inline};
 
 const RECENT_LIMIT: usize = 6;
 
@@ -204,23 +205,6 @@ fn nav_item(
     .into_any_element()
 }
 
-fn plain_item(
-    id: &'static str,
-    icon: IconName,
-    text: &'static str,
-    keys: Option<&'static str>,
-    palette: &Palette,
-    on_click: impl Fn(&mut Window, &mut App) + 'static,
-) -> AnyElement {
-    item_base(id, false, palette)
-        .on_click(move |_, window, cx| on_click(window, cx))
-        .child(sized_icon(icon, ICON, palette.sidebar_ink))
-        .child(div().flex_1().min_w_0().child(text))
-        .children(keys.map(kbd_group))
-        .test_support()
-        .into_any_element()
-}
-
 fn group_label(text: &'static str, palette: &Palette) -> AnyElement {
     h_flex()
         .flex_none()
@@ -235,53 +219,63 @@ fn group_label(text: &'static str, palette: &Palette) -> AnyElement {
         .into_any_element()
 }
 
-fn theme_switch(current: ThemeChoice, palette: &Palette) -> AnyElement {
-    let palette = *palette;
+fn theme_icon(choice: ThemeChoice) -> IconName {
+    match choice {
+        ThemeChoice::System => IconName::Monitor,
+        ThemeChoice::Light => IconName::Sun,
+        ThemeChoice::Dark => IconName::Moon,
+    }
+}
+
+fn theme_menu(current: ThemeChoice) -> AnyElement {
+    menu("sidebar-theme")
+        .anchor(Anchor::BottomRight)
+        .width(176.)
+        .trigger(
+            icon_button(
+                "sidebar-theme",
+                theme_icon(current),
+                format!("Theme: {}", current.title()),
+            )
+            .dense(),
+        )
+        .content(move |menu, _, _| {
+            menu.label("Theme")
+                .items(ThemeChoice::ALL.into_iter().map(|choice| {
+                    MenuEntry::new(
+                        SharedString::from(format!("sidebar-theme-{}", choice.as_str())),
+                        choice.title(),
+                        move |window, cx| set_theme(choice, window, cx),
+                    )
+                    .icon(theme_icon(choice))
+                    .check(choice == current)
+                }))
+        })
+        .into_any_element()
+}
+
+fn footer_tools(theme: ThemeChoice) -> AnyElement {
     h_flex()
-        .id("sidebar-theme")
         .flex_none()
-        .p(px(2.))
         .gap(px(2.))
-        .rounded(px(RADIUS))
-        .bg(palette.sidebar_hover)
-        .children(ThemeChoice::ALL.into_iter().map(move |choice| {
-            let selected = choice == current;
-            let icon = match choice {
-                ThemeChoice::System => IconName::Monitor,
-                ThemeChoice::Light => IconName::Sun,
-                ThemeChoice::Dark => IconName::Moon,
-            };
-            div()
-                .id(SharedString::from(format!(
-                    "sidebar-theme-{}",
-                    choice.as_str()
-                )))
-                .size(px(24.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(6.))
-                .cursor_pointer()
-                .when(selected, |this| {
-                    this.bg(palette.surface).shadow(palette.shadow_xs())
-                })
-                .when(!selected, |this| {
-                    this.hover(move |style| style.bg(palette.sidebar_hover))
-                })
-                .tooltip(tooltip(format!("{} theme", choice.title()), None))
-                .tooltip_show_delay(TOOLTIP_DELAY)
-                .on_click(move |_, window, cx| set_theme(choice, window, cx))
-                .child(sized_icon(
-                    icon,
-                    14.,
-                    if selected {
-                        palette.ink
-                    } else {
-                        palette.ink_muted
-                    },
-                ))
-                .test_support()
-        }))
+        .items_center()
+        .child(
+            icon_button("sidebar-import", IconName::FileUp, "Import Word file")
+                .keys("Mod+O")
+                .dense()
+                .on_click(|_, window, cx| import_word_file(window, cx)),
+        )
+        .child(
+            icon_button(
+                "sidebar-shortcuts",
+                IconName::Keyboard,
+                "Keyboard shortcuts",
+            )
+            .keys("?")
+            .dense()
+            .on_click(|_, window, cx| show_shortcuts(window, cx)),
+        )
+        .child(theme_menu(theme))
         .into_any_element()
 }
 
@@ -293,8 +287,6 @@ impl RenderOnce for Sidebar {
         }
         let models = Models::get(cx);
         let section = NavEntry::destination(self.route);
-        let fir_count = models.firs.read(cx).rows().len();
-        let template_count = models.templates.read(cx).items.len();
         let prefs = models.prefs.read(cx).read();
         let theme = prefs.theme;
         let firs = models.firs.read(cx);
@@ -347,7 +339,7 @@ impl RenderOnce for Sidebar {
             .child(nav_item(
                 NavEntry::Firs,
                 IconName::Folders,
-                Some(fir_count),
+                None,
                 section == NavEntry::Firs,
                 Route::Firs,
                 &palette,
@@ -355,7 +347,7 @@ impl RenderOnce for Sidebar {
             .child(nav_item(
                 NavEntry::Templates,
                 IconName::LayoutTemplate,
-                Some(template_count),
+                None,
                 section == NavEntry::Templates,
                 Route::Templates,
                 &palette,
@@ -374,22 +366,6 @@ impl RenderOnce for Sidebar {
                     .children(recent)
             })
             .child(div().flex_1().min_h(px(16.)))
-            .child(plain_item(
-                "sidebar-import",
-                IconName::FileUp,
-                "Import Word file",
-                None,
-                &palette,
-                import_word_file,
-            ))
-            .child(plain_item(
-                "sidebar-shortcuts",
-                IconName::Keyboard,
-                "Shortcuts",
-                Some("?"),
-                &palette,
-                show_shortcuts,
-            ))
             .child(
                 h_flex()
                     .flex_none()
@@ -414,7 +390,7 @@ impl RenderOnce for Sidebar {
                                     .child("Missal"),
                             ),
                     )
-                    .child(theme_switch(theme, &palette)),
+                    .child(footer_tools(theme)),
             )
             .into_any_element()
     }

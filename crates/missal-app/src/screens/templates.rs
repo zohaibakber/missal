@@ -1275,15 +1275,7 @@ impl TemplatesScreen {
             .border_b_1()
             .border_color(palette.line)
             .mb(px(8.))
-            .child(section_label("Templates"))
-            .child(
-                div()
-                    .ml(px(4.))
-                    .text_size(px(12.))
-                    .line_height(px(16.))
-                    .text_color(palette.ink_faint)
-                    .child(total.to_string()),
-            )
+            .child(section_label("Templates").child(crate::ui::count_badge(total)))
             .child(div().flex_1())
             .child(
                 div()

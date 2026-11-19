@@ -15,7 +15,7 @@ use gpui_kit::{
 };
 use missal_core::{FirId, FirStatus};
 use missal_text::input::{Enter, MoveDown};
-use missal_text::{Align, LineHeight, TextInput, TextInputEvent, label};
+use missal_text::{Align, TextInput, TextInputEvent, label};
 
 use crate::app::navigate;
 use crate::prefs::{Column, Sort};
@@ -27,12 +27,12 @@ use crate::theme::{ICON_XS, PAGE_GUTTER, Palette, TABLE_ROW};
 use crate::ui::dialogs::{Choice, Tone, open_choice};
 use crate::ui::input::{Hint, Kind, field_input, search_field};
 use crate::ui::popup_menu::{Dismissed, MenuContent, MenuEntry, Placement, PopupList};
-use crate::ui::status::{status_badge, status_dot};
+use crate::ui::status::status_badge;
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::{
     BadgeVariant, ButtonKind, UrRole, badge, button, checkbox, checkbox_mixed, danger_outline,
-    empty_state, icon_button, isolate_urdu, kbd_group, sized_icon, skeleton_bar, tab, tab_list,
-    table, table_body, table_footer, table_head, table_header, tabular, ur_label,
+    empty_state, icon_button, isolate_urdu, kbd_group, sized_icon, skeleton_bar, table, table_body,
+    table_footer, table_head, table_header, tabular, ur_label,
 };
 
 const SELECT_WIDTH: f32 = 36.0;
@@ -80,6 +80,7 @@ const STATUS_ITEMS: [FirStatus; 4] = [
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum MenuKind {
     Columns,
+    Status,
     Row,
 }
 
@@ -112,6 +113,7 @@ pub struct FirListScreen {
     scroll: UniformListScrollHandle,
     menu: Option<Entity<PopupList>>,
     columns_bounds: Rc<Cell<Bounds<Pixels>>>,
+    filter_bounds: Rc<Cell<Bounds<Pixels>>>,
     focused_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     skeleton: bool,
     _subscriptions: Vec<Subscription>,
@@ -163,6 +165,7 @@ impl FirListScreen {
             scroll: UniformListScrollHandle::new(),
             menu: None,
             columns_bounds: Rc::new(Cell::new(Bounds::default())),
+            filter_bounds: Rc::new(Cell::new(Bounds::default())),
             focused_bounds: Rc::new(Cell::new(None)),
             skeleton: false,
             models,
@@ -638,6 +641,59 @@ impl FirListScreen {
         self.open_menu(MenuKind::Columns, menu, window, cx);
     }
 
+    pub fn open_status_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let weak = cx.entity().downgrade();
+        let filter = self.status_filter();
+        let palette = *Palette::get(cx);
+        let counts: Vec<usize> = {
+            let index = self.models.firs.read(cx).index.borrow();
+            STATUS_ITEMS
+                .iter()
+                .map(|status| index.status_count(*status))
+                .collect()
+        };
+        let clear = weak.clone();
+        let rows = MenuContent::new()
+            .label("Status")
+            .items(STATUS_ITEMS.into_iter().zip(counts).map(|(status, count)| {
+                let weak = weak.clone();
+                MenuEntry::urdu(
+                    SharedString::from(format!("status-{}", status.as_str())),
+                    status.label(),
+                    move |_, cx| {
+                        weak.update(cx, |this, cx| this.toggle_status(status, cx))
+                            .ok();
+                    },
+                )
+                .check(filter == Some(status))
+                .dot(palette.status(status))
+                .count(count)
+            }))
+            .separator()
+            .item(
+                MenuEntry::new("status-all", "Show all FIRs", move |_, cx| {
+                    clear
+                        .update(cx, |this, cx| this.clear_status_filter(cx))
+                        .ok();
+                })
+                .disabled(filter.is_none()),
+            );
+        let bounds = self.filter_bounds.get();
+        let position = point(bounds.right(), bounds.bottom() + px(4.));
+        let menu = PopupList::open(
+            "status-menu",
+            rows,
+            Placement {
+                position,
+                anchor: Anchor::TopRight,
+                width: 220.,
+            },
+            window,
+            cx,
+        );
+        self.open_menu(MenuKind::Status, menu, window, cx);
+    }
+
     pub fn open_row_menu(
         &mut self,
         index: usize,
@@ -719,56 +775,11 @@ impl FirListScreen {
     fn toolbar(&mut self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let palette = *palette;
         let filter = self.status_filter();
-        let (all_count, counts): (usize, Vec<usize>) = {
-            let index = self.models.firs.read(cx).index.borrow();
-            (
-                index.matched_count(),
-                STATUS_ITEMS
-                    .iter()
-                    .map(|status| index.status_count(*status))
-                    .collect(),
-            )
-        };
-        let item = |id: SharedString, on: bool, count: usize, content: Option<FirStatus>| {
-            tab(id, on)
-                .when(content.is_some(), |this| this.flex_row_reverse())
-                .when(count == 0 && !on, |this| this.opacity(0.64))
-                .map(|this| match content {
-                    None => this.child("All"),
-                    Some(status) => this.child(status_dot(status)).child(
-                        div().font_weight(FontWeight::NORMAL).mt(px(-3.)).child(
-                            label(status.label())
-                                .rtl()
-                                .leading(LineHeight::Px(26.))
-                                .text_size(px(15.)),
-                        ),
-                    ),
-                })
-                .child(
-                    div()
-                        .font_weight(FontWeight::NORMAL)
-                        .font_features(tabular())
-                        .text_color(palette.ink_faint)
-                        .child(count.to_string()),
-                )
-        };
-        let mut row = tab_list().id("status-filter").child(
-            item("status-all".into(), filter.is_none(), all_count, None)
-                .on_click(cx.listener(|this, _, _, cx| this.set_status_filter(None, cx))),
-        );
-        for (position, status) in STATUS_ITEMS.into_iter().enumerate() {
-            row = row.child(
-                item(
-                    SharedString::from(format!("status-{}", status.as_str())),
-                    filter == Some(status),
-                    counts[position],
-                    Some(status),
-                )
-                .on_click(cx.listener(move |this, _, _, cx| this.toggle_status(status, cx))),
-            );
-        }
         let columns_bounds = self.columns_bounds.clone();
         let menu_open = self.menu_kind == Some(MenuKind::Columns);
+        let filter_bounds = self.filter_bounds.clone();
+        let filter_open = self.menu_kind == Some(MenuKind::Status);
+        let action = palette.action;
         h_flex()
             .id("fir-toolbar")
             .flex_none()
@@ -803,8 +814,46 @@ impl FirListScreen {
                             .hint(Hint::Slash),
                     ),
             )
-            .child(row)
             .child(div().flex_1())
+            .child(
+                div()
+                    .relative()
+                    .flex_none()
+                    .child(
+                        canvas(
+                            move |bounds, _, _| filter_bounds.set(bounds),
+                            |_, _, _, _| {},
+                        )
+                        .absolute()
+                        .size_full(),
+                    )
+                    .child(
+                        icon_button(
+                            "status-filter",
+                            IconName::ListFilter,
+                            if filter.is_some() {
+                                "Filtered by status"
+                            } else {
+                                "Filter by status"
+                            },
+                        )
+                        .toggled(filter_open || filter.is_some())
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.open_status_menu(window, cx)),
+                        ),
+                    )
+                    .when(filter.is_some(), |this| {
+                        this.child(
+                            div()
+                                .absolute()
+                                .top(px(5.))
+                                .right(px(5.))
+                                .size(px(6.))
+                                .rounded_full()
+                                .bg(action),
+                        )
+                    }),
+            )
             .child(
                 div()
                     .relative()
@@ -1444,17 +1493,7 @@ impl Render for FirListScreen {
 impl HeaderSource for FirListScreen {
     fn header(&mut self, _: &mut Window, cx: &mut Context<Self>) -> HeaderContent {
         self.ensure_derived(cx);
-        let total = self.models.firs.read(cx).rows().len();
-        let visible = self.visible_count();
-        let ready = self.models.firs.read(cx).load.is_ready();
-        let meta = if !ready {
-            String::new()
-        } else if visible == total {
-            total.to_string()
-        } else {
-            format!("{visible} of {total}")
-        };
-        let content = HeaderContent::new("FIRs").meta(meta);
+        let content = HeaderContent::new("FIRs");
         let selected = self.selected.len();
         if selected == 0 {
             return content.action(

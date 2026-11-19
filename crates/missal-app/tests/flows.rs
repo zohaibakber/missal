@@ -657,6 +657,7 @@ fn the_sidebar_navigates_and_hides(cx: &mut TestAppContext) {
     assert_eq!(fixture.route(cx), Route::Templates);
     fixture.click(cx, "sidebar-nav-settings");
     assert_eq!(fixture.route(cx), Route::Settings);
+    fixture.click(cx, "sidebar-theme");
     fixture.click(cx, "sidebar-theme-dark");
     assert_eq!(
         cx.update(|cx| fixture.models.prefs.read(cx).read().theme),

@@ -1329,7 +1329,7 @@ struct Slab {
 impl Slab {
     fn new(palette: &Palette) -> Slab {
         Slab {
-            fill: hex(if palette.dark { 0x0b0b0b } else { 0x1b1b1b }),
+            fill: hex(if palette.dark { 0x19191b } else { 0x18181b }),
             ink: hex(0xf5f5f5),
             muted: hex_alpha(0xffffff, 0.56),
             wash: hex_alpha(0xffffff, 0.06),
@@ -1356,12 +1356,31 @@ fn case_file(palette: &Palette, still: bool) -> impl IntoElement + use<> {
                 .bg(slab.fill)
                 .shadow(vec![inset(slab.wash, 1., 0.)])
                 .child(
-                    div()
-                        .text_size(px(15.))
-                        .line_height(px(20.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(slab.ink)
-                        .child("Missal"),
+                    h_flex()
+                        .items_center()
+                        .gap(px(10.))
+                        .child(
+                            div()
+                                .size(px(24.))
+                                .rounded(px(6.))
+                                .bg(slab.ink)
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(crate::ui::sized_icon(
+                                    gpui_kit::assets::IconName::Feather,
+                                    14.,
+                                    slab.fill,
+                                )),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(15.))
+                                .line_height(px(20.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(slab.ink)
+                                .child("Missal"),
+                        ),
                 )
                 .child(
                     h_flex()

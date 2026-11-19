@@ -571,6 +571,17 @@ fn new_databases_start_without_templates_until_the_library_seeds_them() {
 }
 
 #[test]
+fn the_embedded_bundle_installs_every_template_once() {
+    let scratch = Scratch::new();
+    let path = scratch.path("bundled.db");
+    let store = Store::open_with(&path, &TemplateBundle::embedded()).unwrap();
+    assert_eq!(store.templates().unwrap().len(), 36);
+    drop(store);
+    let reopened = Store::open_with(&path, &TemplateBundle::embedded()).unwrap();
+    assert_eq!(reopened.templates().unwrap().len(), 36);
+}
+
+#[test]
 fn repository_templates_install_from_library_uploads_with_bound_fields() {
     let scratch = Scratch::new();
     let path = scratch.path("bundle.db");

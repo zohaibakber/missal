@@ -649,9 +649,10 @@ impl FieldsPanel {
         let reveal = reference.clone();
         let name = h_flex()
             .id(("empty-field", index))
-            .w(px(88.))
+            .w_full()
             .flex_none()
             .flex_row_reverse()
+            .cursor_pointer()
             .items_center()
             .on_click(cx.listener(move |_, _, _, cx| {
                 cx.emit(FieldsPanelEvent::Reveal(reveal.clone(), true))
@@ -659,16 +660,15 @@ impl FieldsPanel {
             .child(
                 div()
                     .min_w_0()
-                    .mt(px(-2.))
-                    .text_color(palette.ink)
-                    .child(ur_label(item.name.clone(), UrRole::InputLabel).truncate()),
+                    .text_color(palette.ink_muted)
+                    .child(ur_label(item.name.clone(), UrRole::Label).truncate()),
             )
             .tooltip(crate::ui::tooltip(item.name.clone(), None))
             .tooltip_show_delay(crate::theme::TOOLTIP_DELAY)
             .test_support();
         let body: AnyElement = match &item.scope {
             Scope::Fir(_) => div()
-                .flex_1()
+                .w_full()
                 .h(px(32.))
                 .flex()
                 .items_center()
@@ -678,18 +678,14 @@ impl FieldsPanel {
             _ => {
                 let input = self.ensure_input(&reference, "", window, cx);
                 div()
-                    .flex_1()
-                    .min_w_0()
-                    .child(field(("empty-field-input", index), &input, Kind::UrduAuto).height(32.))
+                    .w_full()
+                    .child(field(("empty-field-input", index), &input, Kind::UrduAuto).height(34.))
                     .into_any_element()
             }
         };
-        h_flex()
-            .flex_row_reverse()
-            .items_center()
-            .gap(px(12.))
+        v_flex()
             .px(px(16.))
-            .py(px(4.))
+            .py(px(5.))
             .child(name)
             .child(body)
             .into_any_element()

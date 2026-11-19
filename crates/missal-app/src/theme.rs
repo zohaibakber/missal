@@ -293,8 +293,13 @@ impl Palette {
 
     pub fn focus_ring(&self) -> Vec<BoxShadow> {
         vec![
-            shadow(self.ring, 0., 0., 3.),
-            shadow(self.surface, 0., 0., 1.),
+            shadow(
+                self.ring.opacity(if self.dark { 0.56 } else { 0.48 }),
+                0.,
+                0.,
+                3.,
+            ),
+            shadow(self.ring.opacity(0.9), 0., 0., 1.),
         ]
     }
 

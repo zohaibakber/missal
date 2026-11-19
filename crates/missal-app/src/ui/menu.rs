@@ -78,6 +78,7 @@ pub enum Trail {
     None,
     Keys(SharedString),
     Text(SharedString),
+    Count(SharedString),
     Chevron,
 }
 
@@ -138,6 +139,11 @@ impl MenuItem {
 
     pub fn trailing_text(mut self, text: impl Into<SharedString>) -> Self {
         self.trail = Trail::Text(text.into());
+        self
+    }
+
+    pub fn trailing_count(mut self, count: usize) -> Self {
+        self.trail = Trail::Count(count.to_string().into());
         self
     }
 
@@ -230,6 +236,15 @@ impl RenderOnce for MenuItem {
                         ICON_SM,
                         palette.ink_faint,
                     ))
+                    .into_any_element(),
+            ),
+            Trail::Count(value) => Some(
+                div()
+                    .flex_none()
+                    .text_size(px(12.))
+                    .font_features(crate::ui::tabular())
+                    .text_color(palette.ink_faint)
+                    .child(value)
                     .into_any_element(),
             ),
             Trail::Chevron => Some(
