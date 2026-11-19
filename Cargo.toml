@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/missal-app", "crates/missal-auth", "crates/missal-core", "crates/missal-docx", "crates/missal-editor", "crates/missal-library", "crates/missal-page", "crates/missal-store", "crates/missal-text"]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.8.1"
 edition = "2024"
 rust-version = "1.100"
 license = "UNLICENSED"
