@@ -1395,12 +1395,10 @@ impl TemplatesScreen {
                 .gap(px(4.))
                 .px(px(16.))
                 .pt(px(8.))
-                .children((0..6usize).map(|index| {
-                    div()
-                        .id(("template-skeleton", index))
+                .children((0..6usize).map(|_| {
+                    crate::ui::skeleton()
                         .h(px(ROW_HEIGHT - 12.))
                         .rounded(px(crate::theme::RADIUS_LG))
-                        .bg(palette.hover)
                 }))
                 .into_any_element(),
             Load::Failed(message) => empty_state(

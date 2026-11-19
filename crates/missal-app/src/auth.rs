@@ -21,7 +21,9 @@ use crate::theme::{
     BUTTON_XS, Palette, SHELL_INSET, hex, hex_alpha, inset, motion_entrance, outline, shadow,
 };
 use crate::ui::input::{Kind, field, field_input, secret_input};
-use crate::ui::{ButtonKind, UrRole, button, sized_icon, ur_label};
+use crate::ui::{
+    ButtonKind, Intent, UrRole, alert, button, field_label, form_field, sized_icon, ur_label,
+};
 
 const REFRESH_EVERY: Duration = Duration::from_secs(60 * 60);
 pub const MIN_PASSWORD: usize = 10;
@@ -843,25 +845,16 @@ impl AuthGate {
     }
 
     fn labelled(
-        palette: &Palette,
         text: &'static str,
         trailing: Option<AnyElement>,
         element: impl IntoElement,
     ) -> AnyElement {
-        v_flex()
-            .gap(px(6.))
+        form_field()
             .child(
                 h_flex()
                     .h(px(BUTTON_XS))
                     .justify_between()
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .line_height(px(16.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(palette.ink)
-                            .child(text),
-                    )
+                    .child(field_label(text))
                     .children(trailing.map(|trailing| div().mr(px(-7.)).child(trailing))),
             )
             .child(element)
@@ -906,11 +899,10 @@ impl AuthGate {
         flow: &Flow,
         notice: Option<Notice>,
         busy: bool,
-        palette: &Palette,
         cx: &mut Context<Self>,
     ) -> Screen {
         let input = |label: &'static str, id: &'static str, input: &Entity<TextInput>| {
-            Self::labelled(palette, label, None, field(id, input, Kind::Latin))
+            Self::labelled(label, None, field(id, input, Kind::Latin))
         };
         let new_password = |label: &'static str| {
             [
@@ -942,7 +934,6 @@ impl AuthGate {
                 vec![
                     input("Email", "sign-in-email", &self.email),
                     Self::labelled(
-                        palette,
                         "Password",
                         Some(
                             button("auth-forgot", "Forgot password?")
@@ -1116,7 +1107,7 @@ impl Render for AuthGate {
                 links: Vec::new(),
             },
             AuthState::SignedOut { flow, notice, busy } => {
-                self.signed_out_screen(flow, notice.clone(), *busy, &palette, cx)
+                self.signed_out_screen(flow, notice.clone(), *busy, cx)
             }
             AuthState::LicenceExpired {
                 account,
@@ -1168,13 +1159,13 @@ impl Render for AuthGate {
             ));
         }
         if let Some(notice) = notice {
-            parts.push(rise(callout(&palette, notice), step(2), 0, still));
+            parts.push(rise(callout(notice), step(2), 0, still));
         }
         if !action.is_empty() {
             parts.push(rise(
                 button("auth-submit", label)
                     .primary()
-                    .disabled(busy)
+                    .busy(busy)
                     .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
                 step(3),
                 2,
@@ -1233,48 +1224,12 @@ fn rise(element: impl IntoElement + 'static, id: ElementId, step: u32, still: bo
         .into_any_element()
 }
 
-fn callout(palette: &Palette, notice: Notice) -> impl IntoElement + use<> {
-    let (icon, fill, edge, tint, ink, text) = match notice {
-        Notice::Problem(text) => (
-            IconName::CircleAlert,
-            palette.danger_wash,
-            palette.danger.opacity(0.2),
-            palette.danger_text,
-            palette.danger_text,
-            text,
-        ),
-        Notice::Info(text) => (
-            IconName::Info,
-            palette.accent_wash,
-            palette.accent.opacity(0.2),
-            palette.accent,
-            palette.ink,
-            text,
-        ),
+fn callout(notice: Notice) -> impl IntoElement + use<> {
+    let (intent, text) = match notice {
+        Notice::Problem(text) => (Intent::Danger, text),
+        Notice::Info(text) => (Intent::Info, text),
     };
-    h_flex()
-        .items_start()
-        .gap(px(10.))
-        .p(px(12.))
-        .rounded(px(14.))
-        .bg(fill)
-        .border_1()
-        .border_color(edge)
-        .child(
-            div()
-                .flex_none()
-                .mt(px(1.))
-                .child(sized_icon(icon, 16., tint)),
-        )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .text_size(px(13.))
-                .line_height(px(19.))
-                .text_color(ink)
-                .child(text),
-        )
+    alert(intent).child(text)
 }
 
 fn account_chip(palette: &Palette, email: &str) -> AnyElement {

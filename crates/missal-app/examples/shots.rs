@@ -612,6 +612,15 @@ fn run_gate(dark: bool, out: &Path, api: &str) {
     h.with_window(|window, cx| window.click(("user-licence", 2usize), cx));
     h.idle();
     h.shot("49b-people-added-year");
+    h.press("escape");
+    h.with_window(missal_app::ui::account::open_change_password);
+    h.idle();
+    h.fill("password-current", "correct horse battery");
+    h.fill("password-new", "short");
+    h.fill("password-confirm", "short");
+    h.click("password-save");
+    h.idle();
+    h.shot("49c-change-password");
 }
 
 mod fake_api {

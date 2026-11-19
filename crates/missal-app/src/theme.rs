@@ -70,6 +70,7 @@ pub struct Palette {
     pub success_wash: Hsla,
     pub danger: Hsla,
     pub danger_text: Hsla,
+    pub on_danger: Hsla,
     pub danger_wash: Hsla,
     pub notice: Hsla,
     pub notice_text: Hsla,
@@ -127,6 +128,7 @@ impl Palette {
             success_wash: hex_alpha(0x00bc7d, 0.08),
             danger: hex(0xfb2c36),
             danger_text: hex(0xc10007),
+            on_danger: hex(0xffffff),
             danger_wash: hex_alpha(0xfb2c36, 0.08),
             notice: hex(0xfe9a00),
             notice_text: hex(0xbb4d00),
@@ -174,6 +176,7 @@ impl Palette {
             success_wash: hex_alpha(0x00bc7d, 0.16),
             danger: hex(0xfb414a),
             danger_text: hex(0xff6467),
+            on_danger: hex(0xffffff),
             danger_wash: hex_alpha(0xfb2c36, 0.16),
             notice: hex(0xfe9a00),
             notice_text: hex(0xffb900),
@@ -545,8 +548,8 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     colors.danger_active = palette.danger.opacity(0.84);
     colors.button_danger_hover = colors.danger_hover;
     colors.button_danger_active = colors.danger_active;
-    colors.danger_foreground = hex(0xffffff);
-    colors.button_danger_foreground = hex(0xffffff);
+    colors.danger_foreground = palette.on_danger;
+    colors.button_danger_foreground = palette.on_danger;
     colors.warning = palette.notice;
     colors.info = palette.accent;
     colors.success = palette.success;

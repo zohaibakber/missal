@@ -26,9 +26,10 @@ use crate::ui::input::{Kind, field, field_input, search_field};
 use crate::ui::part::Part;
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::{
-    SaveState, SegmentItem, UrRole, button, card_description, card_header, card_title, count_badge,
-    ghost_sm, icon_button, isolate_urdu, primary_sm, save_state, segmented, sidebar_group,
-    sidebar_group_label, sidebar_menu_button, ur_label,
+    Intent, SaveState, SegmentItem, UrRole, alert, alert_description, alert_title, button,
+    card_description, card_header, card_title, count_badge, field_error, ghost_sm, icon_button,
+    isolate_urdu, primary_sm, save_state, segmented, separator_vertical, sidebar_group,
+    sidebar_group_label, sidebar_menu_button, skeleton, ur_label,
 };
 use crate::update::controller::{self, UpdateState, UpdateStatus};
 
@@ -960,42 +961,18 @@ impl SettingsScreen {
             .when(!last, |this| this.child(crate::ui::separator().mt(px(40.))))
     }
 
-    fn error_line(&self, palette: &Palette, text: &'static str) -> gpui_kit::Div {
-        div()
-            .text_size(px(12.))
-            .line_height(px(16.))
-            .text_color(palette.danger_text)
-            .child(text)
-    }
-
     fn globals_body(&mut self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let load = self.models.catalog.read(cx).load.clone();
         match load {
             Load::Loading => v_flex()
                 .gap(px(8.))
-                .children((0..4usize).map(|index| {
-                    div()
-                        .id(("global-skeleton", index))
-                        .h(px(36.))
-                        .rounded(px(RADIUS))
-                        .bg(palette.hover)
-                }))
+                .children((0..4usize).map(|_| skeleton().h(px(36.)).rounded(px(RADIUS))))
                 .into_any_element(),
-            Load::Failed(message) => v_flex()
-                .gap(px(8.))
+            Load::Failed(message) => alert(Intent::Danger)
+                .child(alert_title().child("Could not load global values"))
+                .child(alert_description().child(message.clone()))
                 .child(
-                    div()
-                        .text_size(px(14.))
-                        .child("Could not load global values"),
-                )
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(palette.ink_faint)
-                        .child(message.clone()),
-                )
-                .child(
-                    h_flex().child(
+                    h_flex().mt(px(8.)).child(
                         button("retry-settings", "Try again")
                             .outline()
                             .sm()
@@ -1093,7 +1070,7 @@ impl SettingsScreen {
                                 h_flex()
                                     .flex_row_reverse()
                                     .pt(px(2.))
-                                    .child(self.error_line(&palette, error))
+                                    .child(field_error(error))
                             }))
                     }))
                     .child(
@@ -1129,7 +1106,7 @@ impl SettingsScreen {
                             .child(ur_label("نام", UrRole::Body)),
                     )
                     .child(field("marker-close", &self.marker_close, Kind::Urdu).width(px(56.)))
-                    .child(div().w(px(1.)).h(px(24.)).mx(px(8.)).bg(palette.line))
+                    .child(separator_vertical().h(px(24.)).mx(px(8.)))
                     .child(
                         div()
                             .text_size(px(14.))
@@ -1149,7 +1126,7 @@ impl SettingsScreen {
                             ),
                     ),
             )
-            .children(error.map(|error| self.error_line(palette, error)))
+            .children(error.map(field_error))
             .into_any_element()
     }
 
@@ -1287,7 +1264,7 @@ impl SettingsScreen {
                             .flex_row_reverse()
                             .px(px(10.))
                             .pb(px(6.))
-                            .child(self.error_line(&palette, error))
+                            .child(field_error(error))
                     }))
             })))
             .child(
@@ -1534,7 +1511,8 @@ impl SettingsScreen {
                             .outline()
                             .sm()
                             .icon(IconName::RefreshCw)
-                            .disabled(!updates_enabled || checking)
+                            .disabled(!updates_enabled)
+                            .busy(checking)
                             .on_click(|_, window, cx| check_for_updates(window, cx)),
                     )
                     .children(match &state {
