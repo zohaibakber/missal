@@ -1014,15 +1014,15 @@ impl SettingsScreen {
                         let error = errors.get(index).copied().flatten();
                         let name_cell: AnyElement = if row.editing_name {
                             field(("global-name", index), &row.name, Kind::Urdu)
-                                .width(px(120.))
+                                .width(px(220.))
                                 .error(error.is_some())
                                 .into_any_element()
                         } else {
                             div()
                                 .id(("global-name-label", index))
                                 .test_support()
-                                .w(px(120.))
-                                .h(px(36.))
+                                .max_w(px(320.))
+                                .h(px(30.))
                                 .flex_none()
                                 .px(px(10.))
                                 .rounded(px(RADIUS))
@@ -1035,8 +1035,8 @@ impl SettingsScreen {
                                     this.rename_global(index, window, cx)
                                 }))
                                 .child(
-                                    div().flex_1().min_w_0().mt(px(-2.)).child(
-                                        ur_label(row.initial.0.clone(), UrRole::Body)
+                                    div().min_w_0().mt(px(-2.)).child(
+                                        ur_label(row.initial.0.clone(), UrRole::InputLabel)
                                             .text_color(palette.ink)
                                             .truncate(),
                                     ),
@@ -1046,15 +1046,20 @@ impl SettingsScreen {
                         v_flex()
                             .id(("global-row", index))
                             .group("global-row")
-                            .py(px(4.))
+                            .py(px(6.))
                             .ml(px(-34.))
-                            .mr(px(-10.))
+                            .child(
+                                h_flex()
+                                    .flex_row_reverse()
+                                    .mr(px(if row.editing_name { 0. } else { -10. }))
+                                    .mb(px(4.))
+                                    .child(name_cell),
+                            )
                             .child(
                                 h_flex()
                                     .flex_row_reverse()
                                     .items_center()
                                     .gap(px(10.))
-                                    .child(name_cell)
                                     .child(
                                         div().flex_1().min_w_0().child(
                                             field(
@@ -1088,12 +1093,11 @@ impl SettingsScreen {
                                 h_flex()
                                     .flex_row_reverse()
                                     .pt(px(2.))
-                                    .child(div().w(px(160.)).flex_none())
                                     .child(self.error_line(&palette, error))
                             }))
                     }))
                     .child(
-                        h_flex().flex_row_reverse().pt(px(8.)).mr(px(-10.)).child(
+                        h_flex().flex_row_reverse().pt(px(8.)).child(
                             ghost_sm("add-global", "Add global value")
                                 .icon(IconName::Plus)
                                 .on_click(

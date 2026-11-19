@@ -119,14 +119,7 @@ pub fn skeleton_bar(width: f32, height: f32) -> Part {
 }
 
 pub fn table() -> Part {
-    part(|base, palette| {
-        base.v_flex()
-            .size_full()
-            .p(px(4.))
-            .pt(px(0.))
-            .rounded(px(RADIUS_2XL))
-            .bg(palette.hover.opacity(0.72))
-    })
+    part(|base, _| base.v_flex().size_full())
 }
 
 pub fn table_header() -> Part {
@@ -134,6 +127,10 @@ pub fn table_header() -> Part {
         base.h_flex()
             .flex_none()
             .h(px(TABLE_HEAD))
+            .rounded_t(px(RADIUS_XL))
+            .border_1()
+            .border_color(palette.line)
+            .bg(palette.sunken.opacity(if palette.dark { 0.5 } else { 0.7 }))
             .text_size(px(14.))
             .line_height(px(20.))
             .font_weight(FontWeight::MEDIUM)
@@ -146,9 +143,12 @@ pub fn table_body() -> Part {
         base.flex_1()
             .min_h_0()
             .overflow_hidden()
-            .rounded(px(RADIUS_XL))
+            .rounded_b(px(RADIUS_XL))
+            .border_l_1()
+            .border_r_1()
+            .border_b_1()
+            .border_color(palette.line)
             .bg(palette.surface)
-            .shadow(palette.shadow_xs())
     })
 }
 

@@ -744,13 +744,15 @@ impl FirListScreen {
                         ),
                     ),
                 })
-                .child(
-                    div()
-                        .font_weight(FontWeight::NORMAL)
-                        .font_features(tabular())
-                        .text_color(palette.ink_faint)
-                        .child(count.to_string()),
-                )
+                .when(content.is_some(), |this| {
+                    this.child(
+                        div()
+                            .font_weight(FontWeight::NORMAL)
+                            .font_features(tabular())
+                            .text_color(palette.ink_faint)
+                            .child(count.to_string()),
+                    )
+                })
         };
         let mut row = tab_list().id("status-filter").child(
             item("status-all".into(), filter.is_none(), all_count, None)
@@ -1444,17 +1446,7 @@ impl Render for FirListScreen {
 impl HeaderSource for FirListScreen {
     fn header(&mut self, _: &mut Window, cx: &mut Context<Self>) -> HeaderContent {
         self.ensure_derived(cx);
-        let total = self.models.firs.read(cx).rows().len();
-        let visible = self.visible_count();
-        let ready = self.models.firs.read(cx).load.is_ready();
-        let meta = if !ready {
-            String::new()
-        } else if visible == total {
-            total.to_string()
-        } else {
-            format!("{visible} of {total}")
-        };
-        let content = HeaderContent::new("FIRs").meta(meta);
+        let content = HeaderContent::new("FIRs");
         let selected = self.selected.len();
         if selected == 0 {
             return content.action(

@@ -293,8 +293,6 @@ impl RenderOnce for Sidebar {
         }
         let models = Models::get(cx);
         let section = NavEntry::destination(self.route);
-        let fir_count = models.firs.read(cx).rows().len();
-        let template_count = models.templates.read(cx).items.len();
         let prefs = models.prefs.read(cx).read();
         let theme = prefs.theme;
         let firs = models.firs.read(cx);
@@ -347,7 +345,7 @@ impl RenderOnce for Sidebar {
             .child(nav_item(
                 NavEntry::Firs,
                 IconName::Folders,
-                Some(fir_count),
+                None,
                 section == NavEntry::Firs,
                 Route::Firs,
                 &palette,
@@ -355,7 +353,7 @@ impl RenderOnce for Sidebar {
             .child(nav_item(
                 NavEntry::Templates,
                 IconName::LayoutTemplate,
-                Some(template_count),
+                None,
                 section == NavEntry::Templates,
                 Route::Templates,
                 &palette,
