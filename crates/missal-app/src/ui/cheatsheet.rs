@@ -86,7 +86,7 @@ impl Render for Cheatsheet {
                     )
                     .children(rows.into_iter().map(|shortcut| {
                         h_flex()
-                            .h(px(28.))
+                            .h(px(26.))
                             .items_center()
                             .justify_between()
                             .gap(px(12.))
@@ -109,14 +109,21 @@ impl Render for Cheatsheet {
         };
         v_flex()
             .gap(px(16.))
-            .child(field("cheatsheet-filter", &self.filter, Kind::Search).width(px(280.)))
+            .child(
+                h_flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(16.))
+                    .child(dialog_title("Keyboard shortcuts"))
+                    .child(field("cheatsheet-filter", &self.filter, Kind::Search).width(px(240.))),
+            )
             .child(
                 h_flex()
                     .items_start()
                     .gap(px(32.))
-                    .child(column(&[Group::General, Group::Templates]))
-                    .child(column(&[Group::FirList, Group::Print]))
-                    .child(column(&[Group::Workspace, Group::Editor])),
+                    .child(column(&[Group::General, Group::Print]))
+                    .child(column(&[Group::FirList, Group::Workspace]))
+                    .child(column(&[Group::Editor, Group::Templates])),
             )
             .child(
                 div()
@@ -146,14 +153,12 @@ pub fn open(window: &mut Window, cx: &mut App) {
     window.open_dialog(cx, move |dialog: Dialog, _, cx| {
         let palette = *Palette::get(cx);
         dialog_surface(dialog, &palette, CHEATSHEET_WIDTH)
-            .margin_top(px(56.))
+            .margin_top(px(40.))
             .keyboard(true)
             .on_close(|_, _, cx| cx.set_global(CheatsheetOpen(false)))
             .child(
-                v_flex()
-                    .gap(px(12.))
+                div()
                     .pb(px(crate::ui::dialogs::DIALOG_PAD))
-                    .child(dialog_title("Keyboard shortcuts"))
                     .child(sheet.clone()),
             )
     });

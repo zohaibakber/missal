@@ -36,6 +36,8 @@ pub struct MenuEntry {
     icon: Option<IconName>,
     check: Option<bool>,
     keys: Option<SharedString>,
+    count: Option<usize>,
+    dot: Option<gpui_kit::Hsla>,
     danger: bool,
     disabled: bool,
     keep_open: bool,
@@ -54,6 +56,8 @@ impl MenuEntry {
             icon: None,
             check: None,
             keys: None,
+            count: None,
+            dot: None,
             danger: false,
             disabled: false,
             keep_open: false,
@@ -89,6 +93,16 @@ impl MenuEntry {
 
     pub fn danger(mut self) -> Self {
         self.danger = true;
+        self
+    }
+
+    pub fn count(mut self, count: usize) -> Self {
+        self.count = Some(count);
+        self
+    }
+
+    pub fn dot(mut self, color: gpui_kit::Hsla) -> Self {
+        self.dot = Some(color);
         self
     }
 
@@ -338,11 +352,25 @@ impl PopupList {
     }
 
     fn item(&self, index: usize, entry: &MenuEntry, cx: &mut Context<Self>) -> AnyElement {
+        let dot = entry.dot.map(|color| {
+            div()
+                .flex_none()
+                .size(px(crate::ui::status::DOT))
+                .rounded_full()
+                .bg(color)
+        });
         let content: AnyElement = match &entry.label {
             Label::Text(text) => div().child(text.clone()).into_any_element(),
-            Label::Urdu(text) => div()
-                .mt(px(-2.))
-                .child(ur_label(text.clone(), UrRole::Body))
+            Label::Urdu(text) => gpui_kit::component::h_flex()
+                .flex_row_reverse()
+                .items_center()
+                .gap(px(8.))
+                .children(dot)
+                .child(
+                    div()
+                        .mt(px(-2.))
+                        .child(ur_label(text.clone(), UrRole::Body)),
+                )
                 .into_any_element(),
         };
         let mut item = match &entry.label {
@@ -357,6 +385,9 @@ impl PopupList {
         }
         if let Some(keys) = &entry.keys {
             item = item.keys(keys.clone());
+        }
+        if let Some(count) = entry.count {
+            item = item.trailing_count(count);
         }
         if entry.danger {
             item = item.danger();

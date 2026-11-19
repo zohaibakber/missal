@@ -247,9 +247,10 @@ fn run(dark: bool, out: &Path, only_wp0: bool) {
     h.shot("03b-partial-selection");
     h.press("escape");
     h.press("escape");
+    h.click("status-filter");
+    h.shot("04-status-menu");
     h.click("status-Open");
     h.shot("04-status-filter");
-    h.press("escape");
     h.click("columns");
     h.shot("05-columns-menu");
     h.press("escape");
