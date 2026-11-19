@@ -4,8 +4,8 @@ use common::{Scratch, fir};
 use missal_core::document::{Block, Field, Inline, Paragraph, Text};
 use missal_core::{
     CustomFieldDraft, DisplayMode, Document, Entity, FieldMarkers, FieldPresentation,
-    FieldReference, FirDocumentId, FirId, GlobalPlaceholderDraft, Invalid, PlaceholderId,
-    PlaceholderSource, RepositoryError, Revision, TemplateId,
+    FieldReference, FirDocumentId, FirField, FirId, FirProperty, GlobalPlaceholderDraft, Invalid,
+    PlaceholderId, PlaceholderSource, RepositoryError, Revision, TemplateId, Zimni,
 };
 use missal_store::{DraftKey, Store, TemplateBundle};
 
@@ -35,9 +35,23 @@ fn firs_are_validated_trimmed_and_round_trip() {
     assert!(store.firs().unwrap().is_empty());
     let mut draft = fir(" 12/26 ");
     draft.witness = vec![" گواہ ".into()];
+    draft.zimni = vec![
+        Zimni::new(" 1 ", "12-09-2026"),
+        Zimni::new("", "14-09-2026"),
+        Zimni::new("3", ""),
+        Zimni::default(),
+    ];
     let created = store.create_fir(&draft).unwrap();
     assert_eq!(created.fir.fir_no, "12/26");
     assert_eq!(created.fir.witness, ["گواہ"]);
+    assert_eq!(
+        created.fir.zimni,
+        [
+            Zimni::new("1", "12-09-2026"),
+            Zimni::new("", "14-09-2026"),
+            Zimni::new("3", "")
+        ]
+    );
     assert_eq!(store.fir(created.id).unwrap(), created);
     let missing = FirId::new(99).unwrap();
     assert_eq!(store.fir(missing), Err(not_found(Entity::Fir, missing)));
@@ -602,6 +616,7 @@ fn repository_templates_install_from_library_uploads_with_bound_fields() {
     assert_eq!(templates.len(), 36);
     let mut unresolved = Vec::new();
     let mut catalog_fields = 0;
+    let mut fir_fields = std::collections::HashSet::new();
     for summary in &templates {
         for reference in store
             .template(summary.id)
@@ -612,12 +627,30 @@ fn repository_templates_install_from_library_uploads_with_bound_fields() {
             match reference {
                 FieldReference::Unresolved(label) => unresolved.push(label),
                 FieldReference::Catalog(_) => catalog_fields += 1,
-                FieldReference::Fir(_) => {}
+                FieldReference::Fir(field) => {
+                    fir_fields.insert(field);
+                }
             }
         }
     }
     assert!(unresolved.is_empty(), "{unresolved:?}");
     assert!(catalog_fields > 0);
+    for (property, index) in [
+        (FirProperty::Body, None),
+        (FirProperty::ZimniDate, Some(1)),
+        (FirProperty::ZimniDate, Some(4)),
+        (FirProperty::ZimniDate, Some(5)),
+        (FirProperty::ZimniDate, Some(6)),
+    ] {
+        assert!(fir_fields.contains(&FirField { property, index }));
+    }
+    assert!(
+        store
+            .placeholders()
+            .unwrap()
+            .iter()
+            .all(|placeholder| placeholder.label != "مختصر حالات")
+    );
     assert_eq!(store.global_placeholders().unwrap().len(), 5);
     drop(store);
     let reopened = Store::open(&path).unwrap();

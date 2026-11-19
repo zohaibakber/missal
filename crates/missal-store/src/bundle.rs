@@ -6,7 +6,7 @@ use flate2::Compression;
 use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
 use missal_core::error::STORED_DATA_INVALID;
-use missal_core::{Document, PlaceholderId, RepositoryError, field_lookup_key};
+use missal_core::{Document, PlaceholderId, RepositoryError, field_lookup_key, fir_field_by_key};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::{Result, failed, placeholders, templates};
@@ -177,7 +177,11 @@ pub(crate) fn ensure_labels(
         .map(|label| (label, true))
         .chain(custom.iter().map(|label| (label, false)));
     for (label, shared) in labels {
-        if let Entry::Vacant(entry) = ids.entry(field_lookup_key(label)) {
+        let key = field_lookup_key(label);
+        if fir_field_by_key(&key).is_some() {
+            continue;
+        }
+        if let Entry::Vacant(entry) = ids.entry(key) {
             entry.insert(placeholders::insert(
                 connection, label, shared, "", operation,
             )?);

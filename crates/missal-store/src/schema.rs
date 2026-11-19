@@ -115,6 +115,9 @@ CREATE TABLE template_drafts (
 ALTER TABLE settings ADD COLUMN library_seeded INTEGER NOT NULL DEFAULT 0;
 UPDATE settings SET library_seeded = bundle_version > 0;
 "#,
+    r#"
+ALTER TABLE firs ADD COLUMN zimni_dates TEXT NOT NULL DEFAULT '';
+"#,
 ];
 
 pub(crate) fn configure(connection: &Connection) -> Result<()> {

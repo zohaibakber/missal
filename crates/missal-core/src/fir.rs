@@ -62,10 +62,11 @@ pub enum FirProperty {
     Imei2,
     Sim1,
     Sim2,
+    ZimniDate,
 }
 
 impl FirProperty {
-    pub const ALL: [FirProperty; 17] = [
+    pub const ALL: [FirProperty; 18] = [
         FirProperty::FirNo,
         FirProperty::Complainant,
         FirProperty::Date,
@@ -83,6 +84,7 @@ impl FirProperty {
         FirProperty::Imei2,
         FirProperty::Sim1,
         FirProperty::Sim2,
+        FirProperty::ZimniDate,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -104,6 +106,7 @@ impl FirProperty {
             FirProperty::Imei2 => "imei_2",
             FirProperty::Sim1 => "sim_1",
             FirProperty::Sim2 => "sim_2",
+            FirProperty::ZimniDate => "zimni_date",
         }
     }
 
@@ -121,11 +124,12 @@ impl FirProperty {
             FirProperty::InvestigationOfficer => "تفتیشی افسر",
             FirProperty::Writer => "تحریر کنندہ",
             FirProperty::Recovery => "برآمدگی",
-            FirProperty::Body => "متن",
+            FirProperty::Body => "مختصر حالات",
             FirProperty::Imei1 => "ایمی نمبر 1",
             FirProperty::Imei2 => "ایمی نمبر 2",
             FirProperty::Sim1 => "سم نمبر 1",
             FirProperty::Sim2 => "سم نمبر 2",
+            FirProperty::ZimniDate => "تاریخ ضمنی",
         }
     }
 
@@ -138,7 +142,10 @@ impl FirProperty {
     pub const fn is_list(self) -> bool {
         matches!(
             self,
-            FirProperty::Accused | FirProperty::Witness | FirProperty::Zimni
+            FirProperty::Accused
+                | FirProperty::Witness
+                | FirProperty::Zimni
+                | FirProperty::ZimniDate
         )
     }
 }
@@ -149,6 +156,39 @@ pub const STATUS_LABEL: &str = "حالت";
 pub enum FirValue<'a> {
     Text(&'a str),
     List(&'a [String]),
+    Zimni(&'a [Zimni], ZimniPart),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZimniPart {
+    Number,
+    Date,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Zimni {
+    pub number: String,
+    pub date: String,
+}
+
+impl Zimni {
+    pub fn new(number: impl Into<String>, date: impl Into<String>) -> Zimni {
+        Zimni {
+            number: number.into(),
+            date: date.into(),
+        }
+    }
+
+    pub fn part(&self, part: ZimniPart) -> &str {
+        match part {
+            ZimniPart::Number => &self.number,
+            ZimniPart::Date => &self.date,
+        }
+    }
+
+    pub fn is_blank(&self) -> bool {
+        self.number.trim().is_empty() && self.date.trim().is_empty()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -159,7 +199,7 @@ pub struct Fir {
     pub offence: String,
     pub accused: Vec<String>,
     pub witness: Vec<String>,
-    pub zimni: Vec<String>,
+    pub zimni: Vec<Zimni>,
     pub incident_date: String,
     pub arrest_date: String,
     pub investigation_officer: String,
@@ -184,7 +224,8 @@ impl Fir {
             FirProperty::Offence => FirValue::Text(&self.offence),
             FirProperty::Accused => FirValue::List(&self.accused),
             FirProperty::Witness => FirValue::List(&self.witness),
-            FirProperty::Zimni => FirValue::List(&self.zimni),
+            FirProperty::Zimni => FirValue::Zimni(&self.zimni, ZimniPart::Number),
+            FirProperty::ZimniDate => FirValue::Zimni(&self.zimni, ZimniPart::Date),
             FirProperty::InvestigationOfficer => FirValue::Text(&self.investigation_officer),
             FirProperty::Writer => FirValue::Text(&self.writer),
             FirProperty::Recovery => FirValue::Text(&self.recovery),
@@ -216,6 +257,14 @@ impl Fir {
         if accused.is_empty() {
             return Err(Invalid::NoAccused);
         }
+        let mut zimni: Vec<Zimni> = self
+            .zimni
+            .iter()
+            .map(|entry| Zimni::new(entry.number.trim(), entry.date.trim()))
+            .collect();
+        while zimni.last().is_some_and(Zimni::is_blank) {
+            zimni.pop();
+        }
         Ok(Fir {
             fir_no: required(&self.fir_no, "fir_no")?,
             complainant: optional(&self.complainant),
@@ -223,7 +272,7 @@ impl Fir {
             offence: required(&self.offence, "offence")?,
             accused,
             witness: entries(&self.witness, "witness")?,
-            zimni: entries(&self.zimni, "zimni")?,
+            zimni,
             incident_date: required(&self.incident_date, "incident_date")?,
             arrest_date: optional(&self.arrest_date),
             investigation_officer: optional(&self.investigation_officer),
@@ -292,6 +341,21 @@ mod tests {
         let mut empty_entry = draft();
         empty_entry.witness = vec!["".into()];
         assert_eq!(empty_entry.validated(), Err(Invalid::EmptyEntry("witness")));
+        let mut zimni = draft();
+        zimni.zimni = vec![
+            Zimni::new(" 3 ", ""),
+            Zimni::default(),
+            Zimni::new("", "01-10-2026"),
+            Zimni::new(" ", " "),
+        ];
+        assert_eq!(
+            zimni.validated().unwrap().zimni,
+            [
+                Zimni::new("3", ""),
+                Zimni::default(),
+                Zimni::new("", "01-10-2026")
+            ]
+        );
         let mut no_accused = draft();
         no_accused.accused.clear();
         assert_eq!(no_accused.validated(), Err(Invalid::NoAccused));

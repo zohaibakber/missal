@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::OnceLock;
 
-use missal_core::{CalendarDate, Fir, FirStatus, RepositoryError, TemplateId};
+use missal_core::{CalendarDate, Fir, FirStatus, RepositoryError, TemplateId, Zimni};
 use missal_store::{Store, TemplateBundle};
 
 const OFFENCES: [&str; 12] = [
@@ -86,7 +86,7 @@ fn sample_fir(index: usize, random: &mut Random) -> Fir {
         accused: (0..accused_count).map(|_| name(random)).collect(),
         witness: (0..witness_count).map(|_| name(random)).collect(),
         zimni: if random.below(3) == 0 {
-            vec!["موقع واردات کا نقشہ تیار کیا گیا".to_owned()]
+            vec![Zimni::new("1", incident.to_string())]
         } else {
             Vec::new()
         },

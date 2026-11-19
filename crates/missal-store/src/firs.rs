@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use missal_core::{
     Entity, Fir, FirId, FirRecord, FirStatus, FirSummary, FirValueContext, FirValues,
-    PlaceholderId, PlaceholderValue, RepositoryError,
+    PlaceholderId, PlaceholderValue, RepositoryError, Zimni,
 };
 use rusqlite::{Connection, Row, ToSql, params};
 
@@ -12,8 +12,8 @@ use crate::{FirWorkspace, Result, Store, failed, id, invalid, is_constraint};
 
 const LIST_SEPARATOR: char = '\u{1F}';
 
-const COLUMNS: &str = "id, fir_no, date, offence, incident_date, arrest_date, status, accused, complainant, witness, zimni, investigation_officer, writer, recovery, imei_1, imei_2, sim_1, sim_2, body";
-const WRITE_COLUMNS: &str = "fir_no, date, offence, incident_date, arrest_date, status, accused, complainant, witness, zimni, investigation_officer, writer, recovery, imei_1, imei_2, sim_1, sim_2, body";
+const COLUMNS: &str = "id, fir_no, date, offence, incident_date, arrest_date, status, accused, complainant, witness, zimni, investigation_officer, writer, recovery, imei_1, imei_2, sim_1, sim_2, body, zimni_dates";
+const WRITE_COLUMNS: &str = "fir_no, date, offence, incident_date, arrest_date, status, accused, complainant, witness, zimni, investigation_officer, writer, recovery, imei_1, imei_2, sim_1, sim_2, body, zimni_dates";
 pub(crate) const SUMMARY_COLUMNS: &str =
     "id, fir_no, date, offence, incident_date, arrest_date, status, accused";
 pub(crate) const SUMMARY_INDEX: &str = "firs_summary";
@@ -37,12 +37,48 @@ fn join(items: &[String]) -> String {
     joined
 }
 
+fn zimni(numbers: &str, dates: &str) -> Vec<Zimni> {
+    let numbers = split(numbers);
+    let mut dates = split(dates).into_iter();
+    let mut entries: Vec<Zimni> = numbers
+        .into_iter()
+        .map(|number| Zimni::new(number, dates.next().unwrap_or_default()))
+        .collect();
+    entries.extend(dates.map(|date| Zimni::new("", date)));
+    entries
+}
+
+fn zimni_dates(entries: &[Zimni]) -> String {
+    let dates: Vec<String> = entries.iter().map(|entry| entry.date.clone()).collect();
+    if dates.iter().all(String::is_empty) {
+        String::new()
+    } else {
+        join(&dates)
+    }
+}
+
 fn split(joined: &str) -> Vec<String> {
     if joined.is_empty() {
         Vec::new()
     } else {
         joined.split(LIST_SEPARATOR).map(str::to_owned).collect()
     }
+}
+
+pub(crate) fn write_zimni(
+    connection: &Connection,
+    fir_id: FirId,
+    zimni: &[Zimni],
+    operation: &'static str,
+) -> Result<()> {
+    let numbers: Vec<String> = zimni.iter().map(|entry| entry.number.clone()).collect();
+    connection
+        .execute(
+            "UPDATE firs SET zimni = ?1, zimni_dates = ?2 WHERE id = ?3",
+            params![join(&numbers), zimni_dates(zimni), fir_id.get()],
+        )
+        .map(|_| ())
+        .map_err(failed(operation))
 }
 
 fn status_code(status: FirStatus) -> i64 {
@@ -66,7 +102,7 @@ fn validated(fir: &Fir) -> Result<Fir> {
     })
 }
 
-fn write_values(fir: &Fir) -> [Box<dyn ToSql + '_>; 18] {
+fn write_values(fir: &Fir) -> [Box<dyn ToSql + '_>; 19] {
     [
         Box::new(&fir.fir_no),
         Box::new(&fir.date),
@@ -77,7 +113,12 @@ fn write_values(fir: &Fir) -> [Box<dyn ToSql + '_>; 18] {
         Box::new(join(&fir.accused)),
         Box::new(&fir.complainant),
         Box::new(join(&fir.witness)),
-        Box::new(join(&fir.zimni)),
+        Box::new(join(
+            &fir.zimni
+                .iter()
+                .map(|entry| entry.number.clone())
+                .collect::<Vec<_>>(),
+        )),
         Box::new(&fir.investigation_officer),
         Box::new(&fir.writer),
         Box::new(&fir.recovery),
@@ -86,6 +127,7 @@ fn write_values(fir: &Fir) -> [Box<dyn ToSql + '_>; 18] {
         Box::new(&fir.sim_1),
         Box::new(&fir.sim_2),
         Box::new(&fir.body),
+        Box::new(zimni_dates(&fir.zimni)),
     ]
 }
 
@@ -112,7 +154,7 @@ fn raw_fir(row: &Row<'_>) -> rusqlite::Result<RawFir> {
             accused: list(7)?,
             complainant: text(8)?,
             witness: list(9)?,
-            zimni: list(10)?,
+            zimni: zimni(row.get_ref(10)?.as_str()?, row.get_ref(19)?.as_str()?),
             investigation_officer: text(11)?,
             writer: text(12)?,
             recovery: text(13)?,
@@ -191,7 +233,7 @@ fn fir_values(
 
 fn insert(connection: &Connection, fir: &Fir) -> Result<FirRecord> {
     let fir = validated(fir)?;
-    let marks = (1..=18)
+    let marks = (1..=19)
         .map(|index| format!("?{index}"))
         .collect::<Vec<_>>()
         .join(", ");
@@ -307,7 +349,7 @@ impl Store {
         let raw = self
             .connection
             .prepare_cached(&format!(
-                "UPDATE firs SET {assignments} WHERE id = ?19 RETURNING {COLUMNS}"
+                "UPDATE firs SET {assignments} WHERE id = ?20 RETURNING {COLUMNS}"
             ))
             .and_then(|mut statement| {
                 statement.query_row(rusqlite::params_from_iter(values.iter()), raw_fir)

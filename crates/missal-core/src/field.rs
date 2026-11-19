@@ -39,7 +39,7 @@ const fn fir_field(
     }
 }
 
-pub const FIR_FIELDS: [FirFieldLabel; 27] = [
+pub const FIR_FIELDS: [FirFieldLabel; 41] = [
     fir_field("مقدمہ نمبر", FirProperty::FirNo, None),
     fir_field("مدعی مقدمہ", FirProperty::Complainant, None),
     fir_field("Date FIR", FirProperty::Date, None),
@@ -59,9 +59,23 @@ pub const FIR_FIELDS: [FirFieldLabel; 27] = [
     fir_field("ضمنی 4", FirProperty::Zimni, Some(4)),
     fir_field("ضمنی 5", FirProperty::Zimni, Some(5)),
     fir_field("ضمنی 6", FirProperty::Zimni, Some(6)),
+    fir_field("تاریخ ضمنی 1", FirProperty::ZimniDate, Some(1)),
+    fir_field("تاریخ ضمنی 2", FirProperty::ZimniDate, Some(2)),
+    fir_field("تاریخ ضمنی 3", FirProperty::ZimniDate, Some(3)),
+    fir_field("تاریخ ضمنی 4", FirProperty::ZimniDate, Some(4)),
+    fir_field("تاریخ ضمنی 5", FirProperty::ZimniDate, Some(5)),
+    fir_field("تاریخ ضمنی 6", FirProperty::ZimniDate, Some(6)),
+    fir_field("تاریخ ضمنی", FirProperty::ZimniDate, Some(1)),
+    fir_field("ضمنی 1 تاریخ", FirProperty::ZimniDate, Some(1)),
+    fir_field("ضمنی 2 تاریخ", FirProperty::ZimniDate, Some(2)),
+    fir_field("ضمنی 3 تاریخ", FirProperty::ZimniDate, Some(3)),
+    fir_field("ضمنی 4 تاریخ", FirProperty::ZimniDate, Some(4)),
+    fir_field("ضمنی 5 تاریخ", FirProperty::ZimniDate, Some(5)),
+    fir_field("ضمنی 6 تاریخ", FirProperty::ZimniDate, Some(6)),
     fir_field("تفتیشی", FirProperty::InvestigationOfficer, None),
     fir_field("تحریر کنندہ", FirProperty::Writer, None),
     fir_field("برآمدگی", FirProperty::Recovery, None),
+    fir_field("مختصر حالات", FirProperty::Body, None),
     fir_field("متن", FirProperty::Body, None),
     fir_field("ایمی نمبر 1", FirProperty::Imei1, None),
     fir_field("ایمی نمبر 2", FirProperty::Imei2, None),
@@ -73,7 +87,7 @@ pub fn fir_field_label(field: FirField) -> &'static str {
     FIR_FIELDS
         .iter()
         .find(|candidate| candidate.field == field)
-        .map_or(field.property.as_str(), |candidate| candidate.label)
+        .map_or(field.property.label(), |candidate| candidate.label)
 }
 
 static FIR_FIELDS_BY_KEY: LazyLock<HashMap<String, FirField>> = LazyLock::new(|| {
@@ -456,6 +470,17 @@ pub fn fir_value(fir: &Fir, field: FirField) -> String {
         FirValue::List(items) => match field.index {
             None => items.join("\n"),
             Some(index) => items.get(index as usize - 1).cloned().unwrap_or_default(),
+        },
+        FirValue::Zimni(entries, part) => match field.index {
+            None => entries
+                .iter()
+                .map(|entry| entry.part(part))
+                .collect::<Vec<_>>()
+                .join("\n"),
+            Some(index) => entries
+                .get(index as usize - 1)
+                .map(|entry| entry.part(part).to_owned())
+                .unwrap_or_default(),
         },
     }
 }

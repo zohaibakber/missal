@@ -2,6 +2,7 @@ mod bundle;
 mod documents;
 mod drafts;
 mod firs;
+mod fold;
 mod library;
 mod placeholders;
 mod schema;
@@ -116,6 +117,7 @@ impl Store {
         schema::configure(&connection)?;
         schema::migrate(&mut connection)?;
         schema::ensure_indexes(&connection)?;
+        fold::fold_fir_fields(&mut connection)?;
         Ok(Store { connection })
     }
 }
