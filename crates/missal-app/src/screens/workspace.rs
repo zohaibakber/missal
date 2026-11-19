@@ -1213,10 +1213,12 @@ impl WorkspaceScreen {
             .child(
                 h_flex()
                     .flex_none()
-                    .h(px(40.))
+                    .h(px(44.))
                     .px(px(8.))
-                    .pt(px(8.))
+                    .mb(px(8.))
                     .items_center()
+                    .border_b_1()
+                    .border_color(palette.line)
                     .child(section_label("Documents").child(count_badge(count))),
             )
             .when(self.state == WorkspaceState::Loading, |this| {
@@ -1657,7 +1659,10 @@ impl Render for WorkspaceScreen {
             .key_context(WORKSPACE)
             .track_focus(&self.focus)
             .size_full()
-            .gap(px(crate::theme::SHELL_INSET))
+            .rounded(px(crate::theme::RADIUS_XL))
+            .overflow_hidden()
+            .bg(palette.surface)
+            .shadow(palette.shadow_xs())
             .on_action(cx.listener(|this, _: &Save, window, cx| this.save_active(window, cx, None)))
             .on_action(cx.listener(|this, _: &EditFir, window, cx| this.edit_details(window, cx)))
             .on_action(
@@ -1694,19 +1699,17 @@ impl Render for WorkspaceScreen {
                 }
             }))
             .child(rail)
+            .child(crate::ui::pane_divider())
             .child(
                 v_flex()
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .rounded(px(crate::theme::RADIUS_XL))
-                    .overflow_hidden()
                     .bg(palette.sunken)
-                    .shadow(palette.shadow_xs())
                     .child(canvas),
             )
             .when(panel_open, |this| {
-                this.child(
+                this.child(crate::ui::pane_divider()).child(
                     self.panel.clone().cached(
                         StyleRefinement::default()
                             .w(px(crate::theme::DETAILS_RAIL_WIDTH))

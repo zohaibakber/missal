@@ -263,7 +263,8 @@ impl PrintPreview {
             }),
         };
         let mut viewport = window.viewport_size();
-        viewport.width -= px(PANEL_WIDTH + crate::theme::SHELL_INSET * 3.0);
+        viewport.width -=
+            px(PANEL_WIDTH + crate::theme::SIDEBAR_COMPACT_WIDTH + crate::theme::SHELL_INSET + 1.0);
         viewport.height -= px(crate::theme::HEADER_HEIGHT + crate::theme::SHELL_INSET);
         let mut preview = PrintPreview {
             target,
@@ -1754,7 +1755,10 @@ impl Render for PrintPreview {
             .key_context(PRINT_PREVIEW)
             .track_focus(&self.focus)
             .size_full()
-            .gap(px(crate::theme::SHELL_INSET))
+            .rounded(px(crate::theme::RADIUS_XL))
+            .overflow_hidden()
+            .bg(palette.surface)
+            .shadow(palette.shadow_xs())
             .on_action(cx.listener(|this, _: &PreviewNextPage, _, cx| this.step_page(1, cx)))
             .on_action(cx.listener(|this, _: &PreviewPreviousPage, _, cx| this.step_page(-1, cx)))
             .on_action(cx.listener(|this, _: &PreviewZoomIn, _, cx| this.step_zoom(1, cx)))
@@ -1766,6 +1770,7 @@ impl Render for PrintPreview {
             .on_action(cx.listener(|this, _: &MoveDocumentUp, _, cx| this.move_document(-1, cx)))
             .on_action(cx.listener(|this, _: &MoveDocumentDown, _, cx| this.move_document(1, cx)))
             .child(panel)
+            .child(crate::ui::pane_divider())
             .child(
                 v_flex().flex_1().min_w_0().h_full().child(
                     div()
@@ -1773,10 +1778,8 @@ impl Render for PrintPreview {
                         .flex_1()
                         .min_h_0()
                         .relative()
-                        .rounded(px(crate::theme::RADIUS_XL))
                         .overflow_hidden()
                         .bg(palette.sunken)
-                        .shadow(palette.shadow_xs())
                         .child(probe)
                         .child(area)
                         .children(pages.map(|pages| {

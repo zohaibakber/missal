@@ -173,7 +173,7 @@ impl Selectable for ToolButton {
 impl RenderOnce for ToolButton {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = EditorTheme::get(cx);
-        let size = if self.dense { 24. } else { 32. };
+        let size = if self.dense { 24. } else { 28. };
         let glyph = if self.dense { 14. } else { 16. };
         let color = theme.ink.opacity(0.8);
         let disabled = self.disabled;
@@ -185,10 +185,12 @@ impl RenderOnce for ToolButton {
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(if self.dense { 8. } else { 10. }))
+            .rounded(px(if self.dense { 6. } else { 8. }))
             .text_color(color)
             .cursor_pointer()
-            .when(self.toggled, |this| this.bg(theme.input.opacity(0.64)))
+            .when(self.toggled, |this| {
+                this.bg(theme.pressed).text_color(theme.ink)
+            })
             .when(disabled, |this| this.opacity(0.64))
             .when(!disabled && !self.toggled, |this| {
                 this.hover(move |s| s.bg(hover))
@@ -215,8 +217,8 @@ fn separator(line: gpui_kit::Hsla) -> AnyElement {
     div()
         .flex_none()
         .w(px(1.))
-        .h(px(20.))
-        .mx(px(4.))
+        .h(px(16.))
+        .mx(px(6.))
         .bg(line)
         .into_any_element()
 }
@@ -364,12 +366,12 @@ impl Editor {
             let ink = theme.ink;
             div()
                 .id(id)
-                .h(px(28.))
-                .px(px(9.))
+                .h(px(24.))
+                .px(px(8.))
                 .flex()
                 .items_center()
-                .rounded(px(8.))
-                .text_size(px(14.))
+                .rounded(px(6.))
+                .text_size(px(13.))
                 .line_height(px(20.))
                 .font_weight(FontWeight::MEDIUM)
                 .cursor_pointer()
@@ -403,7 +405,7 @@ impl Editor {
             .flex_none()
             .p(px(2.))
             .gap(px(2.))
-            .rounded(px(10.))
+            .rounded(px(8.))
             .bg(theme.hover)
             .child(item("editor-mode-values", "Values", DisplayMode::Values))
             .child(item("editor-mode-names", "Names", DisplayMode::Labels))
@@ -431,20 +433,8 @@ impl Editor {
                 entity.update(cx, |editor, cx| f(editor, window, cx));
             }
         };
-        let pill = |id: &'static str| {
-            h_flex()
-                .id(id)
-                .h(px(40.))
-                .px(px(4.))
-                .gap(px(2.))
-                .items_center()
-                .rounded(px(14.))
-                .bg(theme.raised)
-                .shadow(theme.bar_shadows().to_vec())
-                .occlude()
-        };
-        let history = pill("editor-history")
-            .flex_none()
+        let group = |id: &'static str| h_flex().id(id).flex_none().gap(px(1.)).items_center();
+        let history = group("editor-history")
             .child(
                 tool("editor-undo", IconName::Undo2, "Undo")
                     .keys("Mod+Z")
@@ -457,7 +447,7 @@ impl Editor {
                     .disabled(!can_redo)
                     .on_click(act(Editor::redo)),
             );
-        let bar = pill("editor-toolbar")
+        let bar = group("editor-toolbar")
             .flex_shrink(1.)
             .min_w_0()
             .overflow_hidden()
@@ -534,32 +524,43 @@ impl Editor {
                             e.open_find(false, w, cx)
                         }
                     })),
-            )
-            .when(self.mode_toggle, |this| {
-                this.child(separator(theme.line))
-                    .child(self.mode_toggle(theme, cx))
-            });
+            );
+        let mode = self.mode_toggle.then(|| self.mode_toggle(theme, cx));
         let end = self
             .toolbar_end
             .clone()
             .and_then(|slot| slot(window, cx))
-            .map(|content| pill("editor-toolbar-end").px(px(4.)).child(content));
+            .map(|content| h_flex().id("editor-toolbar-end").flex_none().child(content));
         h_flex()
+            .id("editor-bar")
             .flex_none()
             .w_full()
+            .h(px(44.))
             .items_center()
-            .gap(px(8.))
-            .px(px(12.))
-            .pt(px(10.))
-            .pb(px(2.))
+            .gap(px(2.))
+            .px(px(8.))
+            .bg(theme.surface)
+            .border_b_1()
+            .border_color(theme.line)
+            .overflow_hidden()
+            .occlude()
             .font_family(missal_text::UI_FAMILY)
-            .child(h_flex().flex_1().justify_start().child(history))
+            .child(history)
+            .child(separator(theme.line))
             .child(bar)
-            .child(h_flex().flex_1().justify_end().children(end))
+            .child(div().flex_1().min_w(px(8.)))
+            .children(mode)
+            .children(end.map(|end| {
+                h_flex()
+                    .flex_none()
+                    .items_center()
+                    .child(separator(theme.line))
+                    .child(end)
+            }))
             .into_any_element()
     }
 
-    pub(crate) fn render_zoom(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    fn zoom_controls(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = EditorTheme::get(cx);
         let entity = cx.entity();
         let act = |f: fn(&mut Editor, &mut Window, &mut Context<Editor>)| {
@@ -572,18 +573,9 @@ impl Editor {
         let fit = self.is_fit_zoom();
         h_flex()
             .id("editor-zoom")
-            .absolute()
-            .right(px(12.))
-            .bottom(px(12.))
-            .h(px(36.))
-            .px(px(4.))
+            .flex_none()
             .gap(px(2.))
             .items_center()
-            .rounded(px(14.))
-            .bg(theme.raised)
-            .shadow(theme.bar_shadows().to_vec())
-            .occlude()
-            .font_family(missal_text::UI_FAMILY)
             .child(
                 tool("editor-zoom-out", IconName::Minus, "Zoom out")
                     .keys("Mod+-")
@@ -636,6 +628,24 @@ impl Editor {
                         e.set_zoom(Some(z), cx)
                     })),
             )
+            .into_any_element()
+    }
+
+    pub(crate) fn render_zoom(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let theme = EditorTheme::get(cx);
+        h_flex()
+            .absolute()
+            .right(px(12.))
+            .bottom(px(12.))
+            .h(px(32.))
+            .px(px(2.))
+            .items_center()
+            .rounded(px(10.))
+            .bg(theme.raised)
+            .shadow(theme.bar_shadows().to_vec())
+            .occlude()
+            .font_family(missal_text::UI_FAMILY)
+            .child(self.zoom_controls(cx))
             .into_any_element()
     }
 }

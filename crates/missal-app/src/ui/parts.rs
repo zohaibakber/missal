@@ -102,6 +102,10 @@ pub fn floating_bar() -> Part {
     })
 }
 
+pub fn pane_divider() -> Part {
+    part(|base, palette| base.flex_none().w(px(1.)).h_full().bg(palette.line))
+}
+
 pub fn separator() -> Part {
     part(|base, palette| base.flex_none().h(px(1.)).w_full().bg(palette.line))
 }

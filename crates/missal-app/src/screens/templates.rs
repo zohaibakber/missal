@@ -1270,8 +1270,11 @@ impl TemplatesScreen {
             .h(px(44.))
             .items_center()
             .gap(px(2.))
-            .pl(px(16.))
+            .pl(px(8.))
             .pr(px(8.))
+            .border_b_1()
+            .border_color(palette.line)
+            .mb(px(8.))
             .child(section_label("Templates"))
             .child(
                 div()
@@ -1560,19 +1563,13 @@ impl Render for TemplatesScreen {
             let list = self.list(cx);
             h_flex()
                 .size_full()
-                .gap(px(crate::theme::SHELL_INSET))
+                .rounded(px(crate::theme::RADIUS_XL))
+                .overflow_hidden()
+                .bg(palette.surface)
+                .shadow(palette.shadow_xs())
                 .child(list)
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .rounded(px(crate::theme::RADIUS_XL))
-                        .overflow_hidden()
-                        .bg(palette.surface)
-                        .shadow(palette.shadow_xs())
-                        .child(main),
-                )
+                .child(crate::ui::pane_divider())
+                .child(div().flex_1().min_w_0().h_full().child(main))
                 .into_any_element()
         };
         let body = if nothing_at_all {

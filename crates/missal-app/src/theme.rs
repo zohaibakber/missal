@@ -80,6 +80,8 @@ pub struct Palette {
     pub st_closed: Hsla,
     pub scrim: Hsla,
     pub sidebar_ink: Hsla,
+    pub sidebar_hover: Hsla,
+    pub sidebar_active: Hsla,
 }
 
 impl Global for Palette {}
@@ -101,9 +103,9 @@ impl Palette {
             raised: hex(0xffffff),
             sunken: hex(0xf5f5f5),
             paper: hex(0xffffff),
-            ink: hex(0x262626),
-            ink_muted: hex(0x686868),
-            ink_faint: hex_alpha(0x686868, 0.72),
+            ink: hex(0x18181b),
+            ink_muted: hex(0x71717a),
+            ink_faint: hex_alpha(0x71717a, 0.72),
             line: hex_alpha(0x000000, 0.08),
             line_strong: hex_alpha(0x000000, 0.16),
             line_input: hex_alpha(0x000000, 0.1),
@@ -112,9 +114,9 @@ impl Palette {
             pressed: hex_alpha(0x000000, 0.08),
             hover_raised: hex_alpha(0x000000, 0.04),
             pressed_raised: hex_alpha(0x000000, 0.08),
-            action: hex(0x262626),
-            action_hover: hex(0x262626).opacity(0.9),
-            action_pressed: hex(0x262626).opacity(0.9),
+            action: hex(0x18181b),
+            action_hover: hex(0x18181b).opacity(0.9),
+            action_pressed: hex(0x18181b).opacity(0.9),
             on_action: hex(0xfafafa),
             accent: hex(0x2b7fff),
             accent_wash: hex_alpha(0x2b7fff, 0.08),
@@ -134,25 +136,27 @@ impl Palette {
             st_challan: hex(0x8e51ff),
             st_closed: hex_alpha(0x686868, 0.64),
             scrim: hex_alpha(0x000000, 0.32),
-            sidebar_ink: hex(0x727272),
+            sidebar_ink: hex(0x5c5c5c),
+            sidebar_hover: hex_alpha(0x000000, 0.04),
+            sidebar_active: hex_alpha(0x000000, 0.06),
         }
     }
 
     pub fn dark() -> Palette {
         Palette {
             dark: true,
-            canvas: hex(0x111111),
-            surface: hex(0x141414),
-            raised: hex(0x1d1d1d),
-            sunken: hex(0x0f0f0f),
-            paper: hex(0x1f1f1f),
+            canvas: hex(0x0c0c0d),
+            surface: hex(0x161617),
+            raised: hex(0x1f1f21),
+            sunken: hex(0x0f0f10),
+            paper: hex(0x1d1d20),
             ink: hex(0xf5f5f5),
-            ink_muted: hex(0x818181),
-            ink_faint: hex_alpha(0x818181, 0.72),
-            line: hex_alpha(0xffffff, 0.06),
-            line_strong: hex_alpha(0xffffff, 0.12),
-            line_input: hex_alpha(0xffffff, 0.08),
-            hairline: hex_alpha(0xffffff, 0.06),
+            ink_muted: hex(0x9f9fa3),
+            ink_faint: hex_alpha(0x9f9fa3, 0.64),
+            line: hex_alpha(0xffffff, 0.08),
+            line_strong: hex_alpha(0xffffff, 0.14),
+            line_input: hex_alpha(0xffffff, 0.1),
+            hairline: hex_alpha(0xffffff, 0.08),
             hover: hex_alpha(0xffffff, 0.04),
             pressed: hex_alpha(0xffffff, 0.08),
             hover_raised: hex_alpha(0xffffff, 0.04),
@@ -180,6 +184,8 @@ impl Palette {
             st_closed: hex_alpha(0x818181, 0.64),
             scrim: hex_alpha(0x000000, 0.32),
             sidebar_ink: hex(0xa3a3a3),
+            sidebar_hover: hex_alpha(0xffffff, 0.04),
+            sidebar_active: hex_alpha(0xffffff, 0.07),
         }
     }
 
@@ -407,6 +413,8 @@ pub const PANEL_PADDING: f32 = 16.0;
 pub const PAGE_GUTTER: f32 = 24.0;
 
 pub const NAV_MENU_WIDTH: f32 = 256.0;
+pub const SIDEBAR_WIDTH: f32 = 224.0;
+pub const SIDEBAR_COMPACT_WIDTH: f32 = 48.0;
 pub const SIDEBAR_ITEM: f32 = 32.0;
 pub const PALETTE_WIDTH: f32 = 600.0;
 pub const PALETTE_TOP: f32 = 88.0;

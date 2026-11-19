@@ -732,21 +732,27 @@ impl FirForm {
         v_flex()
             .id(("form-section", index))
             .w_full()
-            .pt(px(40.))
+            .mt(px(16.))
+            .rounded(px(crate::theme::RADIUS_XL))
+            .bg(palette.surface)
+            .shadow(palette.shadow_xs())
             .child(
                 h_flex()
                     .flex_row_reverse()
                     .items_center()
+                    .h(px(48.))
+                    .px(px(20.))
                     .gap(px(12.))
-                    .mb(px(8.))
+                    .border_b_1()
+                    .border_color(palette.line)
                     .child(
                         div()
                             .flex_none()
                             .text_color(palette.ink)
-                            .child(ur_label(title, UrRole::Display)),
+                            .child(ur_label(title, UrRole::Title)),
                     ),
             )
-            .child(body)
+            .child(div().px(px(20.)).pt(px(4.)).pb(px(20.)).child(body))
             .into_any_element()
     }
 
@@ -910,8 +916,6 @@ impl FirForm {
                     .flex_row_reverse()
                     .items_center()
                     .gap(px(8.))
-                    .mr(px(-26.))
-                    .ml(px(-36.))
                     .child(
                         div()
                             .w(px(18.))
@@ -1213,8 +1217,9 @@ impl Render for FirForm {
                     .w(px(760.))
                     .max_w_full()
                     .mx_auto()
+                    .px(px(16.))
                     .pt(px(8.))
-                    .pb(px(112.))
+                    .pb(px(32.))
                     .children(sections),
             )
     }
@@ -1375,14 +1380,24 @@ impl NewFirScreen {
         let bar = h_flex()
             .id("fir-form-actions")
             .flex_none()
-            .p(px(4.))
-            .pl(px(if unsaved { 12. } else { 4. }))
-            .gap(px(4.))
+            .w_full()
+            .h(px(56.))
+            .px(px(16.))
+            .gap(px(8.))
             .items_center()
-            .rounded(px(crate::theme::RADIUS_XL))
-            .bg(palette.raised)
-            .shadow(palette.shadow_lg())
+            .bg(palette.surface)
+            .border_t_1()
+            .border_color(palette.line)
             .occlude()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .text_size(px(13.))
+                    .line_height(px(20.))
+                    .text_color(palette.ink_faint)
+                    .when(!unsaved, |this| this.child("Fields marked * are required.")),
+            )
             .when(unsaved, |this| {
                 this.child(
                     h_flex()
@@ -1418,14 +1433,7 @@ impl NewFirScreen {
                 .disabled(saving)
                 .on_click(move |_, window, cx| form.update(cx, |form, cx| form.submit(window, cx))),
             );
-        h_flex()
-            .absolute()
-            .left_0()
-            .right_0()
-            .bottom(px(20.))
-            .justify_center()
-            .child(bar)
-            .into_any_element()
+        bar.into_any_element()
     }
 }
 
@@ -1460,7 +1468,8 @@ impl Render for NewFirScreen {
             .size_full()
             .relative()
             .rounded(px(crate::theme::RADIUS_XL))
-            .bg(palette.surface)
+            .overflow_hidden()
+            .bg(palette.sunken)
             .shadow(palette.shadow_xs())
             .on_action(cx.listener(|this, _: &BlurFocus, window, cx| this.cancel(window, cx)))
             .on_action(cx.listener(|this, _: &Save, window, cx| {
