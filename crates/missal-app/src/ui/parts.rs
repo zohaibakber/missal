@@ -1,5 +1,6 @@
 use gpui_kit::assets::IconName;
-use gpui_kit::component::StyledExt as _;
+use gpui_kit::component::spinner::Spinner;
+use gpui_kit::component::{Sizable as _, StyledExt as _};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnyElement, FontWeight, Hsla, InteractiveElement, IntoElement, ParentElement, SharedString,
@@ -76,13 +77,7 @@ pub fn toolbar() -> Part {
 }
 
 pub fn toolbar_separator() -> Part {
-    part(|base, palette| {
-        base.flex_none()
-            .w(px(1.))
-            .h(px(20.))
-            .mx(px(4.))
-            .bg(palette.line)
-    })
+    separator_vertical().h(px(20.)).mx(px(4.))
 }
 
 pub fn floating_bar() -> Part {
@@ -108,6 +103,53 @@ pub fn pane_divider() -> Part {
 
 pub fn separator() -> Part {
     part(|base, palette| base.flex_none().h(px(1.)).w_full().bg(palette.line))
+}
+
+pub fn separator_vertical() -> Part {
+    part(|base, palette| base.flex_none().w(px(1.)).h_full().bg(palette.line))
+}
+
+pub fn spinner(size: f32, color: Hsla) -> impl IntoElement {
+    Spinner::new()
+        .icon(IconName::LoaderCircle)
+        .with_size(px(size))
+        .color(color)
+}
+
+pub fn field_group() -> Part {
+    part(|base, _| base.v_flex().gap(px(16.)))
+}
+
+pub fn form_field() -> Part {
+    part(|base, _| base.v_flex().gap(px(6.)))
+}
+
+pub fn field_label(text: impl Into<SharedString>) -> Part {
+    part(|base, palette| {
+        base.text_size(px(13.))
+            .line_height(px(16.))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(palette.ink)
+    })
+    .child(text.into())
+}
+
+pub fn field_description(text: impl Into<SharedString>) -> Part {
+    part(|base, palette| {
+        base.text_size(px(12.))
+            .line_height(px(16.))
+            .text_color(palette.ink_muted)
+    })
+    .child(text.into())
+}
+
+pub fn field_error(text: impl Into<SharedString>) -> Part {
+    part(|base, palette| {
+        base.text_size(px(12.))
+            .line_height(px(16.))
+            .text_color(palette.danger_text)
+    })
+    .child(text.into())
 }
 
 pub fn skeleton() -> Part {
@@ -407,7 +449,11 @@ pub fn alert(intent: Intent) -> Part {
             .border_1()
             .border_color(border)
             .bg(fill)
-            .text_color(palette.ink)
+            .text_color(if intent == Intent::Danger {
+                palette.danger_text
+            } else {
+                palette.ink
+            })
             .text_size(px(14.))
             .line_height(px(20.))
             .child(
@@ -461,10 +507,12 @@ pub fn save_state(state: SaveState) -> Part {
             base.h_flex()
                 .flex_none()
                 .px(px(4.))
+                .gap(px(6.))
                 .text_size(px(12.))
                 .line_height(px(16.))
                 .text_color(palette.ink_faint)
         })
+        .child(Saving)
         .child("Saving…"),
     }
 }
@@ -594,5 +642,14 @@ impl IntoElement for KbdGroup {
                 items
             }),
         )
+    }
+}
+
+#[derive(IntoElement)]
+struct Saving;
+
+impl RenderOnce for Saving {
+    fn render(self, _: &mut gpui_kit::Window, cx: &mut gpui_kit::App) -> impl IntoElement {
+        spinner(ICON_XS, Palette::get(cx).ink_faint)
     }
 }

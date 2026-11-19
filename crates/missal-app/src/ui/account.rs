@@ -14,10 +14,15 @@ use missal_text::{TextInput, TextInputEvent, label};
 use crate::auth::{AuthModel, password_problem};
 use crate::state::{Load, toast_success};
 use crate::theme::{Palette, RADIUS};
-use crate::ui::dialogs::{dialog_footer, dialog_surface, dialog_title, optical_top};
+use crate::ui::dialogs::{
+    dialog_description, dialog_footer, dialog_header, dialog_surface, dialog_title, optical_top,
+};
 use crate::ui::input::{Kind, field, secret_input};
 use crate::ui::library::day_month_year;
-use crate::ui::{SegmentItem, button, ghost_sm, segmented, skeleton_bar};
+use crate::ui::{
+    Intent, SegmentItem, alert, button, field_description, field_error, field_group, field_label,
+    form_field, ghost_sm, segmented, skeleton_bar,
+};
 
 const PASSWORD_WIDTH: f32 = 420.;
 const USERS_WIDTH: f32 = 760.;
@@ -30,17 +35,6 @@ fn caption(palette: &Palette, text: impl Into<SharedString>) -> AnyElement {
         .text_color(palette.ink_muted)
         .child(text.into())
         .into_any_element()
-}
-
-fn problem_line(palette: &Palette, problem: Option<SharedString>) -> Option<AnyElement> {
-    problem.map(|problem| {
-        div()
-            .text_size(px(14.))
-            .line_height(px(20.))
-            .text_color(palette.danger_text)
-            .child(problem)
-            .into_any_element()
-    })
 }
 
 fn keeper(cx: &App) -> Option<Arc<SessionKeeper>> {
@@ -156,22 +150,40 @@ impl ChangePassword {
 
 impl Render for ChangePassword {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let palette = *Palette::get(cx);
         let width = px(PASSWORD_WIDTH - 40.);
         v_flex()
-            .gap(px(10.))
-            .child(dialog_title("Change password"))
-            .child(caption(
-                &palette,
-                "At least 10 characters. Other computers signed in to this account are signed out.",
-            ))
-            .child(field("password-current", &self.current, Kind::Latin).width(width))
-            .child(field("password-new", &self.new, Kind::Latin).width(width))
-            .child(field("password-confirm", &self.confirm, Kind::Latin).width(width))
-            .children(problem_line(&palette, self.problem.clone()))
+            .child(
+                dialog_header()
+                    .child(dialog_title("Change password"))
+                    .child(dialog_description(
+                        "Other computers signed in to this account are signed out.",
+                    )),
+            )
+            .child(
+                field_group()
+                    .mt(px(20.))
+                    .child(
+                        form_field().child(field_label("Current password")).child(
+                            field("password-current", &self.current, Kind::Latin).width(width),
+                        ),
+                    )
+                    .child(
+                        form_field()
+                            .child(field_label("New password"))
+                            .child(field("password-new", &self.new, Kind::Latin).width(width))
+                            .child(field_description("At least 10 characters.")),
+                    )
+                    .child(
+                        form_field()
+                            .child(field_label("Repeat the new password"))
+                            .child(
+                                field("password-confirm", &self.confirm, Kind::Latin).width(width),
+                            )
+                            .children(self.problem.clone().map(field_error)),
+                    ),
+            )
             .child(
                 dialog_footer()
-                    .mt(px(14.))
                     .child(div().flex_1())
                     .child(
                         button("password-cancel", "Cancel")
@@ -188,7 +200,7 @@ impl Render for ChangePassword {
                             },
                         )
                         .primary()
-                        .disabled(self.busy)
+                        .busy(self.busy)
                         .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
                     ),
             )
@@ -507,7 +519,11 @@ impl Render for UsersPanel {
                 &palette,
                 "People create their own accounts. Members use templates, publishers can also publish to the library, and administrators also manage people. Add 1 year extends a licence from today or from its current end, whichever is later.",
             ))
-            .children(problem_line(&palette, self.problem.clone()))
+            .children(
+                self.problem
+                    .clone()
+                    .map(|problem| alert(Intent::Danger).child(problem)),
+            )
             .child(div().h(px(LIST_HEIGHT)).child(self.list(&palette, cx)))
             .child(
                 dialog_footer()

@@ -86,7 +86,7 @@ impl LibraryPanel {
             EntryStatus::Busy => button(("library-busy", index), "Working…")
                 .outline()
                 .sm()
-                .disabled(true)
+                .busy(true)
                 .into_any_element(),
             EntryStatus::Available => primary_sm(("library-add", index), "Add")
                 .on_click(move |_, window, cx| {

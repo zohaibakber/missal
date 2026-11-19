@@ -1560,7 +1560,7 @@ impl NewFirScreen {
                         .text_size(px(14.))
                         .line_height(px(20.))
                         .text_color(palette.ink_muted)
-                        .child(div().size(px(6.)).rounded_full().bg(palette.notice))
+                        .child(crate::ui::dirty_dot(true))
                         .child("Unsaved changes"),
                 )
             })
@@ -1583,7 +1583,7 @@ impl NewFirScreen {
                 )
                 .primary()
                 .keys("Mod+S")
-                .disabled(saving)
+                .busy(saving)
                 .on_click(move |_, window, cx| form.update(cx, |form, cx| form.submit(window, cx))),
             );
         bar.into_any_element()

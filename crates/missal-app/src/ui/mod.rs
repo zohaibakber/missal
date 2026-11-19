@@ -37,7 +37,7 @@ use missal_text::{Align, Label, LineHeight, label};
 
 use crate::theme::{
     BUTTON_MD, BUTTON_SM, BUTTON_XS, ICON, ICON_BUTTON, ICON_BUTTON_DENSE, ICON_SM, Palette,
-    RADIUS, RADIUS_LG, TOOLTIP_DELAY, hex, hex_alpha,
+    RADIUS, RADIUS_LG, TOOLTIP_DELAY, hex_alpha,
 };
 
 pub type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
@@ -254,7 +254,7 @@ fn button_look(palette: &Palette, kind: ButtonKind) -> ButtonLook {
     };
     match kind {
         ButtonKind::Primary => solid(palette.action, palette.on_action),
-        ButtonKind::Danger => solid(palette.danger, hex(0xffffff)),
+        ButtonKind::Danger => solid(palette.danger, palette.on_danger),
         ButtonKind::Secondary => ButtonLook {
             fill: Some(palette.hover),
             hover: Some(palette.hover.opacity(0.9)),
@@ -322,6 +322,7 @@ pub struct ActionButton {
     kind: ButtonKind,
     size: ButtonSize,
     disabled: bool,
+    busy: bool,
     show_hover: bool,
     show_focus: bool,
     focus: Option<FocusHandle>,
@@ -339,6 +340,7 @@ pub fn button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Actio
         kind: ButtonKind::Outline,
         size: ButtonSize::Md,
         disabled: false,
+        busy: false,
         show_hover: false,
         show_focus: false,
         focus: None,
@@ -411,6 +413,11 @@ impl ActionButton {
         self
     }
 
+    pub fn busy(mut self, busy: bool) -> Self {
+        self.busy = busy;
+        self
+    }
+
     pub fn track_focus(mut self, focus: &FocusHandle) -> Self {
         self.focus = Some(focus.clone());
         self
@@ -452,7 +459,7 @@ impl RenderOnce for ActionButton {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let palette = *Palette::get(cx);
         let look = button_look(&palette, self.kind);
-        let disabled = self.disabled;
+        let disabled = self.disabled || self.busy;
         let (text_size, line) = self.size.text();
         let focus_shadows = with_focus_ring(&palette, look.shadows.clone());
         let resting = if self.show_focus {
@@ -519,7 +526,14 @@ impl RenderOnce for ActionButton {
             .when_some(on_click, |this, handler| {
                 this.on_click(move |event, window, cx| handler(event, window, cx))
             })
-            .when_some(self.icon, |this, name| {
+            .when(self.busy, |this| {
+                this.child(
+                    div()
+                        .mx(px(-2.))
+                        .child(spinner(ICON, look.text.opacity(0.8))),
+                )
+            })
+            .when_some(self.icon.filter(|_| !self.busy), |this, name| {
                 this.child(
                     div()
                         .mx(px(-2.))
