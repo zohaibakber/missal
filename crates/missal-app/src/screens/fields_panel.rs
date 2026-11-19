@@ -12,7 +12,7 @@ use gpui_kit::{
 };
 use missal_core::{
     DisplayMode, FieldPresentation, FieldReference, FirField, FirId, FirValues, PlaceholderId,
-    PlaceholderSource, format_date,
+    PlaceholderSource, SuggestionKey, format_date,
 };
 use missal_text::{Align, LineHeight, TextInput, TextInputEvent, label};
 
@@ -20,6 +20,7 @@ use crate::app::{navigate, navigate_back};
 use crate::state::rows::fold_for_search;
 use crate::state::{Models, Route, run_db_in, toast_error};
 use crate::theme::{DETAILS_RAIL_WIDTH, Palette, TAB_HEIGHT};
+use crate::ui::autocomplete::{Autocomplete, suggest_field};
 use crate::ui::input::{Kind, field, field_input, search_field};
 use crate::ui::status::status_label;
 use crate::ui::{UrRole, button, count_badge, section_label, sized_icon, ur_label};
@@ -181,6 +182,7 @@ pub struct FieldsPanel {
     show_all: bool,
     focus: FocusHandle,
     subscriptions: HashMap<FieldReference, [Subscription; 1]>,
+    autocomplete: Entity<Autocomplete>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -194,7 +196,10 @@ impl FieldsPanel {
         cx: &mut Context<Self>,
     ) -> FieldsPanel {
         let filter = field_input(window, cx, Kind::SearchRtl, "تلاش", "");
+        let suggestions = models.suggestions.clone();
+        let autocomplete = cx.new(|cx| Autocomplete::new(suggestions, cx));
         let subscriptions = vec![
+            cx.observe(&autocomplete, |_, _, cx| cx.notify()),
             cx.subscribe(&filter, |this, input, event: &TextInputEvent, cx| {
                 if *event == TextInputEvent::Change {
                     this.query = input.read(cx).text().to_owned();
@@ -220,6 +225,7 @@ impl FieldsPanel {
             show_all: false,
             focus: cx.focus_handle(),
             subscriptions: HashMap::new(),
+            autocomplete,
             _subscriptions: subscriptions,
         }
     }
@@ -338,6 +344,20 @@ impl FieldsPanel {
                 TextInputEvent::Change => cx.notify(),
             },
         );
+        if let FieldReference::Catalog(id) = reference
+            && self
+                .models
+                .catalog
+                .read(cx)
+                .field_catalog()
+                .placeholder(*id)
+                .is_some_and(|placeholder| placeholder.source == PlaceholderSource::Custom)
+        {
+            let key = SuggestionKey::Placeholder(*id);
+            self.autocomplete.update(cx, |autocomplete, cx| {
+                autocomplete.attach(&input, key, window, cx)
+            });
+        }
         self.inputs.insert(reference.clone(), input.clone());
         self.subscriptions.insert(reference.clone(), [subscription]);
         input
@@ -393,6 +413,9 @@ impl FieldsPanel {
                     move |store| store.set_placeholder_values(fir_id, &[(id, text)]),
                     |this, result, window, cx| match result {
                         Ok(overrides) => {
+                            this.models
+                                .suggestions
+                                .update(cx, |suggestions, cx| suggestions.reload(cx));
                             if let Some(values) = this.values.as_ref() {
                                 let mut updated = Arc::clone(values);
                                 Arc::make_mut(&mut updated).overrides = overrides;
@@ -679,7 +702,12 @@ impl FieldsPanel {
                 let input = self.ensure_input(&reference, "", window, cx);
                 div()
                     .w_full()
-                    .child(field(("empty-field-input", index), &input, Kind::UrduAuto).height(34.))
+                    .child(suggest_field(
+                        &self.autocomplete,
+                        &input,
+                        field(("empty-field-input", index), &input, Kind::UrduAuto).height(34.),
+                        cx,
+                    ))
                     .into_any_element()
             }
         };
@@ -912,10 +940,13 @@ impl FieldsPanel {
                             .text_color(palette.ink)
                             .child(ur_label(name.clone(), UrRole::Body).truncate()),
                     )
-                    .child(
+                    .child(suggest_field(
+                        &self.autocomplete,
+                        &input,
                         field(("custom-value-input", index), &input, Kind::UrduAuto)
                             .clearable(focused.as_ref() == Some(&reference)),
-                    )
+                        cx,
+                    ))
                     .into_any_element(),
             );
         }

@@ -1,6 +1,7 @@
 mod element;
 mod find;
 pub mod keys;
+pub mod slash;
 mod theme;
 mod toolbar;
 
@@ -25,6 +26,7 @@ use missal_page::{
 };
 use missal_text::TextInput;
 use missal_text::input as text_actions;
+use missal_text::listbox;
 
 use crate::model::boundary;
 use crate::model::selection::{document_end, document_start, effective_range, end_of, pos};
@@ -169,6 +171,7 @@ pub struct Editor {
     menu_selection: Option<Selection>,
     clipboard: Option<(String, Fragment)>,
     pub(crate) find: find::FindState,
+    slash: slash::SlashState,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -222,6 +225,7 @@ impl Editor {
                 this.blink_epoch += 1;
                 this.blink_task = None;
                 this.drag = None;
+                this.close_slash(cx);
                 if this.core.marked().is_some() {
                     let change = this.core.unmark();
                     this.apply(change, window, cx);
@@ -289,6 +293,7 @@ impl Editor {
             menu_selection: None,
             clipboard: None,
             find,
+            slash: slash::SlashState::default(),
             _subscriptions: subscriptions,
         }
     }
@@ -543,6 +548,7 @@ impl Editor {
             cx.emit(EditorEvent::Edited);
         }
         self.moved(cx);
+        self.sync_slash(cx);
     }
 
     fn moved(&mut self, cx: &mut Context<Self>) {
@@ -1446,6 +1452,13 @@ handlers! {
     keys::FindReplace => |this, window, cx| this.open_find(true, window, cx);
     keys::FindNext => |this, window, cx| this.find_next(window, cx);
     keys::FindPrevious => |this, window, cx| this.find_previous(window, cx);
+    listbox::SelectNext => |this, _window, cx| if !this.slash_step(1, cx) { cx.propagate() };
+    listbox::SelectPrevious => |this, _window, cx| if !this.slash_step(-1, cx) { cx.propagate() };
+    listbox::SelectPageDown => |this, _window, cx| if !this.slash_page(1, cx) { cx.propagate() };
+    listbox::SelectPageUp => |this, _window, cx| if !this.slash_page(-1, cx) { cx.propagate() };
+    listbox::Confirm => |this, window, cx| if !this.slash_confirm(window, cx) { cx.propagate() };
+    listbox::Complete => |this, window, cx| if !this.slash_confirm(window, cx) { cx.propagate() };
+    listbox::Dismiss => |this, _window, cx| if this.slash_is_open() { this.close_slash(cx) } else { cx.propagate() };
 }
 
 impl EntityInputHandler for Editor {
@@ -1546,6 +1559,7 @@ impl EntityInputHandler for Editor {
         }
         let text = text.to_owned();
         self.edit(window, cx, |core| core.insert_text(&text));
+        self.typed_slash(&text, cx);
     }
 
     fn replace_and_mark_text_in_range(
@@ -1616,9 +1630,14 @@ impl Render for Editor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.entity();
         let canvas = EditorTheme::get(cx).canvas;
+        let context = if self.slash_is_open() {
+            "Editor TextInput SlashMenu"
+        } else {
+            "Editor TextInput"
+        };
         let root = div()
             .id("editor")
-            .key_context("Editor TextInput")
+            .key_context(context)
             .track_focus(&self.focus)
             .size_full()
             .flex()
@@ -1628,7 +1647,8 @@ impl Render for Editor {
         let toolbar = (!self.read_only).then(|| self.render_toolbar(window, cx));
         let zoom = self.render_zoom(cx);
         let find = self.render_find_bar(cx);
-        root.children(toolbar).child(
+        let slash = self.render_slash(cx);
+        root.children(toolbar).children(slash).child(
             div()
                 .id("editor-canvas")
                 .relative()

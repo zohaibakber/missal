@@ -28,6 +28,20 @@ pub fn menu_popup() -> Part {
     })
 }
 
+pub fn listbox_theme(palette: &Palette) -> missal_text::listbox::ListboxTheme {
+    missal_text::listbox::ListboxTheme {
+        panel: palette.raised,
+        ink: palette.ink,
+        ink_muted: palette.ink_muted,
+        ink_faint: palette.ink_faint,
+        active: palette.hover,
+        line: palette.line,
+        shadow: palette.shadow_lg(),
+        radius: RADIUS_LG,
+        row_radius: RADIUS_SM,
+    }
+}
+
 pub fn menu_separator() -> Part {
     part(|base, palette| base.h(px(1.)).my(px(4.)).mx(px(8.)).bg(palette.line))
 }

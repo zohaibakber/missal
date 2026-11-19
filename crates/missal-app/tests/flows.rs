@@ -864,3 +864,109 @@ fn settings_appearance_and_built_in_fields_respond(cx: &mut TestAppContext) {
     fixture.click(cx, "built-in-toggle");
     assert!(!cx.update(|cx| settings.read(cx).built_in_open()));
 }
+
+fn fir_form(
+    fixture: &Fixture,
+    cx: &mut TestAppContext,
+) -> Entity<missal_app::screens::fir_form::FirForm> {
+    cx.update(|cx| {
+        fixture
+            .shell
+            .read(cx)
+            .new_fir()
+            .unwrap()
+            .read(cx)
+            .form()
+            .clone()
+    })
+}
+
+fn popup_items(
+    form: &Entity<missal_app::screens::fir_form::FirForm>,
+    cx: &mut TestAppContext,
+) -> Vec<String> {
+    cx.update(|cx| form.read(cx).autocomplete().read(cx).items())
+}
+
+#[gpui_kit::test]
+fn form_inputs_suggest_values_from_earlier_firs(cx: &mut TestAppContext) {
+    use missal_core::{FirProperty, SuggestionKey};
+    let fixture = boot(cx, 40);
+    let offence_key = SuggestionKey::Fir(FirProperty::Offence);
+    let top = cx.update(|cx| {
+        fixture
+            .models
+            .suggestions
+            .read(cx)
+            .suggest(offence_key, "", 1)
+    });
+    let expected = top.first().expect("seeded offences").value.clone();
+    let prefix: String = expected.chars().take(2).collect();
+    fixture.go(cx, Route::NewFir);
+    let form = fir_form(&fixture, cx);
+    let offence = cx.update(|cx| form.read(cx).offence_input().clone());
+    focus_input(&fixture, cx, &offence);
+    fixture.type_text(cx, &prefix);
+    let items = popup_items(&form, cx);
+    assert!(items.contains(&expected), "{items:?}");
+    assert_eq!(
+        cx.update(|cx| form.read(cx).autocomplete().read(cx).active()),
+        None
+    );
+
+    let position = items.iter().position(|item| *item == expected).unwrap();
+    for _ in 0..=position {
+        fixture.press(cx, "down");
+    }
+    assert_eq!(
+        cx.update(|cx| form.read(cx).autocomplete().read(cx).active()),
+        Some(position)
+    );
+    fixture.press(cx, "enter");
+    assert_eq!(cx.update(|cx| offence.read(cx).text().to_owned()), expected);
+    assert!(popup_items(&form, cx).is_empty());
+    let undo = if cfg!(target_os = "macos") {
+        "cmd-z"
+    } else {
+        "ctrl-z"
+    };
+    fixture.press(cx, undo);
+    assert_eq!(cx.update(|cx| offence.read(cx).text().to_owned()), prefix);
+
+    fixture.press(cx, "escape");
+    assert!(popup_items(&form, cx).is_empty());
+    assert_eq!(fixture.route(cx), Route::NewFir);
+    fixture.press(cx, "alt-down");
+    assert!(!popup_items(&form, cx).is_empty());
+    fixture.press(cx, "escape");
+    assert!(popup_items(&form, cx).is_empty());
+}
+
+#[gpui_kit::test]
+fn enter_without_a_chosen_suggestion_keeps_the_typed_text(cx: &mut TestAppContext) {
+    use missal_app::screens::fir_form::ListKind;
+    use missal_core::{FirProperty, SuggestionKey};
+    let fixture = boot(cx, 40);
+    let accused_key = SuggestionKey::Fir(FirProperty::Accused);
+    let top = cx.update(|cx| {
+        fixture
+            .models
+            .suggestions
+            .read(cx)
+            .suggest(accused_key, "", 1)
+    });
+    let prefix: String = top[0].value.chars().take(2).collect();
+    fixture.go(cx, Route::NewFir);
+    let form = fir_form(&fixture, cx);
+    let accused = cx.update(|cx| form.read(cx).list_inputs(ListKind::Accused)[0].clone());
+    focus_input(&fixture, cx, &accused);
+    fixture.type_text(cx, &prefix);
+    assert!(!popup_items(&form, cx).is_empty());
+    fixture.press(cx, "enter");
+    assert_eq!(cx.update(|cx| accused.read(cx).text().to_owned()), prefix);
+    assert_eq!(
+        cx.update(|cx| form.read(cx).list_inputs(ListKind::Accused).len()),
+        2
+    );
+    assert!(popup_items(&form, cx).is_empty());
+}

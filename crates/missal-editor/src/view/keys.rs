@@ -101,4 +101,5 @@ pub fn bind_keys(cx: &mut App) {
             KeyBinding::new("ctrl-shift-down", ParagraphDown, c),
         ]);
     }
+    super::slash::bind_keys(cx);
 }

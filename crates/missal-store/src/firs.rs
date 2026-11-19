@@ -57,7 +57,7 @@ fn zimni_dates(entries: &[Zimni]) -> String {
     }
 }
 
-fn split(joined: &str) -> Vec<String> {
+pub(crate) fn split(joined: &str) -> Vec<String> {
     if joined.is_empty() {
         Vec::new()
     } else {

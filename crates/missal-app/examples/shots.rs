@@ -263,6 +263,31 @@ fn run(dark: bool, out: &Path, only_wp0: bool) {
 
     h.go(Route::NewFir);
     h.shot("07-new-fir");
+    let prefix = h.with_window(|window, cx| {
+        let top = Models::get(cx).suggestions.read(cx).suggest(
+            missal_core::SuggestionKey::Fir(missal_core::FirProperty::Offence),
+            "",
+            1,
+        );
+        let form = shell(cx)
+            .read(cx)
+            .new_fir()
+            .expect("form")
+            .read(cx)
+            .form()
+            .clone();
+        let offence = form.read(cx).offence_input().clone();
+        offence.update(cx, |input, cx| input.focus(window, cx));
+        top.first()
+            .map(|s| s.value.chars().take(1).collect::<String>())
+            .unwrap_or_default()
+    });
+    h.with_window(|window, cx| window.input(&prefix, cx));
+    h.press("down");
+    h.shot("07b-autocomplete");
+    h.press("escape");
+    h.press("secondary-a");
+    h.press("backspace");
     h.click("create-fir");
     h.shot("08-new-fir-validation");
     h.reset();
@@ -273,6 +298,24 @@ fn run(dark: bool, out: &Path, only_wp0: bool) {
 
     h.go(Route::Fir(FirId::new(3).expect("id")));
     h.shot("10-workspace");
+    h.with_window(|window, cx| {
+        let workspace = shell(cx).read(cx).workspace().expect("workspace");
+        let editor = workspace.read(cx).editor().clone();
+        let handle = editor.read(cx).focus_handle_ref().clone();
+        window.focus(&handle, cx);
+    });
+    h.press("ctrl-end");
+    h.press("enter");
+    h.with_window(|window, cx| window.input("/", cx));
+    h.shot("10b-slash-menu");
+    h.with_window(|window, cx| window.input("tab", cx));
+    h.shot("10c-slash-filter");
+    h.press("escape");
+    h.with_window(|_, cx| {
+        let workspace = shell(cx).read(cx).workspace().expect("workspace");
+        let editor = workspace.read(cx).editor().clone();
+        editor.update(cx, |editor, cx| editor.discard(cx));
+    });
     h.click("add-templates-trigger");
     h.with_window(|window, cx| window.input("ریمانڈ", cx));
     h.shot("11-add-document");

@@ -23,6 +23,7 @@ pub fn init_app(cx: &mut App, db: Db, paths: Option<&Paths>, preferences: Prefer
         eprintln!("missal: font mapping check failed:\n{problems}");
     }
     shortcuts::bind_keys(cx);
+    crate::ui::autocomplete::bind_keys(cx);
     crate::editor::install(cx);
     theme::install(
         theme::resolve_dark(preferences.theme, cx.window_appearance()),

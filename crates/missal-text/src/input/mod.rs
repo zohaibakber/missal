@@ -455,6 +455,16 @@ impl TextInput {
         cx.notify();
     }
 
+    pub fn replace_all(&mut self, text: impl Into<String>, cx: &mut Context<Self>) {
+        let text = text.into();
+        if text == self.text {
+            return;
+        }
+        self.history.break_coalescing();
+        self.replace(0..self.text.len(), &text, EditKind::Other, cx);
+        self.history.break_coalescing();
+    }
+
     pub fn set_disabled(&mut self, disabled: bool, cx: &mut Context<Self>) {
         self.disabled = disabled;
         cx.notify();

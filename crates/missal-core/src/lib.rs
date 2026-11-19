@@ -5,6 +5,7 @@ pub mod field;
 pub mod fir;
 pub mod ids;
 pub mod parallel;
+pub mod suggest;
 pub mod text;
 pub mod timestamp;
 
@@ -19,4 +20,5 @@ pub use field::{
 };
 pub use fir::{Fir, FirProperty, FirRecord, FirStatus, FirSummary, FirValue, Zimni, ZimniPart};
 pub use ids::{FirDocumentId, FirId, PlaceholderId, Revision, TemplateId};
+pub use suggest::{SUGGESTION_LIMIT, Suggestion, SuggestionEntry, SuggestionIndex, SuggestionKey};
 pub use timestamp::Timestamp;

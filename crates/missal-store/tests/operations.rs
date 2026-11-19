@@ -5,7 +5,8 @@ use missal_core::document::{Block, Field, Inline, Paragraph, Text};
 use missal_core::{
     CustomFieldDraft, DisplayMode, Document, Entity, FieldMarkers, FieldPresentation,
     FieldReference, FirDocumentId, FirField, FirId, FirProperty, GlobalPlaceholderDraft, Invalid,
-    PlaceholderId, PlaceholderSource, RepositoryError, Revision, TemplateId, Zimni,
+    PlaceholderId, PlaceholderSource, RepositoryError, Revision, SuggestionIndex, SuggestionKey,
+    TemplateId, Zimni,
 };
 use missal_store::{DraftKey, Store, TemplateBundle};
 
@@ -845,4 +846,41 @@ fn stale_drafts_are_ignored_and_discarded_drafts_are_gone() {
         .unwrap();
     store.remove_template(template.id).unwrap();
     assert_eq!(store.draft(template_key).unwrap(), None);
+}
+
+#[test]
+fn suggestions_come_from_saved_firs_and_custom_values() {
+    let scratch = Scratch::new();
+    let mut store = store(&scratch);
+    let mut first = fir("1/26");
+    first.accused = vec!["علی ولد احمد".into(), "بلال".into()];
+    first.investigation_officer = "اے ایس آئی اکرم".into();
+    let first = store.create_fir(&first).unwrap();
+    let mut second = fir("2/26");
+    second.accused = vec!["علي ولد احمد".into()];
+    let second = store.create_fir(&second).unwrap();
+    let bank = store.create_placeholder("بینک").unwrap();
+    store
+        .set_placeholder_values(first.id, &[(bank.id, "HBL".into())])
+        .unwrap();
+    let index = SuggestionIndex::build(store.suggestion_entries().unwrap());
+    let accused = SuggestionKey::Fir(FirProperty::Accused);
+    let found = index.suggest(accused, "", 8);
+    assert_eq!(found.len(), 2);
+    assert_eq!(found[0].value, "علي ولد احمد");
+    assert_eq!(found[0].uses, 2);
+    let officer = SuggestionKey::Fir(FirProperty::InvestigationOfficer);
+    assert_eq!(
+        index.suggest(officer, "اکرم", 8)[0].value,
+        "اے ایس آئی اکرم"
+    );
+    let custom = SuggestionKey::Placeholder(bank.id);
+    assert_eq!(index.suggest(custom, "hb", 8)[0].value, "HBL");
+    store.remove_fir(second.id).unwrap();
+    let index = SuggestionIndex::build(store.suggestion_entries().unwrap());
+    let found = index.suggest(accused, "عل", 8);
+    assert_eq!(
+        (found[0].value.as_str(), found[0].uses),
+        ("علی ولد احمد", 1)
+    );
 }

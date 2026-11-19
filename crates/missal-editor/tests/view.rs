@@ -653,3 +653,88 @@ fn find_matches_follow_edits_without_rescanning(cx: &mut TestAppContext) {
         });
     }
 }
+
+fn slash_titles(editor: &Entity<Editor>, cx: &mut VisualTestContext) -> Vec<String> {
+    editor.read_with(cx, |e, _| e.slash_titles())
+}
+
+#[gpui_kit::test]
+fn slash_opens_filters_and_turns_the_line_into_a_heading(cx: &mut TestAppContext) {
+    let (_host, editor, cx) = setup(cx, doc(vec![p("")]));
+    cx.simulate_input("عنوان ");
+    cx.simulate_input("/");
+    assert!(editor.read_with(cx, |e, _| e.slash_is_open()));
+    assert_eq!(slash_titles(&editor, cx)[0], "Text");
+    cx.simulate_input("head");
+    assert_eq!(
+        &slash_titles(&editor, cx)[..3],
+        ["Heading 1", "Heading 2", "Heading 3"]
+    );
+    cx.simulate_keystrokes("down");
+    assert_eq!(editor.read_with(cx, |e, _| e.slash_active()), Some(1));
+    cx.simulate_keystrokes("enter");
+    assert!(!editor.read_with(cx, |e, _| e.slash_is_open()));
+    assert_eq!(text_at(&editor, cx, &[0]), "عنوان ");
+    let kind = editor.read_with(cx, |e, _| e.core().text_kind());
+    assert_eq!(
+        kind,
+        Some(missal_editor::TextKind::Heading(
+            missal_core::document::HeadingLevel::H2
+        ))
+    );
+    assert_eq!(
+        editor.read_with(cx, |e, _| e.document().blocks.len()),
+        1,
+        "enter chose the item instead of splitting the line"
+    );
+    cx.simulate_keystrokes(&mod_key("z"));
+    assert_eq!(text_at(&editor, cx, &[0]), "عنوان /head");
+}
+
+#[gpui_kit::test]
+fn slash_needs_a_space_before_it_and_escape_or_moving_away_closes_it(cx: &mut TestAppContext) {
+    let (_host, editor, cx) = setup(cx, doc(vec![p("")]));
+    cx.simulate_input("302/");
+    assert!(
+        !editor.read_with(cx, |e, _| e.slash_is_open()),
+        "dates and sections stay text"
+    );
+    cx.simulate_input(" /");
+    assert!(editor.read_with(cx, |e, _| e.slash_is_open()));
+    cx.simulate_keystrokes("escape");
+    assert!(!editor.read_with(cx, |e, _| e.slash_is_open()));
+    assert_eq!(text_at(&editor, cx, &[0]), "302/ /");
+    cx.simulate_input(" /tab");
+    assert!(editor.read_with(cx, |e, _| e.slash_is_open()));
+    cx.simulate_keystrokes("backspace backspace backspace backspace");
+    assert!(
+        !editor.read_with(cx, |e, _| e.slash_is_open()),
+        "deleting the slash closes it"
+    );
+    cx.simulate_input("/");
+    assert!(editor.read_with(cx, |e, _| e.slash_is_open()));
+    cx.simulate_keystrokes("home");
+    assert!(
+        !editor.read_with(cx, |e, _| e.slash_is_open()),
+        "moving away closes it"
+    );
+    cx.simulate_keystrokes("end enter");
+    assert_eq!(editor.read_with(cx, |e, _| e.document().blocks.len()), 2);
+}
+
+#[gpui_kit::test]
+fn slash_table_with_a_size_inserts_a_grid_and_moves_into_it(cx: &mut TestAppContext) {
+    let (_host, editor, cx) = setup(cx, doc(vec![p("اوپر"), p("")]));
+    cx.simulate_keystrokes("down");
+    cx.simulate_input("/table 2x4");
+    assert_eq!(slash_titles(&editor, cx), ["Table"]);
+    cx.simulate_keystrokes("tab");
+    let (rows, columns) = editor.read_with(cx, |e, _| match &e.document().blocks[1] {
+        missal_core::document::Block::Table(table) => (table.rows.len(), table.rows[0].cells.len()),
+        other => panic!("expected a table, got {other:?}"),
+    });
+    assert_eq!((rows, columns), (2, 4));
+    assert_eq!(head(&editor, cx), (vec![1, 0, 0, 0], 0));
+    cx.simulate_input("خانہ");
+    assert_eq!(text_at(&editor, cx, &[1, 0, 0, 0]), "خانہ");
+}

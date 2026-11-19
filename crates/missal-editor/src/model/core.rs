@@ -7,6 +7,7 @@ use missal_core::document::{Align, Block, Document, Inline, ListType, TextFormat
 use missal_core::{FieldCatalog, FieldMarkers, FieldReference};
 use missal_page::{Affinity, BlockPath, Edit, Position};
 
+use super::blocks::{self, BlockCommand, TextKind};
 use super::clip::{self, Fragment};
 use super::edit::{self, Backward};
 use super::find::{self, Match, Query};
@@ -514,6 +515,36 @@ impl EditorCore {
                 vec![edit::field_inline(reference, Some(&template))],
             );
             Some((caret, Vec::new()))
+        })
+    }
+
+    pub fn text_kind(&self) -> Option<TextKind> {
+        blocks::text_kind(&self.doc, &self.selection.head.path)
+    }
+
+    pub fn apply_block_command(
+        &mut self,
+        path: &BlockPath,
+        trigger: Range<usize>,
+        command: BlockCommand,
+    ) -> Option<Change> {
+        self.marked = None;
+        let k = path.top_index();
+        if k >= self.doc.blocks.len() {
+            return None;
+        }
+        let path = path.clone();
+        self.transact(k..k + 1, Kind::Structure, None, move |doc, _, _| {
+            let total = doc.blocks.len();
+            let backup = doc.blocks[k].clone();
+            match blocks::apply(doc, &path, trigger, &command) {
+                Some(caret) => Some((Selection::caret(caret), Touch::Structure)),
+                None => {
+                    let grown = (doc.blocks.len() + 1).saturating_sub(total);
+                    doc.blocks.splice(k..k + grown, [backup]);
+                    None
+                }
+            }
         })
     }
 
