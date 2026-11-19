@@ -4443,7 +4443,7 @@ dependencies = [
 
 [[package]]
 name = "missal-app"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "chrono",
  "gpui-kit",
@@ -4466,7 +4466,7 @@ dependencies = [
 
 [[package]]
 name = "missal-auth"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "dotenvy",
  "keyring",
@@ -4477,14 +4477,14 @@ dependencies = [
 
 [[package]]
 name = "missal-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "unicode-general-category",
 ]
 
 [[package]]
 name = "missal-docx"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "dotenvy",
  "flate2",
@@ -4499,7 +4499,7 @@ dependencies = [
 
 [[package]]
 name = "missal-editor"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "gpui-kit",
  "gpui-pre-wgpu",
@@ -4513,7 +4513,7 @@ dependencies = [
 
 [[package]]
 name = "missal-library"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -4523,7 +4523,7 @@ dependencies = [
 
 [[package]]
 name = "missal-page"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "flate2",
  "gpui-kit",
@@ -4539,7 +4539,7 @@ dependencies = [
 
 [[package]]
 name = "missal-store"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "flate2",
  "missal-core",
@@ -4550,7 +4550,7 @@ dependencies = [
 
 [[package]]
 name = "missal-text"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "gpui-kit",
  "gpui-pre-wgpu",
