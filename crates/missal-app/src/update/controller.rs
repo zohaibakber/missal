@@ -9,6 +9,8 @@ use crate::state::{Models, ToastKind, show_toast, toast_error, toast_warning};
 use crate::ui::toast::ToastSpec;
 
 const START_DELAY: Duration = Duration::from_secs(60);
+const CHECK_INTERVAL: Duration = Duration::from_secs(4 * 60 * 60);
+const TOAST_KEY: &str = "update-ready";
 
 pub fn enabled(data_dir_overridden: bool) -> bool {
     static OPTED_OUT: OnceLock<bool> = OnceLock::new();
@@ -60,9 +62,24 @@ pub fn status(cx: &mut App) -> Entity<UpdateStatus> {
 pub fn start(window: AnyWindowHandle, cx: &mut App) {
     cx.spawn(async move |cx| {
         cx.background_executor().timer(START_DELAY).await;
-        cx.update(|cx| run(window, false, cx));
+        loop {
+            cx.update(|cx| tick(window, cx));
+            cx.background_executor().timer(CHECK_INTERVAL).await;
+        }
     })
     .detach();
+}
+
+fn tick(window: AnyWindowHandle, cx: &mut App) {
+    match status(cx).read(cx).state.clone() {
+        UpdateState::Checking => {}
+        UpdateState::Ready(ready) => {
+            window
+                .update(cx, |_, window, cx| announce(ready, window, cx))
+                .ok();
+        }
+        _ => run(window, false, cx),
+    }
 }
 
 pub fn check_now(window: &mut Window, cx: &mut App) {
@@ -124,15 +141,12 @@ fn run(window: AnyWindowHandle, manual: bool, cx: &mut App) {
 }
 
 pub fn announce(ready: Rc<Ready>, window: &mut Window, cx: &mut App) {
-    let version = ready.version().to_owned();
-    let spec = ToastSpec::new(
-        ToastKind::Info,
-        format!("Version {version} is downloaded. Restart to apply it."),
-    )
-    .title("Update ready")
-    .action("Restart now", move |window, cx| {
-        restart(ready.clone(), window, cx)
-    });
+    let spec = ToastSpec::new(ToastKind::Info, "Update ready")
+        .key(TOAST_KEY)
+        .sticky("Later")
+        .action("Restart now", move |window, cx| {
+            restart(ready.clone(), window, cx)
+        });
     show_toast(window, cx, spec);
 }
 

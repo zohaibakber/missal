@@ -217,6 +217,13 @@ fn run_wp0(h: &mut Harness) {
             ToastSpec::new(ToastKind::Error, "Couldn't save. The disk is full.")
                 .action("Retry", |_, _| {}),
         );
+        show_toast(
+            window,
+            cx,
+            ToastSpec::new(ToastKind::Info, "Update ready")
+                .sticky("Later")
+                .action("Restart now", |_, _| {}),
+        );
     });
     h.shot("27-toasts");
     h.with_window(|_, cx| {

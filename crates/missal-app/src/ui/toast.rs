@@ -27,6 +27,8 @@ pub struct ToastSpec {
     pub title: Option<SharedString>,
     pub message: SharedString,
     pub action: Option<(SharedString, ToastAction)>,
+    pub dismiss: Option<SharedString>,
+    pub key: Option<&'static str>,
 }
 
 impl ToastSpec {
@@ -36,6 +38,8 @@ impl ToastSpec {
             title: None,
             message: message.into(),
             action: None,
+            dismiss: None,
+            key: None,
         }
     }
 
@@ -51,6 +55,20 @@ impl ToastSpec {
     ) -> ToastSpec {
         self.action = Some((label.into(), Rc::new(action)));
         self
+    }
+
+    pub fn sticky(mut self, dismiss: impl Into<SharedString>) -> ToastSpec {
+        self.dismiss = Some(dismiss.into());
+        self
+    }
+
+    pub fn key(mut self, key: &'static str) -> ToastSpec {
+        self.key = Some(key);
+        self
+    }
+
+    fn is_sticky(&self) -> bool {
+        self.dismiss.is_some()
     }
 }
 
@@ -100,6 +118,18 @@ impl ToastHost {
     pub fn push(&mut self, spec: ToastSpec, cx: &mut Context<Self>) -> usize {
         let id = self.next_id;
         self.next_id += 1;
+        if let Some(key) = spec.key {
+            let replaced: Vec<usize> = self
+                .toasts
+                .iter()
+                .filter(|toast| !toast.leaving && toast.spec.key == Some(key))
+                .map(|toast| toast.id)
+                .collect();
+            for old in replaced {
+                self.dismiss(old, cx);
+            }
+        }
+        let sticky = spec.is_sticky();
         let duration = if spec.action.is_some() {
             TOAST_DURATION_WITH_ACTION
         } else {
@@ -112,14 +142,18 @@ impl ToastHost {
             leaving: false,
         });
         while self.toasts.iter().filter(|toast| !toast.leaving).count() > 4 {
-            if let Some(oldest) = self
-                .toasts
-                .iter()
-                .find(|toast| !toast.leaving)
-                .map(|t| t.id)
-            {
+            let live = || self.toasts.iter().filter(|toast| !toast.leaving);
+            let oldest = live()
+                .find(|toast| !toast.spec.is_sticky())
+                .or_else(|| live().next())
+                .map(|toast| toast.id);
+            if let Some(oldest) = oldest {
                 self.dismiss(oldest, cx);
             }
+        }
+        if sticky {
+            cx.notify();
+            return id;
         }
         cx.spawn(async move |this, cx| {
             let mut wait = duration;
@@ -254,9 +288,23 @@ impl Render for ToastHost {
                                 .primary()
                                 .xs()
                                 .on_click(cx.listener(move |this, _, window, cx| {
-                                    handler(window, cx);
                                     this.dismiss(id, cx);
+                                    let handler = handler.clone();
+                                    window.defer(cx, move |window, cx| handler(window, cx));
                                 }))
+                        });
+                        let dismiss = toast.spec.dismiss.clone().map(|text| {
+                            crate::ui::button(("toast-dismiss", id), text)
+                                .ghost()
+                                .xs()
+                                .on_click(cx.listener(move |this, _, _, cx| this.dismiss(id, cx)))
+                        });
+                        let buttons = (action.is_some() || dismiss.is_some()).then(|| {
+                            h_flex()
+                                .flex_none()
+                                .gap(px(4.))
+                                .children(dismiss)
+                                .children(action)
                         });
                         let card = div()
                             .id(("toast", id))
@@ -268,7 +316,7 @@ impl Render for ToastHost {
                                     toast.hovered = *hovered;
                                 }
                             }))
-                            .child(toast_card(&palette, &toast.spec).children(action));
+                            .child(toast_card(&palette, &toast.spec).children(buttons));
                         if toast.leaving {
                             card.with_animation(("toast-exit", id), motion_exit(), |this, delta| {
                                 this.opacity(1. - delta)
