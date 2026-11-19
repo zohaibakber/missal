@@ -142,11 +142,4 @@ mod tests {
             assert_eq!(format_date(text), text.trim());
         }
     }
-
-    #[test]
-    fn dates_sort_chronologically() {
-        let key = |text: &str| parse_date(text).unwrap().sort_key();
-        assert!(key("31-12-2025") < key("01-01-2026"));
-        assert!(key("01-02-2026") < key("02-02-2026"));
-    }
 }

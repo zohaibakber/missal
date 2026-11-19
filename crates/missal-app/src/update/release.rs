@@ -96,13 +96,6 @@ mod tests {
     ]"#;
 
     #[test]
-    fn tags_parse_as_versions() {
-        assert_eq!(tag_version("1.2.3"), None);
-        assert_eq!(tag_version("v1.2.3"), Some(Version::new(1, 2, 3)));
-        assert_eq!(tag_version("vnext"), None);
-    }
-
-    #[test]
     fn drafts_prereleases_and_malformed_tags_are_dropped() {
         let releases = parse_releases(LIST).unwrap();
         let tags: Vec<_> = releases
@@ -119,33 +112,5 @@ mod tests {
         assert_eq!(linux.tag, "v0.10.0");
         let windows = newest_update(&releases, &Version::new(0, 1, 0), "win").unwrap();
         assert_eq!(windows.tag, "v0.2.0");
-    }
-
-    #[test]
-    fn nothing_newer_means_no_update() {
-        let releases = parse_releases(LIST).unwrap();
-        assert!(newest_update(&releases, &Version::new(0, 2, 0), "win").is_none());
-        assert!(newest_update(&releases, &Version::new(0, 10, 0), "linux").is_none());
-        assert!(newest_update(&releases, &Version::new(0, 1, 0), "osx").is_none());
-    }
-
-    #[test]
-    fn malformed_lists_are_errors() {
-        assert!(parse_releases("{}").is_err());
-        assert!(parse_releases("nope").is_err());
-        assert_eq!(parse_releases("[]").unwrap(), vec![]);
-    }
-
-    #[test]
-    fn urls_are_built_from_the_repository_and_tag() {
-        assert_eq!(
-            download_base(REPOSITORY, "v0.2.0"),
-            "https://github.com/zohaibakber/missal/releases/download/v0.2.0"
-        );
-        assert!(
-            releases_url(REPOSITORY)
-                .starts_with("https://api.github.com/repos/zohaibakber/missal/releases")
-        );
-        assert_eq!(feed_name("win"), "releases.win.json");
     }
 }

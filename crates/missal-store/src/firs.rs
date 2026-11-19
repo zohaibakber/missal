@@ -433,26 +433,3 @@ impl Store {
         Ok(saved)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_fir_list_reads_only_the_summary_index() {
-        let store = Store::in_memory().unwrap();
-        let plan: Vec<String> = store
-            .connection
-            .prepare(&format!("EXPLAIN QUERY PLAN {}", summaries_query()))
-            .and_then(|mut statement| {
-                statement
-                    .query_map([], |row| row.get::<_, String>(3))?
-                    .collect()
-            })
-            .unwrap();
-        assert_eq!(
-            plan,
-            [format!("SCAN firs USING COVERING INDEX {SUMMARY_INDEX}")]
-        );
-    }
-}

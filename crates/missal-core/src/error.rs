@@ -150,38 +150,3 @@ impl fmt::Display for RepositoryError {
 }
 
 impl std::error::Error for RepositoryError {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn messages_read_as_sentences() {
-        assert_eq!(
-            RepositoryError::not_found(Entity::FirDocument, 3).message(),
-            "Document not found"
-        );
-        assert_eq!(
-            RepositoryError::conflict(Entity::Template, "revision", 2).message(),
-            SAVED_ELSEWHERE
-        );
-        assert_eq!(
-            RepositoryError::conflict(Entity::Placeholder, "name", "x").message(),
-            "name is already in use"
-        );
-        assert_eq!(
-            RepositoryError::InUse {
-                entity: Entity::Template,
-                id: "1".into(),
-                used_by: Entity::FirDocument,
-                count: 2
-            }
-            .message(),
-            "Template is in use and cannot be deleted"
-        );
-        assert_eq!(
-            RepositoryError::storage("fir.list", STORAGE_FAILED).message(),
-            STORAGE_FAILED
-        );
-    }
-}

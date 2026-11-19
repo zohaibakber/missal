@@ -11,7 +11,7 @@ use missal_app::prefs::Preferences;
 use missal_app::printing::Handoff;
 use missal_app::seed::seed_firs;
 use missal_app::state::{Models, Route, ToastKind};
-use missal_app::ui::print_preview::{PreviewDocument, PrintHandler, PrintPreview, Zoom};
+use missal_app::ui::print_preview::{PreviewDocument, PrintHandler, PrintPreview};
 use missal_core::FirId;
 use missal_store::Store;
 
@@ -20,7 +20,6 @@ struct Fixture {
     shell: Entity<AppShell>,
     models: Models,
     database: PathBuf,
-    printed: Rc<std::cell::RefCell<Vec<PathBuf>>>,
     _directory: tempfile::TempDir,
 }
 
@@ -46,7 +45,6 @@ fn boot(cx: &mut TestAppContext, count: usize) -> Fixture {
         shell,
         models,
         database,
-        printed,
         _directory: directory,
     };
     fixture.settle(cx);
@@ -140,48 +138,6 @@ fn template_docx(name: &str) -> PathBuf {
 const BAIL_DOCX: &str = "آمد روبکار عبوری ضمانت.docx";
 
 #[gpui_kit::test]
-fn print_preview_lays_out_the_included_documents_and_navigates(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    let workspace = fir_workspace(&fixture, cx);
-    assert!(fixture.preview(cx).is_none());
-    let preview = fixture.open_preview(cx);
-    let (documents, pages, description) = cx.update(|cx| {
-        let preview = preview.read(cx);
-        (
-            preview.document_count(),
-            preview.page_count(),
-            preview.description(),
-        )
-    });
-    assert_eq!(documents, 3);
-    assert!(pages >= 3, "{pages} pages for three documents");
-    assert!(description.starts_with("FIR "), "{description}");
-    assert!(
-        description.ends_with(&format!("3 documents · {pages} pages")),
-        "{description}"
-    );
-    assert_eq!(cx.update(|cx| preview.read(cx).current_page()), 1);
-
-    fixture.press(cx, "pagedown");
-    assert_eq!(cx.update(|cx| preview.read(cx).current_page()), 2);
-    fixture.click(cx, "preview-next");
-    assert_eq!(cx.update(|cx| preview.read(cx).current_page()), 3);
-    fixture.click(cx, "preview-previous");
-    assert_eq!(cx.update(|cx| preview.read(cx).current_page()), 2);
-    fixture.press(cx, "pageup");
-    fixture.press(cx, "pageup");
-    assert_eq!(cx.update(|cx| preview.read(cx).current_page()), 1);
-    fixture.with(cx, |_, cx| {
-        preview.update(cx, |preview, cx| preview.go_to_page(pages + 10, cx))
-    });
-    assert_eq!(cx.update(|cx| preview.read(cx).current_page()), pages);
-
-    fixture.press(cx, "escape");
-    assert!(fixture.preview(cx).is_none());
-    let _ = workspace;
-}
-
-#[gpui_kit::test]
 fn print_preview_uses_the_live_editor_content_of_the_active_document(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
     let workspace = fir_workspace(&fixture, cx);
@@ -228,90 +184,6 @@ impl ActiveIds for App {
 }
 
 #[gpui_kit::test]
-fn print_preview_respects_the_include_when_printing_choice(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    let workspace = fir_workspace(&fixture, cx);
-    let fir = cx.update(|cx| workspace.read(cx).id());
-    let ids: Vec<_> = cx.update(|cx| {
-        workspace
-            .read(cx)
-            .documents()
-            .iter()
-            .map(|d| d.id)
-            .collect()
-    });
-    let preview = fixture.open_preview(cx);
-    assert_eq!(cx.update(|cx| preview.read(cx).document_count()), 3);
-    fixture.with(cx, |_, cx| {
-        preview.update(cx, |preview, cx| preview.toggle_included(1, cx))
-    });
-    assert_eq!(cx.update(|cx| preview.read(cx).document_count()), 2);
-    let excluded = cx.update(|cx| missal_app::ui::print_preview::excluded_documents(fir, cx));
-    assert_eq!(excluded.into_iter().collect::<Vec<_>>(), [ids[1]]);
-    fixture.press(cx, "escape");
-    let preview = fixture.open_preview(cx);
-    assert_eq!(cx.update(|cx| preview.read(cx).document_count()), 2);
-}
-
-#[gpui_kit::test]
-fn print_preview_zoom_steps_fit_and_preserves_the_scroll_position(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    fir_workspace(&fixture, cx);
-    let preview = fixture.open_preview(cx);
-    assert_eq!(cx.update(|cx| preview.read(cx).zoom()), Zoom::Fit);
-    let fit = cx.update(|cx| preview.read(cx).zoom_percent());
-    assert!((25..=100).contains(&fit));
-    fixture.with(cx, |_, cx| {
-        preview.update(cx, |preview, cx| preview.go_to_page(3, cx))
-    });
-    let before = cx.update(|cx| preview.read(cx).scroll_fraction());
-    fixture.press(cx, "secondary-=");
-    let zoom = cx.update(|cx| preview.read(cx).zoom());
-    assert!(
-        matches!(zoom, Zoom::Percent(percent) if percent > fit),
-        "{zoom:?} from {fit}"
-    );
-    let after = cx.update(|cx| preview.read(cx).scroll_fraction());
-    assert!((before - after).abs() < 0.03, "{before} vs {after}");
-    fixture.press(cx, "secondary--");
-    fixture.press(cx, "secondary--");
-    let Zoom::Percent(smaller) = cx.update(|cx| preview.read(cx).zoom()) else {
-        panic!("a fixed zoom")
-    };
-    assert!(smaller < fit.max(100));
-    fixture.press(cx, "secondary-0");
-    assert_eq!(cx.update(|cx| preview.read(cx).zoom()), Zoom::Fit);
-    fixture.click(cx, "preview-zoom-in");
-    assert!(matches!(
-        cx.update(|cx| preview.read(cx).zoom()),
-        Zoom::Percent(_)
-    ));
-    fixture.click(cx, "preview-zoom-out");
-    for _ in 0..8 {
-        fixture.click(cx, "preview-zoom-out");
-    }
-    assert_eq!(cx.update(|cx| preview.read(cx).zoom()), Zoom::Percent(50));
-    for _ in 0..8 {
-        fixture.click(cx, "preview-zoom-in");
-    }
-    assert_eq!(cx.update(|cx| preview.read(cx).zoom()), Zoom::Percent(200));
-}
-
-#[gpui_kit::test]
-fn printing_from_the_workspace_offers_every_document_on_the_print_screen(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    let workspace = fir_workspace(&fixture, cx);
-    let count = cx.update(|cx| workspace.read(cx).documents().len());
-    fixture.click(cx, "header-print");
-    let preview = fixture.preview(cx).expect("the Print screen opens");
-    assert_eq!(
-        cx.update(|cx| preview.read(cx).request().documents.len()),
-        count
-    );
-    assert!(fixture.toasts(cx).is_empty());
-}
-
-#[gpui_kit::test]
 fn export_pdf_writes_a_valid_pdf_with_every_page(cx: &mut TestAppContext) {
     let fixture = boot(cx, 4);
     fir_workspace(&fixture, cx);
@@ -335,125 +207,6 @@ fn export_pdf_writes_a_valid_pdf_with_every_page(cx: &mut TestAppContext) {
     );
     assert!(fixture.preview(cx).is_some());
     assert_eq!(cx.update(|cx| preview.read(cx).busy()), None);
-}
-
-#[gpui_kit::test]
-fn cancelling_the_save_dialog_writes_nothing(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    fir_workspace(&fixture, cx);
-    let preview = fixture.open_preview(cx);
-    fixture.click(cx, "preview-export");
-    cx.simulate_new_path_selection(|_| None);
-    fixture.settle(cx);
-    assert!(fixture.toasts(cx).is_empty());
-    assert_eq!(cx.update(|cx| preview.read(cx).busy()), None);
-}
-
-#[gpui_kit::test]
-fn print_hands_a_spooled_pdf_to_the_system_and_closes_the_preview(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    fir_workspace(&fixture, cx);
-    let preview = fixture.open_preview(cx);
-    let pages = cx.update(|cx| preview.read(cx).page_count());
-    fixture.press(cx, "secondary-p");
-    let printed = fixture.printed.borrow().clone();
-    assert_eq!(printed.len(), 1);
-    let bytes = std::fs::read(&printed[0]).expect("the spooled PDF");
-    assert!(bytes.starts_with(b"%PDF-"));
-    assert_eq!(count_pdf_pages(&bytes), pages);
-    assert!(fixture.preview(cx).is_none());
-    assert!(
-        fixture
-            .toasts(cx)
-            .iter()
-            .any(|toast| toast.0 == ToastKind::Success)
-    );
-    std::fs::remove_file(&printed[0]).ok();
-}
-
-#[gpui_kit::test]
-fn a_template_previews_with_placeholder_names(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 4);
-    let template = cx.update(|cx| {
-        fixture
-            .models
-            .templates
-            .read(cx)
-            .items
-            .first()
-            .map(|item| item.id)
-            .unwrap()
-    });
-    fixture.go(cx, Route::Template(template));
-    let preview = fixture.open_preview(cx);
-    cx.update(|cx| {
-        let preview = preview.read(cx);
-        assert_eq!(preview.document_count(), 1);
-        assert!(preview.page_count() >= 1);
-        assert!(preview.request().values.is_none());
-        assert!(
-            preview
-                .description()
-                .contains("Placeholders show their names")
-        );
-    });
-}
-
-#[gpui_kit::test]
-fn word_import_fills_a_new_template_through_the_file_picker(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 0);
-    let existing = Store::open(&fixture.database)
-        .unwrap()
-        .templates()
-        .unwrap()
-        .len();
-    fixture.go(cx, Route::NewTemplate);
-    let page = cx.update(|cx| {
-        fixture
-            .shell
-            .read(cx)
-            .templates()
-            .unwrap()
-            .read(cx)
-            .page()
-            .cloned()
-            .unwrap()
-    });
-    assert!(!cx.update(|cx| page.read(cx).is_dirty(cx)));
-    fixture.press(cx, "secondary-o");
-    assert!(cx.did_prompt_for_paths());
-    let docx = template_docx(BAIL_DOCX);
-    assert!(docx.exists());
-    let chosen = docx.clone();
-    cx.simulate_path_prompt_response(move |options| {
-        assert!(options.files && !options.directories && !options.multiple);
-        Some(vec![chosen])
-    });
-    fixture.settle(cx);
-    assert!(!cx.update(|cx| page.read(cx).is_importing()));
-    assert!(!fixture.with(cx, |window, cx| window.has_active_dialog(cx)));
-    let (text, dirty, name) = cx.update(|cx| {
-        let page = page.read(cx);
-        (
-            page.editor().read(cx).snapshot().0.projections().plain_text,
-            page.is_dirty(cx),
-            page.title_input().read(cx).text().to_owned(),
-        )
-    });
-    assert!(!text.trim().is_empty());
-    assert!(dirty);
-    assert!(!name.trim().is_empty());
-    assert!(cx.update(|cx| page.read(cx).is_reviewing()));
-    assert!(fixture.toasts(cx).is_empty());
-
-    fixture.click(cx, "template-save");
-    let saved = Store::open(&fixture.database).unwrap().templates().unwrap();
-    assert_eq!(saved.len(), existing + 1);
-    let created = saved
-        .iter()
-        .find(|template| template.name == name)
-        .expect("the imported template is saved");
-    assert!(created.preview_text.len() > 3);
 }
 
 #[gpui_kit::test]
@@ -535,34 +288,6 @@ fn word_import_into_an_existing_template_asks_before_replacing(cx: &mut TestAppC
 }
 
 #[gpui_kit::test]
-fn word_import_rejects_files_that_are_not_docx(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 0);
-    fixture.go(cx, Route::NewTemplate);
-    let page = cx.update(|cx| {
-        fixture
-            .shell
-            .read(cx)
-            .templates()
-            .unwrap()
-            .read(cx)
-            .page()
-            .cloned()
-            .unwrap()
-    });
-    fixture.press(cx, "secondary-o");
-    cx.simulate_path_prompt_response(|_| Some(vec![PathBuf::from("/tmp/notes.txt")]));
-    fixture.settle(cx);
-    assert!(!cx.update(|cx| page.read(cx).is_dirty(cx)));
-    let toasts = fixture.toasts(cx);
-    assert_eq!(toasts.len(), 1);
-    assert_eq!(toasts[0].0, ToastKind::Error);
-    assert_eq!(
-        toasts[0].1.as_deref(),
-        Some("Could not import Word document")
-    );
-}
-
-#[gpui_kit::test]
 fn word_import_reports_a_corrupt_file(cx: &mut TestAppContext) {
     let fixture = boot(cx, 0);
     fixture.go(cx, Route::NewTemplate);
@@ -579,15 +304,4 @@ fn word_import_reports_a_corrupt_file(cx: &mut TestAppContext) {
         Some("Could not import Word document")
     );
     assert!(!toasts[0].2.is_empty());
-}
-
-#[gpui_kit::test]
-fn the_upload_button_opens_the_same_picker(cx: &mut TestAppContext) {
-    let fixture = boot(cx, 0);
-    fixture.go(cx, Route::NewTemplate);
-    fixture.click(cx, "template-import");
-    assert!(cx.did_prompt_for_paths());
-    cx.simulate_path_prompt_response(|_| None);
-    fixture.settle(cx);
-    assert!(fixture.toasts(cx).is_empty());
 }

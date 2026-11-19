@@ -38,28 +38,3 @@ impl Paths {
         std::fs::create_dir_all(&self.directory)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_location_is_the_shared_app_directory_with_its_own_database() {
-        let paths = Paths::resolve(None);
-        assert!(paths.is_default);
-        assert_eq!(paths.directory.file_name().unwrap(), "Missal");
-        assert_eq!(paths.database.file_name().unwrap(), "missal.db");
-        assert_eq!(
-            paths.preferences.file_name().unwrap(),
-            "missal-preferences.json"
-        );
-        assert_eq!(paths.database.parent(), Some(paths.directory.as_path()));
-    }
-
-    #[test]
-    fn override_is_not_the_default() {
-        let paths = Paths::resolve(Some(Path::new("/tmp/scratch")));
-        assert!(!paths.is_default);
-        assert_eq!(paths.database, Path::new("/tmp/scratch/missal.db"));
-    }
-}

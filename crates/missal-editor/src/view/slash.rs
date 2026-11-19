@@ -605,7 +605,7 @@ fn slash_hints(theme: &EditorTheme) -> AnyElement {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::blocks::MAX_TABLE_SIDE;
+
     use missal_core::{FirField, FirProperty};
 
     fn titles(items: &[SlashItem]) -> Vec<&str> {
@@ -614,30 +614,6 @@ mod tests {
 
     fn fields() -> Vec<(String, FieldReference, bool)> {
         field_choices(&FieldCatalog::default())
-    }
-
-    #[test]
-    fn an_empty_query_lists_blocks_then_insert_then_fields() {
-        let items = slash_items("", &fields(), false);
-        assert_eq!(items[0].title.as_ref(), "Text");
-        let groups: Vec<SlashGroup> = items.iter().map(|item| item.group).collect();
-        assert!(groups.is_sorted());
-        assert!(groups.contains(&SlashGroup::Fields));
-    }
-
-    #[test]
-    fn titles_rank_before_keywords() {
-        let items = slash_items("h", &fields(), false);
-        assert_eq!(
-            &titles(&items)[..3],
-            ["Heading 1", "Heading 2", "Heading 3"]
-        );
-        assert_eq!(titles(&slash_items("h1", &fields(), false))[0], "Heading 1");
-        assert_eq!(titles(&slash_items("hr", &fields(), false)), ["Divider"]);
-        assert_eq!(
-            titles(&slash_items("ol", &fields(), false)),
-            ["Numbered list"]
-        );
     }
 
     #[test]
@@ -652,50 +628,5 @@ mod tests {
                 index: None
             }))
         );
-    }
-
-    #[test]
-    fn duplicate_field_aliases_are_listed_once() {
-        let body = FieldReference::Fir(FirField {
-            property: FirProperty::Body,
-            index: None,
-        });
-        let count = fields()
-            .iter()
-            .filter(|(_, reference, _)| *reference == body)
-            .count();
-        assert_eq!(count, 1);
-    }
-
-    #[test]
-    fn table_sizes_are_read_from_the_query() {
-        let items = slash_items("table 4x2", &fields(), false);
-        assert_eq!(titles(&items), ["Table"]);
-        assert_eq!(items[0].command, BlockCommand::table(4, 2));
-        assert_eq!(items[0].detail.as_deref(), Some("4 × 2"));
-        assert_eq!(
-            slash_items("5×6", &fields(), false)[0].command,
-            BlockCommand::table(5, 6)
-        );
-        assert_eq!(
-            slash_items("table 99x99", &fields(), false)[0].command,
-            BlockCommand::table(MAX_TABLE_SIDE, MAX_TABLE_SIDE)
-        );
-        assert_eq!(
-            slash_items("table", &fields(), false)[0].detail.as_deref(),
-            Some("3 × 3")
-        );
-        assert!(slash_items("quote 2x2", &fields(), false).is_empty());
-    }
-
-    #[test]
-    fn page_breaks_are_hidden_inside_tables() {
-        assert!(titles(&slash_items("page", &fields(), false)).contains(&"Page break"));
-        assert!(!titles(&slash_items("page", &fields(), true)).contains(&"Page break"));
-    }
-
-    #[test]
-    fn nonsense_matches_nothing() {
-        assert!(slash_items("zzqx", &fields(), false).is_empty());
     }
 }

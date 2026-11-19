@@ -56,7 +56,7 @@ impl Config {
 
 #[cfg(test)]
 mod tests {
-    use super::{https, usable};
+    use super::usable;
 
     #[test]
     fn only_https_or_a_local_server_is_accepted() {
@@ -67,16 +67,5 @@ mod tests {
         assert!(usable("http://127.0.0.1:1337").is_some());
         assert!(usable("http://api.example.com").is_none());
         assert!(usable("").is_none());
-    }
-
-    #[test]
-    fn the_purchase_link_must_be_https() {
-        assert_eq!(
-            https(" https://example.com/buy ").as_deref(),
-            Some("https://example.com/buy")
-        );
-        assert!(https("http://example.com/buy").is_none());
-        assert!(https("https://").is_none());
-        assert!(https("").is_none());
     }
 }

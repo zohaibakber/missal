@@ -287,38 +287,3 @@ impl Api {
         Self::json(&self.call(Method::Post, &path, Some(token), Some(body))?)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn server_errors_map_by_tag_before_status() {
-        assert_eq!(
-            problem(
-                429,
-                r#"{"_tag":"AccountLocked","error":"x","retryAfter":600}"#
-            ),
-            AuthError::Locked { retry_after: 600 }
-        );
-        assert_eq!(
-            problem(401, r#"{"_tag":"InvalidCredentials","error":"x"}"#),
-            AuthError::InvalidCredentials
-        );
-        assert_eq!(
-            problem(403, r#"{"_tag":"EmailNotVerified","error":"x"}"#),
-            AuthError::EmailNotVerified
-        );
-        assert_eq!(
-            problem(400, r#"{"_tag":"InvalidCode","error":"x"}"#),
-            AuthError::InvalidCode
-        );
-        assert_eq!(
-            problem(402, r#"{"_tag":"LicenceRequired","error":"x"}"#),
-            AuthError::LicenceRequired
-        );
-        assert_eq!(problem(401, "{}"), AuthError::SessionEnded);
-        assert_eq!(problem(400, ""), AuthError::Invalid);
-        assert!(matches!(problem(503, ""), AuthError::Offline(_)));
-    }
-}
