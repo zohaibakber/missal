@@ -769,10 +769,22 @@ impl FieldsPanel {
                 text(&format_date(value)).unwrap_or_else(dash),
             );
         }
+        let zimni: Vec<String> = fir
+            .zimni
+            .iter()
+            .map(|entry| {
+                let date = format_date(&entry.date);
+                match (entry.number.trim().is_empty(), date.trim().is_empty()) {
+                    (false, false) => format!("{} · {date}", entry.number),
+                    (false, true) => entry.number.clone(),
+                    _ => date,
+                }
+            })
+            .collect();
         for (name, items) in [
             ("ملزمان", &fir.accused),
             ("گواہان", &fir.witness),
-            ("ضمنی", &fir.zimni),
+            ("ضمنی", &zimni),
         ] {
             let list = if items.iter().all(|item| item.trim().is_empty()) {
                 dash()
@@ -805,7 +817,7 @@ impl FieldsPanel {
             ("تفتیشی افسر", &fir.investigation_officer),
             ("تحریر کنندہ", &fir.writer),
             ("برآمدگی", &fir.recovery),
-            ("متن", &fir.body),
+            ("مختصر حالات", &fir.body),
             ("ایمی نمبر 1", &fir.imei_1),
             ("سم نمبر 1", &fir.sim_1),
             ("ایمی نمبر 2", &fir.imei_2),

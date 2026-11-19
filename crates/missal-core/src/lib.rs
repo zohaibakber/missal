@@ -15,8 +15,8 @@ pub use field::{
     AppSettings, CustomFieldDraft, DisplayMode, FIR_FIELDS, FieldCatalog, FieldDisplayText,
     FieldMarkers, FieldPresentation, FieldReference, FirField, FirValueContext, FirValues,
     GlobalPlaceholder, GlobalPlaceholderDraft, Placeholder, PlaceholderSource, PlaceholderValue,
-    field_lookup_key, normalize_placeholder_name, placeholder_name,
+    field_lookup_key, fir_field_by_key, normalize_placeholder_name, placeholder_name,
 };
-pub use fir::{Fir, FirProperty, FirRecord, FirStatus, FirSummary, FirValue};
+pub use fir::{Fir, FirProperty, FirRecord, FirStatus, FirSummary, FirValue, Zimni, ZimniPart};
 pub use ids::{FirDocumentId, FirId, PlaceholderId, Revision, TemplateId};
 pub use timestamp::Timestamp;

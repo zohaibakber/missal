@@ -14,7 +14,7 @@ use gpui_kit::{
     div, px,
 };
 use missal_core::{
-    CalendarDate, Fir, FirId, FirRecord, FirStatus, fold_digits, format_date, parse_date,
+    CalendarDate, Fir, FirId, FirRecord, FirStatus, Zimni, fold_digits, format_date, parse_date,
 };
 use missal_text::{Direction, LineHeight, TextInput, TextInputEvent};
 
@@ -101,6 +101,7 @@ pub struct FirForm {
     status: FirStatus,
     status_open: bool,
     lists: [Vec<Entity<TextInput>>; 3],
+    zimni_dates: Vec<Entity<TextInput>>,
     errors: HashMap<&'static str, &'static str>,
     validated: bool,
     dirty: bool,
@@ -173,17 +174,28 @@ impl FirForm {
             numeric(window, cx, &initial.sim_1),
             numeric(window, cx, &initial.sim_2),
         ];
-        let lists = ListKind::ALL.map(|kind| {
-            let items = match kind {
-                ListKind::Accused => &initial.accused,
-                ListKind::Witness => &initial.witness,
-                ListKind::Zimni => &initial.zimni,
-            };
-            items
+        let lists = ListKind::ALL.map(|kind| match kind {
+            ListKind::Accused => initial
+                .accused
                 .iter()
                 .map(|text| urdu(window, cx, text))
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
+            ListKind::Witness => initial
+                .witness
+                .iter()
+                .map(|text| urdu(window, cx, text))
+                .collect::<Vec<_>>(),
+            ListKind::Zimni => initial
+                .zimni
+                .iter()
+                .map(|entry| zimni_number_input(window, cx, &entry.number))
+                .collect::<Vec<_>>(),
         });
+        let zimni_dates = initial
+            .zimni
+            .iter()
+            .map(|entry| date(window, cx, &entry.date))
+            .collect::<Vec<_>>();
         let mut form = FirForm {
             models,
             id,
@@ -203,6 +215,7 @@ impl FirForm {
             sim,
             status_open: false,
             lists,
+            zimni_dates,
             errors: HashMap::new(),
             validated: false,
             dirty: false,
@@ -247,14 +260,38 @@ impl FirForm {
         cx: &mut Context<Self>,
     ) {
         self.watch(input, cx);
+        if kind == ListKind::Zimni {
+            self.fold_on_blur(input, false, cx);
+        }
         let subscription = cx.subscribe_in(
             input,
             window,
             move |this, input, event: &TextInputEvent, window, cx| {
                 if *event == TextInputEvent::Submit
+                    && kind != ListKind::Zimni
                     && this.lists[kind.index()].last() == Some(input)
                 {
                     this.add_entry(kind, window, cx);
+                }
+            },
+        );
+        self.subscriptions.push(subscription);
+    }
+
+    fn watch_zimni_date(
+        &mut self,
+        input: &Entity<TextInput>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.watch(input, cx);
+        self.fold_on_blur(input, true, cx);
+        let subscription = cx.subscribe_in(
+            input,
+            window,
+            move |this, input, event: &TextInputEvent, window, cx| {
+                if *event == TextInputEvent::Submit && this.zimni_dates.last() == Some(input) {
+                    this.add_entry(ListKind::Zimni, window, cx);
                 }
             },
         );
@@ -286,6 +323,9 @@ impl FirForm {
             for input in self.lists[kind.index()].clone() {
                 self.watch_entry(kind, &input, window, cx);
             }
+        }
+        for input in self.zimni_dates.clone() {
+            self.watch_zimni_date(&input, window, cx);
         }
         for input in self.dates.clone() {
             self.fold_on_blur(&input, true, cx);
@@ -334,7 +374,11 @@ impl FirForm {
             offence: text(&self.offence),
             accused: list(ListKind::Accused),
             witness: list(ListKind::Witness),
-            zimni: list(ListKind::Zimni),
+            zimni: self.lists[ListKind::Zimni.index()]
+                .iter()
+                .zip(&self.zimni_dates)
+                .map(|(number, date)| Zimni::new(text(number), text(date)))
+                .collect(),
             incident_date: text(&self.dates[1]),
             arrest_date: text(&self.dates[2]),
             investigation_officer: text(&self.officer),
@@ -390,6 +434,10 @@ impl FirForm {
 
     pub fn list_inputs(&self, kind: ListKind) -> &[Entity<TextInput>] {
         &self.lists[kind.index()]
+    }
+
+    pub fn zimni_date_inputs(&self) -> &[Entity<TextInput>] {
+        &self.zimni_dates
     }
 
     pub fn offence_input(&self) -> &Entity<TextInput> {
@@ -449,11 +497,10 @@ impl FirForm {
         set(&self.sim[0], &fir.sim_1, cx);
         set(&self.sim[1], &fir.sim_2, cx);
         self.status = fir.status;
-        for kind in ListKind::ALL {
+        for kind in [ListKind::Accused, ListKind::Witness] {
             let wanted = match kind {
                 ListKind::Accused => &fir.accused,
-                ListKind::Witness => &fir.witness,
-                ListKind::Zimni => &fir.zimni,
+                _ => &fir.witness,
             };
             self.lists[kind.index()].truncate(wanted.len());
             for (position, text) in wanted.iter().enumerate() {
@@ -462,10 +509,27 @@ impl FirForm {
                 }
             }
         }
+        self.lists[ListKind::Zimni.index()].truncate(fir.zimni.len());
+        self.zimni_dates.truncate(fir.zimni.len());
+        for (position, entry) in fir.zimni.iter().enumerate() {
+            if let Some(input) = self.lists[ListKind::Zimni.index()].get(position) {
+                set(input, &entry.number, cx);
+            }
+            if let Some(input) = self.zimni_dates.get(position) {
+                set(input, &entry.date, cx);
+            }
+        }
     }
 
     pub fn add_entry(&mut self, kind: ListKind, window: &mut Window, cx: &mut Context<Self>) {
-        let input = field_input(window, cx, Kind::Urdu, "", "");
+        let input = if kind == ListKind::Zimni {
+            let date = field_input(window, cx, Kind::Date, "DD-MM-YYYY", "");
+            self.watch_zimni_date(&date, window, cx);
+            self.zimni_dates.push(date);
+            zimni_number_input(window, cx, "")
+        } else {
+            field_input(window, cx, Kind::Urdu, "", "")
+        };
         self.watch_entry(kind, &input, window, cx);
         input.update(cx, |input, cx| input.focus(window, cx));
         self.lists[kind.index()].push(input);
@@ -477,6 +541,9 @@ impl FirForm {
         let list = &mut self.lists[kind.index()];
         if position < list.len() && !(kind == ListKind::Accused && list.len() == 1) {
             list.remove(position);
+            if kind == ListKind::Zimni && position < self.zimni_dates.len() {
+                self.zimni_dates.remove(position);
+            }
             self.refresh_dirty(cx);
             cx.notify();
         }
@@ -505,11 +572,13 @@ impl FirForm {
         if bad_date(&fir.arrest_date) {
             errors.insert("arrest_date", "Use the format DD-MM-YYYY.");
         }
-        for kind in ListKind::ALL {
+        if fir.zimni.iter().any(|entry| bad_date(&entry.date)) {
+            errors.insert("zimni", "Use the format DD-MM-YYYY.");
+        }
+        for kind in [ListKind::Accused, ListKind::Witness] {
             let items = match kind {
                 ListKind::Accused => &fir.accused,
-                ListKind::Witness => &fir.witness,
-                ListKind::Zimni => &fir.zimni,
+                _ => &fir.witness,
             };
             if kind == ListKind::Accused && items.len() == 1 && blank(&items[0]) {
                 errors.insert(kind.field(), "Enter at least one accused.");
@@ -536,6 +605,16 @@ impl FirForm {
                 continue;
             }
             let input = input.or_else(|| {
+                if key == "zimni" {
+                    return self
+                        .zimni_dates
+                        .iter()
+                        .find(|input| {
+                            let text = input.read(cx).text();
+                            !text.trim().is_empty() && parse_date(text).is_none()
+                        })
+                        .cloned();
+                }
                 let kind = ListKind::ALL.into_iter().find(|kind| kind.field() == key)?;
                 let list = &self.lists[kind.index()];
                 list.iter()
@@ -557,6 +636,10 @@ impl FirForm {
         fir.date = format_date(&fir.date);
         fir.incident_date = format_date(&fir.incident_date);
         fir.arrest_date = format_date(&fir.arrest_date);
+        for entry in &mut fir.zimni {
+            entry.number = fold_digits(entry.number.trim());
+            entry.date = format_date(&entry.date);
+        }
         for value in [
             &mut fir.imei_1,
             &mut fir.imei_2,
@@ -927,16 +1010,38 @@ impl FirForm {
                             .text_center()
                             .child((position + 1).to_string()),
                     )
-                    .child(
-                        div().flex_1().min_w_0().child(
-                            field(
-                                ("entry-field", kind.index() * 1000 + position),
-                                input,
-                                Kind::Urdu,
+                    .when(kind != ListKind::Zimni, |row| {
+                        row.child(
+                            div().flex_1().min_w_0().child(
+                                field(
+                                    ("entry-field", kind.index() * 1000 + position),
+                                    input,
+                                    Kind::Urdu,
+                                )
+                                .error(error.is_some() && blank),
+                            ),
+                        )
+                    })
+                    .when(kind == ListKind::Zimni, |row| {
+                        let date = self.zimni_dates.get(position);
+                        let bad_date = date.is_some_and(|date| {
+                            let text = date.read(cx).text();
+                            !text.trim().is_empty() && parse_date(text).is_none()
+                        });
+                        row.child(
+                            div().w(px(160.)).flex_none().child(
+                                field(("zimni-number", position), input, Kind::LatinNumeric)
+                                    .height(INPUT_URDU),
+                            ),
+                        )
+                        .children(date.map(|date| {
+                            div().flex_1().min_w_0().child(
+                                field(("zimni-date", position), date, Kind::Date)
+                                    .height(INPUT_URDU)
+                                    .error(error.is_some() && bad_date),
                             )
-                            .error(error.is_some() && blank),
-                        ),
-                    )
+                        }))
+                    })
                     .child(
                         div()
                             .w(px(28.))
@@ -998,6 +1103,10 @@ impl FirForm {
             .child(self.body.clone())
             .into_any_element()
     }
+}
+
+fn zimni_number_input(window: &mut Window, cx: &mut App, text: &str) -> Entity<TextInput> {
+    field_input(window, cx, Kind::LatinNumeric, "e.g. 4", text)
 }
 
 fn is_blank(input: &Entity<TextInput>, cx: &App) -> bool {
@@ -1196,8 +1305,8 @@ impl Render for FirForm {
         let text = Self::section(
             &palette,
             7,
-            "متن",
-            self.field_cell(&palette, "متن", false, "body", body),
+            "مختصر حالات",
+            self.field_cell(&palette, "مختصر حالات", false, "body", body),
         );
         let mut sections = vec![first, second];
         sections.extend(lists);
