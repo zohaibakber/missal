@@ -7,6 +7,7 @@ mod library;
 mod placeholders;
 mod schema;
 mod settings;
+mod suggestions;
 mod templates;
 
 use std::io::{Read, Write};

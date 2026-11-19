@@ -1,4 +1,5 @@
 pub mod account;
+pub mod autocomplete;
 pub mod cheatsheet;
 pub mod controls;
 pub mod dialogs;

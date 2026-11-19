@@ -3,6 +3,7 @@ pub mod firs;
 pub mod nav;
 pub mod prefs_model;
 pub mod rows;
+pub mod suggestions;
 pub mod templates;
 
 use gpui_kit::{App, AppContext, Context, Entity, Global, Window};
@@ -16,6 +17,7 @@ pub use catalog::Catalog;
 pub use firs::Firs;
 pub use nav::{Navigator, PrintTarget, Route};
 pub use prefs_model::PrefsModel;
+pub use suggestions::Suggestions;
 pub use templates::Templates;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +40,7 @@ pub struct Models {
     pub catalog: Entity<Catalog>,
     pub nav: Entity<Navigator>,
     pub prefs: Entity<PrefsModel>,
+    pub suggestions: Entity<Suggestions>,
 }
 
 impl Global for Models {}
@@ -73,14 +76,17 @@ impl Models {
             loaded_templates.update(cx, |templates, cx| templates.loaded(templates_result, cx));
         })
         .detach();
+        let firs = cx.new(Firs::new);
+        let suggestions = cx.new(|cx| Suggestions::new(&firs, cx));
         let models = Models {
-            firs: cx.new(Firs::new),
+            firs,
             templates,
             catalog,
             nav: cx.new(|_| Navigator::new(Route::Firs)),
             prefs: cx.new(|_| {
                 PrefsModel::new(preferences, paths.map(|paths| paths.preferences.clone()))
             }),
+            suggestions,
         };
         cx.set_global(models.clone());
         models

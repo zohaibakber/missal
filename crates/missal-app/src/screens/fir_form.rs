@@ -14,7 +14,8 @@ use gpui_kit::{
     div, px,
 };
 use missal_core::{
-    CalendarDate, Fir, FirId, FirRecord, FirStatus, Zimni, fold_digits, format_date, parse_date,
+    CalendarDate, Fir, FirId, FirProperty, FirRecord, FirStatus, SuggestionKey, Zimni, fold_digits,
+    format_date, parse_date,
 };
 use missal_text::{Direction, LineHeight, TextInput, TextInputEvent};
 
@@ -23,6 +24,7 @@ use crate::shortcuts::*;
 use crate::state::rows::FirRow;
 use crate::state::{Models, Route, run_db_in, toast_error, toast_success};
 use crate::theme::{INPUT_URDU, Palette};
+use crate::ui::autocomplete::{Autocomplete, suggest_field};
 use crate::ui::dialogs::confirm_discard;
 use crate::ui::input::{Kind, field, field_input};
 use crate::ui::menu::menu_popup;
@@ -56,6 +58,14 @@ impl ListKind {
             ListKind::Accused => "Add accused",
             ListKind::Witness => "Add witness",
             ListKind::Zimni => "Add zimni",
+        }
+    }
+
+    fn suggestions(self) -> Option<SuggestionKey> {
+        match self {
+            ListKind::Accused => SuggestionKey::for_property(FirProperty::Accused),
+            ListKind::Witness => SuggestionKey::for_property(FirProperty::Witness),
+            ListKind::Zimni => None,
         }
     }
 
@@ -107,6 +117,7 @@ pub struct FirForm {
     dirty: bool,
     saving: bool,
     scroll: ScrollHandle,
+    autocomplete: Entity<Autocomplete>,
     subscriptions: Vec<Subscription>,
 }
 
@@ -196,6 +207,8 @@ impl FirForm {
             .iter()
             .map(|entry| date(window, cx, &entry.date))
             .collect::<Vec<_>>();
+        let suggestions = models.suggestions.clone();
+        let autocomplete = cx.new(|cx| Autocomplete::new(suggestions, cx));
         let mut form = FirForm {
             models,
             id,
@@ -221,6 +234,7 @@ impl FirForm {
             dirty: false,
             saving: false,
             scroll: ScrollHandle::new(),
+            autocomplete,
             subscriptions: Vec::new(),
         };
         form.wire(window, cx);
@@ -263,6 +277,9 @@ impl FirForm {
         if kind == ListKind::Zimni {
             self.fold_on_blur(input, false, cx);
         }
+        if let Some(key) = kind.suggestions() {
+            self.suggest(input, key, window, cx);
+        }
         let subscription = cx.subscribe_in(
             input,
             window,
@@ -298,6 +315,18 @@ impl FirForm {
         self.subscriptions.push(subscription);
     }
 
+    fn suggest(
+        &mut self,
+        input: &Entity<TextInput>,
+        key: SuggestionKey,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.autocomplete.update(cx, |autocomplete, cx| {
+            autocomplete.attach(input, key, window, cx)
+        });
+    }
+
     fn fold_on_blur(&mut self, input: &Entity<TextInput>, date: bool, cx: &mut Context<Self>) {
         let subscription = cx.subscribe(input, move |_, input, event: &TextInputEvent, cx| {
             if *event == TextInputEvent::Blur {
@@ -318,6 +347,20 @@ impl FirForm {
     fn wire(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         for input in self.singles() {
             self.watch(&input, cx);
+        }
+        let observe = cx.observe(&self.autocomplete, |_, _, cx| cx.notify());
+        self.subscriptions.push(observe);
+        let suggested = [
+            (self.complainant.clone(), FirProperty::Complainant),
+            (self.offence.clone(), FirProperty::Offence),
+            (self.officer.clone(), FirProperty::InvestigationOfficer),
+            (self.writer.clone(), FirProperty::Writer),
+            (self.recovery.clone(), FirProperty::Recovery),
+        ];
+        for (input, property) in suggested {
+            if let Some(key) = SuggestionKey::for_property(property) {
+                self.suggest(&input, key, window, cx);
+            }
         }
         for kind in ListKind::ALL {
             for input in self.lists[kind.index()].clone() {
@@ -444,6 +487,10 @@ impl FirForm {
         &self.offence
     }
 
+    pub fn autocomplete(&self) -> &Entity<Autocomplete> {
+        &self.autocomplete
+    }
+
     pub fn errors(&self) -> Vec<&'static str> {
         let mut fields: Vec<_> = self.errors.keys().copied().collect();
         fields.sort_unstable();
@@ -540,7 +587,9 @@ impl FirForm {
     pub fn remove_entry(&mut self, kind: ListKind, position: usize, cx: &mut Context<Self>) {
         let list = &mut self.lists[kind.index()];
         if position < list.len() && !(kind == ListKind::Accused && list.len() == 1) {
-            list.remove(position);
+            let input = list.remove(position);
+            self.autocomplete
+                .update(cx, |autocomplete, cx| autocomplete.detach(&input, cx));
             if kind == ListKind::Zimni && position < self.zimni_dates.len() {
                 self.zimni_dates.remove(position);
             }
@@ -778,12 +827,12 @@ impl FirForm {
 
     fn input_cell(
         &self,
-        palette: &Palette,
         title: &'static str,
         required: bool,
         key: &'static str,
         input: &Entity<TextInput>,
         kind: Kind,
+        cx: &App,
     ) -> AnyElement {
         let control = field(
             gpui_kit::SharedString::from(format!("form-{key}")),
@@ -791,9 +840,9 @@ impl FirForm {
             kind,
         )
         .height(INPUT_URDU)
-        .error(self.errors.contains_key(key))
-        .into_any_element();
-        self.field_cell(palette, title, required, key, control)
+        .error(self.errors.contains_key(key));
+        let control = suggest_field(&self.autocomplete, input, control, cx);
+        self.field_cell(Palette::get(cx), title, required, key, control)
     }
 
     fn row(cells: Vec<AnyElement>) -> AnyElement {
@@ -1011,16 +1060,18 @@ impl FirForm {
                             .child((position + 1).to_string()),
                     )
                     .when(kind != ListKind::Zimni, |row| {
-                        row.child(
-                            div().flex_1().min_w_0().child(
-                                field(
-                                    ("entry-field", kind.index() * 1000 + position),
-                                    input,
-                                    Kind::Urdu,
-                                )
-                                .error(error.is_some() && blank),
-                            ),
+                        let control = field(
+                            ("entry-field", kind.index() * 1000 + position),
+                            input,
+                            Kind::Urdu,
                         )
+                        .error(error.is_some() && blank);
+                        row.child(div().flex_1().min_w_0().child(suggest_field(
+                            &self.autocomplete,
+                            input,
+                            control,
+                            cx,
+                        )))
                     })
                     .when(kind == ListKind::Zimni, |row| {
                         let date = self.zimni_dates.get(position);
@@ -1180,24 +1231,24 @@ impl Render for FirForm {
                 .gap(px(24.))
                 .child(Self::row(vec![
                     self.input_cell(
-                        &palette,
                         "ایف آئی آر نمبر",
                         true,
                         "fir_no",
                         &self.fir_no,
                         Kind::LatinNumeric,
+                        cx,
                     ),
                     self.field_cell(&palette, "حالت", false, "status", status),
                 ]))
                 .child(Self::row(vec![
-                    self.input_cell(&palette, "جرم", true, "offence", &self.offence, Kind::Urdu),
+                    self.input_cell("جرم", true, "offence", &self.offence, Kind::Urdu, cx),
                     self.input_cell(
-                        &palette,
                         "مدعی مقدمہ",
                         false,
                         "complainant",
                         &self.complainant,
                         Kind::Urdu,
+                        cx,
                     ),
                 ]))
                 .into_any_element(),
@@ -1231,29 +1282,22 @@ impl Render for FirForm {
                 .gap(px(24.))
                 .child(Self::row(vec![
                     self.input_cell(
-                        &palette,
                         "تفتیشی افسر",
                         false,
                         "investigation_officer",
                         &self.officer,
                         Kind::Urdu,
+                        cx,
                     ),
-                    self.input_cell(
-                        &palette,
-                        "تحریر کنندہ",
-                        false,
-                        "writer",
-                        &self.writer,
-                        Kind::Urdu,
-                    ),
+                    self.input_cell("تحریر کنندہ", false, "writer", &self.writer, Kind::Urdu, cx),
                 ]))
                 .child(self.input_cell(
-                    &palette,
                     "برآمدگی",
                     false,
                     "recovery",
                     &self.recovery,
                     Kind::Urdu,
+                    cx,
                 ))
                 .into_any_element(),
         );
@@ -1265,38 +1309,38 @@ impl Render for FirForm {
                 .gap(px(24.))
                 .child(Self::row(vec![
                     self.input_cell(
-                        &palette,
                         "ایمی نمبر 1",
                         false,
                         "imei_1",
                         &self.imei[0],
                         Kind::LatinNumeric,
+                        cx,
                     ),
                     self.input_cell(
-                        &palette,
                         "سم نمبر 1",
                         false,
                         "sim_1",
                         &self.sim[0],
                         Kind::LatinNumeric,
+                        cx,
                     ),
                 ]))
                 .child(Self::row(vec![
                     self.input_cell(
-                        &palette,
                         "ایمی نمبر 2",
                         false,
                         "imei_2",
                         &self.imei[1],
                         Kind::LatinNumeric,
+                        cx,
                     ),
                     self.input_cell(
-                        &palette,
                         "سم نمبر 2",
                         false,
                         "sim_2",
                         &self.sim[1],
                         Kind::LatinNumeric,
+                        cx,
                     ),
                 ]))
                 .into_any_element(),
