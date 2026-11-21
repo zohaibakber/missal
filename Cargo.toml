@@ -25,7 +25,7 @@ rusqlite = { version = "0.42", features = ["bundled"] }
 flate2 = "1.1.11"
 tempfile = "3.27.0"
 gpui-kit = "=0.9.1"
-parley = "=0.12.0"
+parley = "=0.13.0"
 swash = "0.2.10"
 gpui-pre-wgpu = "=0.3.12"
 image = { version = "0.25", default-features = false, features = ["png"] }
