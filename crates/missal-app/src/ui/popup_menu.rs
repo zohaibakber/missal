@@ -590,7 +590,8 @@ impl Render for PopupList {
                         ),
                 ),
         )
-        .with_priority(1)
+        // Above dialogs (10 + layer) so a menu opened inside one is visible.
+        .with_priority(100)
     }
 }
 

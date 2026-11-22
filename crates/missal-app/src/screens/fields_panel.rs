@@ -66,6 +66,9 @@ impl FieldItem {
     }
 }
 
+/// Width of the name column, shared by empty and filled rows so they line up.
+const LABEL_COLUMN: f32 = 104.;
+
 pub fn field_items(
     references: &[FieldReference],
     catalog: &missal_core::FieldCatalog,
@@ -523,7 +526,7 @@ impl FieldsPanel {
             .py(px(2.))
             .child(
                 div()
-                    .w(px(88.))
+                    .w(px(LABEL_COLUMN))
                     .flex_none()
                     .pt(px(1.))
                     .text_color(palette.ink_muted)
@@ -672,7 +675,8 @@ impl FieldsPanel {
         let reveal = reference.clone();
         let name = h_flex()
             .id(("empty-field", index))
-            .w_full()
+            .w(px(LABEL_COLUMN))
+            .h(px(34.))
             .flex_none()
             .flex_row_reverse()
             .cursor_pointer()
@@ -711,11 +715,14 @@ impl FieldsPanel {
                     .into_any_element()
             }
         };
-        v_flex()
+        h_flex()
+            .flex_row_reverse()
+            .items_center()
+            .gap(px(12.))
             .px(px(16.))
-            .py(px(5.))
+            .py(px(3.))
             .child(name)
-            .child(body)
+            .child(div().flex_1().min_w_0().child(body))
             .into_any_element()
     }
 
