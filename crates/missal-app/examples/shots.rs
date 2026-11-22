@@ -12,6 +12,7 @@ use missal_app::app::{
 use missal_app::auth::{AuthModel, AuthState, Flow};
 use missal_app::db::Db;
 use missal_app::launch::{init_app, open_shell};
+use missal_app::library::LibraryModel;
 use missal_app::prefs::{Preferences, ThemeChoice};
 use missal_app::seed::seed_firs;
 use missal_app::state::{Models, Route};
@@ -134,6 +135,7 @@ fn build(
         let models = init_app(cx, Db::inline(store), None, preferences);
         if let Some(config) = auth {
             AuthModel::install_with(Some(config), None, cx);
+            LibraryModel::install(&models, cx);
         }
         cx.set_reduce_motion(true);
         cx.set_global(ForceControls(ControlsStyle::Windows));
@@ -627,6 +629,7 @@ fn run_gate(dark: bool, out: &Path, api: &str) {
     h.idle();
     h.shot("49b-people-added-year");
     h.press("escape");
+    publishing_shots(&mut h);
     h.with_window(missal_app::ui::account::open_change_password);
     h.idle();
     h.fill("password-current", "correct horse battery");
@@ -635,6 +638,72 @@ fn run_gate(dark: bool, out: &Path, api: &str) {
     h.click("password-save");
     h.idle();
     h.shot("49c-change-password");
+}
+
+fn publishing_shots(h: &mut Harness) {
+    h.with_window(|_, cx| {
+        let mut items: Vec<_> = Models::get(cx)
+            .templates
+            .read(cx)
+            .items
+            .iter()
+            .filter(|item| item.name != fake_api::TWIN)
+            .cloned()
+            .collect();
+        items.sort_by(|left, right| left.name.cmp(&right.name));
+        let stale = missal_core::Revision::new(999_999).expect("revision");
+        let links = [
+            (items[0].id, "r-current", 3, items[0].revision),
+            (items[1].id, "r-changed", 2, stale),
+            (items[2].id, "r-behind", 1, items[2].revision),
+        ];
+        drop(missal_app::state::db(cx).run(move |store| {
+            for (template, remote, version, revision) in links {
+                store.link_template(template, remote, version, revision)?;
+            }
+            Ok(())
+        }));
+        LibraryModel::get(cx)
+            .expect("library")
+            .update(cx, |library, cx| library.refresh(cx));
+    });
+    h.idle();
+    h.with_window(missal_app::ui::publishing::open_publishing);
+    h.idle();
+    h.shot("50-publishing");
+    let behind = h.with_window(|_, cx| {
+        let library = LibraryModel::get(cx).expect("library");
+        let library = library.read(cx);
+        library
+            .rows(cx)
+            .iter()
+            .position(|row| {
+                row.remote
+                    .as_ref()
+                    .is_some_and(|remote| remote.id == "r-behind")
+            })
+            .expect("behind row")
+    });
+    h.with_window(|window, cx| window.click(("publishing-row", behind), cx));
+    h.idle();
+    h.shot("50b-publishing-history");
+    h.with_window(|window, cx| window.click(("publishing-restore", 2usize), cx));
+    h.idle();
+    h.shot("50c-publishing-restore");
+    h.click("restore-confirm");
+    h.idle();
+    h.shot("50d-publishing-restored");
+    h.with_window(|window, cx| window.click(("publishing-filter", 1usize), cx));
+    h.idle();
+    h.shot("50e-publishing-needs-action");
+    h.click("publishing-all");
+    h.idle();
+    h.shot("50f-publishing-all");
+    h.click("publish-confirm");
+    h.idle();
+    h.idle();
+    h.shot("50g-publishing-all-done");
+    h.reset();
 }
 
 mod fake_api {
@@ -646,6 +715,84 @@ mod fake_api {
 
     const DAY: i64 = 24 * 60 * 60 * 1000;
     const FOREVER: i64 = 253_402_300_799_000;
+    pub const TWIN: &str = "اخراج بذریعہ CDR";
+
+    static PUBLISHED: Mutex<Vec<Value>> = Mutex::new(Vec::new());
+
+    fn managed(id: &str, name: &str, version: i64, fields: i64, size: i64) -> Value {
+        json!({
+            "id": id,
+            "name": name,
+            "version": version,
+            "fieldCount": fields,
+            "preview": "",
+            "size": size,
+            "publisherName": "Bilal Ahmed",
+            "publisherEmail": "lapsed@example.com",
+            "versionCount": version,
+            "createdAt": now() - 90 * DAY,
+            "updatedAt": now() - 2 * DAY,
+        })
+    }
+
+    fn managed_list() -> Value {
+        let mut rows = vec![
+            managed("r-current", "موجودہ", 3, 12, 48_200),
+            managed("r-changed", "تبدیل شدہ", 2, 8, 31_400),
+            managed("r-behind", "پرانا", 4, 15, 1_620_000),
+            managed("r-twin", TWIN, 1, 6, 22_000),
+            managed("r-remote", "صرف لائبریری میں", 2, 9, 40_960),
+        ];
+        rows.extend(PUBLISHED.lock().expect("published").iter().cloned());
+        Value::Array(rows)
+    }
+
+    fn versions(path: &str) -> Value {
+        let latest = match path.split('/').nth(4).unwrap_or_default() {
+            "r-current" => 3,
+            "r-changed" | "r-remote" => 2,
+            "r-behind" => 4,
+            _ => 1,
+        };
+        let row = |version: i64, restored: Option<i64>, age: i64| {
+            json!({
+                "version": version,
+                "name": "پرانا",
+                "fieldCount": 10 + version,
+                "size": 1_000_000 + version * 155_000,
+                "publisherName": if version % 2 == 0 { "Bilal Ahmed" } else { "Admin" },
+                "publisherEmail": if version % 2 == 0 { "lapsed@example.com" } else { "admin@example.com" },
+                "publishedAt": now() - age * DAY,
+                "restoredFrom": restored,
+            })
+        };
+        Value::Array(
+            [
+                row(4, None, 2),
+                row(3, Some(1), 12),
+                row(2, None, 40),
+                row(1, None, 90),
+            ]
+            .into_iter()
+            .filter(|entry| entry["version"].as_i64().unwrap_or(0) <= latest)
+            .collect(),
+        )
+    }
+
+    fn publish(body: &Value) -> Value {
+        let mut published = PUBLISHED.lock().expect("published");
+        let id = format!("r-new-{}", published.len());
+        published.push(managed(
+            &id,
+            body["name"].as_str().unwrap_or_default(),
+            1,
+            body["fieldCount"].as_i64().unwrap_or(0),
+            body["content"]
+                .as_str()
+                .map_or(0, |text| text.len() as i64 * 3 / 4),
+        ));
+        json!({ "id": id, "version": 1 })
+    }
 
     fn now() -> i64 {
         chrono::Utc::now().timestamp_millis()
@@ -700,7 +847,10 @@ mod fake_api {
             ("POST", "/v1/auth/sign-in") if email.starts_with("new") => {
                 (403, problem("EmailNotVerified", "confirm your email first"))
             }
-            ("POST", "/v1/auth/sign-in") => (200, session(email, paid)),
+            ("POST", "/v1/auth/sign-in") => {
+                PUBLISHED.lock().expect("published").clear();
+                (200, session(email, paid))
+            }
             ("POST", "/v1/auth/verify-email" | "/v1/auth/reset-password")
                 if body["code"] == "123456" =>
             {
@@ -715,6 +865,17 @@ mod fake_api {
                 session(body["refreshToken"].as_str().unwrap_or_default(), paid),
             ),
             ("POST", "/v1/auth/sign-out") => (204, Value::Null),
+            ("GET", "/v1/templates") => (200, json!({ "publisher": true, "templates": [] })),
+            ("GET", "/v1/admin/templates") => (200, managed_list()),
+            ("GET", path) if path.ends_with("/versions") => (200, versions(path)),
+            ("POST", path) if path.ends_with("/restore") => {
+                (200, json!({ "id": "r-behind", "version": 5 }))
+            }
+            ("POST", "/v1/templates") => (201, publish(body)),
+            ("PUT", path) if path.starts_with("/v1/templates/") => (
+                200,
+                json!({ "id": path.trim_start_matches("/v1/templates/"), "version": 3 }),
+            ),
             ("GET", "/v1/users") => (
                 200,
                 json!([

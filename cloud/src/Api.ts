@@ -190,6 +190,33 @@ export const Published = Schema.Struct({
   version: Schema.Int,
 });
 
+export const ManagedTemplate = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  version: Schema.Int,
+  fieldCount: Schema.Int,
+  preview: Schema.String,
+  size: Schema.Int,
+  publisherName: Schema.NullOr(Schema.String),
+  publisherEmail: Schema.NullOr(Schema.String),
+  versionCount: Schema.Int,
+  createdAt: Schema.DateTimeUtcFromMillis,
+  updatedAt: Schema.DateTimeUtcFromMillis,
+});
+export type ManagedTemplate = typeof ManagedTemplate.Type;
+
+export const TemplateVersion = Schema.Struct({
+  version: Schema.Int,
+  name: Schema.String,
+  fieldCount: Schema.Int,
+  size: Schema.Int,
+  publisherName: Schema.NullOr(Schema.String),
+  publisherEmail: Schema.NullOr(Schema.String),
+  publishedAt: Schema.DateTimeUtcFromMillis,
+  restoredFrom: Schema.NullOr(Schema.Int),
+});
+export type TemplateVersion = typeof TemplateVersion.Type;
+
 export const SignUp = Schema.Struct({ email: Email, name: Name, password: NewPassword });
 export type SignUp = typeof SignUp.Type;
 
@@ -318,6 +345,31 @@ export class PublishingGroup extends HttpApiGroup.make("publishing")
   .middleware(Licensed)
   .middleware(Authentication) {}
 
+export class TemplateAdminGroup extends HttpApiGroup.make("templateAdmin")
+  .add(
+    HttpApiEndpoint.get("list", "/v1/admin/templates", {
+      success: Schema.Array(ManagedTemplate),
+      error: StorageFailure,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("versions", "/v1/admin/templates/:id/versions", {
+      params: { id: RouteId },
+      success: Schema.Array(TemplateVersion),
+      error: [TemplateNotFound, StorageFailure],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("restore", "/v1/admin/templates/:id/restore", {
+      params: { id: RouteId },
+      payload: Schema.Struct({ version: Schema.Int.check(Schema.isGreaterThan(0)) }),
+      success: Published,
+      error: [TemplateNotFound, PublishConflict, StorageFailure],
+    }),
+  )
+  .middleware(AdminsOnly)
+  .middleware(Authentication) {}
+
 export class UsersGroup extends HttpApiGroup.make("users")
   .add(
     HttpApiEndpoint.get("list", "/v1/users", {
@@ -357,5 +409,6 @@ export class Api extends HttpApi.make("api")
   .add(AccountGroup)
   .add(CatalogGroup)
   .add(PublishingGroup)
+  .add(TemplateAdminGroup)
   .add(UsersGroup)
   .add(HealthGroup) {}

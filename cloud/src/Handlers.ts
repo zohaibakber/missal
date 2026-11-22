@@ -98,6 +98,20 @@ const PublishingHandlers = HttpApiBuilder.group(
   }),
 );
 
+const TemplateAdminHandlers = HttpApiBuilder.group(
+  Api,
+  "templateAdmin",
+  Effect.fn(function* (handlers) {
+    const library = yield* Library;
+    return handlers.handleAll({
+      list: () => library.managed,
+      versions: ({ params }) => library.versions(params.id),
+      restore: ({ params, payload }) =>
+        Effect.flatMap(Viewer, (viewer) => library.restore(params.id, payload.version, viewer.id)),
+    });
+  }),
+);
+
 const UsersHandlers = HttpApiBuilder.group(
   Api,
   "users",
@@ -121,6 +135,7 @@ export const HandlersLive = Layer.mergeAll(
   AccountHandlers,
   CatalogHandlers,
   PublishingHandlers,
+  TemplateAdminHandlers,
   UsersHandlers,
   HealthHandlers,
 );

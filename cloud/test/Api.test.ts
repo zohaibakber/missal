@@ -96,7 +96,14 @@ const testLayer = (throttleLimit = 1_000, verifyEmails = true) => {
   );
 };
 
-const client = HttpApiTest.groups(Api, ["auth", "account", "catalog", "publishing", "users"]);
+const client = HttpApiTest.groups(Api, [
+  "auth",
+  "account",
+  "catalog",
+  "publishing",
+  "templateAdmin",
+  "users",
+]);
 
 const useToken = Effect.fn(function* (token: string | undefined) {
   yield* Ref.set(yield* CurrentToken, token);
@@ -447,6 +454,54 @@ describe("library", () => {
         .download({ params: { id: published.id } })
         .pipe(Effect.flip);
       expect(missing._tag).toBe("TemplateNotFound");
+    }).pipe(Effect.provide(testLayer())),
+  );
+
+  it.effect("administrators see version history and restore an earlier version", () =>
+    Effect.gen(function* () {
+      const api = yield* client;
+      yield* registerAdmin();
+      const { id } = yield* api.publishing.create({
+        payload: { name: "پہلا", fieldCount: 1, preview: "a", content: new Uint8Array([1]) },
+      });
+      yield* api.publishing.update({
+        params: { id },
+        payload: { name: "دوسرا", fieldCount: 2, preview: "b", content: new Uint8Array([2, 2]) },
+      });
+
+      const restored = yield* api.templateAdmin.restore({
+        params: { id },
+        payload: { version: 1 },
+      });
+      expect(restored.version).toBe(3);
+      const download = yield* api.catalog.download({ params: { id } });
+      expect([download.headers["x-missal-version"], [...download.body]]).toEqual([3, [1]]);
+
+      const history = yield* api.templateAdmin.versions({ params: { id } });
+      expect(history.map((row) => [row.version, row.name, row.size, row.restoredFrom])).toEqual([
+        [3, "پہلا", 1, 1],
+        [2, "دوسرا", 2, null],
+        [1, "پہلا", 1, null],
+      ]);
+      expect(history[0]?.publisherEmail).toBe(ADMIN);
+
+      const [managed] = yield* api.templateAdmin.list();
+      expect([managed?.version, managed?.versionCount, managed?.publisherEmail]).toEqual([
+        3,
+        3,
+        ADMIN,
+      ]);
+
+      const again = yield* api.templateAdmin.restore({ params: { id }, payload: { version: 3 } });
+      expect(again.version).toBe(3);
+      const absent = yield* api.templateAdmin
+        .restore({ params: { id }, payload: { version: 9 } })
+        .pipe(Effect.flip);
+      expect(absent._tag).toBe("TemplateNotFound");
+
+      yield* register(READER);
+      const denied = yield* api.templateAdmin.list().pipe(Effect.flip);
+      expect(denied._tag).toBe("NotAdmin");
     }).pipe(Effect.provide(testLayer())),
   );
 });

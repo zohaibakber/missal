@@ -1456,6 +1456,13 @@ impl SettingsScreen {
                             this.child(ghost_sm("manage-people", "People").on_click(
                                 |_, window, cx| crate::ui::account::open_users(window, cx),
                             ))
+                            .child(
+                                ghost_sm("manage-publishing", "Publishing").on_click(
+                                    |_, window, cx| {
+                                        crate::ui::publishing::open_publishing(window, cx)
+                                    },
+                                ),
+                            )
                         })
                         .when(signed_in, |this| {
                             this.child(ghost_sm("change-password", "Change password").on_click(

@@ -1,13 +1,16 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use gpui_kit::{App, AppContext, Context, Entity, Global, SharedString, Window};
 use missal_auth::{AuthError, SessionKeeper};
-use missal_core::TemplateId;
-use missal_library::{Library, LibraryEntry, LibraryError, Published, Upload};
-use missal_store::{LibraryInstall, LibraryLink};
+use missal_core::{Revision, TemplateId};
+use missal_library::{
+    Library, LibraryEntry, LibraryError, ManagedTemplate, Published, TemplateVersion, Upload,
+};
+use missal_store::{LibraryInstall, LibraryLink, TemplateSummary};
 
 use crate::auth::AuthModel;
+use crate::db::Db;
 use crate::state::templates::TemplatesEvent;
 use crate::state::{Load, Models, db, toast_error, toast_success};
 
@@ -60,12 +63,149 @@ impl Access {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PublishState {
+    NotPublished,
+    NameInLibrary,
+    Current,
+    Changed,
+    Behind { edited: bool },
+    NotInstalled,
+}
+
+#[derive(Debug, Clone)]
+pub struct PublishingRow {
+    pub name: String,
+    pub local: Option<TemplateSummary>,
+    pub link: Option<LibraryLink>,
+    pub remote: Option<ManagedTemplate>,
+    pub state: PublishState,
+}
+
+#[derive(Debug, Clone)]
+pub enum VersionHistory {
+    Loading,
+    Ready(Vec<TemplateVersion>),
+    Failed(String),
+}
+
+fn publishing_rows(
+    templates: &[TemplateSummary],
+    links: &[LibraryLink],
+    managed: &[ManagedTemplate],
+) -> Vec<PublishingRow> {
+    let linked: HashMap<&str, (&LibraryLink, &TemplateSummary)> = links
+        .iter()
+        .filter_map(|link| {
+            let local = templates.iter().find(|item| item.id == link.template_id)?;
+            Some((link.remote_id.as_str(), (link, local)))
+        })
+        .collect();
+    let mut claimed: HashSet<TemplateId> = linked.values().map(|(_, local)| local.id).collect();
+    let mut rows = Vec::with_capacity(templates.len() + managed.len());
+    for remote in managed {
+        let (link, local, state) = match linked.get(remote.id.as_str()) {
+            Some((link, local)) => {
+                let edited = local.revision != link.revision;
+                let state = if link.version < remote.version {
+                    PublishState::Behind { edited }
+                } else if edited {
+                    PublishState::Changed
+                } else {
+                    PublishState::Current
+                };
+                (Some((*link).clone()), Some((*local).clone()), state)
+            }
+            None => {
+                let twin = templates.iter().find(|item| {
+                    !claimed.contains(&item.id) && item.name.trim() == remote.name.trim()
+                });
+                match twin {
+                    Some(item) => {
+                        claimed.insert(item.id);
+                        (None, Some(item.clone()), PublishState::NameInLibrary)
+                    }
+                    None => (None, None, PublishState::NotInstalled),
+                }
+            }
+        };
+        rows.push(PublishingRow {
+            name: local
+                .as_ref()
+                .map_or_else(|| remote.name.clone(), |item| item.name.clone()),
+            local,
+            link,
+            remote: Some(remote.clone()),
+            state,
+        });
+    }
+    rows.extend(
+        templates
+            .iter()
+            .filter(|item| !claimed.contains(&item.id))
+            .map(|item| PublishingRow {
+                name: item.name.clone(),
+                local: Some(item.clone()),
+                link: None,
+                remote: None,
+                state: PublishState::NotPublished,
+            }),
+    );
+    rows.sort_by(|left, right| left.name.cmp(&right.name));
+    rows
+}
+
+async fn prepare_upload(db: &Db, template: TemplateId) -> Result<(Upload, Revision), Failure> {
+    let export = db
+        .run(move |store| store.export_template(template))
+        .await
+        .map_err(|error| Failure::Store(error.message()))?;
+    let upload = Upload {
+        name: export.name.clone(),
+        field_count: export.field_count,
+        preview: export.preview_text.chars().take(PREVIEW_LIMIT).collect(),
+        content: export.content,
+    };
+    Ok((upload, export.revision))
+}
+
+fn send_upload(
+    access: &Access,
+    remote: Option<&str>,
+    upload: &Upload,
+) -> Result<Published, Failure> {
+    let token = access.token()?;
+    match access.client.publish(&token, remote, upload) {
+        Err(LibraryError::NotFound) if remote.is_some() => {
+            access.client.publish(&token, None, upload)
+        }
+        other => other,
+    }
+    .map_err(Failure::Library)
+}
+
+async fn save_link(
+    db: &Db,
+    template: TemplateId,
+    published: Published,
+    revision: Revision,
+) -> Result<LibraryLink, Failure> {
+    db.run(move |store| store.link_template(template, &published.id, published.version, revision))
+        .await
+        .map_err(|error| Failure::Store(error.message()))
+}
+
 pub struct LibraryModel {
     client: Option<Arc<Library>>,
     pub entries: Vec<LibraryEntry>,
     pub publisher: bool,
     pub links: Vec<LibraryLink>,
     pub load: Load,
+    pub managed: Vec<ManagedTemplate>,
+    pub managed_load: Load,
+    versions: HashMap<String, VersionHistory>,
+    managed_fetching: bool,
+    managed_stale: bool,
     loaded: bool,
     fetching: bool,
     seeding: bool,
@@ -111,6 +251,11 @@ impl LibraryModel {
                 publisher: false,
                 links: Vec::new(),
                 load: Load::Loading,
+                managed: Vec::new(),
+                managed_load: Load::Loading,
+                versions: HashMap::new(),
+                managed_fetching: false,
+                managed_stale: false,
                 loaded: false,
                 fetching: false,
                 seeding: false,
@@ -194,8 +339,269 @@ impl LibraryModel {
         })
     }
 
+    fn is_admin(cx: &App) -> bool {
+        AuthModel::get(cx)
+            .is_some_and(|auth| auth.read(cx).account().is_some_and(|a| a.role.is_admin()))
+    }
+
+    pub fn rows(&self, cx: &App) -> Vec<PublishingRow> {
+        if self.managed_load != Load::Ready {
+            return Vec::new();
+        }
+        let templates = Models::get(cx).templates;
+        publishing_rows(&templates.read(cx).items, &self.links, &self.managed)
+    }
+
+    pub fn row_is_busy(&self, row: &PublishingRow) -> bool {
+        row.local
+            .as_ref()
+            .is_some_and(|local| self.is_publishing(local.id))
+            || row
+                .remote
+                .as_ref()
+                .is_some_and(|remote| self.busy.contains(&remote.id))
+    }
+
+    pub fn history(&self, remote: &str) -> Option<&VersionHistory> {
+        self.versions.get(remote)
+    }
+
+    pub fn refresh_managed(&mut self, cx: &mut Context<Self>) {
+        if !Self::is_admin(cx) {
+            return;
+        }
+        let Some(access) = self.access(cx) else {
+            return;
+        };
+        if self.managed_fetching {
+            self.managed_stale = true;
+            return;
+        }
+        self.managed_fetching = true;
+        cx.notify();
+        let task = cx.background_spawn(async move {
+            let token = access.token()?;
+            access
+                .client
+                .managed_templates(&token)
+                .map_err(Failure::Library)
+        });
+        cx.spawn(async move |this, cx| {
+            let outcome = task.await;
+            this.update(cx, |this, cx| {
+                this.managed_fetching = false;
+                match outcome {
+                    Ok(managed) => {
+                        this.managed = managed;
+                        this.managed_load = Load::Ready;
+                        this.versions.clear();
+                    }
+                    Err(failure) => {
+                        let message = this.failed(&failure, cx);
+                        if this.managed_load != Load::Ready {
+                            this.managed_load = Load::Failed(message.to_string());
+                        }
+                    }
+                }
+                if std::mem::take(&mut this.managed_stale) {
+                    this.refresh_managed(cx);
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    pub fn load_versions(&mut self, remote: &str, cx: &mut Context<Self>) {
+        if self.versions.contains_key(remote) {
+            return;
+        }
+        let Some(access) = self.access(cx) else {
+            return;
+        };
+        self.versions
+            .insert(remote.to_owned(), VersionHistory::Loading);
+        cx.notify();
+        let id = remote.to_owned();
+        let task = cx.background_spawn({
+            let id = id.clone();
+            async move {
+                let token = access.token()?;
+                access
+                    .client
+                    .template_versions(&token, &id)
+                    .map_err(Failure::Library)
+            }
+        });
+        cx.spawn(async move |this, cx| {
+            let outcome = task.await;
+            this.update(cx, |this, cx| {
+                let history = match outcome {
+                    Ok(versions) => VersionHistory::Ready(versions),
+                    Err(failure) => VersionHistory::Failed(this.failed(&failure, cx).to_string()),
+                };
+                this.versions.insert(id, history);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    pub fn retry_versions(&mut self, remote: &str, cx: &mut Context<Self>) {
+        self.versions.remove(remote);
+        self.load_versions(remote, cx);
+    }
+
+    pub fn restore_version(
+        &mut self,
+        remote: &str,
+        version: i64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(access) = self.access(cx) else {
+            return;
+        };
+        if !self.busy.insert(remote.to_owned()) {
+            return;
+        }
+        cx.notify();
+        let id = remote.to_owned();
+        let task = cx.background_spawn({
+            let id = id.clone();
+            async move {
+                let token = access.token()?;
+                access
+                    .client
+                    .restore_version(&token, &id, version)
+                    .map_err(Failure::Library)
+            }
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let outcome = task.await;
+            this.update_in(cx, |this, window, cx| {
+                this.busy.remove(&id);
+                match outcome {
+                    Ok(published) => {
+                        toast_success(
+                            window,
+                            cx,
+                            format!(
+                                "Version {version} is live again as version {}",
+                                published.version
+                            ),
+                        );
+                        this.refresh(cx);
+                    }
+                    Err(failure) => {
+                        let message = this.failed(&failure, cx);
+                        toast_error(window, cx, message);
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn published(&mut self, link: LibraryLink) {
+        self.links.retain(|item| {
+            item.template_id != link.template_id && item.remote_id != link.remote_id
+        });
+        self.links.push(link);
+    }
+
+    pub fn publish_many(
+        &mut self,
+        templates: Vec<TemplateId>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(access) = self.access(cx) else {
+            return;
+        };
+        let mut jobs: Vec<(TemplateId, Option<String>)> = Vec::with_capacity(templates.len());
+        for template in templates {
+            if self.busy.insert(template_key(template)) {
+                let remote = self
+                    .link_for_template(template)
+                    .map(|link| link.remote_id.clone());
+                jobs.push((template, remote));
+            }
+        }
+        if jobs.is_empty() {
+            return;
+        }
+        cx.notify();
+        let db = db(cx);
+        cx.spawn_in(window, async move |this, cx| {
+            let keys: Vec<String> = jobs.iter().map(|(id, _)| template_key(*id)).collect();
+            let (mut done, mut failed) = (0usize, 0usize);
+            let mut problem = None;
+            for (template, remote) in jobs {
+                let outcome: Result<LibraryLink, Failure> = async {
+                    let (upload, revision) = prepare_upload(&db, template).await?;
+                    let access = access.clone();
+                    let published = cx
+                        .background_executor()
+                        .spawn(async move { send_upload(&access, remote.as_deref(), &upload) })
+                        .await?;
+                    save_link(&db, template, published, revision).await
+                }
+                .await;
+                let stop = this
+                    .update(cx, |this, cx| {
+                        this.busy.remove(&template_key(template));
+                        let stop = match outcome {
+                            Ok(link) => {
+                                this.published(link);
+                                done += 1;
+                                false
+                            }
+                            Err(failure) => {
+                                failed += 1;
+                                let ends = failure.ends_session();
+                                problem = Some(this.failed(&failure, cx));
+                                ends
+                            }
+                        };
+                        cx.notify();
+                        stop
+                    })
+                    .unwrap_or(true);
+                if stop {
+                    break;
+                }
+            }
+            this.update_in(cx, |this, window, cx| {
+                for key in &keys {
+                    this.busy.remove(key);
+                }
+                match problem {
+                    Some(problem) => toast_error(
+                        window,
+                        cx,
+                        format!("Published {done}, {failed} failed: {problem}"),
+                    ),
+                    None if done == 1 => toast_success(window, cx, "Published 1 template"),
+                    None => toast_success(window, cx, format!("Published {done} templates")),
+                }
+                this.refresh(cx);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     fn forget(&mut self, cx: &mut Context<Self>) {
         self.entries.clear();
+        self.managed.clear();
+        self.managed_load = Load::Loading;
+        self.versions.clear();
         self.publisher = false;
         self.loaded = false;
         self.load = Load::Loading;
@@ -252,6 +658,7 @@ impl LibraryModel {
                         this.loaded = true;
                         this.load = Load::Ready;
                         this.seed(cx);
+                        this.refresh_managed(cx);
                     }
                     Err(failure) => {
                         let message = this.failed(&failure, cx);
@@ -414,6 +821,19 @@ impl LibraryModel {
     }
 
     pub fn publish(&mut self, template: TemplateId, window: &mut Window, cx: &mut Context<Self>) {
+        let remote = self
+            .link_for_template(template)
+            .map(|link| link.remote_id.clone());
+        self.publish_to(template, remote, window, cx);
+    }
+
+    pub fn publish_to(
+        &mut self,
+        template: TemplateId,
+        remote: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(access) = self.access(cx) else {
             return;
         };
@@ -422,52 +842,23 @@ impl LibraryModel {
             return;
         }
         cx.notify();
-        let remote = self
-            .link_for_template(template)
-            .map(|link| link.remote_id.clone());
         let first = remote.is_none();
         let db = db(cx);
-        let export = db.run(move |store| store.export_template(template));
         cx.spawn_in(window, async move |this, cx| {
             let outcome: Result<LibraryLink, Failure> = async {
-                let export = export
-                    .await
-                    .map_err(|error| Failure::Store(error.message()))?;
-                let upload = Upload {
-                    name: export.name.clone(),
-                    field_count: export.field_count,
-                    preview: export.preview_text.chars().take(PREVIEW_LIMIT).collect(),
-                    content: export.content,
-                };
-                let published: Published = cx
+                let (upload, revision) = prepare_upload(&db, template).await?;
+                let published = cx
                     .background_executor()
-                    .spawn(async move {
-                        let token = access.token()?;
-                        match access.client.publish(&token, remote.as_deref(), &upload) {
-                            Err(LibraryError::NotFound) if remote.is_some() => {
-                                access.client.publish(&token, None, &upload)
-                            }
-                            other => other,
-                        }
-                        .map_err(Failure::Library)
-                    })
+                    .spawn(async move { send_upload(&access, remote.as_deref(), &upload) })
                     .await?;
-                let revision = export.revision;
-                db.run(move |store| {
-                    store.link_template(template, &published.id, published.version, revision)
-                })
-                .await
-                .map_err(|error| Failure::Store(error.message()))
+                save_link(&db, template, published, revision).await
             }
             .await;
             this.update_in(cx, |this, window, cx| {
                 this.busy.remove(&key);
                 match outcome {
                     Ok(link) => {
-                        this.links.retain(|item| {
-                            item.template_id != link.template_id && item.remote_id != link.remote_id
-                        });
-                        this.links.push(link);
+                        this.published(link);
                         let message = if first {
                             "Published to the library"
                         } else {
@@ -523,6 +914,8 @@ impl LibraryModel {
                 match outcome {
                     Ok(()) => {
                         this.entries.retain(|entry| entry.id != id);
+                        this.managed.retain(|entry| entry.id != id);
+                        this.versions.remove(&id);
                         this.links.retain(|link| link.remote_id != id);
                         toast_success(window, cx, "Removed from the library");
                     }
