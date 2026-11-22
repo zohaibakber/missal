@@ -33,8 +33,8 @@ use crate::ui::popup_menu::{Dismissed, MenuContent, MenuEntry, Placement, PopupL
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::toast::ToastSpec;
 use crate::ui::{
-    UrRole, button, checkbox, empty_state, icon_button, isolate_urdu, primary_sm, section_label,
-    sized_icon, skeleton_bar, tabular, ur_inline, ur_label,
+    UrRole, button, checkbox, empty_state, icon_button, isolate_urdu, primary_sm, sized_icon,
+    skeleton_bar, tabular, ur_inline, ur_label,
 };
 use missal_core::digit_value;
 
@@ -46,6 +46,7 @@ const PAD_BOTTOM: f32 = PAD_TOP + FOOTER_HEIGHT + FLOAT_INSET;
 const FIT_PAGE_MARGIN: f32 = PAD_TOP + PAD_BOTTOM + 20.0;
 const FIT_WIDTH_MARGIN: f32 = 24.0;
 const GAP: f32 = 24.0;
+const PAGE_LABEL: f32 = 16.0;
 const FIT_MIN: f32 = 0.1;
 const ZOOM_STEPS: [u16; 6] = [50, 75, 100, 125, 150, 200];
 const MENU_STEPS: [u16; 5] = [50, 75, 100, 125, 150];
@@ -1106,69 +1107,97 @@ impl PrintPreview {
         let empty = self.empty_fields();
         let first = empty.first()?;
         let count = empty.len();
-        let lead = format!(
-            "{} empty.",
-            if count == 1 {
-                "1 field is".to_owned()
-            } else {
-                format!("{count} fields are")
-            }
-        );
-        let middle = " They will print as their names, for example ";
+        let title: String = if count == 1 {
+            "1 field is empty".to_owned()
+        } else {
+            format!("{count} fields are empty")
+        };
+        let lead = "They print as their names, for example ";
         let name = isolate_urdu(first);
-        let link = "Fill them in";
-        let text = format!("{lead}{middle}{name}. {link}");
+        let text = format!("{lead}{name}.");
         let base = TextStyle::interface(13.).with_color(to_rgba(palette.ink_muted));
-        let name_start = lead.len() + middle.len();
-        let link_start = text.len() - link.len();
         let rich = AttributedText::new(text.clone(), base)
-            .with(0..lead.len(), Attr::Weight(600))
-            .with(0..lead.len(), Attr::Color(to_rgba(palette.ink)))
-            .with(link_start..text.len(), Attr::Color(to_rgba(palette.ink)))
             .with(
-                name_start..name_start + name.len(),
+                lead.len()..lead.len() + name.len(),
                 Attr::Family(FontFamily::Document),
             )
-            .with(name_start..name_start + name.len(), Attr::Size(14.))
-            .with(link_start..text.len(), Attr::Underline(true))
-            .with(link_start..text.len(), Attr::Weight(500));
+            .with(lead.len()..lead.len() + name.len(), Attr::Size(14.))
+            .with(
+                lead.len()..lead.len() + name.len(),
+                Attr::Color(to_rgba(palette.ink)),
+            );
         let fill = self.plan.as_ref().and_then(|plan| plan.fir).is_some();
         Some(
-            h_flex()
+            v_flex()
                 .id("print-warning")
                 .test_support()
-                .m(px(8.))
-                .px(px(14.))
-                .py(px(12.))
-                .gap(px(8.))
-                .items_start()
+                .flex_none()
+                .m(px(12.))
+                .p(px(12.))
+                .gap(px(10.))
                 .rounded(px(crate::theme::RADIUS_XL))
                 .border_1()
-                .border_color(palette.notice.opacity(0.32))
-                .bg(palette.notice.opacity(0.04))
-                .when(fill, |this| {
-                    let hover = palette.notice.opacity(0.08);
-                    this.cursor_pointer()
-                        .hover(move |s| s.bg(hover))
-                        .role(gpui_kit::accesskit::Role::Link)
-                        .aria_label(SharedString::from(format!("{lead} {link}")))
-                        .on_click(cx.listener(|this, _, _, cx| this.fill_in(cx)))
-                })
-                .child(div().pt(px(1.)).child(sized_icon(
-                    IconName::TriangleAlert,
-                    crate::theme::ICON,
-                    palette.notice,
-                )))
+                .border_color(palette.line)
+                .bg(palette.surface)
+                .shadow(palette.shadow_xs())
                 .child(
-                    div().flex_1().min_w_0().child(
-                        missal_text::Label::rich(rich)
-                            .ltr()
-                            .align(Align::Left)
-                            .leading(LineHeight::Px(18.)),
-                    ),
+                    h_flex()
+                        .gap(px(10.))
+                        .items_start()
+                        .child(
+                            div()
+                                .flex_none()
+                                .size(px(28.))
+                                .rounded(px(RADIUS))
+                                .bg(palette.notice_wash)
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(sized_icon(
+                                    IconName::TriangleAlert,
+                                    ICON_SM,
+                                    palette.notice_text,
+                                )),
+                        )
+                        .child(
+                            v_flex()
+                                .flex_1()
+                                .min_w_0()
+                                .gap(px(2.))
+                                .child(
+                                    div()
+                                        .text_size(px(13.))
+                                        .line_height(px(18.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(palette.ink)
+                                        .child(title),
+                                )
+                                .child(
+                                    missal_text::Label::rich(rich)
+                                        .ltr()
+                                        .align(Align::Left)
+                                        .leading(LineHeight::Px(18.)),
+                                ),
+                        ),
                 )
+                .when(fill, |this| {
+                    this.child(
+                        button("print-fill-in", "Fill them in")
+                            .outline()
+                            .sm()
+                            .icon(IconName::Pencil)
+                            .on_click(cx.listener(|this, _, _, cx| this.fill_in(cx))),
+                    )
+                })
                 .into_any_element(),
         )
+    }
+
+    fn set_all_included(&mut self, included: bool, cx: &mut Context<Self>) {
+        let count = self.plan.as_ref().map_or(0, |plan| plan.docs.len());
+        for index in 0..count {
+            self.set_included(index, included, cx);
+        }
     }
 
     fn panel(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
@@ -1181,8 +1210,9 @@ impl PrintPreview {
             .map(|plan| plan.docs.clone())
             .unwrap_or_default();
         let warning = self.warning(&palette, cx);
-        let has_warning = warning.is_some();
         let failed = matches!(self.state, State::Failed(_));
+        let total = docs.len();
+        let included = docs.iter().filter(|doc| doc.included).count();
         let rows = docs.into_iter().enumerate().map(|(index, doc)| {
             let pages = ranges.get(index).copied();
             let on = current_doc == Some(index);
@@ -1250,36 +1280,80 @@ impl PrintPreview {
                         })
                         .child(title),
                 )
-                .children(pages.map(|pages| {
+                .children(pages.filter(|_| doc.included).map(|pages| {
                     div()
                         .flex_none()
+                        .px(px(6.))
+                        .h(px(20.))
+                        .flex()
+                        .items_center()
+                        .rounded(px(crate::theme::RADIUS_SM))
+                        .bg(palette.hover)
                         .text_size(px(12.))
-                        .text_color(palette.ink_faint)
+                        .text_color(palette.ink_muted)
                         .font_features(tabular())
                         .child(Self::plural(pages, "page", "pages"))
                 }))
         });
+        let header = h_flex()
+            .flex_none()
+            .h(px(44.))
+            .mx(px(8.))
+            .px(px(8.))
+            .gap(px(8.))
+            .flex_row_reverse()
+            .items_center()
+            .when(!failed && total > 0, |this| {
+                let toggle = if included == total {
+                    checkbox("print-include-all", true)
+                } else if included == 0 {
+                    checkbox("print-include-all", false)
+                } else {
+                    crate::ui::checkbox_mixed("print-include-all")
+                };
+                this.child(toggle.accessibility_label("Print every document").on_click(
+                    cx.listener(move |this, _, _, cx| this.set_all_included(included < total, cx)),
+                ))
+            })
+            .child(div().flex_1())
+            .child(
+                h_flex()
+                    .gap(px(6.))
+                    .items_center()
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .line_height(px(18.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(palette.ink)
+                            .child("Documents"),
+                    )
+                    .when(total > 0, |this| {
+                        this.child(
+                            div()
+                                .text_size(px(12.))
+                                .text_color(palette.ink_faint)
+                                .font_features(tabular())
+                                .child(format!("{included} of {total}")),
+                        )
+                    }),
+            );
         v_flex()
             .id("print-panel")
             .w(px(PANEL_WIDTH))
             .flex_none()
             .h_full()
-            .children(warning)
-            .child(
-                div()
-                    .flex_none()
-                    .px(px(8.))
-                    .when(!has_warning, |this| this.mt(px(8.)))
-                    .child(section_label("Documents to print")),
-            )
+            .child(header)
             .child(
                 v_flex()
                     .id("print-documents")
                     .flex_1()
                     .min_h_0()
+                    .gap(px(2.))
                     .overflow_y_scroll()
                     .children(rows),
             )
+            .children(warning)
             .into_any_element()
     }
 
@@ -1353,12 +1427,28 @@ impl PrintPreview {
                         div()
                             .id(("preview-page", position))
                             .test_support()
+                            .relative()
                             .flex_none()
                             .w(px(width))
                             .h(px(height))
                             .rounded(px(RADIUS_PAPER))
                             .bg(gpui_kit::white())
                             .shadow(palette.paper_shadow())
+                            .child(
+                                div()
+                                    .absolute()
+                                    .left_0()
+                                    .right_0()
+                                    .bottom(px(-(PAGE_LABEL + 2.)))
+                                    .h(px(PAGE_LABEL))
+                                    .flex()
+                                    .justify_center()
+                                    .text_size(px(11.))
+                                    .line_height(px(PAGE_LABEL))
+                                    .text_color(palette.ink_faint)
+                                    .font_features(tabular())
+                                    .child((position + 1).to_string()),
+                            )
                             .child(
                                 canvas(
                                     |_, _, _| (),
@@ -1405,12 +1495,7 @@ impl PrintPreview {
         }
     }
 
-    fn footer(
-        &self,
-        palette: &Palette,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) -> (AnyElement, AnyElement) {
+    fn footer(&self, palette: &Palette, window: &Window, cx: &mut Context<Self>) -> AnyElement {
         let palette = *palette;
         let ready = self.is_ready() && self.document_count() > 0;
         let count = self.page_count();
@@ -1426,8 +1511,9 @@ impl PrintPreview {
         let hover = palette.hover;
         let laying_out = matches!(self.state, State::Loading) && self.show_skeleton;
         let page_input = self.page_input.clone();
-        let pages = crate::ui::floating_bar()
-            .id("print-footer")
+        let pages = h_flex()
+            .items_center()
+            .gap(px(2.))
             .child(
                 icon_button("preview-previous", IconName::ChevronLeft, "Previous page")
                     .keys("PageUp")
@@ -1489,8 +1575,10 @@ impl PrintPreview {
                 )
             })
             .into_any_element();
-        let zoom = crate::ui::floating_bar()
+        let zoom = h_flex()
             .id("print-zoom-bar")
+            .items_center()
+            .gap(px(2.))
             .child(
                 icon_button("preview-zoom-out", IconName::Minus, "Zoom out")
                     .keys("Mod+-")
@@ -1544,7 +1632,12 @@ impl PrintPreview {
                     .on_click(cx.listener(|this, _, _, cx| this.step_zoom(1, cx))),
             )
             .into_any_element();
-        (pages, zoom)
+        crate::ui::floating_bar()
+            .id("print-footer")
+            .child(pages)
+            .child(crate::ui::toolbar_separator())
+            .child(zoom)
+            .into_any_element()
     }
 }
 
@@ -1732,12 +1825,9 @@ impl Render for PrintPreview {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
         let panel = self.panel(&palette, cx);
-        let (pages, zoom) = match self.state {
-            State::Failed(_) => (None, None),
-            _ => {
-                let (pages, zoom) = self.footer(&palette, window, cx);
-                (Some(pages), Some(zoom))
-            }
+        let footer = match self.state {
+            State::Failed(_) => None,
+            _ => Some(self.footer(&palette, window, cx)),
         };
         let area = self.pages_area(&palette, cx);
         let weak = cx.entity().downgrade();
@@ -1779,19 +1869,14 @@ impl Render for PrintPreview {
                         .bg(palette.sunken)
                         .child(probe)
                         .child(area)
-                        .children(pages.map(|pages| {
-                            div()
+                        .children(footer.map(|footer| {
+                            h_flex()
                                 .absolute()
-                                .left(px(FLOAT_INSET))
+                                .left_0()
+                                .right_0()
                                 .bottom(px(FLOAT_INSET))
-                                .child(pages)
-                        }))
-                        .children(zoom.map(|zoom| {
-                            div()
-                                .absolute()
-                                .right(px(FLOAT_INSET))
-                                .bottom(px(FLOAT_INSET))
-                                .child(zoom)
+                                .justify_center()
+                                .child(footer)
                         })),
                 ),
             )
