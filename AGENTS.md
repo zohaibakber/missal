@@ -29,7 +29,7 @@ Commands:
 
 Releases (CI in `.github/workflows/ci.yml`, Velopack `vpk` version pinned there):
 
-- Tags are `v*` and must equal the `missal-app` version. CI publishes the tagged release as latest.
+- Every push to `main` publishes a release. Its version is the next patch after the highest `vX.Y.Z` tag, or the workspace version in `Cargo.toml` when that is higher, so bump `Cargo.toml` in a pull request only for a minor or major release. CI writes the version into its own checkout before building and creates the tag; nothing is committed back to `main`. A pushed `v*` tag must equal the `missal-app` version and releases that tag.
 - A release deploys the API to the `prod` stage after the installers build and before the GitHub release is published. A failed deploy stops the release. The deploy reads the `RESEND_API_KEY` secret and the `MAIL_FROM` variable.
 - Installers and updaters must never delete or move the data directory (`%APPDATA%\Missal`, `~/.config/Missal`).
 - Restart for an update is allowed only when `Navigator::has_unsaved_changes` is false.
