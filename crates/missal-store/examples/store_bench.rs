@@ -13,7 +13,7 @@ fn main() {
     let started = Instant::now();
     let folder = missal_docx::import_folder(&missal_docx::repository_templates()).unwrap();
     let documents = folder.documents();
-    let bundle = TemplateBundle::pack(1, &folder.global, &folder.custom, &documents);
+    let bundle = TemplateBundle::pack(&folder.global, &folder.custom, &documents);
     println!(
         "docx import: {:.1}ms ({} templates)",
         started.elapsed().as_secs_f64() * 1e3,

@@ -7,15 +7,15 @@ use flate2::read::DeflateDecoder;
 use flate2::write::DeflateEncoder;
 use missal_core::error::STORED_DATA_INVALID;
 use missal_core::{Document, PlaceholderId, RepositoryError, field_lookup_key, fir_field_by_key};
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::Connection;
 
 use crate::{Result, failed, placeholders, templates};
 
 const MAGIC: &[u8; 4] = b"MSB\x01";
+const FORMAT: u32 = 1;
 
 #[derive(Debug, Clone)]
 pub struct TemplateBundle {
-    version: i64,
     packed: Vec<u8>,
 }
 
@@ -60,14 +60,13 @@ impl<'a> Cursor<'a> {
     }
 }
 
-fn header(packed: &mut impl Read) -> Result<i64> {
+fn header(packed: &mut impl Read) -> Result<()> {
     let mut header = [0u8; 8];
     packed.read_exact(&mut header).map_err(|_| invalid())?;
-    let [m0, m1, m2, m3, v0, v1, v2, v3] = header;
-    if [m0, m1, m2, m3] != *MAGIC {
+    if header[..4] != MAGIC[..] {
         return Err(invalid());
     }
-    Ok(i64::from(u32::from_le_bytes([v0, v1, v2, v3])))
+    Ok(())
 }
 
 fn put(out: &mut Vec<u8>, bytes: &[u8]) {
@@ -81,9 +80,8 @@ fn put_count(out: &mut Vec<u8>, count: usize) {
 
 impl TemplateBundle {
     pub fn decode(packed: &[u8]) -> Result<TemplateBundle> {
-        let version = header(&mut DeflateDecoder::new(packed))?;
+        header(&mut DeflateDecoder::new(packed))?;
         Ok(TemplateBundle {
-            version,
             packed: packed.to_vec(),
         })
     }
@@ -111,13 +109,12 @@ impl TemplateBundle {
     }
 
     pub fn encode(
-        version: u32,
         global: &[String],
         custom: &[String],
         templates: &[(String, Document)],
     ) -> Vec<u8> {
         let mut raw = MAGIC.to_vec();
-        raw.extend_from_slice(&version.to_le_bytes());
+        raw.extend_from_slice(&FORMAT.to_le_bytes());
         for labels in [global, custom] {
             put_count(&mut raw, labels.len());
             for label in labels {
@@ -137,17 +134,12 @@ impl TemplateBundle {
     }
 
     pub fn pack(
-        version: u32,
         global: &[String],
         custom: &[String],
         templates: &[(String, Document)],
     ) -> TemplateBundle {
-        TemplateBundle::decode(&TemplateBundle::encode(version, global, custom, templates))
+        TemplateBundle::decode(&TemplateBundle::encode(global, custom, templates))
             .expect("a freshly encoded bundle decodes")
-    }
-
-    pub fn version(&self) -> i64 {
-        self.version
     }
 
     pub fn templates(&self) -> Result<Vec<(String, Document)>> {
@@ -185,18 +177,6 @@ pub(crate) fn ensure_labels(
 
 pub(crate) fn install(connection: &mut Connection, bundle: &TemplateBundle) -> Result<()> {
     let operation = "bundledTemplates.install";
-    let installed: i64 = connection
-        .query_row(
-            "SELECT bundle_version FROM settings WHERE id = 1",
-            [],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(failed(operation))?
-        .unwrap_or(0);
-    if installed >= bundle.version {
-        return Ok(());
-    }
     let contents = bundle.contents()?;
     let transaction = connection.transaction().map_err(failed(operation))?;
     let ids = ensure_labels(&transaction, &contents.global, &contents.custom, operation)?;
@@ -211,11 +191,5 @@ pub(crate) fn install(connection: &mut Connection, bundle: &TemplateBundle) -> R
         document.bind_catalog_fields(&ids);
         templates::insert(&transaction, &name, &document, operation)?;
     }
-    transaction
-        .execute(
-            "UPDATE settings SET bundle_version = ?1 WHERE id = 1",
-            params![bundle.version],
-        )
-        .map_err(failed(operation))?;
     transaction.commit().map_err(failed(operation))
 }

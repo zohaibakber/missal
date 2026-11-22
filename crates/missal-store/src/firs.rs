@@ -14,9 +14,8 @@ const LIST_SEPARATOR: char = '\u{1F}';
 
 const COLUMNS: &str = "id, fir_no, date, offence, incident_date, arrest_date, status, accused, complainant, witness, zimni, investigation_officer, writer, recovery, imei_1, imei_2, sim_1, sim_2, body, zimni_dates";
 const WRITE_COLUMNS: &str = "fir_no, date, offence, incident_date, arrest_date, status, accused, complainant, witness, zimni, investigation_officer, writer, recovery, imei_1, imei_2, sim_1, sim_2, body, zimni_dates";
-pub(crate) const SUMMARY_COLUMNS: &str =
+const SUMMARY_COLUMNS: &str =
     "id, fir_no, date, offence, incident_date, arrest_date, status, accused";
-pub(crate) const SUMMARY_INDEX: &str = "firs_summary";
 
 fn summaries_query() -> String {
     format!("SELECT {SUMMARY_COLUMNS} FROM firs ORDER BY id DESC")
@@ -63,22 +62,6 @@ pub(crate) fn split(joined: &str) -> Vec<String> {
     } else {
         joined.split(LIST_SEPARATOR).map(str::to_owned).collect()
     }
-}
-
-pub(crate) fn write_zimni(
-    connection: &Connection,
-    fir_id: FirId,
-    zimni: &[Zimni],
-    operation: &'static str,
-) -> Result<()> {
-    let numbers: Vec<String> = zimni.iter().map(|entry| entry.number.clone()).collect();
-    connection
-        .execute(
-            "UPDATE firs SET zimni = ?1, zimni_dates = ?2 WHERE id = ?3",
-            params![join(&numbers), zimni_dates(zimni), fir_id.get()],
-        )
-        .map(|_| ())
-        .map_err(failed(operation))
 }
 
 fn status_code(status: FirStatus) -> i64 {

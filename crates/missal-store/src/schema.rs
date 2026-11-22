@@ -1,15 +1,15 @@
-use rusqlite::{Connection, OptionalExtension, Transaction};
+use rusqlite::Connection;
 
-use crate::firs::{SUMMARY_COLUMNS, SUMMARY_INDEX};
 use crate::{Result, failed, open_error};
 
-const MIGRATIONS: &[&str] = &[
-    r#"
+const SCHEMA_VERSION: i64 = 5;
+
+const SCHEMA: &str = r#"
 CREATE TABLE settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     open_marker TEXT NOT NULL DEFAULT '«',
     close_marker TEXT NOT NULL DEFAULT '»',
-    bundle_version INTEGER NOT NULL DEFAULT 0
+    library_seeded INTEGER NOT NULL DEFAULT 0
 );
 INSERT INTO settings (id) VALUES (1);
 
@@ -39,8 +39,10 @@ CREATE TABLE firs (
     imei_2 TEXT NOT NULL,
     sim_1 TEXT NOT NULL,
     sim_2 TEXT NOT NULL,
-    body TEXT NOT NULL
+    body TEXT NOT NULL,
+    zimni_dates TEXT NOT NULL DEFAULT ''
 );
+CREATE INDEX firs_summary ON firs (id, fir_no, date, offence, incident_date, arrest_date, status, accused);
 
 CREATE TABLE fir_values (
     fir_id INTEGER NOT NULL REFERENCES firs (id) ON DELETE CASCADE,
@@ -87,16 +89,14 @@ CREATE TABLE document_bodies (
     document_id INTEGER PRIMARY KEY REFERENCES documents (id) ON DELETE CASCADE,
     body BLOB NOT NULL
 );
-"#,
-    r#"
+
 CREATE TABLE library_links (
     template_id INTEGER PRIMARY KEY REFERENCES templates (id) ON DELETE CASCADE,
     remote_id TEXT NOT NULL UNIQUE,
     version INTEGER NOT NULL,
     revision INTEGER NOT NULL
 );
-"#,
-    r#"
+
 CREATE TABLE document_drafts (
     document_id INTEGER PRIMARY KEY REFERENCES documents (id) ON DELETE CASCADE,
     base_revision INTEGER NOT NULL,
@@ -110,15 +110,7 @@ CREATE TABLE template_drafts (
     saved_at INTEGER NOT NULL,
     body BLOB NOT NULL
 );
-"#,
-    r#"
-ALTER TABLE settings ADD COLUMN library_seeded INTEGER NOT NULL DEFAULT 0;
-UPDATE settings SET library_seeded = bundle_version > 0;
-"#,
-    r#"
-ALTER TABLE firs ADD COLUMN zimni_dates TEXT NOT NULL DEFAULT '';
-"#,
-];
+"#;
 
 pub(crate) fn configure(connection: &Connection) -> Result<()> {
     connection
@@ -134,59 +126,29 @@ pub(crate) fn configure(connection: &Connection) -> Result<()> {
         .map_err(failed("database.open"))
 }
 
-pub(crate) fn ensure_indexes(connection: &Connection) -> Result<()> {
-    let wanted = format!("CREATE INDEX {SUMMARY_INDEX} ON firs ({SUMMARY_COLUMNS})");
-    let current: Option<String> = connection
-        .query_row(
-            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?1",
-            [SUMMARY_INDEX],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(failed("database.index"))?;
-    if current.as_deref() == Some(wanted.as_str()) {
-        return Ok(());
-    }
-    let transaction = connection
-        .unchecked_transaction()
-        .map_err(failed("database.index"))?;
-    transaction
-        .execute_batch(&format!("DROP INDEX IF EXISTS {SUMMARY_INDEX}; {wanted}"))
-        .and_then(|()| transaction.commit())
-        .map_err(failed("database.index"))
-}
-
-pub(crate) fn migrate(connection: &mut Connection) -> Result<()> {
+pub(crate) fn prepare(connection: &mut Connection) -> Result<()> {
     let version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
-        .map_err(failed("database.migrate"))?;
-    let version = usize::try_from(version).unwrap_or(usize::MAX);
-    if version > MIGRATIONS.len() {
-        return Err(open_error(
-            "This database was written by a newer version of Missal. Update Missal to open it.",
-        ));
+        .map_err(failed("database.schema"))?;
+    match version {
+        SCHEMA_VERSION => Ok(()),
+        0 if has_tables(connection)? => Err(open_error("This file is not a Missal database.")),
+        0 => create(connection),
+        _ => Err(open_error(
+            "This database was written by a different version of Missal.",
+        )),
     }
-    if version == 0 && has_tables(connection)? {
-        return Err(open_error("This file is not a Missal database."));
-    }
-    for (index, sql) in MIGRATIONS.iter().enumerate().skip(version) {
-        let transaction = connection
-            .transaction()
-            .map_err(failed("database.migrate"))?;
-        apply(&transaction, sql, index + 1).map_err(|_| {
-            open_error(&format!(
-                "The database could not be upgraded (step {}).",
-                index + 1
-            ))
-        })?;
-        transaction.commit().map_err(failed("database.migrate"))?;
-    }
-    Ok(())
 }
 
-fn apply(transaction: &Transaction<'_>, sql: &str, version: usize) -> rusqlite::Result<()> {
-    transaction.execute_batch(sql)?;
-    transaction.pragma_update(None, "user_version", version as i64)
+fn create(connection: &mut Connection) -> Result<()> {
+    let transaction = connection
+        .transaction()
+        .map_err(failed("database.schema"))?;
+    transaction
+        .execute_batch(SCHEMA)
+        .and_then(|()| transaction.pragma_update(None, "user_version", SCHEMA_VERSION))
+        .map_err(failed("database.schema"))?;
+    transaction.commit().map_err(failed("database.schema"))
 }
 
 fn has_tables(connection: &Connection) -> Result<bool> {
@@ -196,5 +158,5 @@ fn has_tables(connection: &Connection) -> Result<bool> {
             [],
             |row| row.get(0),
         )
-        .map_err(failed("database.migrate"))
+        .map_err(failed("database.schema"))
 }

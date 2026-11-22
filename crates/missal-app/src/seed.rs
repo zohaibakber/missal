@@ -126,7 +126,7 @@ pub fn repository_bundle() -> &'static TemplateBundle {
     BUNDLE.get_or_init(|| {
         let folder = missal_docx::import_folder(&missal_docx::repository_templates())
             .unwrap_or_else(|error| panic!("{error}"));
-        TemplateBundle::pack(1, &folder.global, &folder.custom, &folder.documents())
+        TemplateBundle::pack(&folder.global, &folder.custom, &folder.documents())
     })
 }
 

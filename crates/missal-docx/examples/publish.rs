@@ -65,7 +65,6 @@ fn main() {
                 .take(PREVIEW_LIMIT)
                 .collect(),
             content: TemplateBundle::encode(
-                1,
                 &template.global,
                 &template.custom,
                 &[(template.name.clone(), template.document)],

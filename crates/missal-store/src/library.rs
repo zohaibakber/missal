@@ -140,8 +140,7 @@ impl Store {
                 .map(|item| item.label.clone())
         });
         let projections = document.projections();
-        let content =
-            TemplateBundle::encode(1, &global, &custom, &[(record.name.clone(), document)]);
+        let content = TemplateBundle::encode(&global, &custom, &[(record.name.clone(), document)]);
         Ok(LibraryExport {
             name: record.name,
             field_count: projections.field_count as i64,
