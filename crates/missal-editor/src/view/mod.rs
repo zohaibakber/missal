@@ -6,15 +6,14 @@ mod theme;
 mod toolbar;
 
 use std::ops::Range;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
 use gpui_kit::{
-    AnyElement, App, AppContext, Bounds, ClipboardEntry, ClipboardItem, Context, Entity,
-    EntityInputHandler, EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement,
-    MouseDownEvent, ParentElement, Pixels, Point, Render, ScrollEvent, Styled, Subscription, Task,
-    UTF16Selection, Window, div, prelude::FluentBuilder, px,
+    App, AppContext, Bounds, ClipboardEntry, ClipboardItem, Context, Entity, EntityInputHandler,
+    EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, MouseDownEvent,
+    ParentElement, Pixels, Point, Render, ScrollEvent, Styled, Subscription, Task, UTF16Selection,
+    Window, div, prelude::FluentBuilder, px,
 };
 use missal_core::document::{Align, ListType, TextFormat};
 use missal_core::{
@@ -36,8 +35,6 @@ pub use element::PagesElement;
 pub use find::FIND_CONTEXT;
 pub use keys::KEY_CONTEXT;
 pub use theme::EditorTheme;
-
-pub type ToolbarSlot = Rc<dyn Fn(&mut Window, &mut App) -> Option<AnyElement>>;
 
 pub const PAGE_GAP: f32 = 24.0;
 pub const CANVAS_PAD: f32 = 24.0;
@@ -152,7 +149,6 @@ pub struct Editor {
     packet: Packet,
     read_only: bool,
     mode_toggle: bool,
-    toolbar_end: Option<ToolbarSlot>,
     zoom_override: Option<f32>,
     pub(crate) scroll: PagePoint,
     pub(crate) viewport: Option<Bounds<Pixels>>,
@@ -274,7 +270,6 @@ impl Editor {
             packet,
             read_only: false,
             mode_toggle: false,
-            toolbar_end: None,
             zoom_override,
             scroll: PagePoint::default(),
             viewport: None,
@@ -347,7 +342,6 @@ impl Editor {
     pub fn reset(&mut self, cx: &mut Context<Self>) {
         self.read_only = false;
         self.mode_toggle = false;
-        self.toolbar_end = None;
         self.autoscroll_task = None;
         self.menu_selection = None;
         self.field_query.clear();
@@ -407,15 +401,6 @@ impl Editor {
 
     pub fn set_mode_toggle(&mut self, shown: bool, cx: &mut Context<Self>) {
         self.mode_toggle = shown;
-        cx.notify();
-    }
-
-    pub fn set_toolbar_end(
-        &mut self,
-        slot: impl Fn(&mut Window, &mut App) -> Option<AnyElement> + 'static,
-        cx: &mut Context<Self>,
-    ) {
-        self.toolbar_end = Some(Rc::new(slot));
         cx.notify();
     }
 
@@ -1627,7 +1612,7 @@ impl EntityInputHandler for Editor {
 }
 
 impl Render for Editor {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let entity = cx.entity();
         let canvas = EditorTheme::get(cx).canvas;
         let context = if self.slash_is_open() {
@@ -1644,7 +1629,7 @@ impl Render for Editor {
             .flex_col()
             .bg(canvas);
         let root = self.register_actions(root, cx);
-        let toolbar = (!self.read_only).then(|| self.render_toolbar(window, cx));
+        let toolbar = (!self.read_only).then(|| self.render_toolbar(cx));
         let zoom = self.render_zoom(cx);
         let find = self.render_find_bar(cx);
         let slash = self.render_slash(cx);

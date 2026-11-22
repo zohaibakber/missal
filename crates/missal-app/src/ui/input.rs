@@ -16,6 +16,7 @@ use crate::ui::{icon_button, sized_icon};
 pub const URDU_SIZE: f32 = 16.0;
 pub const LATIN_SIZE: f32 = 14.0;
 pub const SEARCH_SIZE: f32 = 15.0;
+pub const TITLE_SIZE: f32 = 18.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
@@ -109,6 +110,16 @@ pub fn field_input(
         let input = TextInput::new(window, cx).bare();
         let line = if kind.holds_urdu() { 30. } else { 20. };
         configure(input, kind, placeholder, text, cx).line_height(LineHeight::Px(line))
+    })
+}
+
+pub fn title_input(window: &mut Window, cx: &mut App, placeholder: &str) -> Entity<TextInput> {
+    cx.new(|cx| {
+        let input = TextInput::new(window, cx).bare();
+        configure(input, Kind::Urdu, placeholder, "", cx)
+            .align(Align::Left)
+            .text_size(TITLE_SIZE)
+            .line_height(LineHeight::Px(30.))
     })
 }
 

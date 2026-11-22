@@ -43,14 +43,7 @@ pub enum SidebarMode {
 
 impl SidebarMode {
     pub fn of(hidden: bool, route: Route) -> SidebarMode {
-        let compact = matches!(
-            route,
-            Route::Fir(_)
-                | Route::Print(_)
-                | Route::Templates
-                | Route::Template(_)
-                | Route::NewTemplate
-        );
+        let compact = matches!(route, Route::Fir(_) | Route::Print(_));
         match (hidden, compact) {
             (true, _) => SidebarMode::Hidden,
             (false, true) => SidebarMode::Compact,
