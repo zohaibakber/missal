@@ -4515,7 +4515,7 @@ dependencies = [
 name = "missal-library"
 version = "0.10.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "serde",
  "serde_json",
  "ureq",
