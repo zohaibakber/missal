@@ -30,6 +30,36 @@ pub struct Catalog {
     pub templates: Vec<LibraryEntry>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManagedTemplate {
+    pub id: String,
+    pub name: String,
+    pub version: i64,
+    pub field_count: i64,
+    #[serde(default)]
+    pub preview: String,
+    pub size: i64,
+    pub publisher_name: Option<String>,
+    pub publisher_email: Option<String>,
+    pub version_count: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplateVersion {
+    pub version: i64,
+    pub name: String,
+    pub field_count: i64,
+    pub size: i64,
+    pub publisher_name: Option<String>,
+    pub publisher_email: Option<String>,
+    pub published_at: i64,
+    pub restored_from: Option<i64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Download {
     pub version: i64,
@@ -184,6 +214,44 @@ impl Library {
             .header("Authorization", format!("Bearer {token}"))
             .content_type("application/json")
             .send(&body[..]);
+        Self::json(Self::checked(response)?)
+    }
+
+    pub fn managed_templates(&self, token: &str) -> Result<Vec<ManagedTemplate>, LibraryError> {
+        let response = self
+            .agent
+            .get(self.url("admin/templates"))
+            .header("Authorization", format!("Bearer {token}"))
+            .call();
+        Self::json(Self::checked(response)?)
+    }
+
+    pub fn template_versions(
+        &self,
+        token: &str,
+        id: &str,
+    ) -> Result<Vec<TemplateVersion>, LibraryError> {
+        let response = self
+            .agent
+            .get(self.url(&format!("admin/templates/{}/versions", valid_id(id)?)))
+            .header("Authorization", format!("Bearer {token}"))
+            .call();
+        Self::json(Self::checked(response)?)
+    }
+
+    pub fn restore_version(
+        &self,
+        token: &str,
+        id: &str,
+        version: i64,
+    ) -> Result<Published, LibraryError> {
+        let body = serde_json::json!({ "version": version }).to_string();
+        let response = self
+            .agent
+            .post(self.url(&format!("admin/templates/{}/restore", valid_id(id)?)))
+            .header("Authorization", format!("Bearer {token}"))
+            .content_type("application/json")
+            .send(body.as_bytes());
         Self::json(Self::checked(response)?)
     }
 

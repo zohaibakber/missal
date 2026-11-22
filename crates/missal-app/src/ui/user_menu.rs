@@ -16,6 +16,7 @@ use crate::state::{Models, Route};
 use crate::theme::Palette;
 use crate::ui::account::{open_change_password, open_users};
 use crate::ui::popup_menu::{MenuContent, MenuEntry, MenuSwitchOption, MenuTrigger, menu};
+use crate::ui::publishing::open_publishing;
 use crate::ui::{ClickHandler, IconButton, icon_button, sidebar_menu_button};
 
 const SIGNED_OUT: &str = "Not signed in";
@@ -108,6 +109,10 @@ fn rows(menu: MenuContent, profile: Option<&Profile>, theme: ThemeChoice) -> Men
         })
         .when(profile.is_some_and(|profile| profile.admin), |menu| {
             menu.item(MenuEntry::new("account-people", "People…", open_users).icon(IconName::Users))
+                .item(
+                    MenuEntry::new("account-publishing", "Publishing…", open_publishing)
+                        .icon(IconName::CloudUpload),
+                )
         })
         .item(
             MenuEntry::new("account-settings", "Settings", |window, cx| {
