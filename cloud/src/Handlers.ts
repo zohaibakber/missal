@@ -3,9 +3,10 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
 import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as Layer from "effect/Layer";
-import { canPublish, Api, Viewer } from "./Api.ts";
+import { Api, Viewer } from "./Api.ts";
 import { Accounts } from "./Accounts.ts";
 import { Library } from "./Library.ts";
+import { canPublish } from "./Models.ts";
 
 const clientAddress = Effect.map(
   HttpServerRequest.HttpServerRequest,

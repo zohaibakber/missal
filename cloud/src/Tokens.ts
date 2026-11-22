@@ -37,10 +37,10 @@ export interface Subject {
   readonly licence: Licence;
 }
 
-const seconds = (time: DateTime.Utc) => Math.floor(DateTime.toEpochMillis(time) / 1000);
-
 const licensedUntil = (licence: Licence) =>
-  licence.status === "expired" || licence.status === "trialEnded" ? 0 : seconds(licence.until);
+  licence.status === "expired" || licence.status === "trialEnded"
+    ? 0
+    : DateTime.toEpochSeconds(licence.until);
 
 const unauthorized = () => new Unauthorized({ error: "sign in to use Missal" });
 
@@ -50,6 +50,14 @@ const secretBytes = (secret: Redacted.Redacted<string>) => {
     ? Effect.succeed(bytes.success)
     : Effect.die(`${SECRET_VARIABLE} must be at least ${MIN_SECRET_BYTES} hex-encoded bytes`);
 };
+
+const signingKey = Effect.gen(function* () {
+  const bytes = yield* secretBytes(yield* Config.Redacted(SECRET_VARIABLE));
+  return yield* Jwk.importSecret(
+    Redacted.make({ kty: "oct", k: Base64Url.encode(bytes) } as const),
+    "HS256",
+  );
+}).pipe(Effect.orDie);
 
 export class Tokens extends Context.Service<
   Tokens,
@@ -64,15 +72,10 @@ export class Tokens extends Context.Service<
     Tokens,
     Effect.gen(function* () {
       const mac = yield* Mac.Mac;
-      const secret = yield* Config.Redacted(SECRET_VARIABLE).pipe(Effect.orDie);
-      const bytes = yield* secretBytes(secret);
-      const key = yield* Jwk.importSecret(
-        Redacted.make({ kty: "oct", k: Base64Url.encode(bytes) } as const),
-        "HS256",
-      ).pipe(Effect.orDie);
 
       const issue = Effect.fn("Tokens.issue")(function* (subject: Subject) {
-        const now = seconds(yield* DateTime.now);
+        const key = yield* signingKey;
+        const now = DateTime.toEpochSeconds(yield* DateTime.now);
         const token = yield* Jwt.sign(
           Claims,
           {
@@ -91,6 +94,7 @@ export class Tokens extends Context.Service<
       });
 
       const verify = Effect.fn("Tokens.verify")(function* (token: Redacted.Redacted<string>) {
+        const key = yield* signingKey;
         const { claims } = yield* Jwt.verify(Claims, token, key, {
           issuer: ISSUER,
           typ: TYPE,
@@ -100,7 +104,7 @@ export class Tokens extends Context.Service<
           id: claims.sub,
           sessionId: claims.sid,
           role: claims.role,
-          licensedUntil: DateTime.makeUnsafe(claims.lic * 1000),
+          licensedUntil: DateTime.fromEpochSeconds(claims.lic),
         });
       });
 

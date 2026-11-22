@@ -69,7 +69,7 @@ export default Cloudflare.Worker(
     );
 
     return {
-      fetch: ApiLive.pipe(
+      fetch: yield* ApiLive.pipe(
         Layer.provide(Infrastructure),
         Layer.provide(Http.Platform),
         HttpRouter.toHttpEffect,

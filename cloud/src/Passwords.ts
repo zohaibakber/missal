@@ -1,17 +1,13 @@
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
 import * as Kdf from "effect/crypto/Kdf";
-import * as Mac from "effect/crypto/Mac";
-import * as SecureRandom from "effect/crypto/SecureRandom";
+import * as Password from "effect/crypto/Password";
 import * as Effect from "effect/Effect";
 import * as Base64Url from "effect/encoding/Base64Url";
 import * as Layer from "effect/Layer";
-import * as Redacted from "effect/Redacted";
-import * as Result from "effect/Result";
+import type * as Redacted from "effect/Redacted";
 
 export const ITERATIONS = 100_000;
-const SALT_BYTES = 16;
-const HASH_BYTES = 32;
 
 export interface StoredPassword {
   readonly hash: string;
@@ -19,7 +15,13 @@ export interface StoredPassword {
   readonly iterations: number;
 }
 
-const encoder = new TextEncoder();
+export const DECOY: StoredPassword = {
+  hash: Base64Url.encode(new Uint8Array(32)),
+  salt: Base64Url.encode(new Uint8Array(16)),
+  iterations: ITERATIONS,
+};
+
+const pbkdf2 = (iterations: number) => Kdf.pbkdf2({ hash: Digest.sha256, iterations });
 
 export class Passwords extends Context.Service<
   Passwords,
@@ -29,30 +31,20 @@ export class Passwords extends Context.Service<
       password: Redacted.Redacted<string>,
       stored: StoredPassword,
     ) => Effect.Effect<boolean>;
-    readonly decoy: Effect.Effect<StoredPassword>;
   }
 >()("Passwords") {
   static readonly layer = Layer.effect(
     Passwords,
     Effect.gen(function* () {
-      const kdf = yield* Kdf.Kdf;
-      const random = yield* SecureRandom.SecureRandom;
-
-      const derive = (password: Redacted.Redacted<string>, salt: Uint8Array, iterations: number) =>
-        kdf
-          .derive(
-            Kdf.pbkdf2({ hash: Digest.sha256, iterations }),
-            encoder.encode(Redacted.value(password)),
-            { salt, length: HASH_BYTES },
-          )
-          .pipe(Effect.orDie);
+      const passwords = yield* Password.Password;
 
       const hash = Effect.fn("Passwords.hash")(function* (password: Redacted.Redacted<string>) {
-        const salt = yield* random.randomBytes(SALT_BYTES);
-        const derived = yield* derive(password, salt, ITERATIONS);
+        const decoded = yield* passwords
+          .hash(password)
+          .pipe(Effect.flatMap(Password.decode), Effect.orDie);
         return {
-          hash: Base64Url.encode(derived),
-          salt: Base64Url.encode(salt),
+          hash: Base64Url.encode(decoded.hash),
+          salt: Base64Url.encode(decoded.salt),
           iterations: ITERATIONS,
         };
       });
@@ -61,18 +53,13 @@ export class Passwords extends Context.Service<
         password: Redacted.Redacted<string>,
         stored: StoredPassword,
       ) {
-        const salt = Base64Url.decode(stored.salt);
-        const expected = Base64Url.decode(stored.hash);
-        if (Result.isFailure(salt) || Result.isFailure(expected)) return false;
-        const derived = yield* derive(password, salt.success, stored.iterations);
-        return Mac.timingSafeEqual(derived, expected.success);
-      });
+        const salt = yield* Effect.fromResult(Base64Url.decode(stored.salt));
+        const hash = yield* Effect.fromResult(Base64Url.decode(stored.hash));
+        const phc = Password.encode({ algorithm: pbkdf2(stored.iterations), salt, hash });
+        return yield* passwords.verify(password, phc);
+      }, Effect.orDie);
 
-      const decoy = yield* Effect.cached(
-        hash(Redacted.make("decoy password for unknown accounts")),
-      );
-
-      return Passwords.of({ hash, verify, decoy });
+      return Passwords.of({ hash, verify });
     }),
-  );
+  ).pipe(Layer.provide(Password.layer({ algorithm: pbkdf2(ITERATIONS) })));
 }

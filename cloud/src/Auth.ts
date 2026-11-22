@@ -4,7 +4,6 @@ import * as Layer from "effect/Layer";
 import {
   AdminsOnly,
   Authentication,
-  canPublish,
   NotAdmin,
   LicenceRequired,
   Licensed,
@@ -12,6 +11,7 @@ import {
   PublishersOnly,
   Viewer,
 } from "./Api.ts";
+import { canPublish } from "./Models.ts";
 import { Tokens } from "./Tokens.ts";
 
 export const AuthenticationLive = Layer.effect(

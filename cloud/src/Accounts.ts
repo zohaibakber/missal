@@ -45,7 +45,7 @@ import {
   User,
   UserId,
 } from "./Models.ts";
-import { Passwords, type StoredPassword } from "./Passwords.ts";
+import { DECOY, Passwords, type StoredPassword } from "./Passwords.ts";
 import { AuthThrottle } from "./Throttle.ts";
 import { ACCESS_SECONDS, Tokens } from "./Tokens.ts";
 
@@ -80,11 +80,8 @@ const storedPassword = (user: User): StoredPassword => ({
   iterations: user.passwordIterations,
 });
 
-const sameText = (left: string, right: string) => {
-  const a = encoder.encode(left);
-  const b = encoder.encode(right);
-  return a.length === b.length && Mac.timingSafeEqual(a, b);
-};
+const sameText = (left: string, right: string) =>
+  Mac.timingSafeEqual(encoder.encode(left), encoder.encode(right));
 
 const splitToken = (token: string) => {
   const dot = token.indexOf(".");
@@ -97,11 +94,12 @@ const millis = DateTime.toEpochMillis;
 
 const isVerified = (user: User) => Option.isSome(user.emailVerifiedAt);
 
-/**
- * When false (the default), sign-up confirms the email at once and starts the trial, so no
- * email is sent to create an account. Set it to "true" once mail delivery works.
- */
 export const VERIFY_EMAILS_VARIABLE = "VERIFY_EMAILS";
+
+const emailVerification = Effect.gen(function* () {
+  const value = yield* Config.option(Config.String(VERIFY_EMAILS_VARIABLE));
+  return Option.exists(value, (text) => text.trim().toLowerCase() === "true");
+}).pipe(Effect.orDie);
 
 const expired = () => new SessionExpired({ error: "your session has ended; sign in again" });
 const invalid = () => new InvalidCredentials({ error: "wrong email or password" });
@@ -195,10 +193,6 @@ export class Accounts extends Context.Service<
       const mailer = yield* Mailer;
       const random = yield* SecureRandom.SecureRandom;
       const digest = yield* Digest.Digest;
-      const verifyEmails = Option.exists(
-        yield* Config.option(Config.String(VERIFY_EMAILS_VARIABLE)).pipe(Effect.orDie),
-        (value) => value.trim().toLowerCase() === "true",
-      );
 
       const users = yield* SqlModel.makeRepository(User, {
         tableName: "users",
@@ -236,10 +230,7 @@ export class Accounts extends Context.Service<
       });
 
       const findUser = (id: string) =>
-        users.findById(UserId.make(id)).pipe(
-          Effect.map(Option.some),
-          Effect.catchTag("NoSuchElementError", () => Effect.succeedNone),
-        );
+        users.findById(UserId.make(id)).pipe(Effect.catchNoSuchElement);
 
       const existing = (id: string) =>
         findUser(id).pipe(
@@ -417,6 +408,7 @@ export class Accounts extends Context.Service<
 
       const signUp = Effect.fn("Accounts.signUp")(function* (client: string, request: SignUp) {
         yield* throttle.check(client);
+        const verifyEmails = yield* emailVerification;
         const fields = yield* passwordFields(request.password);
         const found = yield* userByEmail(request.email).pipe(storage("sign up"));
         const now = yield* DateTime.now;
@@ -427,7 +419,6 @@ export class Accounts extends Context.Service<
         if (Option.isSome(found)) {
           yield* sql`UPDATE users SET ${sql.update({ ...fields, name: request.name })}
             WHERE id = ${found.value.id} AND email_verified_at IS NULL`.pipe(storage("sign up"));
-          if (!verifyEmails) return yield* confirm(found.value.id);
         } else {
           const row = yield* Schema.encodeEffect(User.insert)(
             User.insert.make({
@@ -517,7 +508,7 @@ export class Accounts extends Context.Service<
           });
         }
         const found = yield* userByEmail(email).pipe(storage("sign in"));
-        const stored = Option.isSome(found) ? storedPassword(found.value) : yield* passwords.decoy;
+        const stored = Option.isSome(found) ? storedPassword(found.value) : DECOY;
         const matches = yield* passwords.verify(password, stored);
         if (Option.isNone(found) || !matches || found.value.disabled) {
           yield* recordFailure(email, now).pipe(storage("record a failed sign-in"));
@@ -525,15 +516,8 @@ export class Accounts extends Context.Service<
         }
         yield* sql`DELETE FROM sign_in_failures WHERE email = ${email}`.pipe(storage("sign in"));
         if (!isVerified(found.value)) {
-          if (verifyEmails) {
-            yield* sendCode(email, "verify");
-            return yield* new EmailNotVerified({ error: "confirm your email first" });
-          }
-          yield* confirm(found.value.id);
-          const user = yield* existing(found.value.id).pipe(
-            Effect.catchTag("UserNotFound", () => Effect.fail(invalid())),
-          );
-          return yield* openSession(user).pipe(storage("open a session"));
+          yield* sendCode(email, "verify");
+          return yield* new EmailNotVerified({ error: "confirm your email first" });
         }
         return yield* openSession(found.value).pipe(storage("open a session"));
       });
@@ -543,11 +527,9 @@ export class Accounts extends Context.Service<
         if (Option.isNone(parts)) return yield* expired();
         const { sessionId, secret } = parts.value;
         const now = yield* DateTime.now;
-        const session = yield* sessions.findById(sessionId).pipe(
-          Effect.map(Option.some),
-          Effect.catchTag("NoSuchElementError", () => Effect.succeedNone),
-          storage("refresh the session"),
-        );
+        const session = yield* sessions
+          .findById(sessionId)
+          .pipe(Effect.catchNoSuchElement, storage("refresh the session"));
         if (Option.isNone(session)) return yield* expired();
         const user = yield* findUser(session.value.userId).pipe(storage("refresh the session"));
         const presented = yield* hashSecret(secret);
