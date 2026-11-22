@@ -13,16 +13,18 @@ use missal_text::{TextInput, TextInputEvent, label};
 
 use crate::auth::{AuthModel, password_problem};
 use crate::state::{Load, toast_success};
-use crate::theme::{Palette, RADIUS};
+use crate::theme::Palette;
 use crate::ui::dialogs::{
     dialog_description, dialog_footer, dialog_header, dialog_surface, dialog_title, optical_top,
 };
 use crate::ui::input::{Kind, field, secret_input};
 use crate::ui::library::day_month_year;
+use crate::ui::popup_menu::{MenuEntry, menu};
 use crate::ui::{
     Intent, SegmentItem, alert, button, field_description, field_error, field_group, field_label,
-    form_field, ghost_sm, segmented, skeleton_bar,
+    form_field, icon_button, segmented, skeleton_bar,
 };
+use gpui_kit::assets::IconName;
 
 const PASSWORD_WIDTH: f32 = 420.;
 const USERS_WIDTH: f32 = 760.;
@@ -408,14 +410,16 @@ impl UsersPanel {
         let grant_id = user.id.clone();
         let toggle_id = user.id.clone();
         let disabled_now = user.disabled;
+        let is_admin = user.role.is_admin();
+        let weak = cx.entity().downgrade();
         h_flex()
             .id(("user-row", index))
             .px(px(10.))
             .py(px(8.))
             .gap(px(12.))
             .items_center()
-            .rounded(px(RADIUS))
-            .hover(|style| style.bg(palette.hover))
+            .border_b_1()
+            .border_color(palette.line)
             .child(
                 v_flex()
                     .flex_1()
@@ -435,35 +439,75 @@ impl UsersPanel {
             )
             .child(self.role_picker(&user.id, index, user.role, busy || own, cx))
             .child(
-                ghost_sm(("user-licence", index), "Add 1 year")
-                    .disabled(busy || user.role.is_admin())
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.apply(
-                            grant_id.clone(),
-                            |keeper, id| keeper.grant_licence(id, 1),
-                            true,
-                            window,
-                            cx,
-                        );
-                    })),
-            )
-            .child(
-                ghost_sm(
-                    ("user-toggle", index),
-                    if disabled_now { "Enable" } else { "Disable" },
-                )
-                .disabled(busy || own)
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.change(
-                        toggle_id.clone(),
-                        UserChanges {
-                            disabled: Some(!disabled_now),
-                            ..UserChanges::default()
-                        },
-                        window,
-                        cx,
-                    );
-                })),
+                menu(SharedString::from(format!("user-more-{index}")))
+                    .trigger(
+                        icon_button(("user-more", index), IconName::Ellipsis, "More actions")
+                            .disabled(busy),
+                    )
+                    .width(200.)
+                    .content(move |content, _, _| {
+                        let grant = weak.clone();
+                        let grant_id = grant_id.clone();
+                        let toggle = weak.clone();
+                        let toggle_id = toggle_id.clone();
+                        content
+                            .item(
+                                MenuEntry::new(
+                                    format!("user-licence-{index}"),
+                                    "Add 1 year",
+                                    move |window, cx| {
+                                        let grant_id = grant_id.clone();
+                                        grant
+                                            .update(cx, |this, cx| {
+                                                this.apply(
+                                                    grant_id,
+                                                    |keeper, id| keeper.grant_licence(id, 1),
+                                                    true,
+                                                    window,
+                                                    cx,
+                                                );
+                                            })
+                                            .ok();
+                                    },
+                                )
+                                .icon(IconName::CalendarPlus)
+                                .disabled(is_admin),
+                            )
+                            .separator()
+                            .item({
+                                let entry = MenuEntry::new(
+                                    format!("user-toggle-{index}"),
+                                    if disabled_now {
+                                        "Enable account"
+                                    } else {
+                                        "Disable account"
+                                    },
+                                    move |window, cx| {
+                                        let toggle_id = toggle_id.clone();
+                                        toggle
+                                            .update(cx, |this, cx| {
+                                                this.change(
+                                                    toggle_id,
+                                                    UserChanges {
+                                                        disabled: Some(!disabled_now),
+                                                        ..UserChanges::default()
+                                                    },
+                                                    window,
+                                                    cx,
+                                                );
+                                            })
+                                            .ok();
+                                    },
+                                )
+                                .icon(if disabled_now {
+                                    IconName::UserCheck
+                                } else {
+                                    IconName::UserX
+                                })
+                                .disabled(own);
+                                if disabled_now { entry } else { entry.danger() }
+                            })
+                    }),
             )
             .into_any_element()
     }
@@ -497,8 +541,7 @@ impl UsersPanel {
                 v_flex()
                     .id("users-list")
                     .overflow_y_scroll()
-                    .h_full()
-                    .gap(px(2.))
+                    .max_h(px(LIST_HEIGHT))
                     .children(users.iter().enumerate().map(|(index, user)| {
                         let own = own.as_deref() == Some(user.id.as_str());
                         self.row(index, user, palette, own, cx)
@@ -524,7 +567,7 @@ impl Render for UsersPanel {
                     .clone()
                     .map(|problem| alert(Intent::Danger).child(problem)),
             )
-            .child(div().h(px(LIST_HEIGHT)).child(self.list(&palette, cx)))
+            .child(div().min_h(px(120.)).child(self.list(&palette, cx)))
             .child(
                 dialog_footer()
                     .mt(px(12.))

@@ -872,11 +872,9 @@ impl FirForm {
                 h_flex()
                     .flex_row_reverse()
                     .items_center()
-                    .h(px(48.))
                     .px(px(20.))
+                    .pt(px(16.))
                     .gap(px(12.))
-                    .border_b_1()
-                    .border_color(palette.line)
                     .child(
                         div()
                             .flex_none()

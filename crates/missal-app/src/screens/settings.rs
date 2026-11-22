@@ -33,6 +33,8 @@ use crate::ui::{
 };
 use crate::update::controller::{self, UpdateState, UpdateStatus};
 
+/// Width of the name column on the global values page.
+const GLOBAL_NAME_COLUMN: f32 = 200.;
 const COLUMN_WIDTH: f32 = 680.0;
 const NAV_WIDTH: f32 = 208.0;
 const FILTER_THRESHOLD: usize = 12;
@@ -991,14 +993,14 @@ impl SettingsScreen {
                         let error = errors.get(index).copied().flatten();
                         let name_cell: AnyElement = if row.editing_name {
                             field(("global-name", index), &row.name, Kind::Urdu)
-                                .width(px(220.))
+                                .width(px(GLOBAL_NAME_COLUMN))
                                 .error(error.is_some())
                                 .into_any_element()
                         } else {
                             div()
                                 .id(("global-name-label", index))
                                 .test_support()
-                                .max_w(px(320.))
+                                .max_w(px(GLOBAL_NAME_COLUMN + 10.))
                                 .h(px(30.))
                                 .flex_none()
                                 .px(px(10.))
@@ -1023,20 +1025,21 @@ impl SettingsScreen {
                         v_flex()
                             .id(("global-row", index))
                             .group("global-row")
-                            .py(px(6.))
+                            .py(px(4.))
                             .ml(px(-34.))
-                            .child(
-                                h_flex()
-                                    .flex_row_reverse()
-                                    .mr(px(if row.editing_name { 0. } else { -10. }))
-                                    .mb(px(4.))
-                                    .child(name_cell),
-                            )
                             .child(
                                 h_flex()
                                     .flex_row_reverse()
                                     .items_center()
                                     .gap(px(10.))
+                                    .child(
+                                        h_flex()
+                                            .w(px(GLOBAL_NAME_COLUMN))
+                                            .flex_none()
+                                            .flex_row_reverse()
+                                            .mr(px(if row.editing_name { 0. } else { -10. }))
+                                            .child(name_cell),
+                                    )
                                     .child(
                                         div().flex_1().min_w_0().child(
                                             field(
@@ -1069,6 +1072,7 @@ impl SettingsScreen {
                             .children(error.map(|error| {
                                 h_flex()
                                     .flex_row_reverse()
+                                    .mr(px(GLOBAL_NAME_COLUMN + 10.))
                                     .pt(px(2.))
                                     .child(field_error(error))
                             }))

@@ -625,7 +625,9 @@ fn run_gate(dark: bool, out: &Path, api: &str) {
     h.with_window(missal_app::ui::account::open_users);
     h.idle();
     h.shot("49-people");
-    h.with_window(|window, cx| window.click(("user-licence", 2usize), cx));
+    h.with_window(|window, cx| window.click(("user-more", 2usize), cx));
+    h.shot("49a-people-row-menu");
+    h.click("user-licence-2");
     h.idle();
     h.shot("49b-people-added-year");
     h.press("escape");
