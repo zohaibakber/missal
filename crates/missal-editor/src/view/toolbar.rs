@@ -382,11 +382,7 @@ impl Editor {
         .into_any_element()
     }
 
-    pub(crate) fn render_toolbar(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    pub(crate) fn render_toolbar(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let theme = EditorTheme::get(cx);
         let entity = cx.entity();
         let core = &self.core;
@@ -496,11 +492,6 @@ impl Editor {
                     })),
             );
         let mode = self.mode_toggle.then(|| self.mode_toggle(theme, cx));
-        let end = self
-            .toolbar_end
-            .clone()
-            .and_then(|slot| slot(window, cx))
-            .map(|content| h_flex().id("editor-toolbar-end").flex_none().child(content));
         h_flex()
             .id("editor-bar")
             .flex_none()
@@ -520,13 +511,6 @@ impl Editor {
             .child(bar)
             .child(div().flex_1().min_w(px(8.)))
             .children(mode)
-            .children(end.map(|end| {
-                h_flex()
-                    .flex_none()
-                    .items_center()
-                    .child(separator(theme.line))
-                    .child(end)
-            }))
             .into_any_element()
     }
 

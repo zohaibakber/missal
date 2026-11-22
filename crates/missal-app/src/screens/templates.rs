@@ -9,9 +9,9 @@ use gpui_kit::prelude::*;
 
 use gpui_kit::{
     Anchor, App, AppContext, Bounds, Context, Entity, ExternalPaths, FocusHandle, FontWeight,
-    InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Pixels, Render, ScrollStrategy,
-    SharedString, StatefulInteractiveElement, Styled, Subscription, UniformListScrollHandle,
-    Window, canvas, div, point, px, uniform_list,
+    InteractiveElement, IntoElement, KeyDownEvent, MouseButton, ParentElement, Pixels, Render,
+    ScrollStrategy, SharedString, StatefulInteractiveElement, Styled, Subscription,
+    UniformListScrollHandle, Window, canvas, div, point, px, uniform_list,
 };
 use missal_core::{DisplayMode, Document, Revision, TemplateId};
 use missal_editor::{Editor, EditorEvent, EditorFields};
@@ -32,7 +32,7 @@ use crate::state::{
 };
 use crate::theme::Palette;
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
-use crate::ui::input::{Kind, field, field_input, search_field};
+use crate::ui::input::{Kind, field_input, search_field, title_input};
 use crate::ui::library::open_library;
 use crate::ui::popup_menu::{Dismissed, MenuContent, MenuEntry, Placement, PopupList, menu};
 use crate::ui::print_preview::{PreviewDocument, PrintRequest};
@@ -46,6 +46,7 @@ use crate::word::{WordImport, is_docx};
 type Continuation = Box<dyn FnOnce(&mut Window, &mut App)>;
 
 const LIST_WIDTH: f32 = crate::theme::RAIL_WIDTH;
+const TITLE_WIDTH: f32 = 360.;
 const ROW_HEIGHT: f32 = 44.0;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -88,7 +89,7 @@ impl TemplatePage {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> TemplatePage {
-        let title = field_input(window, cx, Kind::Urdu, "Template name", "");
+        let title = title_input(window, cx, "Template name");
         let editor = crate::editor::shared(window, cx);
         let editor_subscription =
             cx.subscribe(&editor, |this, _, event: &EditorEvent, cx| match event {
@@ -126,17 +127,6 @@ impl TemplatePage {
             review: None,
             _subscriptions: vec![editor_subscription, title_subscription],
         };
-        let weak = cx.weak_entity();
-        page.editor.update(cx, |editor, cx| {
-            editor.set_toolbar_end(
-                move |_, cx| {
-                    weak.update(cx, |page, cx| page.name_pill(cx))
-                        .ok()
-                        .flatten()
-                },
-                cx,
-            )
-        });
         page.load(window, cx);
         page
     }
@@ -668,10 +658,21 @@ impl TemplatePage {
     }
 
     fn title_field(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
+        let input = self.title.clone();
         div()
             .id("template-title")
+            .test_support()
             .occlude()
-            .w(px(280.))
+            .w(px(TITLE_WIDTH))
+            .min_w_0()
+            .flex_shrink(1.)
+            .h(px(32.))
+            .flex()
+            .items_center()
+            .cursor_text()
+            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                input.update(cx, |input, cx| input.focus(window, cx));
+            })
             .on_action(cx.listener(|this, _: &BlurFocus, window, cx| {
                 if this.is_renaming() {
                     this.cancel_rename(window, cx);
@@ -679,46 +680,42 @@ impl TemplatePage {
                     cx.propagate();
                 }
             }))
-            .child(field("template-title-field", &self.title, Kind::Urdu).width(px(280.)))
+            .on_action(cx.listener(|this, _: &Save, window, cx| this.save(window, cx)))
+            .child(div().w_full().min_w_0().child(self.title.clone()))
             .into_any_element()
     }
 
-    fn name_pill(&self, cx: &mut Context<Self>) -> Option<gpui_kit::AnyElement> {
-        let palette = *Palette::get(cx);
-        if self.state != PageState::Ready {
-            return None;
-        }
+    fn name_title(&self, cx: &mut Context<Self>) -> gpui_kit::AnyElement {
         if self.id.is_none() || self.renaming {
-            return Some(self.title_field(cx));
+            return self.title_field(cx);
         }
+        let palette = *Palette::get(cx);
         let name = self.title.read(cx).text().trim().to_owned();
         let shown = if name.is_empty() {
             "Untitled template".to_owned()
         } else {
             name
         };
-        Some(
-            div()
-                .id("template-name")
-                .max_w(px(280.))
-                .h(px(32.))
-                .px(px(12.))
-                .flex()
-                .items_center()
-                .rounded(px(crate::theme::RADIUS_LG))
-                .hover(move |style| style.bg(palette.hover))
-                .active(move |s| s.bg(palette.pressed))
-                .on_click(cx.listener(|this, _, window, cx| this.begin_rename(window, cx)))
-                .child(
-                    label(shown)
-                        .text_size(px(18.))
-                        .text_color(palette.ink)
-                        .rtl()
-                        .leading(missal_text::LineHeight::Px(30.))
-                        .truncate(),
-                )
-                .into_any_element(),
-        )
+        div()
+            .id("template-name")
+            .test_support()
+            .occlude()
+            .min_w_0()
+            .max_w(px(TITLE_WIDTH))
+            .h(px(32.))
+            .flex()
+            .items_center()
+            .cursor_text()
+            .on_click(cx.listener(|this, _, window, cx| this.begin_rename(window, cx)))
+            .child(
+                label(shown)
+                    .text_size(px(crate::ui::input::TITLE_SIZE))
+                    .text_color(palette.ink)
+                    .rtl()
+                    .leading(missal_text::LineHeight::Px(30.))
+                    .truncate(),
+            )
+            .into_any_element()
     }
 
     pub fn header(&mut self, cx: &mut Context<Self>) -> HeaderContent {
@@ -746,26 +743,30 @@ impl TemplatePage {
                 }
             };
             let save_enabled = !name.is_empty() && !self.saving && !self.importing;
-            return HeaderContent::element(
-                div()
-                    .text_size(px(14.))
-                    .line_height(px(20.))
-                    .font_weight(FontWeight::MEDIUM)
-                    .whitespace_nowrap()
-                    .child(label(format!("Import: {file}")).ltr().truncate()),
-            )
-            .meta(summary)
-            .action(
-                ghost_sm("template-discard", "Discard")
-                    .on_click(cx.listener(|this, _, window, cx| this.discard_import(window, cx))),
-            )
-            .action(
-                primary_sm("template-save", "Save template")
-                    .disabled(!save_enabled)
-                    .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
-            );
+            return HeaderContent::element(self.name_title(cx))
+                .meta_element(
+                    h_flex()
+                        .min_w_0()
+                        .gap(px(8.))
+                        .child(
+                            div()
+                                .min_w_0()
+                                .child(label(format!("Import: {file}")).ltr().truncate()),
+                        )
+                        .child(div().flex_none().child(summary)),
+                )
+                .action(
+                    ghost_sm("template-discard", "Discard").on_click(
+                        cx.listener(|this, _, window, cx| this.discard_import(window, cx)),
+                    ),
+                )
+                .action(
+                    primary_sm("template-save", "Save template")
+                        .disabled(!save_enabled)
+                        .on_click(cx.listener(|this, _, window, cx| this.save(window, cx))),
+                );
         }
-        let mut content = HeaderContent::new(if is_new { "New template" } else { "Template" });
+        let mut content = HeaderContent::element(self.name_title(cx));
         if is_new {
             let save_enabled = !name.is_empty() && !self.saving && !self.importing;
             content = content
@@ -1241,8 +1242,8 @@ impl TemplatesScreen {
             "template-sort-menu",
             rows,
             Placement {
-                position: point(bounds.left(), bounds.bottom() + px(4.)),
-                anchor: Anchor::TopLeft,
+                position: point(bounds.right(), bounds.bottom() + px(4.)),
+                anchor: Anchor::TopRight,
                 width: 200.,
             },
             window,
@@ -1284,6 +1285,8 @@ impl TemplatesScreen {
                     .child(
                         canvas(move |bounds, _, _| sort_bounds.set(bounds), |_, _, _, _| {})
                             .absolute()
+                            .top_0()
+                            .left_0()
                             .size_full(),
                     )
                     .child(
@@ -1555,9 +1558,9 @@ impl Render for TemplatesScreen {
                 .size_full()
                 .overflow_hidden()
                 .bg(palette.surface)
-                .child(list)
-                .child(crate::ui::pane_divider())
                 .child(div().flex_1().min_w_0().h_full().child(main))
+                .child(crate::ui::pane_divider())
+                .child(list)
                 .into_any_element()
         };
         let body = if nothing_at_all {

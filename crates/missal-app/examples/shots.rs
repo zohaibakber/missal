@@ -351,6 +351,9 @@ fn run(dark: bool, out: &Path, only_wp0: bool) {
     let template = h.models_template_id();
     h.go(Route::Template(template));
     h.shot("14-template-page");
+    h.click("template-name");
+    h.shot("14b-template-rename");
+    h.press("escape");
 
     h.go(Route::Settings);
     h.shot("15-settings");
