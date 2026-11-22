@@ -80,6 +80,7 @@ pub struct Palette {
     pub st_challan: Hsla,
     pub st_closed: Hsla,
     pub scrim: Hsla,
+    pub sidebar: Hsla,
     pub sidebar_ink: Hsla,
     pub sidebar_hover: Hsla,
     pub sidebar_active: Hsla,
@@ -138,6 +139,7 @@ impl Palette {
             st_challan: hex(0x8e51ff),
             st_closed: hex_alpha(0x686868, 0.64),
             scrim: hex_alpha(0x000000, 0.32),
+            sidebar: hex(0xf3f3f3),
             sidebar_ink: hex(0x5c5c5c),
             sidebar_hover: hex_alpha(0x000000, 0.04),
             sidebar_active: hex_alpha(0x000000, 0.06),
@@ -186,6 +188,7 @@ impl Palette {
             st_challan: hex(0x8e51ff),
             st_closed: hex_alpha(0x818181, 0.64),
             scrim: hex_alpha(0x000000, 0.32),
+            sidebar: hex(0x111112),
             sidebar_ink: hex(0xa3a3a3),
             sidebar_hover: hex_alpha(0xffffff, 0.04),
             sidebar_active: hex_alpha(0xffffff, 0.07),
@@ -485,7 +488,7 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     colors.title_bar = palette.canvas;
     colors.status_bar = palette.canvas;
     colors.tab_active = palette.surface;
-    colors.sidebar = palette.canvas;
+    colors.sidebar = palette.sidebar;
     colors.popover = palette.raised;
     colors.foreground = palette.ink;
     colors.popover_foreground = palette.ink;

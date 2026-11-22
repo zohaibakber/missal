@@ -1659,10 +1659,8 @@ impl Render for WorkspaceScreen {
             .key_context(WORKSPACE)
             .track_focus(&self.focus)
             .size_full()
-            .rounded(px(crate::theme::RADIUS_XL))
             .overflow_hidden()
             .bg(palette.surface)
-            .shadow(palette.shadow_xs())
             .on_action(cx.listener(|this, _: &Save, window, cx| this.save_active(window, cx, None)))
             .on_action(cx.listener(|this, _: &EditFir, window, cx| this.edit_details(window, cx)))
             .on_action(

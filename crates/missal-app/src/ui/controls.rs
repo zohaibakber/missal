@@ -11,11 +11,11 @@ use gpui_kit::{
 };
 
 use crate::theme::{
-    CHECKBOX, ICON_XS, Palette, RADIUS, RADIUS_CHIP, RADIUS_LG, SEGMENTED_ITEM, SIDEBAR_ITEM,
-    hex_alpha,
+    CHECKBOX, ICON_SM, ICON_XS, Palette, RADIUS, RADIUS_CHIP, RADIUS_LG, SEGMENTED_ITEM,
+    SIDEBAR_ITEM, TOOLTIP_DELAY, hex_alpha,
 };
 use crate::ui::part::{Part, part, underlay};
-use crate::ui::{ClickHandler, inset_shadow, sized_icon};
+use crate::ui::{ClickHandler, inset_shadow, sized_icon, tooltip};
 
 #[derive(IntoElement)]
 pub struct Themed<T: IntoElement + Styled + 'static> {
@@ -283,6 +283,37 @@ pub fn segmented(items: Vec<SegmentItem>, selected: usize) -> Part {
         tab(item.id, index == selected)
             .on_click(move |event, window, cx| handler(event, window, cx))
             .child(item.label)
+    }))
+}
+
+pub struct IconSegment {
+    pub id: ElementId,
+    pub icon: IconName,
+    pub label: SharedString,
+    pub on_select: ClickHandler,
+}
+
+pub fn icon_segmented(items: Vec<IconSegment>, selected: usize, palette: &Palette) -> Part {
+    let (active, idle) = (palette.ink, palette.ink_muted);
+    tab_list().children(items.into_iter().enumerate().map(move |(index, item)| {
+        let handler = item.on_select;
+        let chosen = index == selected;
+        let name = item.label.clone();
+        tab(item.id, chosen)
+            .map(move |tab| tab.accessibility_label(name))
+            .flex()
+            .justify_center()
+            .w(px(28.))
+            .h(px(24.))
+            .px_0()
+            .tooltip(tooltip(item.label, None))
+            .tooltip_show_delay(TOOLTIP_DELAY)
+            .on_click(move |event, window, cx| handler(event, window, cx))
+            .child(sized_icon(
+                item.icon,
+                ICON_SM,
+                if chosen { active } else { idle },
+            ))
     }))
 }
 

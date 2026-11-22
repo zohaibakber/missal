@@ -10,6 +10,7 @@ use crate::prefs::ThemeChoice;
 use crate::state::{Models, Route};
 use crate::theme::{HEADER_HEIGHT, MENU_ITEM, NAV_MENU_WIDTH, motion_fast};
 use crate::ui::menu::{menu_item, menu_popup, menu_separator};
+use crate::ui::sidebar::{SidebarMode, rail_width};
 
 pub struct Dismissed;
 
@@ -295,7 +296,16 @@ impl NavMenu {
 }
 
 impl Render for NavMenu {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let left = {
+            let models = Models::get(cx);
+            let route = models.nav.read(cx).current();
+            let hidden = models.prefs.read(cx).read().sidebar_hidden;
+            match SidebarMode::of(hidden, route) {
+                SidebarMode::Compact => rail_width(window, cx) + px(8.),
+                SidebarMode::Hidden | SidebarMode::Full => px(8.),
+            }
+        };
         let theme = Models::get(cx).prefs.read(cx).read().theme;
         let highlighted = self.highlighted;
         let mut panel = menu_popup()
@@ -360,7 +370,7 @@ impl Render for NavMenu {
             .child({
                 let anchor = div()
                     .absolute()
-                    .left(px(8.))
+                    .left(left)
                     .top(px(HEADER_HEIGHT - 4.))
                     .child(panel)
                     .children(submenu);

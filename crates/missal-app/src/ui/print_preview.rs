@@ -263,9 +263,8 @@ impl PrintPreview {
             }),
         };
         let mut viewport = window.viewport_size();
-        viewport.width -=
-            px(PANEL_WIDTH + crate::theme::SIDEBAR_COMPACT_WIDTH + crate::theme::SHELL_INSET + 1.0);
-        viewport.height -= px(crate::theme::HEADER_HEIGHT + crate::theme::SHELL_INSET);
+        viewport.width -= px(PANEL_WIDTH + 1.0) + crate::ui::sidebar::rail_width(window, cx);
+        viewport.height -= px(crate::theme::HEADER_HEIGHT);
         let mut preview = PrintPreview {
             target,
             source: Some(source),
@@ -1755,10 +1754,8 @@ impl Render for PrintPreview {
             .key_context(PRINT_PREVIEW)
             .track_focus(&self.focus)
             .size_full()
-            .rounded(px(crate::theme::RADIUS_XL))
             .overflow_hidden()
             .bg(palette.surface)
-            .shadow(palette.shadow_xs())
             .on_action(cx.listener(|this, _: &PreviewNextPage, _, cx| this.step_page(1, cx)))
             .on_action(cx.listener(|this, _: &PreviewPreviousPage, _, cx| this.step_page(-1, cx)))
             .on_action(cx.listener(|this, _: &PreviewZoomIn, _, cx| this.step_zoom(1, cx)))

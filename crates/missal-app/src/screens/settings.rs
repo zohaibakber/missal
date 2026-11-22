@@ -1613,10 +1613,8 @@ impl Render for SettingsScreen {
             .key_context("Settings")
             .track_focus(&self.focus)
             .size_full()
-            .rounded(px(crate::theme::RADIUS_XL))
             .overflow_hidden()
             .bg(palette.surface)
-            .shadow(palette.shadow_xs())
             .on_action(cx.listener(|this, _: &Save, window, cx| this.save_all(window, cx)))
             .on_action(
                 cx.listener(|this, _: &RenameTemplate, window, cx| this.rename_focused(window, cx)),
