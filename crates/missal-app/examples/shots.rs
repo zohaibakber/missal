@@ -6,7 +6,9 @@ use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
     AnyWindowHandle, Bounds, HeadlessAppContext, Size, WindowBounds, WindowOptions, point, px, size,
 };
-use missal_app::app::{AppShell, ShellHandle, navigate, show_shortcuts, toggle_nav_menu};
+use missal_app::app::{
+    AppShell, ShellHandle, navigate, show_shortcuts, toggle_nav_menu, toggle_sidebar,
+};
 use missal_app::auth::{AuthModel, AuthState, Flow};
 use missal_app::db::Db;
 use missal_app::launch::{init_app, open_shell};
@@ -172,6 +174,15 @@ fn run_wp0(h: &mut Harness) {
     h.shot("25b-nav-menu-theme");
     h.press("escape");
     h.press("escape");
+    h.click("account-menu");
+    h.shot("26-user-menu");
+    h.press("right");
+    h.shot("26b-user-menu-theme-switched");
+    h.press("left");
+    h.press("escape");
+    h.with_window(|_, cx| toggle_sidebar(cx));
+    h.shot("26c-sidebar-hidden");
+    h.with_window(|_, cx| toggle_sidebar(cx));
     h.with_window(show_shortcuts);
     h.shot("16-shortcuts");
     h.reset();

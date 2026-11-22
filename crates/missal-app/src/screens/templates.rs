@@ -1553,17 +1553,19 @@ impl Render for TemplatesScreen {
             let list = self.list(cx);
             h_flex()
                 .size_full()
-                .rounded(px(crate::theme::RADIUS_XL))
                 .overflow_hidden()
                 .bg(palette.surface)
-                .shadow(palette.shadow_xs())
                 .child(list)
                 .child(crate::ui::pane_divider())
                 .child(div().flex_1().min_w_0().h_full().child(main))
                 .into_any_element()
         };
         let body = if nothing_at_all {
-            crate::ui::card().size_full().child(body).into_any_element()
+            div()
+                .size_full()
+                .bg(palette.surface)
+                .child(body)
+                .into_any_element()
         } else {
             body
         };

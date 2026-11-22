@@ -1620,10 +1620,8 @@ impl Render for NewFirScreen {
             .track_focus(&self.focus)
             .size_full()
             .relative()
-            .rounded(px(crate::theme::RADIUS_XL))
             .overflow_hidden()
             .bg(palette.sunken)
-            .shadow(palette.shadow_xs())
             .on_action(cx.listener(|this, _: &BlurFocus, window, cx| this.cancel(window, cx)))
             .on_action(cx.listener(|this, _: &Save, window, cx| {
                 if let Some(form) = this.form.clone() {

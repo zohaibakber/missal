@@ -12,12 +12,13 @@ use gpui_kit::{
 };
 
 use crate::shortcuts::{BlurFocus, PreviewClose};
+use crate::theme::MENU_ITEM;
 use crate::theme::{Palette, motion_fast};
 use crate::ui::menu::{
     menu_group_label, menu_header, menu_header_detail, menu_item, menu_item_element, menu_popup,
     menu_separator,
 };
-use crate::ui::{ActionButton, IconButton, UrRole, ur_label};
+use crate::ui::{ActionButton, IconButton, IconSegment, UrRole, icon_segmented, ur_label};
 
 pub struct Dismissed;
 
@@ -117,6 +118,30 @@ impl MenuEntry {
     }
 }
 
+#[derive(Clone)]
+pub struct MenuSwitchOption {
+    id: SharedString,
+    icon: IconName,
+    label: SharedString,
+    action: Action,
+}
+
+impl MenuSwitchOption {
+    pub fn new(
+        id: impl Into<SharedString>,
+        icon: IconName,
+        label: impl Into<SharedString>,
+        action: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> MenuSwitchOption {
+        MenuSwitchOption {
+            id: id.into(),
+            icon,
+            label: label.into(),
+            action: Rc::new(action),
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct Placement {
     pub position: Point<Pixels>,
@@ -129,6 +154,11 @@ enum Row {
     Entry(MenuEntry),
     Label(SharedString),
     Header(SharedString, Option<SharedString>),
+    Switch {
+        label: SharedString,
+        options: Vec<MenuSwitchOption>,
+        selected: usize,
+    },
     Separator,
 }
 
@@ -166,6 +196,20 @@ impl MenuContent {
 
     pub fn header(mut self, title: impl Into<SharedString>, detail: Option<SharedString>) -> Self {
         self.rows.push(Row::Header(title.into(), detail));
+        self
+    }
+
+    pub fn switch(
+        mut self,
+        label: impl Into<SharedString>,
+        options: Vec<MenuSwitchOption>,
+        selected: usize,
+    ) -> Self {
+        self.rows.push(Row::Switch {
+            label: label.into(),
+            options,
+            selected,
+        });
         self
     }
 
@@ -257,7 +301,7 @@ impl PopupList {
                 Row::Entry(entry) => Some(match &entry.label {
                     Label::Text(text) | Label::Urdu(text) => text.to_string(),
                 }),
-                Row::Label(..) | Row::Header(..) | Row::Separator => None,
+                Row::Label(..) | Row::Header(..) | Row::Switch { .. } | Row::Separator => None,
             })
             .collect()
     }
@@ -299,8 +343,87 @@ impl PopupList {
         action(window, cx);
     }
 
+    fn choose_option(
+        &mut self,
+        row: usize,
+        option: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(Row::Switch {
+            options, selected, ..
+        }) = self.rows.get_mut(row)
+        else {
+            return;
+        };
+        let Some(action) = options.get(option).map(|entry| entry.action.clone()) else {
+            return;
+        };
+        if *selected == option {
+            return;
+        }
+        *selected = option;
+        cx.notify();
+        action(window, cx);
+    }
+
+    fn shift_switch(&mut self, delta: isize, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some((row, count, selected)) =
+            self.rows
+                .iter()
+                .enumerate()
+                .find_map(|(index, row)| match row {
+                    Row::Switch {
+                        options, selected, ..
+                    } => Some((index, options.len() as isize, *selected as isize)),
+                    _ => None,
+                })
+        else {
+            return false;
+        };
+        let next = (selected + delta).rem_euclid(count) as usize;
+        self.choose_option(row, next, window, cx);
+        true
+    }
+
+    fn switch_row(
+        &self,
+        row: usize,
+        text: &SharedString,
+        options: &[MenuSwitchOption],
+        selected: usize,
+        palette: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let items = options
+            .iter()
+            .enumerate()
+            .map(|(option, entry)| IconSegment {
+                id: entry.id.clone().into(),
+                icon: entry.icon,
+                label: entry.label.clone(),
+                on_select: Rc::new(cx.listener(move |this, _, window, cx| {
+                    this.choose_option(row, option, window, cx)
+                })),
+            })
+            .collect();
+        gpui_kit::component::h_flex()
+            .h(px(MENU_ITEM + 4.))
+            .px(px(8.))
+            .items_center()
+            .justify_between()
+            .text_size(px(14.))
+            .line_height(px(20.))
+            .text_color(palette.ink)
+            .child(text.clone())
+            .child(icon_segmented(items, selected, palette))
+            .into_any_element()
+    }
+
     fn on_key(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         match event.keystroke.key.as_str() {
+            "left" if self.shift_switch(-1, window, cx) => {}
+            "right" if self.shift_switch(1, window, cx) => {}
             "down" => self.step(1, cx),
             "up" => self.step(-1, cx),
             "home" => {
@@ -338,7 +461,9 @@ impl PopupList {
                                 })
                             }
                         },
-                        Row::Label(..) | Row::Header(..) | Row::Separator => false,
+                        Row::Label(..) | Row::Header(..) | Row::Switch { .. } | Row::Separator => {
+                            false
+                        }
                     });
                 if let Some(row) = found {
                     self.highlighted = Some(row);
@@ -411,7 +536,7 @@ impl PopupList {
 
 impl Render for PopupList {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let _palette = *Palette::get(cx);
+        let palette = *Palette::get(cx);
         let rows: Vec<Row> = self.rows.clone();
         let children: Vec<AnyElement> = rows
             .iter()
@@ -427,6 +552,11 @@ impl Render for PopupList {
                             .map(|detail| menu_header_detail().child(detail)),
                     )
                     .into_any_element(),
+                Row::Switch {
+                    label,
+                    options,
+                    selected,
+                } => self.switch_row(index, label, options, *selected, &palette, cx),
                 Row::Separator => menu_separator().into_any_element(),
             })
             .collect();
@@ -625,6 +755,8 @@ impl<T: MenuTrigger> RenderOnce for Menu<T> {
             .child(
                 canvas(move |area, _, _| painted.set(area), |_, _, _, _| {})
                     .absolute()
+                    .top_0()
+                    .left_0()
                     .size_full(),
             )
             .children(list)

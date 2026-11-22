@@ -1453,9 +1453,7 @@ impl Render for FirListScreen {
             .key_context(FIR_LIST)
             .track_focus(&self.focus)
             .size_full()
-            .rounded(px(crate::theme::RADIUS_XL))
             .bg(palette.surface)
-            .shadow(palette.shadow_sm())
             .on_action(cx.listener(|this, _: &NextRow, _, cx| this.move_focus(1, cx)))
             .on_action(cx.listener(|this, _: &PreviousRow, _, cx| this.move_focus(-1, cx)))
             .on_action(cx.listener(|this, _: &ToggleRow, _, cx| {

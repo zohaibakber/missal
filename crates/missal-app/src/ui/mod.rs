@@ -16,6 +16,7 @@ pub mod sidebar;
 pub mod status;
 pub mod titlebar;
 pub mod toast;
+pub mod user_menu;
 pub mod window_controls;
 
 pub use controls::*;

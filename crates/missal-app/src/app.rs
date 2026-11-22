@@ -781,6 +781,8 @@ pub fn set_theme(choice: crate::prefs::ThemeChoice, window: &mut Window, cx: &mu
     theme::apply(choice, window, cx);
 }
 
+use crate::ui::sidebar::SidebarMode;
+
 impl Render for AppShell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = *Palette::get(cx);
@@ -810,13 +812,9 @@ impl Render for AppShell {
             (nav.can_go_back(), nav.can_go_forward())
         };
         let content = self.screen.header(window, cx);
-        let sidebar_open = !self.models.prefs.read(cx).read().sidebar_hidden;
-        let header = Header::new(
-            content,
-            can_back,
-            can_forward,
-            sidebar_open && !crate::ui::sidebar::compact_for(self.route),
-        );
+        let sidebar_mode =
+            SidebarMode::of(self.models.prefs.read(cx).read().sidebar_hidden, self.route);
+        let header = Header::new(content, can_back, can_forward, sidebar_mode);
         v_flex()
             .id("app-shell")
             .key_context(SHELL)
@@ -870,31 +868,31 @@ impl Render for AppShell {
                 cx.listener(|this, _: &SavePdf, window, cx| this.save_pdf_action(window, cx)),
             )
             .on_action(cx.listener(|this, _: &ImportWord, window, cx| this.import_word(window, cx)))
-            .child(header)
             .child(
                 gpui_kit::component::h_flex()
                     .flex_1()
                     .min_h_0()
                     .w_full()
-                    .when(sidebar_open, |this| {
+                    .when(sidebar_mode != SidebarMode::Hidden, |this| {
                         this.child(crate::ui::sidebar::sidebar(
                             self.route,
-                            crate::ui::sidebar::compact_for(self.route),
+                            sidebar_mode == SidebarMode::Compact,
                         ))
                     })
                     .child(
-                        div()
-                            .id("content")
+                        v_flex()
+                            .id("inset")
                             .flex_1()
                             .min_w_0()
                             .h_full()
-                            .when(!sidebar_open, |this| this.pl(px(crate::theme::SHELL_INSET)))
-                            .pr(px(crate::theme::SHELL_INSET))
-                            .pb(px(crate::theme::SHELL_INSET))
+                            .bg(palette.surface)
+                            .child(header)
                             .child(
-                                self.screen
-                                    .view()
-                                    .cached(StyleRefinement::default().size_full()),
+                                div().id("content").flex_1().min_h_0().w_full().child(
+                                    self.screen
+                                        .view()
+                                        .cached(StyleRefinement::default().size_full()),
+                                ),
                             ),
                     ),
             )
