@@ -188,6 +188,9 @@ importers:
       '@alchemy.run/cloudflare':
         specifier: 2.0.0-beta.87
         version: 2.0.0-beta.87(@effect/platform-node@4.1.5(effect@4.1.5)(redis@6.3.1))(@types/node@24.19.2)(@voidzero-dev/vite-plus-core@1.6.0(@types/node@24.19.2)(yaml@2.9.1))(alchemy@2.0.0-beta.87(@effect/platform-node@4.1.5(effect@4.1.5)(redis@6.3.1))(@voidzero-dev/vite-plus-core@1.6.0(@types/node@24.19.2)(yaml@2.9.1))(effect@4.1.5)(ws@8.23.0))(effect@4.1.5)
+      '@alchemy.run/github':
+        specifier: 2.0.0-beta.87
+        version: 2.0.0-beta.87(alchemy@2.0.0-beta.87(@effect/platform-node@4.1.5(effect@4.1.5)(redis@6.3.1))(@voidzero-dev/vite-plus-core@1.6.0(@types/node@24.19.2)(yaml@2.9.1))(effect@4.1.5)(ws@8.23.0))(effect@4.1.5)
       '@cloudflare/workers-types':
         specifier: 5.20261114.1
         version: 5.20261114.1
@@ -277,6 +280,12 @@ packages:
     peerDependenciesMeta:
       '@effect/platform-bun':
         optional: true
+
+  '@alchemy.run/github@2.0.0-beta.87':
+    resolution: {integrity: sha512-6OjWZ+uaLkyUhBY5l8iuVj+3Mf0JNsSE+VHVR0TAALx7/GYiZbWjPHu9lM6BksGuHHamStIVZs16RJ33srPm9w==}
+    peerDependencies:
+      alchemy: 2.0.0-beta.87
+      effect: ^4.1.4
 
   '@alchemy.run/node-utils@2.0.0-beta.87':
     resolution: {integrity: sha512-GhQSAY89Sz0P046tuHnLqoCUj79PMu1WUAOnIRLCwO4E4yPZ76IkEDrdl3hjCb7YHuqYA1Da6ZfV59TIQgGkSg==}
@@ -394,6 +403,11 @@ packages:
 
   '@distilled.cloud/core@1.0.0-rc.20':
     resolution: {integrity: sha512-uoZ8W5QhxcSyyM6/XZzRJCKc55FC4fZfXWX2ypx8AOIC4PTOtdyDZ3fswGpVp/SRiC4ua0HYGhAgFA8Ub7Ot5Q==}
+    peerDependencies:
+      effect: ^4.1.2
+
+  '@distilled.cloud/github@1.0.0-rc.20':
+    resolution: {integrity: sha512-Mgt2jvOoSrbiBtH2S1boy/R66uSAmC3eBS7eDkk/AkEtnbAXhwwaoWWKQeB3NoSHF7yDEHELhfG1TOs/EsgP6Q==}
     peerDependencies:
       effect: ^4.1.2
 
@@ -1440,6 +1454,12 @@ packages:
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
+  libsodium-wrappers@0.8.4:
+    resolution: {integrity: sha512-mu8aAWucZjTB5O/BtGXtW4e1agy7uHxNYG7zPthmmD1jU43LCDmSWZLN4JhflbdPXj3yDO4lxM1O9hLDgIOXDw==}
+
+  libsodium@0.8.4:
+    resolution: {integrity: sha512-lMcYaRi0zcs7tarATsQUYC7rstliIXZuoq0c6zXSgNtSNtdvBgkSegjWhpMJAXzKX3SUSwIp7+zEsob+j3LuRw==}
+
   lightningcss-android-arm64@1.33.0:
     resolution: {integrity: sha512-gEpRTalKdosp4Bb8qWtc2iOgE5SeIHlpS1up9bFq2wAyYhl1UdTObYiHe98zEM9SQvSoqQZ1IQD0JNpg3Ml5pg==}
     engines: {node: '>= 12.0.0'}
@@ -1874,6 +1894,14 @@ snapshots:
       effect: 4.1.5
       rolldown: 1.2.16
 
+  '@alchemy.run/github@2.0.0-beta.87(alchemy@2.0.0-beta.87(@effect/platform-node@4.1.5(effect@4.1.5)(redis@6.3.1))(@voidzero-dev/vite-plus-core@1.6.0(@types/node@24.19.2)(yaml@2.9.1))(effect@4.1.5)(ws@8.23.0))(effect@4.1.5)':
+    dependencies:
+      '@distilled.cloud/core': 1.0.0-rc.20(effect@4.1.5)
+      '@distilled.cloud/github': 1.0.0-rc.20(effect@4.1.5)
+      alchemy: 2.0.0-beta.87(@effect/platform-node@4.1.5(effect@4.1.5)(redis@6.3.1))(@voidzero-dev/vite-plus-core@1.6.0(@types/node@24.19.2)(yaml@2.9.1))(effect@4.1.5)(ws@8.23.0)
+      effect: 4.1.5
+      libsodium-wrappers: 0.8.4
+
   '@alchemy.run/node-utils@2.0.0-beta.87':
     dependencies:
       chokidar: 5.0.0
@@ -1945,6 +1973,11 @@ snapshots:
 
   '@distilled.cloud/core@1.0.0-rc.20(effect@4.1.5)':
     dependencies:
+      effect: 4.1.5
+
+  '@distilled.cloud/github@1.0.0-rc.20(effect@4.1.5)':
+    dependencies:
+      '@distilled.cloud/core': 1.0.0-rc.20(effect@4.1.5)
       effect: 4.1.5
 
   '@distilled.cloud/iceberg@1.0.0-rc.20(effect@4.1.5)':
@@ -2597,6 +2630,12 @@ snapshots:
   get-east-asian-width@1.7.0: {}
 
   js-tokens@4.0.0: {}
+
+  libsodium-wrappers@0.8.4:
+    dependencies:
+      libsodium: 0.8.4
+
+  libsodium@0.8.4: {}
 
   lightningcss-android-arm64@1.33.0:
     optional: true
