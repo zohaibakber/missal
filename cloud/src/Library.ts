@@ -70,11 +70,9 @@ export class Library extends Context.Service<
       });
 
       const find = (id: string) =>
-        templates.findById(TemplateId.make(id)).pipe(
-          Effect.map(Option.some),
-          Effect.catchTag("NoSuchElementError", () => Effect.succeedNone),
-          storage("read the template"),
-        );
+        templates
+          .findById(TemplateId.make(id))
+          .pipe(Effect.catchNoSuchElement, storage("read the template"));
 
       const list = all(undefined).pipe(
         Effect.map((rows) => rows.map(toEntry)),

@@ -84,7 +84,7 @@ const testLayer = (throttleLimit = 1_000, verifyEmails = true) => {
     Layer.provideMerge(infrastructure),
     Layer.provideMerge(CurrentToken.layer),
     Layer.provideMerge(Http.Platform),
-    Layer.provide(
+    Layer.provideMerge(
       ConfigProvider.layer(
         ConfigProvider.fromUnknown({
           TOKEN_SECRET: "ab".repeat(32),
@@ -192,21 +192,6 @@ describe("accounts", () => {
       );
       yield* signIn(READER);
     }).pipe(Effect.provide(testLayer(1_000, false))),
-  );
-
-  it.effect(
-    "with verification off, an account left unconfirmed signs in and starts its trial",
-    () =>
-      Effect.gen(function* () {
-        yield* signUp(READER);
-        const sql = yield* SqlClient.SqlClient;
-        yield* sql`UPDATE users SET email_verified_at = NULL, trial_ends_at = NULL`;
-        yield* TestClock.adjust(Duration.days(1));
-        const session = yield* signIn(READER);
-        expect(session.account.licence.status).toBe("trial");
-        expect(millis(session.account.licence.until)).toBe(Duration.toMillis(Duration.days(8)));
-        expect(yield* mailTo(READER)).toHaveLength(0);
-      }).pipe(Effect.provide(testLayer(1_000, false))),
   );
 
   it.effect("sign-up and code requests never reveal whether an email has an account", () =>

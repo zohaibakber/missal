@@ -19,8 +19,6 @@ import {
   UserId,
 } from "./Models.ts";
 
-export { canPublish, Role } from "./Models.ts";
-
 export const MAX_TEMPLATE_BYTES = 16 * 1024 * 1024;
 
 export class Viewer extends Context.Service<
