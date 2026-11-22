@@ -290,7 +290,7 @@ impl LibraryModel {
                 let (seeded, links, templates) = state
                     .await
                     .map_err(|error| Failure::Store(error.message()))?;
-                if seeded {
+                if seeded || entries.is_empty() {
                     return Ok(());
                 }
                 let wanted = entries.into_iter().filter(|entry| {

@@ -7,7 +7,7 @@ use missal_core::{
     GlobalPlaceholderDraft, Invalid, PlaceholderId, PlaceholderSource, RepositoryError, Revision,
     TemplateId, Zimni,
 };
-use missal_store::{DraftKey, Store, TemplateBundle};
+use missal_store::{DraftKey, Store};
 
 fn store(scratch: &Scratch) -> Store {
     Store::open(scratch.path("test.sqlite")).unwrap()
@@ -382,17 +382,6 @@ fn placeholders_global_values_and_custom_fields() {
         Err(not_found(Entity::Placeholder, missing))
     );
     store.remove_placeholder(bank.id).unwrap();
-}
-
-#[test]
-fn the_embedded_bundle_installs_every_template_once() {
-    let scratch = Scratch::new();
-    let path = scratch.path("bundled.db");
-    let store = Store::open_with(&path, &TemplateBundle::embedded()).unwrap();
-    assert_eq!(store.templates().unwrap().len(), 36);
-    drop(store);
-    let reopened = Store::open_with(&path, &TemplateBundle::embedded()).unwrap();
-    assert_eq!(reopened.templates().unwrap().len(), 36);
 }
 
 #[test]

@@ -12,7 +12,6 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::{Result, failed, placeholders, templates};
 
 const MAGIC: &[u8; 4] = b"MSB\x01";
-const EMBEDDED: &[u8] = include_bytes!("../bundle/templates.bin");
 
 #[derive(Debug, Clone)]
 pub struct TemplateBundle {
@@ -81,12 +80,6 @@ fn put_count(out: &mut Vec<u8>, count: usize) {
 }
 
 impl TemplateBundle {
-    /// The templates that ship inside the app, packed from templates/ by
-    /// `cargo run -p missal-docx --example bundle`.
-    pub fn embedded() -> TemplateBundle {
-        TemplateBundle::decode(EMBEDDED).expect("the embedded template bundle is valid")
-    }
-
     pub fn decode(packed: &[u8]) -> Result<TemplateBundle> {
         let version = header(&mut DeflateDecoder::new(packed))?;
         Ok(TemplateBundle {

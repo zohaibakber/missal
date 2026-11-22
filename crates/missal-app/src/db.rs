@@ -95,7 +95,7 @@ impl Db {
         let started = std::thread::Builder::new()
             .name("database".into())
             .spawn(move || {
-                let mut opened = Store::open_with(&path, &missal_store::TemplateBundle::embedded());
+                let mut opened = Store::open(&path);
                 while let Ok(job) = receiver.recv() {
                     job(&mut opened);
                 }
