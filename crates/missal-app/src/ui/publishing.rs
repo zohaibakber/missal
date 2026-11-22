@@ -387,7 +387,10 @@ impl PublishingPanel {
         let mut actions = Vec::new();
         if let Some(template) = row.local.as_ref().map(|local| local.id) {
             actions.push(
-                ghost_sm("publishing-open", "Open template")
+                button("publishing-open", "Open template")
+                    .outline()
+                    .sm()
+                    .icon(IconName::ExternalLink)
                     .on_click(move |_, window, cx| {
                         window.close_dialog(cx);
                         navigate(Route::Template(template), window, cx);
@@ -399,21 +402,40 @@ impl PublishingPanel {
             let handle = self.model.clone();
             let name = row.name.clone();
             actions.push(
-                ghost_sm("publishing-remove", "Remove from library")
-                    .disabled(busy)
-                    .on_click(move |_, window, cx| {
+                crate::ui::popup_menu::menu("publishing-more")
+                    .trigger(
+                        icon_button("publishing-more", IconName::Ellipsis, "More actions")
+                            .disabled(busy),
+                    )
+                    .width(220.)
+                    .content(move |content, _, _| {
                         let handle = handle.clone();
                         let remote = remote.clone();
-                        confirm_delete(
-                            window,
-                            cx,
-                            format!("Remove «{}» from the library?", isolate_urdu(&name)),
-                            "Its whole version history is deleted and cannot be restored. Copies people already added stay on their computers.",
-                            "Remove",
-                            move |window, cx| {
-                                handle.update(cx, |model, cx| model.unpublish(&remote, window, cx));
-                            },
-                        );
+                        let name = name.clone();
+                        content.item(
+                            crate::ui::popup_menu::MenuEntry::new(
+                                "publishing-remove",
+                                "Remove from library",
+                                move |window, cx| {
+                                    let handle = handle.clone();
+                                    let remote = remote.clone();
+                                    confirm_delete(
+                                        window,
+                                        cx,
+                                        format!("Remove «{}» from the library?", isolate_urdu(&name)),
+                                        "Its whole version history is deleted and cannot be restored. Copies people already added stay on their computers.",
+                                        "Remove",
+                                        move |window, cx| {
+                                            handle.update(cx, |model, cx| {
+                                                model.unpublish(&remote, window, cx)
+                                            });
+                                        },
+                                    );
+                                },
+                            )
+                            .icon(IconName::Trash)
+                            .danger(),
+                        )
                     })
                     .into_any_element(),
             );
