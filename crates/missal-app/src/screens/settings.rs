@@ -1,3 +1,4 @@
+use crate::ui::ScrollArea as _;
 use std::time::{Duration, Instant};
 
 use crate::ui::popup_menu::{MenuEntry, menu};
@@ -2232,8 +2233,7 @@ impl Render for SettingsScreen {
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll)
+                    .scroll_area_y(&self.scroll)
                     .items_center()
                     .child(
                         v_flex()

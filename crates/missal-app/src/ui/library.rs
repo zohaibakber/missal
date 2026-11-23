@@ -1,3 +1,4 @@
+use crate::ui::ScrollArea as _;
 use chrono::Datelike;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::dialog::Dialog;
@@ -61,6 +62,7 @@ pub fn open_library(window: &mut Window, cx: &mut App) {
 }
 
 struct LibraryPanel {
+    list_scroll: gpui_kit::ScrollHandle,
     model: Entity<LibraryModel>,
     _subscriptions: Vec<Subscription>,
 }
@@ -69,6 +71,7 @@ impl LibraryPanel {
     fn new(model: Entity<LibraryModel>, cx: &mut Context<Self>) -> LibraryPanel {
         let templates = Models::get(cx).templates;
         LibraryPanel {
+            list_scroll: gpui_kit::ScrollHandle::new(),
             _subscriptions: vec![
                 cx.observe(&model, |_, _, cx| cx.notify()),
                 cx.observe(&templates, |_, _, cx| cx.notify()),
@@ -244,7 +247,7 @@ impl LibraryPanel {
                 let entries = model.entries.clone();
                 v_flex()
                     .id("library-list")
-                    .overflow_y_scroll()
+                    .scroll_area_y(&self.list_scroll)
                     .h_full()
                     .gap(px(2.))
                     .children(

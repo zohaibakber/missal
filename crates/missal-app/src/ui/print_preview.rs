@@ -1,3 +1,4 @@
+use crate::ui::ScrollArea as _;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -166,6 +167,7 @@ enum State {
 }
 
 pub struct PrintPreview {
+    documents_scroll: gpui_kit::ScrollHandle,
     target: Option<PrintTarget>,
     source: Option<PrintSource>,
     plan: Option<Plan>,
@@ -267,6 +269,7 @@ impl PrintPreview {
         viewport.width -= px(PANEL_WIDTH + 1.0) + crate::ui::sidebar::rail_width(window, cx);
         viewport.height -= px(crate::theme::HEADER_HEIGHT);
         let mut preview = PrintPreview {
+            documents_scroll: gpui_kit::ScrollHandle::new(),
             target,
             source: Some(source),
             plan: None,
@@ -1350,7 +1353,7 @@ impl PrintPreview {
                     .flex_1()
                     .min_h_0()
                     .gap(px(2.))
-                    .overflow_y_scroll()
+                    .scroll_area_y(&self.documents_scroll)
                     .children(rows),
             )
             .children(warning)

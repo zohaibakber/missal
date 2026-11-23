@@ -1,3 +1,4 @@
+use crate::ui::ScrollArea as _;
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{h_flex, v_flex};
@@ -606,8 +607,7 @@ impl Render for CommandPalette {
                             .rounded_t(px(RADIUS_XL))
                             .bg(palette.raised)
                             .shadow(palette.ring_only())
-                            .overflow_y_scroll()
-                            .track_scroll(&self.scroll)
+                            .scroll_area_y(&self.scroll)
                             .children(rows)
                             .when(empty, |this| {
                                 this.child(

@@ -699,3 +699,25 @@ impl RenderOnce for IconButton {
             )
     }
 }
+
+/// A vertical scroll area with a visible, draggable scrollbar, in the shape of
+/// shadcn's ScrollArea: the element itself scrolls, and a thin pill thumb sits
+/// over its trailing edge whenever the content is taller than the area. The
+/// thumb can be dragged, and clicking the track pages to that point.
+///
+/// Keep the handle on the view (a `ScrollHandle` is cheap to clone) so the
+/// position survives re-renders.
+pub trait ScrollArea:
+    gpui_kit::component::scroll::ScrollableElement + StatefulInteractiveElement
+{
+    fn scroll_area_y(self, handle: &gpui_kit::ScrollHandle) -> Self {
+        self.overflow_y_scroll()
+            .track_scroll(handle)
+            .vertical_scrollbar(handle)
+    }
+}
+
+impl<E> ScrollArea for E where
+    E: gpui_kit::component::scroll::ScrollableElement + StatefulInteractiveElement
+{
+}

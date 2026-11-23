@@ -1,3 +1,4 @@
+use crate::ui::ScrollArea as _;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -7,9 +8,8 @@ use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
     AnimationExt, AnyElement, App, AppContext, Context, ElementId, Entity, FontWeight, Global,
-    Hsla, InteractiveElement, IntoElement, ParentElement, Render, SharedString,
-    StatefulInteractiveElement, Styled, Subscription, Task, Window, div, linear_color_stop,
-    linear_gradient, px, relative,
+    Hsla, InteractiveElement, IntoElement, ParentElement, Render, SharedString, Styled,
+    Subscription, Task, Window, div, linear_color_stop, linear_gradient, px, relative,
 };
 use missal_auth::{
     Account, AuthError, CodePurpose, Config, LicenceStatus, Session, SessionKeeper, SessionStore,
@@ -634,6 +634,7 @@ pub fn sign_out(window: &mut Window, cx: &mut App) {
 }
 
 pub struct AuthGate {
+    form_scroll: gpui_kit::ScrollHandle,
     auth: Entity<AuthModel>,
     email: Entity<TextInput>,
     name: Entity<TextInput>,
@@ -715,6 +716,7 @@ impl AuthGate {
             }),
         ];
         AuthGate {
+            form_scroll: gpui_kit::ScrollHandle::new(),
             auth,
             email,
             name,
@@ -1198,7 +1200,7 @@ impl Render for AuthGate {
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .overflow_y_scroll()
+                    .scroll_area_y(&self.form_scroll)
                     .child(
                         v_flex()
                             .min_h_full()

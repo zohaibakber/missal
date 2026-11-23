@@ -1,3 +1,4 @@
+use crate::ui::ScrollArea as _;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -214,6 +215,8 @@ enum Outcome {
 type Job = Box<dyn FnOnce(&SessionKeeper, &str) -> Result<Outcome, AuthError> + Send>;
 
 pub struct UsersPanel {
+    details_scroll: gpui_kit::ScrollHandle,
+    list_scroll: gpui_kit::ScrollHandle,
     users: Vec<ManagedAccount>,
     load: Load,
     busy: HashSet<String>,
@@ -238,6 +241,8 @@ impl UsersPanel {
                 }),
             ];
         let mut panel = UsersPanel {
+            details_scroll: gpui_kit::ScrollHandle::new(),
+            list_scroll: gpui_kit::ScrollHandle::new(),
             users: Vec::new(),
             load: Load::Loading,
             busy: HashSet::new(),
@@ -818,7 +823,7 @@ impl UsersPanel {
             .flex_1()
             .min_w_0()
             .h_full()
-            .overflow_y_scroll()
+            .scroll_area_y(&self.details_scroll)
             .pl(px(20.))
             .gap(px(16.))
             .child(
@@ -953,7 +958,7 @@ impl UsersPanel {
                             .w(px(LIST_WIDTH))
                             .flex_none()
                             .h_full()
-                            .overflow_y_scroll()
+                            .scroll_area_y(&self.list_scroll)
                             .pr(px(10.))
                             .gap(px(2.))
                             .border_r_1()
