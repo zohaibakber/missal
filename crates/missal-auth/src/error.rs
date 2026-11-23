@@ -11,6 +11,7 @@ pub enum AuthError {
     EmailNotVerified,
     LicenceRequired,
     OwnAccess,
+    EmailTaken,
     NotAllowed,
     NotFound,
     Invalid,
@@ -45,8 +46,9 @@ impl fmt::Display for AuthError {
             AuthError::EmailNotVerified => write!(f, "Confirm your email first."),
             AuthError::LicenceRequired => write!(f, "Your Missal licence has ended."),
             AuthError::OwnAccess => {
-                write!(f, "You cannot remove your own administrator access.")
+                write!(f, "You cannot do that to your own account.")
             }
+            AuthError::EmailTaken => write!(f, "An account with this email already exists."),
             AuthError::NotAllowed => write!(f, "This account is not allowed to do that."),
             AuthError::NotFound => write!(f, "That account no longer exists."),
             AuthError::Invalid => write!(f, "Check the details and try again."),

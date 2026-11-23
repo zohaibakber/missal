@@ -10,6 +10,7 @@ pub mod nav_menu;
 pub mod palette;
 pub mod part;
 pub mod parts;
+pub mod people;
 pub mod popup_menu;
 pub mod print_preview;
 pub mod publishing;

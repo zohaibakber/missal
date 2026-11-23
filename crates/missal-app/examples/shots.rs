@@ -622,14 +622,33 @@ fn run_gate(dark: bool, out: &Path, api: &str) {
     h.fill("sign-in-password", "correct horse battery");
     h.click("auth-submit");
     h.wait_auth(|state| matches!(state, AuthState::SignedIn { .. }));
-    h.with_window(missal_app::ui::account::open_users);
+    h.with_window(missal_app::ui::people::open_users);
     h.idle();
     h.shot("49-people");
-    h.with_window(|window, cx| window.click(("user-more", 2usize), cx));
-    h.shot("49a-people-row-menu");
-    h.click("user-licence-2");
+    h.with_window(|window, cx| window.click(("people-row", 1usize), cx));
     h.idle();
-    h.shot("49b-people-added-year");
+    h.shot("49a-people-lapsed");
+    h.click("people-renew");
+    h.shot("49b-people-renew-menu");
+    h.click("people-renew-12");
+    h.idle();
+    h.shot("49c-people-renewed");
+    h.click("people-more");
+    h.shot("49d-people-more-menu");
+    h.click("people-more");
+    h.with_window(|window, cx| window.click(("people-filter", 4usize), cx));
+    h.idle();
+    h.shot("49e-people-unconfirmed");
+    h.click("people-add");
+    h.idle();
+    h.fill("new-person-name", "Kashif Iqbal");
+    h.fill("new-person-email", "kashif@example.com");
+    h.fill("new-person-password", "temporary-pass-1");
+    h.with_window(|window, cx| window.click(("new-person-term", 3usize), cx));
+    h.shot("49f-people-add");
+    h.click("new-person-save");
+    h.idle();
+    h.shot("49g-people-added");
     h.press("escape");
     publishing_shots(&mut h);
     h.with_window(missal_app::ui::account::open_change_password);
@@ -816,7 +835,20 @@ mod fake_api {
             "admin@example.com" => ("Admin", "admin", now() - 400 * DAY),
             "lapsed@example.com" => ("Bilal Ahmed", "publisher", now() - 420 * DAY),
             "trial@example.com" => ("Sara Malik", "member", now() - 3 * DAY),
+            "pending@example.com" => ("Usman Tariq", "member", now() - DAY),
+            "kashif@example.com" => ("Kashif Iqbal", "member", now()),
             _ => ("", "member", now() - 3 * DAY),
+        };
+        let (sessions, seen) = match email {
+            "admin@example.com" => (2, Some(now() - 3_600_000)),
+            "trial@example.com" => (1, Some(now() - DAY)),
+            "lapsed@example.com" => (1, Some(now() - 41 * DAY)),
+            _ => (0, None),
+        };
+        let licence = match email {
+            "pending@example.com" => json!({ "status": "trialEnded", "until": now() }),
+            "kashif@example.com" => json!({ "status": "licensed", "until": now() + 365 * DAY }),
+            _ => licence(email, paid),
         };
         json!({
             "id": email.split('@').next().unwrap_or("user"),
@@ -824,8 +856,11 @@ mod fake_api {
             "name": name,
             "role": role,
             "disabled": false,
+            "emailVerified": email != "pending@example.com",
             "createdAt": created,
-            "licence": licence(email, paid),
+            "licence": licence,
+            "sessions": sessions,
+            "lastSeenAt": seen,
         })
     }
 
@@ -882,11 +917,13 @@ mod fake_api {
                 200,
                 json!([
                     account("admin@example.com", paid),
-                    account("trial@example.com", paid),
                     account("lapsed@example.com", paid),
+                    account("pending@example.com", paid),
+                    account("trial@example.com", paid),
                 ]),
             ),
-            ("POST", "/v1/users/lapsed/licence") if body["years"] == 1 => {
+            ("POST", "/v1/users") => (201, account(email, paid)),
+            ("POST", "/v1/users/lapsed/licence") if body["months"] == 12 => {
                 *paid.lock().expect("paid") = now() + 365 * DAY;
                 (200, account("lapsed@example.com", paid))
             }

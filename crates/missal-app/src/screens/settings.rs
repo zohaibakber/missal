@@ -1458,7 +1458,7 @@ impl SettingsScreen {
                         )
                         .when(admin, |this| {
                             this.child(ghost_sm("manage-people", "People").on_click(
-                                |_, window, cx| crate::ui::account::open_users(window, cx),
+                                |_, window, cx| crate::ui::people::open_users(window, cx),
                             ))
                             .child(
                                 ghost_sm("manage-publishing", "Publishing").on_click(

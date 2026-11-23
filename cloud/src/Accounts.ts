@@ -20,8 +20,11 @@ import {
   type Account,
   AccountLocked,
   EmailNotVerified,
+  EmailTaken,
   InvalidCode,
   InvalidCredentials,
+  type ManagedAccount,
+  type NewUser,
   OwnAccess,
   type Session as SessionTokens,
   SessionExpired,
@@ -61,6 +64,12 @@ const UNVERIFIED_LIFETIME = Duration.days(7);
 const FailureRow = Schema.Struct({ failures: Schema.Int, lockedUntil: Schema.Number });
 const CodeRow = Schema.Struct({ codeHash: Schema.String, expiresAt: Schema.Number });
 const CodeKey = Schema.Struct({ email: Schema.String, purpose: Schema.String });
+const ActivityRow = Schema.Struct({
+  userId: Schema.String,
+  sessions: Schema.Int,
+  lastSeenAt: Schema.NullOr(Schema.Number),
+});
+type Activity = typeof ActivityRow.Type;
 
 const encoder = new TextEncoder();
 
@@ -70,8 +79,18 @@ const toAccount = (user: User, now: DateTime.Utc): Account => ({
   name: user.name,
   role: user.role,
   disabled: user.disabled,
+  emailVerified: Option.isSome(user.emailVerifiedAt),
   createdAt: user.createdAt,
   licence: licenceOf(user, now),
+});
+
+const toManaged = (user: User, now: DateTime.Utc, activity?: Activity): ManagedAccount => ({
+  ...toAccount(user, now),
+  sessions: activity?.sessions ?? 0,
+  lastSeenAt:
+    activity?.lastSeenAt === null || activity?.lastSeenAt === undefined
+      ? null
+      : DateTime.makeUnsafe(activity.lastSeenAt),
 });
 
 const storedPassword = (user: User): StoredPassword => ({
@@ -169,16 +188,37 @@ export class Accounts extends Context.Service<
       current: Redacted.Redacted<string>,
       next: Redacted.Redacted<string>,
     ) => Effectful<SessionTokens, WrongPassword | UserNotFound | StorageFailure>;
-    readonly list: Effectful<ReadonlyArray<Account>, StorageFailure>;
+    readonly list: Effectful<ReadonlyArray<ManagedAccount>, StorageFailure>;
+    readonly create: (request: NewUser) => Effectful<ManagedAccount, EmailTaken | StorageFailure>;
     readonly update: (
       viewer: Viewer["Service"],
       id: string,
       changes: UserChanges,
-    ) => Effectful<Account, UserNotFound | OwnAccess | StorageFailure>;
+    ) => Effectful<ManagedAccount, UserNotFound | OwnAccess | StorageFailure>;
+    readonly remove: (
+      viewer: Viewer["Service"],
+      id: string,
+    ) => Effectful<void, UserNotFound | OwnAccess | StorageFailure>;
+    readonly confirmEmail: (id: string) => Effectful<ManagedAccount, UserNotFound | StorageFailure>;
     readonly grantLicence: (
       id: string,
-      years: number,
-    ) => Effectful<Account, UserNotFound | StorageFailure>;
+      months: number,
+    ) => Effectful<ManagedAccount, UserNotFound | StorageFailure>;
+    readonly endLicence: (id: string) => Effectful<ManagedAccount, UserNotFound | StorageFailure>;
+    readonly extendTrial: (
+      id: string,
+      days: number,
+    ) => Effectful<ManagedAccount, UserNotFound | StorageFailure>;
+    readonly setPassword: (
+      viewer: Viewer["Service"],
+      id: string,
+      password: Redacted.Redacted<string>,
+    ) => Effectful<ManagedAccount, UserNotFound | OwnAccess | StorageFailure>;
+    readonly sendReset: (id: string) => Effectful<void, UserNotFound | StorageFailure>;
+    readonly endSessions: (
+      viewer: Viewer["Service"],
+      id: string,
+    ) => Effectful<ManagedAccount, UserNotFound | OwnAccess | StorageFailure>;
     readonly purgeExpired: Effectful<void, StorageFailure>;
   }
 >()("Accounts") {
@@ -211,10 +251,19 @@ export class Accounts extends Context.Service<
         Result: User,
         execute: (email) => sql`SELECT * FROM users WHERE email = ${email}`,
       });
-      const verifiedUsers = SqlSchema.findAll({
+      const allUsers = SqlSchema.findAll({
         Request: Schema.Void,
         Result: User,
-        execute: () => sql`SELECT * FROM users WHERE email_verified_at IS NOT NULL ORDER BY email`,
+        execute: () => sql`SELECT * FROM users ORDER BY email`,
+      });
+      const activity = SqlSchema.findAll({
+        Request: Schema.Struct({ now: Schema.Number, id: Schema.NullOr(Schema.String) }),
+        Result: ActivityRow,
+        execute: ({ now, id }) =>
+          sql`SELECT user_id, COUNT(*) AS sessions, MAX(last_used_at) AS last_seen_at
+            FROM sessions
+            WHERE expires_at > ${now} ${id === null ? sql`` : sql`AND user_id = ${id}`}
+            GROUP BY user_id`,
       });
       const failuresFor = SqlSchema.findOneOption({
         Request: Schema.String,
@@ -579,11 +628,58 @@ export class Accounts extends Context.Service<
         return yield* replacePassword(user, next);
       });
 
+      const ownAccess = (error: string) => new OwnAccess({ error });
+
+      const managed = Effect.fnUntraced(function* (id: string) {
+        const user = yield* existing(id);
+        const now = yield* DateTime.now;
+        const rows = yield* activity({ now: millis(now), id: user.id }).pipe(
+          storage("read the user's sessions"),
+        );
+        return toManaged(user, now, rows[0]);
+      });
+
       const list = Effect.gen(function* () {
         const now = yield* DateTime.now;
-        const rows = yield* verifiedUsers(undefined).pipe(storage("list users"));
-        return rows.map((user) => toAccount(user, now));
+        const rows = yield* allUsers(undefined).pipe(storage("list users"));
+        const seen = yield* activity({ now: millis(now), id: null }).pipe(storage("list users"));
+        const byUser = new Map(seen.map((row) => [row.userId, row]));
+        return rows.map((user) => toManaged(user, now, byUser.get(user.id)));
       }).pipe(Effect.withSpan("Accounts.list"));
+
+      const create = Effect.fn("Accounts.create")(function* (request: NewUser) {
+        const fields = yield* passwordFields(request.password);
+        const now = yield* DateTime.now;
+        const row = yield* Schema.encodeEffect(User.insert)(
+          User.insert.make({
+            id: UserId.make(yield* random.uuidV4()),
+            email: request.email,
+            name: request.name,
+            role: request.role,
+            passwordHash: fields.password_hash,
+            passwordSalt: fields.password_salt,
+            passwordIterations: fields.password_iterations,
+            disabled: false,
+            emailVerifiedAt: Option.some(now),
+            trialEndsAt: Option.some(DateTime.add(now, TRIAL_LENGTH)),
+            paidUntil:
+              request.months > 0
+                ? Option.some(DateTime.add(now, { months: request.months }))
+                : Option.none(),
+            createdAt: Model.Override(now),
+            updatedAt: Model.Override(now),
+          }),
+        ).pipe(Effect.orDie);
+        const inserted = yield* sql`INSERT INTO users ${sql.insert(row)}
+          ON CONFLICT (email) DO NOTHING RETURNING id`.pipe(storage("create the account"));
+        if (inserted.length === 0) {
+          return yield* new EmailTaken({ error: "an account with this email already exists" });
+        }
+        yield* sql`DELETE FROM email_codes WHERE email = ${request.email}`.pipe(
+          storage("create the account"),
+        );
+        return yield* managed(row.id).pipe(Effect.catchTag("UserNotFound", Effect.die));
+      });
 
       const update = Effect.fn("Accounts.update")(function* (
         viewer: Viewer["Service"],
@@ -594,9 +690,7 @@ export class Accounts extends Context.Service<
           id === viewer.id &&
           ((changes.role !== undefined && changes.role !== "admin") || changes.disabled === true);
         if (demotesSelf) {
-          return yield* new OwnAccess({
-            error: "you cannot remove your own administrator access",
-          });
+          return yield* ownAccess("you cannot remove your own administrator access");
         }
         const user = yield* existing(id);
         const fields = {
@@ -613,12 +707,37 @@ export class Accounts extends Context.Service<
               : []),
           ])
           .pipe(storage("update the user"));
-        return yield* accountOf(yield* existing(user.id));
+        return yield* managed(user.id);
+      });
+
+      const remove = Effect.fn("Accounts.remove")(function* (
+        viewer: Viewer["Service"],
+        id: string,
+      ) {
+        if (id === viewer.id) return yield* ownAccess("you cannot delete your own account");
+        const user = yield* existing(id);
+        yield* atomic
+          .run([
+            sql`DELETE FROM sessions WHERE user_id = ${user.id}`,
+            sql`DELETE FROM email_codes WHERE email = ${user.email}`,
+            sql`DELETE FROM sign_in_failures WHERE email = ${user.email}`,
+            sql`DELETE FROM users WHERE id = ${user.id}`,
+          ])
+          .pipe(storage("delete the account"));
+      });
+
+      const confirmEmail = Effect.fn("Accounts.confirmEmail")(function* (id: string) {
+        const user = yield* existing(id);
+        yield* confirm(user.id);
+        yield* sql`DELETE FROM email_codes WHERE email = ${user.email} AND purpose = 'verify'`.pipe(
+          storage("confirm the email"),
+        );
+        return yield* managed(user.id);
       });
 
       const grantLicence = Effect.fn("Accounts.grantLicence")(function* (
         id: string,
-        years: number,
+        months: number,
       ) {
         const user = yield* existing(id);
         const now = yield* DateTime.now;
@@ -627,10 +746,70 @@ export class Accounts extends Context.Service<
           onSome: (paid) => DateTime.max(paid, now),
         });
         yield* sql`UPDATE users SET ${sql.update({
-          paidUntil: millis(DateTime.add(from, { years })),
+          paidUntil: millis(DateTime.add(from, { months })),
           updatedAt: millis(now),
         })} WHERE id = ${user.id}`.pipe(storage("grant the licence"));
-        return yield* accountOf(yield* existing(user.id));
+        return yield* managed(user.id);
+      });
+
+      const endLicence = Effect.fn("Accounts.endLicence")(function* (id: string) {
+        const user = yield* existing(id);
+        const now = millis(yield* DateTime.now);
+        yield* sql`UPDATE users SET
+            paid_until = CASE WHEN paid_until > ${now} THEN ${now} ELSE paid_until END,
+            trial_ends_at = CASE WHEN trial_ends_at > ${now} THEN ${now} ELSE trial_ends_at END,
+            updated_at = ${now}
+          WHERE id = ${user.id}`.pipe(storage("end the licence"));
+        return yield* managed(user.id);
+      });
+
+      const extendTrial = Effect.fn("Accounts.extendTrial")(function* (id: string, days: number) {
+        const user = yield* existing(id);
+        const now = yield* DateTime.now;
+        const from = Option.match(user.trialEndsAt, {
+          onNone: () => now,
+          onSome: (ends) => DateTime.max(ends, now),
+        });
+        yield* sql`UPDATE users SET ${sql.update({
+          trialEndsAt: millis(DateTime.add(from, { days })),
+          updatedAt: millis(now),
+        })} WHERE id = ${user.id}`.pipe(storage("extend the trial"));
+        return yield* managed(user.id);
+      });
+
+      const setPassword = Effect.fn("Accounts.setPassword")(function* (
+        viewer: Viewer["Service"],
+        id: string,
+        password: Redacted.Redacted<string>,
+      ) {
+        if (id === viewer.id) {
+          return yield* ownAccess("change your own password from your account menu");
+        }
+        const user = yield* existing(id);
+        const fields = yield* passwordFields(password);
+        yield* atomic
+          .run([
+            sql`UPDATE users SET ${sql.update(fields)} WHERE id = ${user.id}`,
+            sql`DELETE FROM sessions WHERE user_id = ${user.id}`,
+            sql`DELETE FROM sign_in_failures WHERE email = ${user.email}`,
+          ])
+          .pipe(storage("set the password"));
+        return yield* managed(user.id);
+      });
+
+      const sendReset = Effect.fn("Accounts.sendReset")(function* (id: string) {
+        const user = yield* existing(id);
+        if (isVerified(user) && !user.disabled) yield* sendCode(user.email, "reset");
+      });
+
+      const endSessions = Effect.fn("Accounts.endSessions")(function* (
+        viewer: Viewer["Service"],
+        id: string,
+      ) {
+        if (id === viewer.id) return yield* ownAccess("sign out from your account menu");
+        const user = yield* existing(id);
+        yield* sql`DELETE FROM sessions WHERE user_id = ${user.id}`.pipe(storage("sign out"));
+        return yield* managed(user.id);
       });
 
       const purgeExpired = Effect.gen(function* () {
@@ -654,8 +833,16 @@ export class Accounts extends Context.Service<
         me,
         changePassword,
         list,
+        create,
         update,
+        remove,
+        confirmEmail,
         grantLicence,
+        endLicence,
+        extendTrial,
+        setPassword,
+        sendReset,
+        endSessions,
         purgeExpired,
       });
     }),

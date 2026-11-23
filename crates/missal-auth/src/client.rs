@@ -8,7 +8,7 @@ use ureq::http::Response;
 
 use crate::config::Config;
 use crate::error::AuthError;
-use crate::session::{Account, Role, Session};
+use crate::session::{Account, ManagedAccount, Role, Session};
 
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -46,6 +46,15 @@ pub struct UserChanges {
     pub disabled: Option<bool>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewUser {
+    pub email: String,
+    pub name: String,
+    pub role: Role,
+    pub password: String,
+    pub months: u8,
+}
+
 fn problem(status: u16, body: &str) -> AuthError {
     let problem = serde_json::from_str::<Problem>(body).ok();
     match problem.as_ref().map(|problem| problem.tag.as_str()) {
@@ -59,6 +68,7 @@ fn problem(status: u16, body: &str) -> AuthError {
         Some("EmailNotVerified") => AuthError::EmailNotVerified,
         Some("LicenceRequired") => AuthError::LicenceRequired,
         Some("OwnAccess") => AuthError::OwnAccess,
+        Some("EmailTaken") => AuthError::EmailTaken,
         Some("NotAdmin" | "NotPublisher") => AuthError::NotAllowed,
         Some("UserNotFound") => AuthError::NotFound,
         _ => match status {
@@ -107,6 +117,7 @@ enum Method {
     Get,
     Post,
     Patch,
+    Delete,
 }
 
 impl Api {
@@ -133,6 +144,13 @@ impl Api {
         let url = format!("{}/v1/{path}", self.base_url);
         let bearer = token.map(|token| format!("Bearer {token}"));
         let response: Result<Response<ureq::Body>, ureq::Error> = match (method, body) {
+            (Method::Delete, _) => {
+                let mut request = self.agent.delete(&url);
+                if let Some(bearer) = &bearer {
+                    request = request.header("Authorization", bearer);
+                }
+                request.call()
+            }
             (Method::Get, _) => {
                 let mut request = self.agent.get(&url);
                 if let Some(bearer) = &bearer {
@@ -252,8 +270,35 @@ impl Api {
         )
     }
 
-    pub(crate) fn users(&self, token: &str) -> Result<Vec<Account>, AuthError> {
+    pub(crate) fn users(&self, token: &str) -> Result<Vec<ManagedAccount>, AuthError> {
         Self::json(&self.call(Method::Get, "users", Some(token), None)?)
+    }
+
+    fn user_call(
+        &self,
+        method: Method,
+        token: &str,
+        id: &str,
+        action: &str,
+        body: Option<Value>,
+    ) -> Result<String, AuthError> {
+        let path = format!("users/{}{action}", valid_id(id)?);
+        self.call(method, &path, Some(token), body)
+    }
+
+    pub(crate) fn create_user(
+        &self,
+        token: &str,
+        user: &NewUser,
+    ) -> Result<ManagedAccount, AuthError> {
+        let body = json!({
+            "email": user.email.trim(),
+            "name": user.name.trim(),
+            "role": user.role,
+            "password": user.password,
+            "months": user.months,
+        });
+        Self::json(&self.call(Method::Post, "users", Some(token), Some(body))?)
     }
 
     pub(crate) fn update_user(
@@ -261,7 +306,7 @@ impl Api {
         token: &str,
         id: &str,
         changes: &UserChanges,
-    ) -> Result<Account, AuthError> {
+    ) -> Result<ManagedAccount, AuthError> {
         let mut body = serde_json::Map::new();
         if let Some(name) = &changes.name {
             body.insert("name".into(), json!(name.trim()));
@@ -272,18 +317,58 @@ impl Api {
         if let Some(disabled) = changes.disabled {
             body.insert("disabled".into(), json!(disabled));
         }
-        let path = format!("users/{}", valid_id(id)?);
-        Self::json(&self.call(Method::Patch, &path, Some(token), Some(Value::Object(body)))?)
+        Self::json(&self.user_call(Method::Patch, token, id, "", Some(Value::Object(body)))?)
+    }
+
+    pub(crate) fn delete_user(&self, token: &str, id: &str) -> Result<(), AuthError> {
+        self.user_call(Method::Delete, token, id, "", None)
+            .map(|_| ())
+    }
+
+    pub(crate) fn verify_user(&self, token: &str, id: &str) -> Result<ManagedAccount, AuthError> {
+        Self::json(&self.user_call(Method::Post, token, id, "/verify", None)?)
     }
 
     pub(crate) fn grant_licence(
         &self,
         token: &str,
         id: &str,
-        years: u8,
-    ) -> Result<Account, AuthError> {
-        let path = format!("users/{}/licence", valid_id(id)?);
-        let body = json!({ "years": years });
-        Self::json(&self.call(Method::Post, &path, Some(token), Some(body))?)
+        months: u8,
+    ) -> Result<ManagedAccount, AuthError> {
+        let body = json!({ "months": months });
+        Self::json(&self.user_call(Method::Post, token, id, "/licence", Some(body))?)
+    }
+
+    pub(crate) fn end_licence(&self, token: &str, id: &str) -> Result<ManagedAccount, AuthError> {
+        Self::json(&self.user_call(Method::Delete, token, id, "/licence", None)?)
+    }
+
+    pub(crate) fn extend_trial(
+        &self,
+        token: &str,
+        id: &str,
+        days: u8,
+    ) -> Result<ManagedAccount, AuthError> {
+        let body = json!({ "days": days });
+        Self::json(&self.user_call(Method::Post, token, id, "/trial", Some(body))?)
+    }
+
+    pub(crate) fn set_password(
+        &self,
+        token: &str,
+        id: &str,
+        password: &str,
+    ) -> Result<ManagedAccount, AuthError> {
+        let body = json!({ "password": password });
+        Self::json(&self.user_call(Method::Post, token, id, "/password", Some(body))?)
+    }
+
+    pub(crate) fn send_reset(&self, token: &str, id: &str) -> Result<(), AuthError> {
+        self.user_call(Method::Post, token, id, "/reset-email", None)
+            .map(|_| ())
+    }
+
+    pub(crate) fn sign_out_user(&self, token: &str, id: &str) -> Result<ManagedAccount, AuthError> {
+        Self::json(&self.user_call(Method::Post, token, id, "/sign-out", None)?)
     }
 }
