@@ -1,3 +1,4 @@
+use crate::ui::ScrollArea as _;
 use std::collections::HashMap;
 
 use chrono::{Datelike, NaiveDate};
@@ -1359,8 +1360,7 @@ impl Render for FirForm {
             .id("fir-form-scroll")
             .key_context(FIR_FORM)
             .size_full()
-            .overflow_y_scroll()
-            .track_scroll(&self.scroll)
+            .scroll_area_y(&self.scroll)
             .on_action(cx.listener(|this, _: &Save, window, cx| this.submit(window, cx)))
             .child(
                 v_flex()

@@ -1,3 +1,4 @@
+use crate::ui::ScrollArea as _;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -144,6 +145,8 @@ impl RenderOnce for AddRow {
 }
 
 pub struct WorkspaceScreen {
+    rail_scroll: gpui_kit::ScrollHandle,
+    add_template_scroll: gpui_kit::ScrollHandle,
     models: Models,
     id: FirId,
     focus: FocusHandle,
@@ -261,6 +264,8 @@ impl WorkspaceScreen {
             ),
         ];
         let mut screen = WorkspaceScreen {
+            rail_scroll: gpui_kit::ScrollHandle::new(),
+            add_template_scroll: gpui_kit::ScrollHandle::new(),
             models,
             id,
             focus: cx.focus_handle(),
@@ -1241,7 +1246,7 @@ impl WorkspaceScreen {
                         .id("workspace-rail-scroll")
                         .flex_1()
                         .min_h_0()
-                        .overflow_y_scroll()
+                        .scroll_area_y(&self.rail_scroll)
                         .child(v_flex().gap(px(4.)).children(rows))
                         .child(add),
                 )
@@ -1275,6 +1280,7 @@ impl WorkspaceScreen {
         let no_templates = templates.items.is_empty();
         let search = self.add_search.clone();
         let highlight = self.add_highlight;
+        let list_scroll = self.add_template_scroll.clone();
         Popover::new("add-templates")
             .appearance(false)
             .trigger(AddRow {
@@ -1393,7 +1399,7 @@ impl WorkspaceScreen {
                         v_flex()
                             .id("add-template-list")
                             .max_h(px(280.))
-                            .overflow_y_scroll()
+                            .scroll_area_y(&list_scroll)
                             .p(px(4.))
                             .children(available.iter().enumerate().map(
                                 |(row, (id, name, added))| {

@@ -558,12 +558,16 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     colors.success = palette.success;
     colors.overlay = palette.scrim;
     colors.scrollbar = transparent;
-    colors.scrollbar_thumb = palette.ink_muted.opacity(0.28);
-    colors.scrollbar_thumb_hover = palette.ink_muted.opacity(0.5);
+    colors.scrollbar_thumb = palette.ink_muted.opacity(0.4);
+    colors.scrollbar_thumb_hover = palette.ink_muted.opacity(0.62);
     colors.switch_thumb = hex(0xffffff);
     colors.slider_thumb = palette.surface;
     colors.progress_bar = palette.action;
     colors.slider_bar = palette.action;
+    // Scrollbars stay on screen whenever an area can scroll. The library
+    // default fades them out after scrolling, which left long forms with no
+    // sign that there was more below and nothing to drag.
+    theme.scrollbar_mode = gpui_kit::component::scroll::ScrollbarMode::Always;
     theme.radius = px(RADIUS_LG);
     theme.radius_lg = px(RADIUS_LG);
     theme.font_size = px(FONT_SIZE);

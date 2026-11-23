@@ -1,3 +1,4 @@
+use crate::ui::ScrollArea as _;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -172,6 +173,7 @@ pub enum FieldsPanelEvent {
 }
 
 pub struct FieldsPanel {
+    body_scroll: gpui_kit::ScrollHandle,
     models: Models,
     fir_id: FirId,
     values: Option<Arc<FirValues>>,
@@ -215,6 +217,7 @@ impl FieldsPanel {
             }),
         ];
         FieldsPanel {
+            body_scroll: gpui_kit::ScrollHandle::new(),
             models,
             fir_id,
             values: None,
@@ -1026,7 +1029,7 @@ impl Render for FieldsPanel {
                     .id("fields-panel-scroll")
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scroll()
+                    .scroll_area_y(&self.body_scroll)
                     .pb(px(16.))
                     .children(body),
             )

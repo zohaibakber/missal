@@ -1,3 +1,4 @@
+use crate::ui::ScrollArea as _;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::dialog::Dialog;
 use gpui_kit::component::{WindowExt, h_flex, v_flex};
@@ -201,6 +202,8 @@ pub fn open_publishing(window: &mut Window, cx: &mut App) {
 }
 
 struct PublishingPanel {
+    details_scroll: gpui_kit::ScrollHandle,
+    list_scroll: gpui_kit::ScrollHandle,
     model: Entity<LibraryModel>,
     filter: Filter,
     selected: Option<Selection>,
@@ -219,6 +222,8 @@ impl PublishingPanel {
         ];
         model.update(cx, |model, cx| model.refresh_managed(cx));
         let mut panel = PublishingPanel {
+            details_scroll: gpui_kit::ScrollHandle::new(),
+            list_scroll: gpui_kit::ScrollHandle::new(),
             model,
             filter: Filter::All,
             selected: None,
@@ -722,7 +727,7 @@ impl PublishingPanel {
             .flex_1()
             .min_w_0()
             .h_full()
-            .overflow_y_scroll()
+            .scroll_area_y(&self.details_scroll)
             .pl(px(20.))
             .gap(px(14.))
             .child(
@@ -823,7 +828,7 @@ impl PublishingPanel {
                             .w(px(LIST_WIDTH))
                             .flex_none()
                             .h_full()
-                            .overflow_y_scroll()
+                            .scroll_area_y(&self.list_scroll)
                             .pr(px(10.))
                             .gap(px(2.))
                             .border_r_1()
