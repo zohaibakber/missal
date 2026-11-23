@@ -358,7 +358,7 @@ fn run(dark: bool, out: &Path, only_wp0: bool) {
     h.press("escape");
 
     h.go(Route::Settings);
-    h.shot("15-settings");
+    settings_shots(&mut h);
 
     h.with_window(show_shortcuts);
     h.shot("16b-shortcuts-second-open");
@@ -464,9 +464,14 @@ fn main() {
     let only_wp0 = args.iter().any(|argument| argument == "--wp0");
     let only_gate = args.iter().any(|argument| argument == "--gate");
     let skip_gate = args.iter().any(|argument| argument == "--no-gate");
+    let only_settings = args.iter().any(|argument| argument == "--settings");
     let api = fake_api::start();
     for dark in [false, true] {
         if only.as_deref().is_some_and(|only| (only == "dark") != dark) {
+            continue;
+        }
+        if only_settings {
+            run_settings(dark, &out, &api);
             continue;
         }
         if !only_gate {
@@ -532,6 +537,65 @@ fn noticed(state: &AuthState) -> bool {
             ..
         }
     )
+}
+
+fn settings_shots(h: &mut Harness) {
+    h.shot("15-settings");
+    h.click("settings-nav-customs");
+    h.shot("15a-settings-custom-fields");
+    h.with_window(|window, cx| window.click(("custom-more", 0usize), cx));
+    h.shot("15b-settings-custom-menu");
+    h.press("escape");
+    h.click("settings-nav-built-in");
+    h.shot("15c-settings-built-in");
+    h.click("settings-nav-markers");
+    h.shot("15d-settings-markers");
+    h.click("settings-nav-appearance");
+    h.shot("15e-settings-appearance");
+    h.click("settings-nav-about");
+    h.shot("15f-settings-about");
+    h.click("settings-nav-globals");
+}
+
+fn run_settings(dark: bool, out: &Path, api: &str) {
+    let (mut h, _directory) = build(dark, out, 1280.0, 800.0, None);
+    h.go(Route::Settings);
+    settings_shots(&mut h);
+    let config = missal_auth::Config {
+        base_url: api.to_owned(),
+        purchase_url: Some("https://example.com/buy".to_owned()),
+    };
+    let (mut h, _directory) = build(dark, out, 1280.0, 800.0, Some(config));
+    h.wait_flow(|flow| *flow == Flow::SignIn);
+    h.replace("sign-in-email", "trial@example.com");
+    h.fill("sign-in-password", "correct horse battery");
+    h.click("auth-submit");
+    h.wait_auth(|state| matches!(state, AuthState::SignedIn { .. }));
+    account_shots(&mut h, "15h-settings-account-trial");
+    h.with_window(|_, cx| {
+        AuthModel::get(cx)
+            .expect("auth")
+            .update(cx, |auth, cx| auth.sign_out(cx));
+    });
+    h.wait_flow(|flow| *flow == Flow::SignIn);
+    h.replace("sign-in-email", "admin@example.com");
+    h.fill("sign-in-password", "correct horse battery");
+    h.click("auth-submit");
+    h.wait_auth(|state| matches!(state, AuthState::SignedIn { .. }));
+    account_shots(&mut h, "15g-settings-account");
+    h.click("account-more");
+    h.shot("15i-settings-account-menu");
+    h.press("escape");
+    h.click("manage-people");
+    h.idle();
+    h.shot("15j-settings-people");
+    h.press("escape");
+}
+
+fn account_shots(h: &mut Harness, name: &str) {
+    h.go(Route::Settings);
+    h.click("settings-nav-account");
+    h.shot(name);
 }
 
 fn run_gate(dark: bool, out: &Path, api: &str) {

@@ -3,10 +3,11 @@ use std::time::{Duration, Instant};
 use crate::ui::popup_menu::{MenuEntry, menu};
 use gpui_kit::TestSupportExt as _;
 use gpui_kit::assets::IconName;
+use gpui_kit::component::avatar::Avatar;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, App, AppContext, Context, Entity, EntityId, FocusHandle, Focusable,
+    AnyElement, App, AppContext, Context, Entity, EntityId, FocusHandle, Focusable, FontWeight,
     InteractiveElement, IntoElement, ParentElement, Render, ScrollHandle,
     StatefulInteractiveElement, Styled, Subscription, Window, div, px,
 };
@@ -20,41 +21,96 @@ use crate::app::{AppPaths, check_for_updates, set_theme};
 use crate::prefs::ThemeChoice;
 use crate::shortcuts::*;
 use crate::state::{Load, Models, run_db_in, toast_error, toast_warning};
-use crate::theme::{Palette, RADIUS, RADIUS_SM};
+use crate::theme::{Palette, RADIUS, RADIUS_LG, RADIUS_SM};
 use crate::ui::dialogs::confirm_delete;
 use crate::ui::input::{Kind, field, field_input, search_field};
-use crate::ui::part::Part;
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::{
-    Intent, SaveState, SegmentItem, UrRole, alert, alert_description, alert_title, button,
-    card_description, card_header, card_title, count_badge, field_error, ghost_sm, icon_button,
-    isolate_urdu, primary_sm, save_state, segmented, separator_vertical, sidebar_group,
-    sidebar_group_label, sidebar_menu_button, skeleton, ur_label,
+    BadgeVariant, Intent, SaveState, UrRole, alert, alert_description, alert_title, badge, button,
+    card_description, empty_state_body, field_error, frame, frame_panel, icon_button, isolate_urdu,
+    kbd_group, primary_sm, save_state, separator_vertical, sidebar_group, sidebar_group_label,
+    sidebar_menu_button, sized_icon, skeleton, small_icon, switch, ur_label,
 };
 use crate::update::controller::{self, UpdateState, UpdateStatus};
 
-/// Width of the name column on the global values page.
-const GLOBAL_NAME_COLUMN: f32 = 200.;
-const COLUMN_WIDTH: f32 = 680.0;
-const NAV_WIDTH: f32 = 208.0;
+const NAME_COLUMN: f32 = 180.;
+const COLUMN_WIDTH: f32 = 720.0;
+const NAV_WIDTH: f32 = 224.0;
 const FILTER_THRESHOLD: usize = 12;
 const FLASH: Duration = Duration::from_secs(2);
 
-const SECTIONS: [&str; 6] = [
-    "Global values",
-    "Field markers",
-    "Custom fields",
-    "Built-in fields",
-    "Appearance",
-    "About",
-];
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Section {
+pub enum Page {
     Globals,
-    Markers,
     Customs,
+    BuiltIn,
+    Markers,
+    Appearance,
+    About,
+    Account,
 }
+
+impl Page {
+    fn title(self) -> &'static str {
+        match self {
+            Page::Globals => "Global values",
+            Page::Customs => "Custom fields",
+            Page::BuiltIn => "Built-in fields",
+            Page::Markers => "Field markers",
+            Page::Appearance => "Appearance",
+            Page::About => "About",
+            Page::Account => "Account",
+        }
+    }
+
+    fn description(self) -> &'static str {
+        match self {
+            Page::Globals => "Filled into every FIR's documents, such as the police station name.",
+            Page::Customs => {
+                "Extra fields you fill in for each FIR. Renaming one keeps its templates linked."
+            }
+            Page::BuiltIn => {
+                "Filled from each FIR's details. Type a field's name between markers to use it in a template."
+            }
+            Page::Markers => "The symbols around a field name when you type it into a document.",
+            Page::Appearance => "Choose how Missal looks on this computer.",
+            Page::About => "Missal keeps everything on this computer.",
+            Page::Account => "Your Missal account and licence.",
+        }
+    }
+
+    fn icon(self) -> IconName {
+        match self {
+            Page::Globals => IconName::Globe,
+            Page::Customs => IconName::TextCursorInput,
+            Page::BuiltIn => IconName::Braces,
+            Page::Markers => IconName::Quote,
+            Page::Appearance => IconName::SunMoon,
+            Page::About => IconName::Info,
+            Page::Account => IconName::CircleUser,
+        }
+    }
+
+    fn id(self) -> &'static str {
+        match self {
+            Page::Globals => "settings-nav-globals",
+            Page::Customs => "settings-nav-customs",
+            Page::BuiltIn => "settings-nav-built-in",
+            Page::Markers => "settings-nav-markers",
+            Page::Appearance => "settings-nav-appearance",
+            Page::About => "settings-nav-about",
+            Page::Account => "settings-nav-account",
+        }
+    }
+}
+
+const NAV_GROUPS: [(&str, &[Page]); 2] = [
+    (
+        "Documents",
+        &[Page::Globals, Page::Customs, Page::BuiltIn, Page::Markers],
+    ),
+    ("General", &[Page::Account, Page::Appearance, Page::About]),
+];
 
 struct GlobalRow {
     id: Option<PlaceholderId>,
@@ -81,10 +137,10 @@ pub struct SettingsScreen {
     globals: Vec<GlobalRow>,
     customs: Vec<CustomRow>,
     custom_filter: Entity<TextInput>,
-    built_in_open: bool,
+    page: Page,
     synced: bool,
     saving: [bool; 3],
-    flash: Option<(Section, u64)>,
+    flash: Option<(Page, u64)>,
     flash_generation: u64,
     update_status: Entity<UpdateStatus>,
     subscriptions: Vec<Subscription>,
@@ -170,7 +226,7 @@ impl SettingsScreen {
             globals: Vec::new(),
             customs: Vec::new(),
             custom_filter,
-            built_in_open: false,
+            page: Page::Globals,
             synced: false,
             saving: [false; 3],
             flash: None,
@@ -437,35 +493,30 @@ impl SettingsScreen {
         (self.marker_open.clone(), self.marker_close.clone())
     }
 
-    pub fn built_in_open(&self) -> bool {
-        self.built_in_open
+    pub fn page(&self) -> Page {
+        self.page
+    }
+
+    pub fn show(&mut self, page: Page, cx: &mut Context<Self>) {
+        if self.page != page {
+            self.page = page;
+            self.scroll.set_offset(gpui_kit::point(px(0.), px(0.)));
+        }
+        cx.notify();
     }
 
     pub fn add_global(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let row = self.global_row(None, "", "", window, cx);
         row.name.update(cx, |input, cx| input.focus(window, cx));
         self.globals.push(row);
-        cx.notify();
+        self.show(Page::Globals, cx);
     }
 
     pub fn add_custom(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let row = self.custom_row(None, "", window, cx);
         row.name.update(cx, |input, cx| input.focus(window, cx));
         self.customs.insert(0, row);
-        self.scroll_to(2);
-        cx.notify();
-    }
-
-    fn scroll_to(&self, section: usize) {
-        let Some(bounds) = self.scroll.bounds_for_item(section) else {
-            self.scroll.scroll_to_item(section);
-            return;
-        };
-        let top = self.scroll.bounds().origin.y + px(28.);
-        let maximum = self.scroll.max_offset().y;
-        let target = (top - bounds.origin.y).clamp(-maximum, px(0.));
-        self.scroll
-            .set_offset(gpui_kit::point(self.scroll.offset().x, target));
+        self.show(Page::Customs, cx);
     }
 
     fn rename_global(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
@@ -578,7 +629,7 @@ impl SettingsScreen {
             .collect()
     }
 
-    fn flash_saved(&mut self, section: Section, cx: &mut Context<Self>) {
+    fn flash_saved(&mut self, section: Page, cx: &mut Context<Self>) {
         self.flash_generation += 1;
         let generation = self.flash_generation;
         self.flash = Some((section, generation));
@@ -622,7 +673,7 @@ impl SettingsScreen {
                         this.models
                             .catalog
                             .update(cx, |catalog, cx| catalog.set_settings(settings, cx));
-                        this.flash_saved(Section::Markers, cx);
+                        this.flash_saved(Page::Markers, cx);
                     }
                     Err(error) => toast_error(window, cx, error.message()),
                 }
@@ -710,7 +761,7 @@ impl SettingsScreen {
                         this.models.catalog.update(cx, |catalog, cx| {
                             catalog.replace_all(settings, placeholders, globals, cx)
                         });
-                        this.flash_saved(Section::Globals, cx);
+                        this.flash_saved(Page::Globals, cx);
                     }
                     Err(error) => toast_error(window, cx, error.message()),
                 }
@@ -792,7 +843,7 @@ impl SettingsScreen {
                         this.models.catalog.update(cx, |catalog, cx| {
                             catalog.replace_all(settings, placeholders, globals, cx)
                         });
-                        this.flash_saved(Section::Customs, cx);
+                        this.flash_saved(Page::Customs, cx);
                     }
                     Err(error) => toast_error(window, cx, error.message()),
                 }
@@ -914,61 +965,75 @@ impl SettingsScreen {
         );
     }
 
-    fn active_section(&self) -> usize {
-        let top = self.scroll.bounds().origin.y;
-        let offset = self.scroll.offset().y;
-        if offset.abs() > px(1.) && offset <= -self.scroll.max_offset().y + px(1.) {
-            return SECTIONS.len() - 1;
+    fn reset_markers(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let markers = FieldMarkers::default();
+        self.marker_open
+            .update(cx, |input, cx| input.set_text(markers.open(), cx));
+        self.marker_close
+            .update(cx, |input, cx| input.set_text(markers.close(), cx));
+        if self.markers_dirty(cx) {
+            self.save_markers(window, cx);
         }
-        (0..SECTIONS.len())
-            .rev()
-            .find(|index| {
-                self.scroll
-                    .bounds_for_item(*index)
-                    .is_some_and(|bounds| bounds.origin.y + offset <= top + px(48.))
-            })
-            .unwrap_or(0)
     }
 
-    fn section(
-        &self,
-        index: usize,
-        count: Option<usize>,
-        flash: bool,
-        description: &'static str,
-        body: impl IntoElement,
-    ) -> gpui_kit::Stateful<gpui_kit::Div> {
-        let title = SECTIONS[index];
-        let last = index == SECTIONS.len() - 1;
-        v_flex()
-            .id(("settings-section", index))
-            .w(px(COLUMN_WIDTH))
-            .max_w_full()
-            .px(px(24.))
-            .flex_shrink_0()
-            .when(!last, |this| this.mb(px(40.)))
+    fn page_header(&self, palette: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let page = self.page;
+        let saved = self.flash.is_some_and(|(section, _)| section == page);
+        let action: Option<AnyElement> = match page {
+            Page::Globals if self.models.catalog.read(cx).load.is_ready() => Some(
+                button("add-global", "Add value")
+                    .outline()
+                    .sm()
+                    .icon(IconName::Plus)
+                    .on_click(cx.listener(|this, _, window, cx| this.add_global(window, cx)))
+                    .into_any_element(),
+            ),
+            Page::Customs => Some(
+                button("add-custom", "Add field")
+                    .outline()
+                    .sm()
+                    .icon(IconName::Plus)
+                    .on_click(cx.listener(|this, _, window, cx| this.add_custom(window, cx)))
+                    .into_any_element(),
+            ),
+            _ => None,
+        };
+        h_flex()
+            .items_start()
+            .gap(px(16.))
+            .pb(px(24.))
             .child(
-                card_header()
-                    .mb(px(16.))
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap(px(4.))
                     .child(
-                        card_title()
-                            .child(title)
-                            .children(count.map(count_badge))
-                            .child(div().flex_1())
-                            .children(flash.then(|| save_state(SaveState::Saved))),
+                        h_flex()
+                            .gap(px(8.))
+                            .items_center()
+                            .text_size(px(20.))
+                            .line_height(px(28.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(palette.ink)
+                            .child(page.title())
+                            .children(saved.then(|| save_state(SaveState::Saved))),
                     )
-                    .child(card_description().child(description)),
+                    .child(card_description().child(page.description())),
             )
-            .child(body)
-            .when(!last, |this| this.child(crate::ui::separator().mt(px(40.))))
+            .children(action.map(|action| div().flex_none().pt(px(2.)).child(action)))
     }
 
     fn globals_body(&mut self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let load = self.models.catalog.read(cx).load.clone();
         match load {
-            Load::Loading => v_flex()
-                .gap(px(8.))
-                .children((0..4usize).map(|_| skeleton().h(px(36.)).rounded(px(RADIUS))))
+            Load::Loading => frame()
+                .child(
+                    frame_panel().p(px(12.)).child(
+                        v_flex()
+                            .gap(px(8.))
+                            .children((0..4usize).map(|_| skeleton().h(px(36.)).rounded(px(RADIUS)))),
+                    ),
+                )
                 .into_any_element(),
             Load::Failed(message) => alert(Intent::Danger)
                 .child(alert_title().child("Could not load global values"))
@@ -985,157 +1050,172 @@ impl SettingsScreen {
                     ),
                 )
                 .into_any_element(),
+            Load::Ready if self.globals.is_empty() => frame()
+                .child(frame_panel().child(empty_state_body(
+                    IconName::Globe,
+                    "No global values yet",
+                    Some("Add the police station, district and officer names once, and every document fills them in.".into()),
+                    Some(
+                        button("add-global-empty", "Add value")
+                            .outline()
+                            .sm()
+                            .icon(IconName::Plus)
+                            .on_click(cx.listener(|this, _, window, cx| this.add_global(window, cx)))
+                            .into_any_element(),
+                    ),
+                ).py(px(40.))))
+                .into_any_element(),
             Load::Ready => {
                 let errors = self.global_errors(cx);
                 let palette = *palette;
-                v_flex()
-                    .children(self.globals.iter().enumerate().map(|(index, row)| {
-                        let error = errors.get(index).copied().flatten();
-                        let name_cell: AnyElement = if row.editing_name {
-                            field(("global-name", index), &row.name, Kind::Urdu)
-                                .width(px(GLOBAL_NAME_COLUMN))
-                                .error(error.is_some())
-                                .into_any_element()
-                        } else {
-                            div()
-                                .id(("global-name-label", index))
-                                .test_support()
-                                .max_w(px(GLOBAL_NAME_COLUMN + 10.))
-                                .h(px(30.))
-                                .flex_none()
-                                .px(px(10.))
-                                .rounded(px(RADIUS))
-                                .flex()
+                let weak = cx.entity().downgrade();
+                let rows = self.globals.iter().enumerate().map(|(index, row)| {
+                    let error = errors.get(index).copied().flatten();
+                    let name_cell: AnyElement = if row.editing_name {
+                        field(("global-name", index), &row.name, Kind::Urdu)
+                            .width(px(NAME_COLUMN))
+                            .error(error.is_some())
+                            .into_any_element()
+                    } else {
+                        div()
+                            .id(("global-name-label", index))
+                            .test_support()
+                            .max_w(px(NAME_COLUMN))
+                            .h(px(32.))
+                            .px(px(8.))
+                            .mr(px(-8.))
+                            .rounded(px(RADIUS))
+                            .flex()
+                            .items_center()
+                            .cursor_text()
+                            .hover(move |style| style.bg(palette.hover))
+                            .active(move |s| s.bg(palette.pressed))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.rename_global(index, window, cx)
+                            }))
+                            .child(
+                                div().min_w_0().mt(px(-2.)).child(
+                                    ur_label(row.initial.0.clone(), UrRole::InputLabel)
+                                        .text_color(palette.ink)
+                                        .truncate(),
+                                ),
+                            )
+                            .into_any_element()
+                    };
+                    let saved = row.id.is_some();
+                    let rename = weak.clone();
+                    let remove = weak.clone();
+                    let more = menu(gpui_kit::SharedString::from(format!("global-more-{index}")))
+                        .trigger(
+                            icon_button(("global-more", index), IconName::Ellipsis, "More actions")
+                                .dense(),
+                        )
+                        .content(move |menu, _, _| {
+                            let rename = rename.clone();
+                            let remove = remove.clone();
+                            menu.item(
+                                MenuEntry::new("global-rename", "Rename", move |window, cx| {
+                                    rename
+                                        .update(cx, |this, cx| this.rename_global(index, window, cx))
+                                        .ok();
+                                })
+                                .icon(IconName::Pencil)
+                                .disabled(!saved),
+                            )
+                            .separator()
+                            .item(
+                                MenuEntry::new(
+                                    "global-delete",
+                                    if saved { "Delete…" } else { "Remove" },
+                                    move |window, cx| {
+                                        remove
+                                            .update(cx, |this, cx| {
+                                                this.remove_global_row(index, window, cx)
+                                            })
+                                            .ok();
+                                    },
+                                )
+                                .icon(IconName::Trash)
+                                .danger(),
+                            )
+                        });
+                    v_flex()
+                        .id(("global-row", index))
+                        .px(px(12.))
+                        .py(px(8.))
+                        .when(index > 0, |this| this.border_t_1().border_color(palette.line))
+                        .child(
+                            h_flex()
+                                .flex_row_reverse()
                                 .items_center()
-                                .cursor_text()
-                                .hover(move |style| style.bg(palette.hover))
-                                .active(move |s| s.bg(palette.pressed))
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.rename_global(index, window, cx)
-                                }))
+                                .gap(px(12.))
                                 .child(
-                                    div().min_w_0().mt(px(-2.)).child(
-                                        ur_label(row.initial.0.clone(), UrRole::InputLabel)
-                                            .text_color(palette.ink)
-                                            .truncate(),
+                                    h_flex()
+                                        .w(px(NAME_COLUMN))
+                                        .flex_none()
+                                        .flex_row_reverse()
+                                        .child(name_cell),
+                                )
+                                .child(
+                                    div().flex_1().min_w_0().child(
+                                        field(("global-value", index), &row.value, Kind::UrduAuto)
+                                            .error(error.is_some() && row.editing_name),
                                     ),
                                 )
-                                .into_any_element()
-                        };
-                        v_flex()
-                            .id(("global-row", index))
-                            .group("global-row")
-                            .py(px(4.))
-                            .ml(px(-34.))
+                                .child(more),
+                        )
+                        .children(error.map(|error| {
+                            h_flex()
+                                .flex_row_reverse()
+                                .pt(px(4.))
+                                .child(field_error(error))
+                        }))
+                });
+                frame()
+                    .child(
+                        h_flex()
+                            .h(px(32.))
+                            .px(px(12.))
+                            .gap(px(12.))
+                            .text_size(px(12.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(palette.ink_muted)
+                            .child(div().w(px(24.)).flex_none())
+                            .child(div().flex_1().child("Value"))
                             .child(
                                 h_flex()
-                                    .flex_row_reverse()
-                                    .items_center()
-                                    .gap(px(10.))
-                                    .child(
-                                        h_flex()
-                                            .w(px(GLOBAL_NAME_COLUMN))
-                                            .flex_none()
-                                            .flex_row_reverse()
-                                            .mr(px(if row.editing_name { 0. } else { -10. }))
-                                            .child(name_cell),
-                                    )
-                                    .child(
-                                        div().flex_1().min_w_0().child(
-                                            field(
-                                                ("global-value", index),
-                                                &row.value,
-                                                Kind::UrduAuto,
-                                            )
-                                            .error(error.is_some() && row.editing_name),
-                                        ),
-                                    )
-                                    .child(
-                                        div()
-                                            .opacity(0.)
-                                            .group_hover("global-row", |style| style.opacity(1.))
-                                            .child(
-                                                icon_button(
-                                                    ("global-delete", index),
-                                                    IconName::Trash,
-                                                    "Delete",
-                                                )
-                                                .dense()
-                                                .on_click(cx.listener(
-                                                    move |this, _, window, cx| {
-                                                        this.remove_global_row(index, window, cx)
-                                                    },
-                                                )),
-                                            ),
-                                    ),
-                            )
-                            .children(error.map(|error| {
-                                h_flex()
-                                    .flex_row_reverse()
-                                    .mr(px(GLOBAL_NAME_COLUMN + 10.))
-                                    .pt(px(2.))
-                                    .child(field_error(error))
-                            }))
-                    }))
-                    .child(
-                        h_flex().flex_row_reverse().pt(px(8.)).child(
-                            ghost_sm("add-global", "Add global value")
-                                .icon(IconName::Plus)
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| this.add_global(window, cx)),
-                                ),
-                        ),
+                                    .w(px(NAME_COLUMN))
+                                    .flex_none()
+                                    .justify_end()
+                                    .child("Name"),
+                            ),
                     )
+                    .child(frame_panel().children(rows))
                     .into_any_element()
             }
         }
     }
 
-    fn markers_body(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let open = self.marker_open.read(cx).text().to_owned();
-        let close = self.marker_close.read(cx).text().to_owned();
-        let preview = FieldMarkers::new(&open, &close).unwrap_or_default();
-        let error = self.marker_error(cx);
-        v_flex()
-            .gap(px(6.))
-            .child(
-                h_flex()
-                    .items_center()
-                    .gap(px(10.))
-                    .child(field("marker-open", &self.marker_open, Kind::Urdu).width(px(56.)))
-                    .child(
-                        div()
-                            .mt(px(-2.))
-                            .text_color(palette.ink_muted)
-                            .child(ur_label("نام", UrRole::Body)),
-                    )
-                    .child(field("marker-close", &self.marker_close, Kind::Urdu).width(px(56.)))
-                    .child(separator_vertical().h(px(24.)).mx(px(8.)))
-                    .child(
-                        div()
-                            .text_size(px(14.))
-                            .text_color(palette.ink_muted)
-                            .child("Example"),
-                    )
-                    .child(
-                        div()
-                            .px(px(4.))
-                            .rounded(px(RADIUS_SM))
-                            .bg(palette.field_wash)
-                            .text_color(palette.accent)
-                            .child(
-                                ur_label(preview.token("جرم"), UrRole::Body)
-                                    .truncate()
-                                    .mt(px(-2.)),
-                            ),
-                    ),
-            )
-            .children(error.map(field_error))
-            .into_any_element()
-    }
-
     fn customs_body(&mut self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let palette = *palette;
+        if self.customs.is_empty() {
+            return frame()
+                .child(
+                    frame_panel().child(
+                        empty_state_body(
+                            IconName::TextCursorInput,
+                            "No custom fields",
+                            Some(
+                                "Add a field for anything a FIR needs beyond the built-in ones."
+                                    .into(),
+                            ),
+                            None,
+                        )
+                        .py(px(40.)),
+                    ),
+                )
+                .into_any_element();
+        }
         let errors = self.custom_errors(cx);
         let filter = crate::state::rows::fold_for_search(self.custom_filter.read(cx).text())
             .trim()
@@ -1149,223 +1229,375 @@ impl SettingsScreen {
                     || crate::state::rows::fold_for_search(&row.initial).contains(&filter)
             })
             .collect();
-        v_flex()
+        let markers = self.models.catalog.read(cx).settings.field_markers.clone();
+        let weak = cx.entity().downgrade();
+        let rows = visible.iter().enumerate().map(|(position, &index)| {
+            let row = &self.customs[index];
+            let error = errors.get(index).copied().flatten();
+            let content: AnyElement = if row.editing {
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .child(
+                        field(("custom-name", index), &row.name, Kind::Urdu).error(error.is_some()),
+                    )
+                    .into_any_element()
+            } else {
+                h_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .flex_row_reverse()
+                    .gap(px(12.))
+                    .child(
+                        div().min_w_0().mt(px(-2.)).child(
+                            ur_label(row.initial.clone(), UrRole::Body)
+                                .text_color(palette.ink)
+                                .truncate(),
+                        ),
+                    )
+                    .child(div().flex_1())
+                    .child(
+                        div()
+                            .flex_none()
+                            .mt(px(-2.))
+                            .text_color(palette.ink_faint)
+                            .child(ur_label(markers.token(&row.initial), UrRole::Label).truncate()),
+                    )
+                    .into_any_element()
+            };
+            let id = row.id;
+            let name = row.initial.clone();
+            let weak = weak.clone();
+            v_flex()
+                .id(("custom-row", index))
+                .test_support()
+                .when(position > 0, |this| {
+                    this.border_t_1().border_color(palette.line)
+                })
+                .child(
+                    h_flex()
+                        .flex_row_reverse()
+                        .min_h(px(48.))
+                        .items_center()
+                        .gap(px(12.))
+                        .px(px(12.))
+                        .py(px(6.))
+                        .child(content)
+                        .child(
+                            menu(gpui_kit::SharedString::from(format!("custom-more-{index}")))
+                                .trigger(
+                                    icon_button(
+                                        ("custom-more", index),
+                                        IconName::Ellipsis,
+                                        "More actions",
+                                    )
+                                    .dense(),
+                                )
+                                .content(move |menu, _, _| {
+                                    let rename = weak.clone();
+                                    let delete = weak.clone();
+                                    let name = name.clone();
+                                    menu.item(
+                                        MenuEntry::new(
+                                            "custom-rename",
+                                            "Rename",
+                                            move |window, cx| {
+                                                rename
+                                                    .update(cx, |this, cx| {
+                                                        this.rename_custom(index, window, cx)
+                                                    })
+                                                    .ok();
+                                            },
+                                        )
+                                        .icon(IconName::Pencil)
+                                        .disabled(id.is_none()),
+                                    )
+                                    .separator()
+                                    .item(
+                                        MenuEntry::new(
+                                            "custom-delete",
+                                            "Delete…",
+                                            move |window, cx| {
+                                                let name = name.clone();
+                                                delete
+                                                    .update(cx, |this, cx| {
+                                                        if let Some(id) = id {
+                                                            this.request_delete_field(
+                                                                id, name, window, cx,
+                                                            )
+                                                        }
+                                                    })
+                                                    .ok();
+                                            },
+                                        )
+                                        .icon(IconName::Trash)
+                                        .danger()
+                                        .disabled(id.is_none()),
+                                    )
+                                }),
+                        ),
+                )
+                .children(error.map(|error| {
+                    h_flex()
+                        .flex_row_reverse()
+                        .px(px(12.))
+                        .pb(px(8.))
+                        .child(field_error(error))
+                }))
+        });
+        let empty_match = visible.is_empty();
+        frame()
             .children(show_filter.then(|| {
-                div().pb(px(8.)).child(
+                div().p(px(4.)).pb(px(8.)).child(
                     search_field("custom-filter-field", &self.custom_filter, Kind::SearchRtl)
                         .height(32.),
                 )
             }))
-            .child(v_flex().children(visible.iter().map(|&index| {
-                let row = &self.customs[index];
-                let error = errors.get(index).copied().flatten();
-                let content: AnyElement = if row.editing {
+            .child(frame_panel().children(rows).when(empty_match, |this| {
+                this.child(
                     div()
-                        .flex_1()
-                        .min_w_0()
-                        .child(
-                            field(("custom-name", index), &row.name, Kind::Urdu)
-                                .error(error.is_some()),
-                        )
-                        .into_any_element()
-                } else {
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .mt(px(-2.))
-                        .child(
-                            ur_label(row.initial.clone(), UrRole::Body)
-                                .text_color(palette.ink)
-                                .truncate(),
-                        )
-                        .into_any_element()
-                };
-                let id = row.id;
-                let name = row.initial.clone();
-                let weak = cx.entity().downgrade();
-                v_flex()
-                    .id(("custom-row", index))
-                    .test_support()
-                    .group("custom-row")
-                    .mx(px(-10.))
-                    .rounded(px(RADIUS))
-                    .hover(move |style| style.bg(palette.hover))
-                    .child(
-                        h_flex()
-                            .flex_row_reverse()
-                            .h(px(40.))
-                            .items_center()
-                            .gap(px(10.))
-                            .px(px(10.))
-                            .child(content)
-                            .child(
-                                div()
-                                    .opacity(0.)
-                                    .group_hover("custom-row", |style| style.opacity(1.))
-                                    .child(
-                                        menu(gpui_kit::SharedString::from(format!(
-                                            "custom-more-{index}"
-                                        )))
-                                        .trigger(
-                                            icon_button(
-                                                ("custom-more", index),
-                                                IconName::Ellipsis,
-                                                "More actions",
-                                            )
-                                            .dense(),
-                                        )
-                                        .content(
-                                            move |menu, _, _| {
-                                                let rename = weak.clone();
-                                                let delete = weak.clone();
-                                                let name = name.clone();
-                                                menu.item(
-                                                    MenuEntry::new(
-                                                        "custom-rename",
-                                                        "Rename",
-                                                        move |window, cx| {
-                                                            rename
-                                                                .update(cx, |this, cx| {
-                                                                    this.rename_custom(
-                                                                        index, window, cx,
-                                                                    )
-                                                                })
-                                                                .ok();
-                                                        },
-                                                    )
-                                                    .icon(IconName::Pencil)
-                                                    .disabled(id.is_none()),
-                                                )
-                                                .separator()
-                                                .item(
-                                                    MenuEntry::new(
-                                                        "custom-delete",
-                                                        "Delete…",
-                                                        move |window, cx| {
-                                                            let name = name.clone();
-                                                            delete
-                                                                .update(cx, |this, cx| {
-                                                                    if let Some(id) = id {
-                                                                        this.request_delete_field(
-                                                                            id, name, window, cx,
-                                                                        )
-                                                                    }
-                                                                })
-                                                                .ok();
-                                                        },
-                                                    )
-                                                    .icon(IconName::Trash)
-                                                    .danger()
-                                                    .disabled(id.is_none()),
-                                                )
-                                            },
-                                        ),
-                                    ),
-                            ),
-                    )
-                    .children(error.map(|error| {
-                        h_flex()
-                            .flex_row_reverse()
-                            .px(px(10.))
-                            .pb(px(6.))
-                            .child(field_error(error))
-                    }))
-            })))
-            .child(
-                h_flex().flex_row_reverse().pt(px(8.)).mr(px(-10.)).child(
-                    ghost_sm("add-custom", "Add custom field")
-                        .icon(IconName::Plus)
-                        .on_click(cx.listener(|this, _, window, cx| this.add_custom(window, cx))),
-                ),
-            )
+                        .p(px(24.))
+                        .text_size(px(14.))
+                        .text_color(palette.ink_muted)
+                        .flex()
+                        .justify_center()
+                        .child("No field matches your search."),
+                )
+            }))
             .into_any_element()
     }
 
     fn built_in_body(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
         let palette = *palette;
         let markers = self.models.catalog.read(cx).settings.field_markers.clone();
-        let count = FIR_FIELDS.len();
-        let toggle = ghost_sm(
-            "built-in-toggle",
-            if self.built_in_open {
-                "Hide built-in fields".to_owned()
-            } else {
-                format!("Show {count} built-in fields")
-            },
-        )
-        .icon(if self.built_in_open {
-            IconName::ChevronUp
-        } else {
-            IconName::ChevronDown
-        })
-        .on_click(cx.listener(|this, _, _, cx| {
-            this.built_in_open = !this.built_in_open;
-            cx.notify();
-        }));
-        let grid = self.built_in_open.then(|| {
-            div()
-                .mt(px(8.))
-                .flex()
+        let cell = |index: usize, field: &missal_core::field::FirFieldLabel| {
+            h_flex()
+                .id(("built-in", index))
+                .flex_1()
+                .min_w_0()
+                .h(px(40.))
+                .px(px(12.))
                 .flex_row_reverse()
-                .flex_wrap()
-                .children(FIR_FIELDS.iter().enumerate().map(|(index, field)| {
-                    let group = format!("built-in-{index}");
-                    h_flex()
-                        .id(("built-in", index))
-                        .group(group.clone())
-                        .w(px(COLUMN_WIDTH / 2.))
-                        .h(px(32.))
-                        .flex_row_reverse()
-                        .items_center()
-                        .gap(px(10.))
-                        .px(px(8.))
-                        .child(
-                            div().mt(px(-2.)).child(
-                                ur_label(field.label, UrRole::Label)
-                                    .text_color(palette.ink)
-                                    .truncate(),
-                            ),
-                        )
-                        .child(div().flex_1())
-                        .child(
-                            div()
-                                .opacity(0.)
-                                .group_hover(group, |style| style.opacity(1.))
-                                .text_color(palette.ink_faint)
-                                .mt(px(-2.))
-                                .child(
-                                    ur_label(markers.token(field.label), UrRole::Label).truncate(),
-                                ),
-                        )
-                }))
+                .items_center()
+                .gap(px(12.))
+                .child(
+                    div().min_w_0().mt(px(-2.)).child(
+                        ur_label(field.label, UrRole::Label)
+                            .text_color(palette.ink)
+                            .truncate(),
+                    ),
+                )
+                .child(div().flex_1())
+                .child(
+                    div()
+                        .flex_none()
+                        .text_color(palette.ink_faint)
+                        .mt(px(-2.))
+                        .child(ur_label(markers.token(field.label), UrRole::Label).truncate()),
+                )
+        };
+        let rows = FIR_FIELDS.chunks(2).enumerate().map(|(row, pair)| {
+            h_flex()
+                .when(row > 0, |this| this.border_t_1().border_color(palette.line))
+                .flex_row_reverse()
+                .child(cell(row * 2, &pair[0]))
+                .child(separator_vertical().h(px(40.)))
+                .children(
+                    pair.get(1)
+                        .map(|field| cell(row * 2 + 1, field).into_any_element())
+                        .or_else(|| Some(div().flex_1().into_any_element())),
+                )
         });
-        v_flex()
-            .child(h_flex().child(toggle))
-            .children(grid)
+        frame()
+            .child(frame_panel().children(rows))
             .into_any_element()
     }
 
-    fn appearance_body(&self, cx: &mut Context<Self>) -> AnyElement {
-        let theme = self.models.prefs.read(cx).read().theme;
-        let items = ThemeChoice::ALL
-            .into_iter()
-            .map(|choice| {
-                let id = match choice {
-                    ThemeChoice::System => "theme-system",
-                    ThemeChoice::Light => "theme-light",
-                    ThemeChoice::Dark => "theme-dark",
-                };
-                SegmentItem::new(id, choice.title(), move |_, window, cx| {
-                    set_theme(choice, window, cx)
+    fn markers_body(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let palette = *palette;
+        let open = self.marker_open.read(cx).text().to_owned();
+        let close = self.marker_close.read(cx).text().to_owned();
+        let preview = FieldMarkers::new(&open, &close).unwrap_or_default();
+        let error = self.marker_error(cx);
+        let is_default = {
+            let default = FieldMarkers::default();
+            open == default.open() && close == default.close()
+        };
+        let chip = |text: String| {
+            div()
+                .px(px(6.))
+                .rounded(px(RADIUS_SM))
+                .bg(palette.field_wash)
+                .text_color(palette.accent)
+                .child(ur_label(text, UrRole::Body).mt(px(-2.)))
+        };
+        let token_row = h_flex()
+            .flex_row_reverse()
+            .flex_wrap()
+            .justify_center()
+            .items_center()
+            .gap(px(8.))
+            .text_color(palette.ink)
+            .child(div().mt(px(-2.)).child(ur_label("مقدمہ", UrRole::Body)))
+            .child(chip(preview.token("جرم")))
+            .child(div().mt(px(-2.)).child(ur_label("تھانہ", UrRole::Body)))
+            .child(chip(preview.token("تھانہ نام")))
+            .child(
+                div()
+                    .mt(px(-2.))
+                    .child(ur_label("میں درج ہوا۔", UrRole::Body)),
+            );
+        let symbol_row = |id: &'static str,
+                          title: &'static str,
+                          description: &'static str,
+                          input: &Entity<TextInput>| {
+            setting_row(&palette, title, Some(description.into()))
+                .child(field(id, input, Kind::Urdu).width(px(64.)))
+        };
+        frame()
+            .child(
+                h_flex()
+                    .h(px(32.))
+                    .pl(px(12.))
+                    .pr(px(4.))
+                    .text_size(px(12.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(palette.ink_muted)
+                    .child(div().flex_1().child("Preview"))
+                    .when(!is_default, |this| {
+                        this.child(
+                            button("marker-reset", "Reset")
+                                .ghost()
+                                .xs()
+                                .icon(IconName::RotateCcw)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.reset_markers(window, cx)
+                                })),
+                        )
+                    }),
+            )
+            .child(
+                frame_panel()
+                    .child(
+                        div()
+                            .px(px(16.))
+                            .py(px(24.))
+                            .border_b_1()
+                            .border_color(palette.line)
+                            .child(token_row),
+                    )
+                    .child(symbol_row(
+                        "marker-open",
+                        "Opening symbol",
+                        "Typed before a field name.",
+                        &self.marker_open,
+                    ))
+                    .child(
+                        symbol_row(
+                            "marker-close",
+                            "Closing symbol",
+                            "Typed after a field name.",
+                            &self.marker_close,
+                        )
+                        .top_border(),
+                    )
+                    .children(
+                        error.map(|error| div().px(px(16.)).pb(px(12.)).child(field_error(error))),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn appearance_body(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let palette = *palette;
+        let prefs = self.models.prefs.read(cx).read();
+        let theme = prefs.theme;
+        let sidebar_shown = !prefs.sidebar_hidden;
+        let cards = ThemeChoice::ALL.into_iter().map(|choice| {
+            let selected = choice == theme;
+            let id = match choice {
+                ThemeChoice::System => "theme-system",
+                ThemeChoice::Light => "theme-light",
+                ThemeChoice::Dark => "theme-dark",
+            };
+            v_flex()
+                .id(id)
+                .test_support()
+                .flex_1()
+                .min_w_0()
+                .gap(px(12.))
+                .p(px(12.))
+                .rounded(px(RADIUS_LG))
+                .border_1()
+                .border_color(if selected {
+                    palette.ink.opacity(0.48)
+                } else {
+                    palette.line
                 })
-            })
-            .collect();
-        let selected = ThemeChoice::ALL
-            .iter()
-            .position(|choice| *choice == theme)
-            .unwrap_or(0);
-        h_flex()
-            .child(segmented(items, selected))
+                .when(selected, |this| this.bg(palette.hover))
+                .cursor_pointer()
+                .hover(move |style| style.bg(palette.hover))
+                .on_click(move |_, window, cx| set_theme(choice, window, cx))
+                .child(
+                    div()
+                        .h(px(88.))
+                        .rounded(px(RADIUS))
+                        .overflow_hidden()
+                        .border_1()
+                        .border_color(palette.line_strong)
+                        .child(theme_preview(choice)),
+                )
+                .child(
+                    h_flex()
+                        .gap(px(8.))
+                        .items_center()
+                        .child(radio_dot(&palette, selected))
+                        .child(
+                            div()
+                                .text_size(px(14.))
+                                .line_height(px(20.))
+                                .text_color(palette.ink)
+                                .when(selected, |this| this.font_weight(FontWeight::MEDIUM))
+                                .child(choice.title()),
+                        ),
+                )
+        });
+        v_flex()
+            .gap(px(24.))
+            .child(
+                frame().child(frame_label(&palette, "Theme")).child(
+                    frame_panel()
+                        .p(px(16.))
+                        .child(h_flex().gap(px(12.)).children(cards))
+                        .child(
+                            div()
+                                .pt(px(14.))
+                                .text_size(px(13.))
+                                .line_height(px(18.))
+                                .text_color(palette.ink_muted)
+                                .child(
+                                    "System follows your operating system's light or dark setting.",
+                                ),
+                        ),
+                ),
+            )
+            .child(
+                frame().child(frame_label(&palette, "Layout")).child(
+                    frame_panel().child(
+                        setting_row(
+                            &palette,
+                            "Show sidebar",
+                            Some("Keep the navigation sidebar open beside your work.".into()),
+                        )
+                        .child(kbd_group("Mod+\\").chord())
+                        .child(
+                            switch("sidebar-switch", sidebar_shown)
+                                .accessibility_label("Show sidebar")
+                                .on_click(|_, _, cx| crate::app::toggle_sidebar(cx)),
+                        ),
+                    ),
+                ),
+            )
             .into_any_element()
     }
 
@@ -1380,181 +1612,582 @@ impl SettingsScreen {
         };
         let state = self.update_status.read(cx).state().clone();
         let checking = matches!(state, UpdateState::Checking);
-        let status: AnyElement = if !updates_enabled {
-            div()
-                .child("Automatic updates are off in this build.")
-                .into_any_element()
+        let (status, intent): (String, Option<Intent>) = if !updates_enabled {
+            ("Automatic updates are off in this build.".to_owned(), None)
         } else {
             match &state {
-                UpdateState::Idle => div().child("Not checked yet.").into_any_element(),
-                UpdateState::Checking => div().child("Checking…").into_any_element(),
-                UpdateState::UpToDate { at } => div()
-                    .child(format!("Up to date. Checked {}.", ago(*at)))
-                    .into_any_element(),
-                UpdateState::Ready(ready) => div()
-                    .child(format!("Version {} is ready to install.", ready.version()))
-                    .into_any_element(),
-                UpdateState::Failed { at, .. } => div()
-                    .text_color(palette.danger_text)
-                    .child(format!("Could not check for updates ({}).", ago(*at)))
-                    .into_any_element(),
+                UpdateState::Idle => ("Not checked yet.".to_owned(), None),
+                UpdateState::Checking => ("Checking for updates…".to_owned(), None),
+                UpdateState::UpToDate { at } => (
+                    format!("You're up to date. Checked {}.", ago(*at)),
+                    Some(Intent::Success),
+                ),
+                UpdateState::Ready(ready) => (
+                    format!("Version {} is ready to install.", ready.version()),
+                    Some(Intent::Info),
+                ),
+                UpdateState::Failed { at, .. } => (
+                    format!("Could not check for updates ({}).", ago(*at)),
+                    Some(Intent::Danger),
+                ),
             }
         };
-        let row = |name: &'static str, value: AnyElement| {
-            h_flex()
-                .min_h(px(28.))
-                .items_center()
-                .gap(px(12.))
-                .child(
-                    div()
-                        .w(px(100.))
-                        .flex_none()
-                        .text_size(px(14.))
-                        .text_color(palette.ink_muted)
-                        .child(name),
-                )
-                .child(div().flex_1().min_w_0().text_size(px(14.)).child(value))
+        let update_action: AnyElement = match &state {
+            UpdateState::Ready(ready) if updates_enabled => {
+                let ready = ready.clone();
+                primary_sm("restart-update", "Restart now")
+                    .on_click(move |_, window, cx| controller::restart(ready.clone(), window, cx))
+                    .into_any_element()
+            }
+            _ => button("check-updates", "Check now")
+                .outline()
+                .sm()
+                .icon(IconName::RefreshCw)
+                .disabled(!updates_enabled)
+                .busy(checking)
+                .on_click(|_, window, cx| check_for_updates(window, cx))
+                .into_any_element(),
         };
         let path_text = folder
             .as_ref()
             .map(|path| path.display().to_string())
             .unwrap_or_else(|| "Unavailable".to_owned());
-        let account = crate::auth::AuthModel::get(cx).map(|auth| {
-            let auth = auth.read(cx);
-            match auth.state() {
-                crate::auth::AuthState::SignedIn { account, online } => {
-                    let status = if *online { "" } else { " (offline)" };
-                    let trial = crate::auth::trial_days_left(account)
-                        .map(|days| format!(" · {}", crate::auth::trial_label(days)))
-                        .unwrap_or_default();
-                    (
-                        format!(
-                            "{} · {} · {}{trial}{status}",
-                            account.display_name(),
-                            account.email,
-                            account.role.label()
-                        ),
-                        true,
-                        account.role.is_admin(),
-                    )
-                }
-                _ => ("Not signed in".to_owned(), false, false),
-            }
-        });
-        v_flex()
-            .gap(px(4.))
-            .children(account.map(|(text, signed_in, admin)| {
-                row(
-                    "Account",
-                    h_flex()
-                        .gap(px(8.))
-                        .items_center()
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .text_color(palette.ink_muted)
-                                .child(label(text).ltr().truncate()),
-                        )
-                        .when(admin, |this| {
-                            this.child(ghost_sm("manage-people", "People").on_click(
-                                |_, window, cx| crate::ui::people::open_users(window, cx),
-                            ))
-                            .child(
-                                ghost_sm("manage-publishing", "Publishing").on_click(
-                                    |_, window, cx| {
-                                        crate::ui::publishing::open_publishing(window, cx)
-                                    },
-                                ),
-                            )
-                        })
-                        .when(signed_in, |this| {
-                            this.child(ghost_sm("change-password", "Change password").on_click(
-                                |_, window, cx| {
-                                    crate::ui::account::open_change_password(window, cx)
-                                },
-                            ))
-                            .child(
-                                ghost_sm("sign-out", "Sign out")
-                                    .on_click(|_, window, cx| crate::auth::sign_out(window, cx)),
-                            )
-                        })
-                        .into_any_element(),
-                )
-            }))
-            .child(row(
-                "Version",
-                div().child(env!("CARGO_PKG_VERSION")).into_any_element(),
-            ))
-            .child(row(
-                "Data folder",
-                h_flex()
-                    .gap(px(8.))
+        let identity = h_flex()
+            .gap(px(12.))
+            .items_center()
+            .px(px(16.))
+            .py(px(16.))
+            .child(
+                div()
+                    .size(px(40.))
+                    .flex_none()
+                    .rounded(px(RADIUS_LG))
+                    .bg(palette.action)
+                    .flex()
                     .items_center()
+                    .justify_center()
+                    .child(sized_icon(IconName::FileText, 20., palette.on_action)),
+            )
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
                     .child(
                         div()
-                            .flex_1()
-                            .min_w_0()
-                            .text_color(palette.ink_muted)
-                            .child(label(path_text).ltr().truncate()),
+                            .text_size(px(15.))
+                            .line_height(px(22.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(palette.ink)
+                            .child("Missal"),
                     )
-                    .children(folder.clone().map(|path| {
-                        ghost_sm("open-data-folder", "Open folder").on_click(move |_, _, cx| {
-                            cx.reveal_path(&path);
-                        })
-                    }))
-                    .into_any_element(),
-            ))
-            .child(row(
-                "Updates",
-                h_flex()
-                    .gap(px(12.))
-                    .items_center()
-                    .child(div().text_color(palette.ink_muted).child(status))
-                    .into_any_element(),
-            ))
-            .child(
-                h_flex()
-                    .mt(px(8.))
-                    .gap(px(8.))
                     .child(
-                        button("check-updates", "Check for updates")
-                            .outline()
-                            .sm()
-                            .icon(IconName::RefreshCw)
-                            .disabled(!updates_enabled)
-                            .busy(checking)
-                            .on_click(|_, window, cx| check_for_updates(window, cx)),
-                    )
-                    .children(match &state {
-                        UpdateState::Ready(ready) if updates_enabled => {
-                            let ready = ready.clone();
-                            Some(primary_sm("restart-update", "Restart now").on_click(
-                                move |_, window, cx| controller::restart(ready.clone(), window, cx),
-                            ))
-                        }
-                        _ => None,
-                    }),
+                        div()
+                            .text_size(px(13.))
+                            .line_height(px(18.))
+                            .text_color(palette.ink_muted)
+                            .child("FIRs and their documents, in Urdu."),
+                    ),
+            )
+            .child(
+                badge(BadgeVariant::Outline)
+                    .px(px(6.))
+                    .child(format!("Version {}", env!("CARGO_PKG_VERSION"))),
+            );
+        let status_line = h_flex()
+            .gap(px(6.))
+            .items_center()
+            .children(intent.map(|intent| {
+                let color = match intent {
+                    Intent::Success => palette.success,
+                    Intent::Danger => palette.danger,
+                    _ => palette.accent,
+                };
+                div().size(px(6.)).rounded_full().bg(color).flex_none()
+            }))
+            .child(status);
+        v_flex()
+            .gap(px(24.))
+            .child(
+                frame().child(
+                    frame_panel().child(identity).child(
+                        setting_row(&palette, "Updates", None)
+                            .top_border()
+                            .child(update_action)
+                            .map(|row| row.description_element(&palette, status_line)),
+                    ),
+                ),
+            )
+            .child(
+                frame()
+                    .child(frame_label(&palette, "On this computer"))
+                    .child(
+                        frame_panel()
+                            .child(
+                                setting_row(&palette, "Data folder", None)
+                                    .map(|row| {
+                                        row.description_element(
+                                            &palette,
+                                            label(path_text).ltr().truncate(),
+                                        )
+                                    })
+                                    .children(folder.clone().map(|path| {
+                                        button("open-data-folder", "Open")
+                                            .outline()
+                                            .sm()
+                                            .icon(IconName::FolderOpen)
+                                            .on_click(move |_, _, cx| cx.reveal_path(&path))
+                                    })),
+                            )
+                            .child(
+                                setting_row(
+                                    &palette,
+                                    "Keyboard shortcuts",
+                                    Some("Every shortcut in Missal, in one place.".into()),
+                                )
+                                .top_border()
+                                .child(
+                                    button("show-shortcuts", "Show")
+                                        .outline()
+                                        .sm()
+                                        .icon(IconName::Keyboard)
+                                        .on_click(|_, window, cx| {
+                                            crate::app::show_shortcuts(window, cx)
+                                        }),
+                                ),
+                            ),
+                    ),
             )
             .into_any_element()
     }
 
-    fn nav(&self, cx: &mut Context<Self>) -> Part {
-        let active = self.active_section();
-        sidebar_group()
+    fn account_body(&self, palette: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let palette = *palette;
+        let signed_in = crate::auth::AuthModel::get(cx).and_then(|auth| {
+            let auth = auth.read(cx);
+            let purchase = auth.purchase_url().is_some();
+            match auth.state() {
+                crate::auth::AuthState::SignedIn { account, online } => {
+                    Some((account.clone(), *online, purchase))
+                }
+                _ => None,
+            }
+        });
+        let Some((account, online, purchase)) = signed_in else {
+            return frame()
+                .child(
+                    frame_panel().child(
+                        empty_state_body(
+                            IconName::CircleUser,
+                            "Not signed in",
+                            Some("This copy of Missal runs without an account.".into()),
+                            None,
+                        )
+                        .py(px(40.)),
+                    ),
+                )
+                .into_any_element();
+        };
+        let admin = account.role.is_admin();
+        let licensed = admin || account.licence.status == missal_auth::LicenceStatus::Licensed;
+        let more = menu("account-more")
+            .trigger(icon_button(
+                "account-more",
+                IconName::Ellipsis,
+                "Account actions",
+            ))
+            .content(|menu, _, _| {
+                menu.item(
+                    MenuEntry::new("change-password", "Change password…", |window, cx| {
+                        crate::ui::account::open_change_password(window, cx)
+                    })
+                    .icon(IconName::KeyRound),
+                )
+                .separator()
+                .item(
+                    MenuEntry::new("sign-out", "Sign out", |window, cx| {
+                        crate::auth::sign_out(window, cx)
+                    })
+                    .icon(IconName::LogOut),
+                )
+            });
+        let profile = h_flex()
+            .gap(px(12.))
+            .items_center()
+            .px(px(16.))
+            .py(px(16.))
+            .child(Avatar::new().name(account.display_name().to_owned()))
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .child(
+                        h_flex()
+                            .gap(px(8.))
+                            .items_center()
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .text_size(px(15.))
+                                    .line_height(px(22.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(palette.ink)
+                                    .child(
+                                        label(account.display_name().to_owned()).ltr().truncate(),
+                                    ),
+                            )
+                            .child(
+                                badge(BadgeVariant::Outline)
+                                    .px(px(6.))
+                                    .child(account.role.label()),
+                            )
+                            .when(!online, |this| {
+                                this.child(
+                                    badge(BadgeVariant::Intent(Intent::Neutral))
+                                        .px(px(6.))
+                                        .child("Offline"),
+                                )
+                            }),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .line_height(px(18.))
+                            .text_color(palette.ink_muted)
+                            .child(label(account.email.clone()).ltr().truncate()),
+                    ),
+            )
+            .child(more);
+        let licence_note = if admin {
+            "Administrators never need a licence.".to_owned()
+        } else {
+            crate::ui::people::licence_text(&account)
+        };
+        let licence = setting_row(&palette, "Licence", Some(licence_note.into()))
+            .top_border()
+            .child(crate::ui::people::standing_badge(&account))
+            .when(purchase && !licensed, |this| {
+                this.child(
+                    primary_sm("buy-licence", "Buy licence")
+                        .on_click(|_, _, cx| crate::auth::open_purchase(cx)),
+                )
+            });
+        let link_row = |id: &'static str,
+                        icon: IconName,
+                        title: &'static str,
+                        description: &'static str,
+                        open: fn(&mut Window, &mut App)| {
+            h_flex()
+                .id(id)
+                .test_support()
+                .gap(px(12.))
+                .items_center()
+                .px(px(16.))
+                .py(px(12.))
+                .cursor_pointer()
+                .hover(move |style| style.bg(palette.hover))
+                .active(move |style| style.bg(palette.pressed))
+                .on_click(move |_, window, cx| open(window, cx))
+                .child(
+                    div()
+                        .size(px(32.))
+                        .flex_none()
+                        .rounded(px(RADIUS))
+                        .border_1()
+                        .border_color(palette.line)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(small_icon(icon, palette.ink_muted)),
+                )
+                .child(row_text(&palette, title, Some(description.into())))
+                .child(small_icon(IconName::ChevronRight, palette.ink_faint))
+        };
+        v_flex()
+            .gap(px(24.))
+            .child(frame().child(frame_panel().child(profile).child(licence)))
+            .when(admin, |this| {
+                this.child(
+                    frame()
+                        .child(frame_label(&palette, "Administration"))
+                        .child(
+                            frame_panel()
+                                .overflow_hidden()
+                                .child(link_row(
+                                    "manage-people",
+                                    IconName::Users,
+                                    "People",
+                                    "Add people, renew licences and reset passwords.",
+                                    crate::ui::people::open_users,
+                                ))
+                                .child(
+                                    link_row(
+                                        "manage-publishing",
+                                        IconName::Upload,
+                                        "Publishing",
+                                        "Share templates through the library.",
+                                        crate::ui::publishing::open_publishing,
+                                    )
+                                    .border_t_1()
+                                    .border_color(palette.line),
+                                ),
+                        ),
+                )
+            })
+            .into_any_element()
+    }
+
+    fn nav(&self, palette: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = *palette;
+        let has_account = crate::auth::AuthModel::get(cx).is_some();
+        let globals = self.globals.iter().filter(|row| row.id.is_some()).count();
+        let customs = self.customs.iter().filter(|row| row.id.is_some()).count();
+        let ready = self.models.catalog.read(cx).load.is_ready();
+        v_flex()
             .w(px(NAV_WIDTH))
             .flex_none()
             .h_full()
-            .p(px(8.))
-            .child(sidebar_group_label().child("Settings"))
-            .children(SECTIONS.iter().enumerate().map(|(index, title)| {
-                sidebar_menu_button(("settings-nav", index), index == active)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.scroll_to(index);
-                        cx.notify();
-                    }))
-                    .child(*title)
+            .px(px(8.))
+            .py(px(12.))
+            .gap(px(16.))
+            .children(NAV_GROUPS.iter().filter_map(|(group, pages)| {
+                let pages: Vec<Page> = pages
+                    .iter()
+                    .copied()
+                    .filter(|page| *page != Page::Account || has_account)
+                    .collect();
+                if pages.is_empty() {
+                    return None;
+                }
+                Some(
+                    sidebar_group()
+                        .child(sidebar_group_label().child(*group))
+                        .children(pages.into_iter().map(|page| {
+                            let active = page == self.page;
+                            let count = match page {
+                                Page::Globals if ready => Some(globals),
+                                Page::Customs if ready => Some(customs),
+                                Page::BuiltIn => Some(FIR_FIELDS.len()),
+                                _ => None,
+                            };
+                            sidebar_menu_button(page.id(), active)
+                                .on_click(cx.listener(move |this, _, _, cx| this.show(page, cx)))
+                                .child(small_icon(
+                                    page.icon(),
+                                    if active {
+                                        palette.ink
+                                    } else {
+                                        palette.ink_muted
+                                    },
+                                ))
+                                .child(div().flex_1().min_w_0().truncate().child(page.title()))
+                                .children(count.map(|count| {
+                                    div()
+                                        .text_size(px(12.))
+                                        .text_color(palette.ink_faint)
+                                        .font_features(crate::ui::tabular())
+                                        .child(count.to_string())
+                                }))
+                        })),
+                )
             }))
+    }
+}
+
+struct SettingRow {
+    top: bool,
+    title: &'static str,
+    description: Option<AnyElement>,
+    controls: Vec<AnyElement>,
+    palette: Palette,
+}
+
+fn setting_row(
+    palette: &Palette,
+    title: &'static str,
+    description: Option<gpui_kit::SharedString>,
+) -> SettingRow {
+    SettingRow {
+        top: false,
+        title,
+        description: description.map(|text| div().child(text).into_any_element()),
+        controls: Vec::new(),
+        palette: *palette,
+    }
+}
+
+impl SettingRow {
+    fn description_element(mut self, _: &Palette, element: impl IntoElement) -> SettingRow {
+        self.description = Some(element.into_any_element());
+        self
+    }
+
+    fn map(self, f: impl FnOnce(SettingRow) -> SettingRow) -> SettingRow {
+        f(self)
+    }
+}
+
+impl ParentElement for SettingRow {
+    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
+        self.controls.extend(elements)
+    }
+}
+
+impl SettingRow {
+    fn top_border(mut self) -> SettingRow {
+        self.top = true;
+        self
+    }
+
+    fn into_div(self) -> gpui_kit::Div {
+        h_flex()
+            .gap(px(16.))
+            .items_center()
+            .px(px(16.))
+            .py(px(12.))
+            .min_h(px(60.))
+            .when(self.top, |this| {
+                this.border_t_1().border_color(self.palette.line)
+            })
+            .child(row_text_with(&self.palette, self.title, self.description))
+            .children(self.controls)
+    }
+}
+
+impl IntoElement for SettingRow {
+    type Element = gpui_kit::Div;
+
+    fn into_element(self) -> Self::Element {
+        self.into_div()
+    }
+}
+
+fn row_text(
+    palette: &Palette,
+    title: &'static str,
+    description: Option<gpui_kit::SharedString>,
+) -> gpui_kit::Div {
+    row_text_with(
+        palette,
+        title,
+        description.map(|text| div().child(text).into_any_element()),
+    )
+}
+
+fn row_text_with(
+    palette: &Palette,
+    title: &'static str,
+    description: Option<AnyElement>,
+) -> gpui_kit::Div {
+    v_flex()
+        .flex_1()
+        .min_w_0()
+        .gap(px(2.))
+        .child(
+            div()
+                .text_size(px(14.))
+                .line_height(px(20.))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(palette.ink)
+                .child(title),
+        )
+        .children(description.map(|description| {
+            div()
+                .min_w_0()
+                .text_size(px(13.))
+                .line_height(px(18.))
+                .text_color(palette.ink_muted)
+                .child(description)
+        }))
+}
+
+fn frame_label(palette: &Palette, text: &'static str) -> gpui_kit::Div {
+    h_flex()
+        .h(px(32.))
+        .px(px(12.))
+        .text_size(px(12.))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(palette.ink_muted)
+        .child(text)
+}
+
+fn radio_dot(palette: &Palette, selected: bool) -> gpui_kit::Div {
+    div()
+        .size(px(16.))
+        .flex_none()
+        .rounded_full()
+        .border_1()
+        .border_color(if selected {
+            palette.ink
+        } else {
+            palette.line_strong
+        })
+        .flex()
+        .items_center()
+        .justify_center()
+        .when(selected, |this| {
+            this.child(div().size(px(8.)).rounded_full().bg(palette.ink))
+        })
+}
+
+fn bar(color: gpui_kit::Hsla, width: f32) -> gpui_kit::Div {
+    div()
+        .h(px(4.))
+        .w(gpui_kit::relative(width))
+        .rounded(px(2.))
+        .bg(color)
+}
+
+fn preview_sidebar(palette: &Palette) -> gpui_kit::Div {
+    v_flex()
+        .w(px(44.))
+        .flex_none()
+        .h_full()
+        .bg(palette.sidebar)
+        .p(px(7.))
+        .gap(px(5.))
+        .child(bar(palette.ink_muted, 0.8))
+        .child(bar(palette.line_strong, 0.6))
+        .child(bar(palette.line_strong, 0.7))
+}
+
+fn preview_content(palette: &Palette) -> gpui_kit::Div {
+    v_flex()
+        .flex_1()
+        .h_full()
+        .bg(palette.surface)
+        .p(px(8.))
+        .gap(px(6.))
+        .child(bar(palette.ink.opacity(0.72), 0.45))
+        .child(
+            div()
+                .h(px(16.))
+                .w_full()
+                .rounded(px(3.))
+                .border_1()
+                .border_color(palette.line_strong),
+        )
+        .child(bar(palette.line_strong, 0.9))
+        .child(bar(palette.line_strong, 0.7))
+        .child(bar(palette.line_strong, 0.8))
+}
+
+fn theme_preview(choice: ThemeChoice) -> gpui_kit::Div {
+    let light = Palette::light();
+    let dark = Palette::dark();
+    match choice {
+        ThemeChoice::Light => h_flex()
+            .size_full()
+            .child(preview_sidebar(&light))
+            .child(preview_content(&light)),
+        ThemeChoice::Dark => h_flex()
+            .size_full()
+            .child(preview_sidebar(&dark))
+            .child(preview_content(&dark)),
+        ThemeChoice::System => h_flex()
+            .size_full()
+            .child(preview_sidebar(&light))
+            .child(preview_content(&light))
+            .child(preview_content(&dark)),
     }
 }
 
@@ -1566,59 +2199,20 @@ impl Render for SettingsScreen {
             self.sync(window, cx);
         }
         let _ = &self.subscriptions;
-        let flash = self.flash.map(|(section, _)| section);
-        let custom_count = self.customs.len();
-        let globals_body = self.globals_body(&palette, cx);
-        let markers_body = self.markers_body(&palette, cx);
-        let customs_body = self.customs_body(&palette, cx);
-        let built_in_body = self.built_in_body(&palette, cx);
-        let appearance_body = self.appearance_body(cx);
-        let about_body = self.about_body(&palette, cx);
-        let nav = self.nav(cx);
-        let sections = [
-            self.section(
-                0,
-                None,
-                flash == Some(Section::Globals),
-                "Filled into every FIR's documents, such as the police station name.",
-                globals_body,
-            ),
-            self.section(
-                1,
-                None,
-                flash == Some(Section::Markers),
-                "The symbols around a field name when you type it into a document.",
-                markers_body,
-            ),
-            self.section(
-                2,
-                Some(custom_count),
-                flash == Some(Section::Customs),
-                "Extra fields you fill per FIR. Renaming keeps templates linked.",
-                customs_body,
-            ),
-            self.section(
-                3,
-                None,
-                false,
-                "Filled from each FIR's details. Hover a name to see how it is typed.",
-                built_in_body,
-            ),
-            self.section(
-                4,
-                None,
-                false,
-                "System follows your operating system.",
-                appearance_body,
-            ),
-            self.section(
-                5,
-                None,
-                false,
-                "Missal keeps everything on this computer.",
-                about_body,
-            ),
-        ];
+        if self.page == Page::Account && crate::auth::AuthModel::get(cx).is_none() {
+            self.page = Page::Globals;
+        }
+        let body = match self.page {
+            Page::Globals => self.globals_body(&palette, cx),
+            Page::Customs => self.customs_body(&palette, cx),
+            Page::BuiltIn => self.built_in_body(&palette, cx),
+            Page::Markers => self.markers_body(&palette, cx),
+            Page::Appearance => self.appearance_body(&palette, cx),
+            Page::About => self.about_body(&palette, cx),
+            Page::Account => self.account_body(&palette, cx),
+        };
+        let header = self.page_header(&palette, cx).into_any_element();
+        let nav = self.nav(&palette, cx).into_any_element();
         h_flex()
             .id("settings")
             .key_context("Settings")
@@ -1638,13 +2232,21 @@ impl Render for SettingsScreen {
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .pt(px(28.))
                     .overflow_y_scroll()
                     .track_scroll(&self.scroll)
-                    .on_scroll(cx.listener(|_, _, _, cx| cx.notify()))
                     .items_center()
-                    .children(sections)
-                    .child(div().h(px(420.)).flex_none()),
+                    .child(
+                        v_flex()
+                            .id(("settings-page", self.page as usize))
+                            .w(px(COLUMN_WIDTH))
+                            .max_w_full()
+                            .flex_shrink_0()
+                            .px(px(24.))
+                            .pt(px(32.))
+                            .pb(px(96.))
+                            .child(header)
+                            .child(body),
+                    ),
             )
     }
 }

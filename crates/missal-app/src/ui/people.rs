@@ -110,7 +110,7 @@ fn days_left(user: &Account) -> i64 {
     ((user.licence.until_ms - Utc::now().timestamp_millis()) + DAY_MS - 1).max(0) / DAY_MS
 }
 
-fn standing_badge(user: &Account) -> AnyElement {
+pub(crate) fn standing_badge(user: &Account) -> AnyElement {
     let (intent, text) = match standing(user) {
         Standing::Admin => (Intent::Success, "Always licensed".to_owned()),
         Standing::Disabled => (Intent::Neutral, "Disabled".to_owned()),
@@ -130,7 +130,7 @@ fn standing_badge(user: &Account) -> AnyElement {
         .into_any_element()
 }
 
-fn licence_text(user: &Account) -> String {
+pub(crate) fn licence_text(user: &Account) -> String {
     let date = date_text(user.licence.until_ms);
     match user.licence.status {
         _ if user.role.is_admin() => "Always licensed".to_owned(),
