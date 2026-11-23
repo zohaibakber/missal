@@ -13,6 +13,7 @@ use crate::theme::{
     HEADER_HEIGHT, ICON, Palette, RADIUS, SIDEBAR_COMPACT_WIDTH, SIDEBAR_ITEM, SIDEBAR_WIDTH,
     TOOLTIP_DELAY,
 };
+use crate::ui::admin::is_admin;
 use crate::ui::nav_menu::NavEntry;
 use crate::ui::status::status_dot;
 use crate::ui::titlebar::{
@@ -110,6 +111,7 @@ fn render_compact(
         drag_region(row, "sidebar-drag-state", window, cx)
     });
     let section = NavEntry::destination(route);
+    let admin = is_admin(cx);
     let nav = |entry: NavEntry, icon: IconName, target: Route| {
         compact_item(
             SharedString::from(format!("sidebar-{}", entry.id())),
@@ -141,6 +143,22 @@ fn render_compact(
             Route::Templates,
         ))
         .child(nav(NavEntry::Settings, IconName::Settings, Route::Settings))
+        .when(admin, |this| {
+            this.child(
+                div()
+                    .flex_none()
+                    .w(px(20.))
+                    .h(px(1.))
+                    .my(px(6.))
+                    .bg(palette.line),
+            )
+            .child(nav(NavEntry::People, IconName::Users, Route::People))
+            .child(nav(
+                NavEntry::Publishing,
+                IconName::CloudUpload,
+                Route::Publishing,
+            ))
+        })
         .child(div().flex_1())
         .child(compact_item(
             "sidebar-shortcuts".into(),
@@ -324,6 +342,7 @@ impl RenderOnce for Sidebar {
             })
             .collect();
         let has_recent = !recent.is_empty();
+        let admin = is_admin(cx);
         v_flex()
             .id("sidebar")
             .flex_none()
@@ -361,6 +380,26 @@ impl RenderOnce for Sidebar {
                 Route::Settings,
                 &palette,
             ))
+            .when(admin, |this| {
+                this.child(div().h(px(14.)))
+                    .child(group_label("Admin", &palette))
+                    .child(nav_item(
+                        NavEntry::People,
+                        IconName::Users,
+                        None,
+                        section == NavEntry::People,
+                        Route::People,
+                        &palette,
+                    ))
+                    .child(nav_item(
+                        NavEntry::Publishing,
+                        IconName::CloudUpload,
+                        None,
+                        section == NavEntry::Publishing,
+                        Route::Publishing,
+                        &palette,
+                    ))
+            })
             .when(has_recent, |this| {
                 this.child(div().h(px(14.)))
                     .child(group_label("Recent", &palette))

@@ -691,9 +691,12 @@ fn run_gate(dark: bool, out: &Path, api: &str) {
     h.fill("sign-in-password", "correct horse battery");
     h.click("auth-submit");
     h.wait_auth(|state| matches!(state, AuthState::SignedIn { .. }));
-    h.with_window(missal_app::ui::people::open_users);
+    h.go(Route::People);
     h.idle();
     h.shot("49-people");
+    h.with_window(|window, cx| window.click(("people-row-more", 2usize), cx));
+    h.shot("49h-people-row-menu");
+    h.press("escape");
     h.with_window(|window, cx| window.click(("people-row", 1usize), cx));
     h.idle();
     h.shot("49a-people-lapsed");
@@ -705,7 +708,8 @@ fn run_gate(dark: bool, out: &Path, api: &str) {
     h.click("people-more");
     h.shot("49d-people-more-menu");
     h.click("people-more");
-    h.with_window(|window, cx| window.click(("people-filter", 4usize), cx));
+    h.click("people-filter");
+    h.click("people-filter-4");
     h.idle();
     h.shot("49e-people-unconfirmed");
     h.click("people-add");
@@ -718,6 +722,11 @@ fn run_gate(dark: bool, out: &Path, api: &str) {
     h.click("new-person-save");
     h.idle();
     h.shot("49g-people-added");
+    h.click("people-more");
+    h.click("people-delete");
+    h.idle();
+    h.shot("49i-people-delete-confirm");
+    h.click("delete-confirm-cancel");
     h.press("escape");
     publishing_shots(&mut h);
     h.with_window(missal_app::ui::account::open_change_password);
@@ -758,7 +767,7 @@ fn publishing_shots(h: &mut Harness) {
             .update(cx, |library, cx| library.refresh(cx));
     });
     h.idle();
-    h.with_window(missal_app::ui::publishing::open_publishing);
+    h.go(Route::Publishing);
     h.idle();
     h.shot("50-publishing");
     let behind = h.with_window(|_, cx| {
@@ -783,7 +792,8 @@ fn publishing_shots(h: &mut Harness) {
     h.click("restore-confirm");
     h.idle();
     h.shot("50d-publishing-restored");
-    h.with_window(|window, cx| window.click(("publishing-filter", 1usize), cx));
+    h.click("publishing-filter");
+    h.click("publishing-filter-1");
     h.idle();
     h.shot("50e-publishing-needs-action");
     h.click("publishing-all");

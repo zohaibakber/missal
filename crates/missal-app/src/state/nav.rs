@@ -22,6 +22,8 @@ pub enum Route {
     Templates,
     NewTemplate,
     Template(TemplateId),
+    People,
+    Publishing,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
