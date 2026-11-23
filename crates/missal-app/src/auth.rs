@@ -104,8 +104,12 @@ struct AuthHandle(Entity<AuthModel>);
 
 impl Global for AuthHandle {}
 
+pub fn password_too_short(password: &str) -> bool {
+    password.chars().count() < MIN_PASSWORD
+}
+
 pub fn password_problem(password: &str, confirm: &str) -> Option<&'static str> {
-    if password.chars().count() < MIN_PASSWORD {
+    if password_too_short(password) {
         Some("Use at least 10 characters.")
     } else if password != confirm {
         Some("The two passwords do not match.")
@@ -748,8 +752,15 @@ impl AuthGate {
         input.update(cx, |input, cx| input.focus(window, cx));
     }
 
-    fn refuse(&mut self, problem: &str, cx: &mut Context<Self>) {
+    fn refuse(
+        &mut self,
+        problem: &str,
+        field: &Entity<TextInput>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.problem = Some(problem.to_owned().into());
+        field.update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
     }
 
@@ -762,27 +773,33 @@ impl AuthGate {
         email.contains('@').then_some(email)
     }
 
-    fn new_password(&mut self, cx: &mut Context<Self>) -> Option<String> {
+    fn new_password(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<String> {
         let password = self.text(&self.new_password, cx);
         let confirm = self.text(&self.confirm, cx);
         match password_problem(&password, &confirm) {
             Some(problem) => {
-                self.refuse(problem, cx);
+                let field = if password_too_short(&password) {
+                    self.new_password.clone()
+                } else {
+                    self.confirm.clone()
+                };
+                self.refuse(problem, &field, window, cx);
                 None
             }
             None => Some(password),
         }
     }
 
-    fn code(&mut self, cx: &mut Context<Self>) -> Option<String> {
+    fn code(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Option<String> {
         let code = code_digits(self.code.read(cx).text());
         if code.is_none() {
-            self.refuse("Enter the 6-digit code from the email.", cx);
+            let field = self.code.clone();
+            self.refuse("Enter the 6-digit code from the email.", &field, window, cx);
         }
         code
     }
 
-    fn submit(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+    fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let flow = match self.auth.read(cx).state() {
             AuthState::SignedOut {
                 flow, busy: false, ..
@@ -798,7 +815,12 @@ impl AuthGate {
                 let email = self.email.read(cx).text().trim().to_owned();
                 let password = self.text(&self.password, cx);
                 if email.is_empty() || password.is_empty() {
-                    return self.refuse("Enter your email and password.", cx);
+                    let field = if email.is_empty() {
+                        self.email.clone()
+                    } else {
+                        self.password.clone()
+                    };
+                    return self.refuse("Enter your email and password.", &field, window, cx);
                 }
                 self.password.update(cx, |input, cx| input.set_text("", cx));
                 self.auth
@@ -807,19 +829,21 @@ impl AuthGate {
             Flow::SignUp => {
                 let name = self.name.read(cx).text().trim().to_owned();
                 if name.is_empty() {
-                    return self.refuse("Enter your name.", cx);
+                    let field = self.name.clone();
+                    return self.refuse("Enter your name.", &field, window, cx);
                 }
                 let Some(email) = self.email(cx) else {
-                    return self.refuse("Enter your email address.", cx);
+                    let field = self.email.clone();
+                    return self.refuse("Enter your email address.", &field, window, cx);
                 };
-                let Some(password) = self.new_password(cx) else {
+                let Some(password) = self.new_password(window, cx) else {
                     return;
                 };
                 self.auth
                     .update(cx, |auth, cx| auth.sign_up(email, name, password, cx));
             }
             Flow::VerifyEmail { email } => {
-                let Some(code) = self.code(cx) else {
+                let Some(code) = self.code(window, cx) else {
                     return;
                 };
                 self.auth
@@ -827,16 +851,17 @@ impl AuthGate {
             }
             Flow::ForgotPassword => {
                 let Some(email) = self.email(cx) else {
-                    return self.refuse("Enter your email address.", cx);
+                    let field = self.email.clone();
+                    return self.refuse("Enter your email address.", &field, window, cx);
                 };
                 self.auth
                     .update(cx, |auth, cx| auth.send_code(email, CodePurpose::Reset, cx));
             }
             Flow::ResetPassword { email } => {
-                let Some(code) = self.code(cx) else {
+                let Some(code) = self.code(window, cx) else {
                     return;
                 };
-                let Some(password) = self.new_password(cx) else {
+                let Some(password) = self.new_password(window, cx) else {
                     return;
                 };
                 self.auth.update(cx, |auth, cx| {
@@ -1087,7 +1112,7 @@ impl AuthGate {
             notice,
             busy,
             fields: vec![account_chip(palette, &account.email)],
-            action: "I've bought a licence, check again",
+            action: "I’ve bought a licence, check again",
             links,
         }
     }

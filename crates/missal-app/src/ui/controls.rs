@@ -12,7 +12,7 @@ use gpui_kit::{
 
 use crate::theme::{
     CHECKBOX, ICON_SM, ICON_XS, Palette, RADIUS, RADIUS_CHIP, RADIUS_LG, SEGMENTED_ITEM,
-    SIDEBAR_ITEM, TOOLTIP_DELAY, hex_alpha,
+    SIDEBAR_ITEM, hex_alpha,
 };
 use crate::ui::part::{Part, part, underlay};
 use crate::ui::{ClickHandler, inset_shadow, sized_icon, tooltip};
@@ -139,6 +139,24 @@ impl Checkbox {
     pub fn disabled(self, disabled: bool) -> Self {
         self.map(|checkbox| checkbox.disabled(disabled))
     }
+}
+
+pub const HIT_TARGET: f32 = 24.;
+
+pub fn hit_target(id: impl Into<ElementId>, visual: f32) -> gpui_kit::Stateful<gpui_kit::Div> {
+    let bleed = ((HIT_TARGET - visual) / 2.).max(0.);
+    gpui_kit::div()
+        .id(id)
+        .flex_none()
+        .size(px(visual.max(HIT_TARGET)))
+        .m(px(-bleed))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .on_mouse_down(gpui_kit::MouseButton::Left, |_, _, cx| {
+            cx.stop_propagation()
+        })
 }
 
 fn mark(icon: IconName) -> Part {
@@ -307,7 +325,7 @@ pub fn icon_segmented(items: Vec<IconSegment>, selected: usize, palette: &Palett
             .h(px(24.))
             .px_0()
             .tooltip(tooltip(item.label, None))
-            .tooltip_show_delay(TOOLTIP_DELAY)
+            .tooltip_show_delay(crate::ui::tooltip_delay())
             .on_click(move |event, window, cx| handler(event, window, cx))
             .child(sized_icon(
                 item.icon,

@@ -29,13 +29,13 @@ use crate::packet::{LaidOut, PacketJob, distinct_empty};
 use crate::printing::{self, Handoff};
 use crate::shortcuts::*;
 use crate::state::{Models, PrintTarget, ToastKind, db, show_toast, toast_success};
-use crate::theme::{ICON_SM, ICON_XS, Palette, RADIUS, RADIUS_PAPER};
+use crate::theme::{CHECKBOX, ICON_SM, ICON_XS, Palette, RADIUS, RADIUS_PAPER};
 use crate::ui::popup_menu::{Dismissed, MenuContent, MenuEntry, Placement, PopupList};
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
 use crate::ui::toast::ToastSpec;
 use crate::ui::{
-    UrRole, button, checkbox, empty_state, icon_button, isolate_urdu, primary_sm, sized_icon,
-    skeleton_bar, tabular, ur_inline, ur_label,
+    UrRole, button, checkbox, empty_state, hit_target, icon_button, isolate_urdu, primary_sm,
+    sized_icon, skeleton_bar, tabular, ur_inline, ur_label,
 };
 use missal_core::digit_value;
 
@@ -906,7 +906,7 @@ impl PrintPreview {
                             cx,
                             ToastSpec::new(
                                 ToastKind::Error,
-                                format!("Couldn't open the save dialog ({error})"),
+                                format!("Couldn’t open the save dialog ({error})"),
                             ),
                         );
                         cx.notify();
@@ -962,7 +962,7 @@ impl PrintPreview {
                             cx,
                             ToastSpec::new(
                                 ToastKind::Error,
-                                format!("Couldn't save the PDF ({error})"),
+                                format!("Couldn’t save the PDF ({error})"),
                             )
                             .action("Retry", move |window, cx| {
                                 retry
@@ -1041,7 +1041,7 @@ impl PrintPreview {
                             cx,
                             ToastSpec::new(
                                 ToastKind::Error,
-                                format!("Couldn't prepare the print job ({error})"),
+                                format!("Couldn’t prepare the print job ({error})"),
                             )
                             .action("Retry", move |window, cx| {
                                 retry.update(cx, |this, cx| this.print(window, cx)).ok();
@@ -1246,12 +1246,19 @@ impl PrintPreview {
                     ))
                     .into_any_element()
             } else {
-                checkbox(("print-include", index), doc.included)
-                    .accessibility_label(SharedString::from(format!("Print {}", doc.title)))
+                hit_target(("print-include-hit", index), CHECKBOX)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         cx.stop_propagation();
                         this.toggle_included(index, cx)
                     }))
+                    .child(
+                        checkbox(("print-include", index), doc.included)
+                            .accessibility_label(SharedString::from(format!("Print {}", doc.title)))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.toggle_included(index, cx)
+                            })),
+                    )
                     .into_any_element()
             };
             h_flex()
@@ -1314,9 +1321,18 @@ impl PrintPreview {
                 } else {
                     crate::ui::checkbox_mixed("print-include-all")
                 };
-                this.child(toggle.accessibility_label("Print every document").on_click(
-                    cx.listener(move |this, _, _, cx| this.set_all_included(included < total, cx)),
-                ))
+                this.child(
+                    hit_target("print-include-all-hit", CHECKBOX)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.set_all_included(included < total, cx)
+                        }))
+                        .child(toggle.accessibility_label("Print every document").on_click(
+                            cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.set_all_included(included < total, cx)
+                            }),
+                        )),
+                )
             })
             .child(div().flex_1())
             .child(
@@ -1400,7 +1416,7 @@ impl PrintPreview {
             }
             State::Failed(message) => empty_state(
                 IconName::TriangleAlert,
-                "Couldn't prepare the preview",
+                "Couldn’t prepare the preview",
                 Some(message.clone().into()),
                 Some(
                     button("preview-retry", "Try again")

@@ -23,8 +23,10 @@ pub mod window_controls;
 pub use controls::*;
 pub use parts::*;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, LazyLock};
+use std::time::{Duration, Instant};
 
 use gpui_kit::assets::IconName;
 use gpui_kit::base::Button as BaseButton;
@@ -39,7 +41,8 @@ use missal_text::{Align, Label, LineHeight, label};
 
 use crate::theme::{
     BUTTON_MD, BUTTON_SM, BUTTON_XS, ICON, ICON_BUTTON, ICON_BUTTON_DENSE, ICON_SM, Palette,
-    RADIUS, RADIUS_LG, TOOLTIP_DELAY, hex_alpha,
+    RADIUS, RADIUS_LG, SPINNER_MIN_VISIBLE, SPINNER_SHOW_DELAY, TOOLTIP_DELAY, TOOLTIP_SKIP_DELAY,
+    hex_alpha,
 };
 
 pub type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
@@ -143,6 +146,26 @@ impl Render for TooltipView {
     }
 }
 
+#[derive(Default)]
+struct TooltipWarmth {
+    open: usize,
+    closed_at: Option<Instant>,
+}
+
+thread_local! {
+    static TOOLTIPS: RefCell<TooltipWarmth> = RefCell::default();
+}
+
+pub fn tooltip_delay() -> Duration {
+    TOOLTIPS.with_borrow(|warmth| {
+        let warm = warmth.open > 0
+            || warmth
+                .closed_at
+                .is_some_and(|at| at.elapsed() < TOOLTIP_SKIP_DELAY);
+        if warm { Duration::ZERO } else { TOOLTIP_DELAY }
+    })
+}
+
 pub fn tooltip(
     label: impl Into<SharedString>,
     keys: Option<&str>,
@@ -150,11 +173,24 @@ pub fn tooltip(
     let label: SharedString = label.into();
     let keys: Option<SharedString> = keys.map(|keys| SharedString::from(keys.to_owned()));
     move |_, cx| {
-        cx.new(|_| TooltipView {
+        let view = cx.new(|_| TooltipView {
             label: label.clone(),
             keys: keys.clone(),
+        });
+        TOOLTIPS.with_borrow_mut(|warmth| warmth.open += 1);
+        cx.observe_release(&view, |_, cx| {
+            TOOLTIPS.with_borrow_mut(|warmth| {
+                warmth.open = warmth.open.saturating_sub(1);
+                warmth.closed_at = Some(Instant::now());
+            });
+            cx.spawn(async move |cx| {
+                cx.background_executor().timer(TOOLTIP_SKIP_DELAY).await;
+                cx.update(|cx| cx.refresh_windows());
+            })
+            .detach();
         })
-        .into()
+        .detach();
+        view.into()
     }
 }
 
@@ -315,6 +351,79 @@ fn with_focus_ring(palette: &Palette, mut shadows: Vec<BoxShadow>) -> Vec<BoxSha
     shadows
 }
 
+#[derive(Default)]
+struct BusyGate {
+    busy: bool,
+    visible: bool,
+    shown_at: Option<Instant>,
+    timer: Option<gpui_kit::Task<()>>,
+}
+
+fn busy_timer(
+    gate: &Rc<RefCell<BusyGate>>,
+    wait: Duration,
+    window: &Window,
+    cx: &App,
+    apply: fn(&mut BusyGate),
+) -> gpui_kit::Task<()> {
+    let gate = gate.clone();
+    window.spawn(cx, async move |cx| {
+        cx.background_executor().timer(wait).await;
+        apply(&mut gate.borrow_mut());
+        cx.update(|window, _| window.refresh()).ok();
+    })
+}
+
+fn busy_spinner_shown(id: &ElementId, busy: bool, window: &mut Window, cx: &mut App) -> bool {
+    window.with_global_id(id.clone(), |global_id, window| {
+        window.with_element_state(
+            global_id,
+            |gate: Option<Option<Rc<RefCell<BusyGate>>>>, window| {
+                let gate = gate.flatten().or_else(|| busy.then(Default::default));
+                let Some(gate) = gate else {
+                    return (false, None);
+                };
+                let shown = {
+                    let mut state = gate.borrow_mut();
+                    if state.busy != busy {
+                        state.busy = busy;
+                        state.timer = None;
+                        if busy && !state.visible {
+                            state.timer =
+                                Some(busy_timer(&gate, SPINNER_SHOW_DELAY, window, cx, |state| {
+                                    if state.busy {
+                                        state.visible = true;
+                                        state.shown_at = Some(Instant::now());
+                                    }
+                                }));
+                        } else if !busy && state.visible {
+                            let shown_for = state
+                                .shown_at
+                                .map_or(SPINNER_MIN_VISIBLE, |at| at.elapsed());
+                            let left = SPINNER_MIN_VISIBLE.saturating_sub(shown_for);
+                            if left.is_zero() {
+                                state.visible = false;
+                            } else {
+                                state.timer = Some(busy_timer(&gate, left, window, cx, |state| {
+                                    if !state.busy {
+                                        state.visible = false;
+                                    }
+                                }));
+                            }
+                        }
+                    }
+                    state.visible
+                };
+                let keep = {
+                    let state = gate.borrow();
+                    state.busy || state.visible
+                };
+                (shown, keep.then_some(gate))
+            },
+        )
+    })
+}
+
 #[derive(IntoElement)]
 pub struct ActionButton {
     id: ElementId,
@@ -458,10 +567,12 @@ impl ActionButton {
 }
 
 impl RenderOnce for ActionButton {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let palette = *Palette::get(cx);
         let look = button_look(&palette, self.kind);
-        let disabled = self.disabled || self.busy;
+        let spinning = busy_spinner_shown(&self.id, self.busy, window, cx);
+        let blocked = self.disabled || self.busy || spinning;
+        let disabled = self.disabled || spinning;
         let (text_size, line) = self.size.text();
         let focus_shadows = with_focus_ring(&palette, look.shadows.clone());
         let resting = if self.show_focus {
@@ -505,7 +616,7 @@ impl RenderOnce for ActionButton {
             .shadow(resting)
             .focus_visible(move |style| style.shadow(focus_shadows))
             .styles(|styles| styles.disabled(|style| style.opacity(0.64).shadow(Vec::new())))
-            .when(!disabled, |this| {
+            .when(!blocked, |this| {
                 this.hover(move |style| {
                     let style = match hover {
                         Some(fill) => style.bg(fill),
@@ -523,19 +634,19 @@ impl RenderOnce for ActionButton {
             })
             .when_some(tooltip_spec, |this, (label, keys)| {
                 this.tooltip(tooltip(label, keys.as_deref()))
-                    .tooltip_show_delay(TOOLTIP_DELAY)
+                    .tooltip_show_delay(tooltip_delay())
             })
-            .when_some(on_click, |this, handler| {
+            .when_some(on_click.filter(|_| !blocked), |this, handler| {
                 this.on_click(move |event, window, cx| handler(event, window, cx))
             })
-            .when(self.busy, |this| {
+            .when(spinning, |this| {
                 this.child(
                     div()
                         .mx(px(-2.))
                         .child(spinner(ICON, look.text.opacity(0.8))),
                 )
             })
-            .when_some(self.icon.filter(|_| !self.busy), |this, name| {
+            .when_some(self.icon.filter(|_| !spinning), |this, name| {
                 this.child(
                     div()
                         .mx(px(-2.))
@@ -682,7 +793,7 @@ impl RenderOnce for IconButton {
                 this.aria_toggled(gpui_kit::accesskit::Toggled::True)
             })
             .tooltip(tooltip(self.label.clone(), self.keys.as_deref()))
-            .tooltip_show_delay(TOOLTIP_DELAY)
+            .tooltip_show_delay(tooltip_delay())
             .when_some(on_click, |this, handler| {
                 this.on_click(move |event, window, cx| {
                     cx.stop_propagation();

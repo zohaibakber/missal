@@ -189,7 +189,7 @@ impl CommandPalette {
             window,
             cx,
             Kind::Search,
-            "Search FIRs, templates, commands",
+            "Search FIRs, templates, commands…",
             "",
         );
         let subscription = cx.subscribe_in(

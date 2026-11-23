@@ -122,7 +122,7 @@ pub struct FirListScreen {
 impl FirListScreen {
     pub fn new(models: Models, window: &mut Window, cx: &mut Context<Self>) -> FirListScreen {
         let prefs = models.prefs.read(cx).read().table.clone();
-        let search = field_input(window, cx, Kind::Search, "FIR no., offence or name", "");
+        let search = field_input(window, cx, Kind::Search, "FIR no., offence or name…", "");
         let subscriptions = vec![
             cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
                 if *event == TextInputEvent::Change {
@@ -481,9 +481,9 @@ impl FirListScreen {
             format!("Delete {} FIRs?", ids.len())
         };
         let description = if ids.len() == 1 {
-            "Every document written for this FIR is deleted too. This can't be undone."
+            "Every document written for this FIR is deleted too. This can’t be undone."
         } else {
-            "Every document written for these FIRs is deleted too. This can't be undone."
+            "Every document written for these FIRs is deleted too. This can’t be undone."
         };
         let screen = cx.entity().downgrade();
         let label = if ids.len() == 1 {
@@ -733,7 +733,7 @@ impl FirListScreen {
             )
             .separator()
             .item(
-                MenuEntry::new("row-delete", "Delete", move |window, cx| {
+                MenuEntry::new("row-delete", "Delete…", move |window, cx| {
                     delete
                         .update(cx, |this, cx| this.request_delete(vec![id], window, cx))
                         .ok();
@@ -886,12 +886,15 @@ impl FirListScreen {
             .flex_row_reverse()
             .child(
                 div()
+                    .id("select-all-cell")
                     .w(px(SELECT_WIDTH))
                     .h_full()
                     .flex_none()
                     .flex()
                     .items_center()
                     .justify_center()
+                    .cursor_pointer()
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_all(cx)))
                     .child(
                         if some_selected {
                             checkbox_mixed("select-all")
@@ -899,7 +902,10 @@ impl FirListScreen {
                             checkbox("select-all", all_selected)
                         }
                         .accessibility_label("Select all visible FIRs")
-                        .on_click(cx.listener(|this, _, _, cx| this.toggle_all(cx))),
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.toggle_all(cx)
+                        })),
                     ),
             )
             .children(
@@ -1338,7 +1344,7 @@ impl FirListScreen {
             }
             Load::Failed(message) => empty_state(
                 IconName::TriangleAlert,
-                "Couldn't read your FIRs",
+                "Couldn’t read your FIRs",
                 Some("Missal could not open its database.".into()),
                 Some(
                     v_flex()

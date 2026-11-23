@@ -200,7 +200,7 @@ impl FieldsPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> FieldsPanel {
-        let filter = field_input(window, cx, Kind::SearchRtl, "تلاش", "");
+        let filter = field_input(window, cx, Kind::SearchRtl, "تلاش…", "");
         let suggestions = models.suggestions.clone();
         let autocomplete = cx.new(|cx| Autocomplete::new(suggestions, cx));
         let subscriptions = vec![
@@ -452,7 +452,7 @@ impl FieldsPanel {
                         },
                         None,
                     ))
-                    .tooltip_show_delay(crate::theme::TOOLTIP_DELAY)
+                    .tooltip_show_delay(crate::ui::tooltip_delay())
                 })
                 .on_click(cx.listener(move |this, _, _, cx| this.set_tab(which, cx)))
                 .child(text)
@@ -694,7 +694,7 @@ impl FieldsPanel {
                     .child(ur_label(item.name.clone(), UrRole::Label).truncate()),
             )
             .tooltip(crate::ui::tooltip(item.name.clone(), None))
-            .tooltip_show_delay(crate::theme::TOOLTIP_DELAY)
+            .tooltip_show_delay(crate::ui::tooltip_delay())
             .test_support();
         let body: AnyElement = match &item.scope {
             Scope::Fir(_) => div()

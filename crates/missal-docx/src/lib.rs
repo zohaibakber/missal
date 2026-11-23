@@ -40,7 +40,7 @@ impl fmt::Display for ImportError {
             }
             ImportError::MissingDocument => f.write_str("This Word file has no document body."),
             ImportError::InvalidDocument(reason) => {
-                write!(f, "This Word file's document XML is unreadable: {reason}")
+                write!(f, "This Word file’s document XML is unreadable: {reason}")
             }
         }
     }
@@ -64,7 +64,7 @@ impl Notice {
     pub fn message(self) -> &'static str {
         match self {
             Notice::DifferentPageLayouts => {
-                "This document uses different page sizes or margins. Printing uses the first page's settings."
+                "This document uses different page sizes or margins. Printing uses the first page’s settings."
             }
             Notice::HeadersFootersAsContent => {
                 "Headers and footers were added as editable content at the start and end of the document."

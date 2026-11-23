@@ -29,6 +29,7 @@ use crate::state::rows::fold_for_search;
 use crate::state::templates::TemplatesEvent;
 use crate::state::{
     Load, Models, Route, ToastKind, run_db_in, toast_detailed, toast_error, toast_success,
+    toast_warning,
 };
 use crate::theme::Palette;
 use crate::ui::dialogs::{Choice, Tone, confirm_delete, open_choice};
@@ -532,7 +533,16 @@ impl TemplatePage {
         cx: &mut Context<Self>,
     ) {
         let name = self.title.read(cx).text().trim().to_owned();
-        if self.saving || name.is_empty() || self.state != PageState::Ready {
+        if self.saving || self.state != PageState::Ready {
+            return;
+        }
+        if name.is_empty() {
+            if self.id.is_some() {
+                self.begin_rename(window, cx);
+            } else {
+                self.title.update(cx, |input, cx| input.focus(window, cx));
+            }
+            toast_warning(window, cx, "Name the template to save it.");
             return;
         }
         if self.id.is_some() && !self.is_dirty(cx) {
@@ -629,7 +639,7 @@ impl TemplatePage {
             window,
             cx,
             format!("Delete «{}»?", isolate_urdu(&name)),
-            "This can't be undone. Templates that an FIR's documents use can't be deleted.",
+            "This can’t be undone. Templates that an FIR’s documents use can’t be deleted.",
             "Delete template",
             move |window, cx| {
                 weak.update(cx, |this, cx| this.delete(id, window, cx)).ok();
@@ -722,7 +732,6 @@ impl TemplatePage {
         if self.state != PageState::Ready {
             return HeaderContent::new("Template");
         }
-        let name = self.title.read(cx).text().trim().to_owned();
         let is_new = self.id.is_none();
         let dirty = self.is_dirty(cx);
         let weak = cx.entity().downgrade();
@@ -742,7 +751,7 @@ impl TemplatePage {
                     None => isolate_urdu(&review.file_name),
                 }
             };
-            let save_enabled = !name.is_empty() && !self.saving && !self.importing;
+            let save_enabled = !self.saving && !self.importing;
             return HeaderContent::element(self.name_title(cx))
                 .meta_element(
                     h_flex()
@@ -768,7 +777,7 @@ impl TemplatePage {
         }
         let mut content = HeaderContent::element(self.name_title(cx));
         if is_new {
-            let save_enabled = !name.is_empty() && !self.saving && !self.importing;
+            let save_enabled = !self.saving && !self.importing;
             content = content
                 .action(
                     icon_button("template-print", IconName::Printer, "Preview")
@@ -868,7 +877,7 @@ impl TemplatePage {
                         .item(
                             action(
                                 "template-delete",
-                                "Delete",
+                                "Delete…",
                                 IconName::Trash,
                                 |this, window, cx| this.request_delete(window, cx),
                             )
@@ -900,9 +909,9 @@ impl TemplatePage {
             lines.push(format!(
                 "{count} {} recognised: {}{more}. They will stay as plain text.",
                 if count == 1 {
-                    "marker wasn't"
+                    "marker wasn’t"
                 } else {
-                    "markers weren't"
+                    "markers weren’t"
                 },
                 shown.join(", ")
             ));
@@ -1066,7 +1075,7 @@ impl TemplatesScreen {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> TemplatesScreen {
-        let search = field_input(window, cx, Kind::SearchRtl, "تلاش", "");
+        let search = field_input(window, cx, Kind::SearchRtl, "تلاش…", "");
         let subscriptions = vec![
             cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
                 if *event == TextInputEvent::Change {

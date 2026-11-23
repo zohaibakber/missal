@@ -66,12 +66,12 @@ impl Page {
 
     fn description(self) -> &'static str {
         match self {
-            Page::Globals => "Filled into every FIR's documents, such as the police station name.",
+            Page::Globals => "Filled into every FIR’s documents, such as the police station name.",
             Page::Customs => {
                 "Extra fields you fill in for each FIR. Renaming one keeps its templates linked."
             }
             Page::BuiltIn => {
-                "Filled from each FIR's details. Type a field's name between markers to use it in a template."
+                "Filled from each FIR’s details. Type a field’s name between markers to use it in a template."
             }
             Page::Markers => "The symbols around a field name when you type it into a document.",
             Page::Appearance => "Choose how Missal looks on this computer.",
@@ -187,7 +187,7 @@ impl SettingsScreen {
     pub fn new(models: Models, window: &mut Window, cx: &mut Context<Self>) -> SettingsScreen {
         let marker_open = marker_input(window, cx, "«");
         let marker_close = marker_input(window, cx, "»");
-        let custom_filter = field_input(window, cx, Kind::SearchRtl, "تلاش", "");
+        let custom_filter = field_input(window, cx, Kind::SearchRtl, "تلاش…", "");
         let update_status = controller::status(cx);
         let subscriptions = vec![
             cx.observe(&models.catalog, |this, _, cx| {
@@ -925,7 +925,7 @@ impl SettingsScreen {
                     cx,
                     format!("Delete «{}»?", isolate_urdu(&name)),
                     format!(
-                        "{usage} Its values in every FIR are deleted too. This can't be undone."
+                        "{usage} Its values in every FIR are deleted too. This can’t be undone."
                     ),
                     "Delete field",
                     move |window, cx| {
@@ -1115,7 +1115,7 @@ impl SettingsScreen {
                             let rename = rename.clone();
                             let remove = remove.clone();
                             menu.item(
-                                MenuEntry::new("global-rename", "Rename", move |window, cx| {
+                                MenuEntry::new("global-rename", "Rename…", move |window, cx| {
                                     rename
                                         .update(cx, |this, cx| this.rename_global(index, window, cx))
                                         .ok();
@@ -1301,7 +1301,7 @@ impl SettingsScreen {
                                     menu.item(
                                         MenuEntry::new(
                                             "custom-rename",
-                                            "Rename",
+                                            "Rename…",
                                             move |window, cx| {
                                                 rename
                                                     .update(cx, |this, cx| {
@@ -1577,7 +1577,7 @@ impl SettingsScreen {
                                 .line_height(px(18.))
                                 .text_color(palette.ink_muted)
                                 .child(
-                                    "System follows your operating system's light or dark setting.",
+                                    "System follows your operating system’s light or dark setting.",
                                 ),
                         ),
                 ),
@@ -1620,7 +1620,7 @@ impl SettingsScreen {
                 UpdateState::Idle => ("Not checked yet.".to_owned(), None),
                 UpdateState::Checking => ("Checking for updates…".to_owned(), None),
                 UpdateState::UpToDate { at } => (
-                    format!("You're up to date. Checked {}.", ago(*at)),
+                    format!("You’re up to date. Checked {}.", ago(*at)),
                     Some(Intent::Success),
                 ),
                 UpdateState::Ready(ready) => (

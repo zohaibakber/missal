@@ -210,7 +210,7 @@ impl WorkspaceScreen {
                 }
                 EditorEvent::SaveRequested => {}
             });
-        let add_search = field_input(window, cx, Kind::SearchRtl, "تلاش", "");
+        let add_search = field_input(window, cx, Kind::SearchRtl, "تلاش…", "");
         let panel = cx.new(|cx| FieldsPanel::new(models.clone(), id, window, cx));
         let subscriptions = vec![
             editor_subscription,
@@ -623,7 +623,7 @@ impl WorkspaceScreen {
             "Save changes first?",
             "This document has unsaved changes.",
             vec![
-                Choice::new("discard", "Don't save", Tone::Ghost, move |window, cx| {
+                Choice::new("discard", "Don’t save", Tone::Ghost, move |window, cx| {
                     discard
                         .update(cx, |this, cx| {
                             this.editor.update(cx, |editor, cx| editor.discard(cx));
@@ -911,9 +911,9 @@ impl WorkspaceScreen {
         let weak = cx.entity().downgrade();
         let count = self.documents.len();
         let body = match count {
-            0 => "This can't be undone.".to_owned(),
-            1 => "Its document is deleted too. This can't be undone.".to_owned(),
-            n => format!("Its {n} documents are deleted too. This can't be undone."),
+            0 => "This can’t be undone.".to_owned(),
+            1 => "Its document is deleted too. This can’t be undone.".to_owned(),
+            n => format!("Its {n} documents are deleted too. This can’t be undone."),
         };
         confirm_delete(
             window,
@@ -1557,7 +1557,7 @@ impl WorkspaceScreen {
                 .bg(palette.sunken)
                 .child(empty_state(
                     IconName::TriangleAlert,
-                    "Couldn't open this document",
+                    "Couldn’t open this document",
                     Some(message.clone().into()),
                     Some(
                         button("document-retry", "Try again")
@@ -1607,7 +1607,7 @@ impl WorkspaceScreen {
             )
             .child(menu_separator())
             .child(
-                menu_item("more-delete", "Delete FIR")
+                menu_item("more-delete", "Delete FIR…")
                     .icon(IconName::Trash)
                     .danger()
                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -1627,7 +1627,7 @@ impl Render for WorkspaceScreen {
                 return empty_state(
                     IconName::Folder,
                     "FIR not found",
-                    Some("This FIR doesn't exist or was deleted.".into()),
+                    Some("This FIR doesn’t exist or was deleted.".into()),
                     Some(
                         button("back-to-firs", "Back to FIRs")
                             .outline()
@@ -1640,7 +1640,7 @@ impl Render for WorkspaceScreen {
             WorkspaceState::Failed(message) => {
                 return empty_state(
                     IconName::TriangleAlert,
-                    "Couldn't open this FIR",
+                    "Couldn’t open this FIR",
                     Some(format!("Your saved documents are safe. ({message})").into()),
                     Some(
                         button("reload-workspace", "Try again")
