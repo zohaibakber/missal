@@ -465,9 +465,14 @@ fn main() {
     let only_gate = args.iter().any(|argument| argument == "--gate");
     let skip_gate = args.iter().any(|argument| argument == "--no-gate");
     let only_settings = args.iter().any(|argument| argument == "--settings");
+    let only_scroll = args.iter().any(|argument| argument == "--scroll");
     let api = fake_api::start();
     for dark in [false, true] {
         if only.as_deref().is_some_and(|only| (only == "dark") != dark) {
+            continue;
+        }
+        if only_scroll {
+            run_scroll(dark, &out);
             continue;
         }
         if only_settings {
@@ -1045,4 +1050,41 @@ mod fake_api {
         });
         format!("http://{address}")
     }
+}
+
+/// Scrolls and drags the scrollbars of the long forms and panels, so a
+/// screenshot shows where the thumb sits after each move.
+fn run_scroll(dark: bool, out: &Path) {
+    fn wheel(h: &mut Harness, x: f32, y: f32, dy: f32) {
+        use gpui_kit::InputEvent as _;
+        h.with_window(|window, cx| {
+            window.dispatch_event(
+                gpui_kit::ScrollEvent {
+                    position: point(px(x), px(y)),
+                    delta: gpui_kit::ScrollDelta::Pixels(point(px(0.), px(dy))),
+                    ..Default::default()
+                }
+                .to_platform_input(),
+                cx,
+            );
+        });
+    }
+    let (mut h, _directory) = build(dark, out, 1280.0, 800.0, None);
+    h.go(Route::NewFir);
+    h.shot("60-new-fir-top");
+    wheel(&mut h, 760., 400., -400.);
+    h.shot("61-new-fir-wheel");
+    wheel(&mut h, 760., 400., -4000.);
+    h.shot("61b-new-fir-bottom");
+    wheel(&mut h, 760., 400., 4000.);
+    h.with_window(|window, cx| {
+        window.drag(point(px(1271.), px(80.)), point(px(1271.), px(400.)), cx)
+    });
+    h.shot("62-new-fir-drag");
+    h.go(Route::Fir(FirId::new(3).expect("id")));
+    wheel(&mut h, 1150., 500., -500.);
+    h.shot("63-fields-panel-wheel");
+    h.go(Route::Settings);
+    wheel(&mut h, 800., 500., -500.);
+    h.shot("64-settings-wheel");
 }

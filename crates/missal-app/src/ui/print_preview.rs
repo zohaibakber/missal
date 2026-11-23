@@ -1353,8 +1353,8 @@ impl PrintPreview {
                     .flex_1()
                     .min_h_0()
                     .gap(px(2.))
-                    .scroll_area_y(&self.documents_scroll)
-                    .children(rows),
+                    .children(rows)
+                    .scroll_area_y(&self.documents_scroll),
             )
             .children(warning)
             .into_any_element()

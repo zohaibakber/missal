@@ -247,7 +247,6 @@ impl LibraryPanel {
                 let entries = model.entries.clone();
                 v_flex()
                     .id("library-list")
-                    .scroll_area_y(&self.list_scroll)
                     .h_full()
                     .gap(px(2.))
                     .children(
@@ -256,6 +255,7 @@ impl LibraryPanel {
                             .enumerate()
                             .map(|(index, entry)| self.row(index, entry, palette, cx)),
                     )
+                    .scroll_area_y(&self.list_scroll)
                     .into_any_element()
             }
         }
