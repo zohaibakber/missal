@@ -33,11 +33,13 @@ jobs:
   # Nothing is committed back to main: the package jobs write the version into
   # Cargo.toml in their own checkout, and the release job creates the tag with
   # GITHUB_TOKEN, which does not start another run, so there is no loop. A
-  # pushed v* tag still releases that tag.
+  # pushed v* tag still releases that tag. A workflow_dispatch run on main
+  # releases too: the Auto-merge workflow starts one after it merges a pull
+  # request, because its merge push (made with GITHUB_TOKEN) starts no run.
   version:
     name: Release version
     timeout-minutes: 5
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     outputs:
       release: ${{ steps.decide.outputs.release }}
