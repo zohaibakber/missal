@@ -1861,11 +1861,11 @@ impl SettingsScreen {
         let licence_note = if admin {
             "Administrators never need a licence.".to_owned()
         } else {
-            crate::ui::people::licence_text(&account)
+            crate::screens::people::licence_text(&account)
         };
         let licence = setting_row(&palette, "Licence", Some(licence_note.into()))
             .top_border()
-            .child(crate::ui::people::standing_badge(&account))
+            .child(crate::screens::people::standing_badge(&account))
             .when(purchase && !licensed, |this| {
                 this.child(
                     primary_sm("buy-licence", "Buy licence")
@@ -1918,7 +1918,13 @@ impl SettingsScreen {
                                     IconName::Users,
                                     "People",
                                     "Add people, renew licences and reset passwords.",
-                                    crate::ui::people::open_users,
+                                    |window, cx| {
+                                        crate::app::navigate(
+                                            crate::state::Route::People,
+                                            window,
+                                            cx,
+                                        )
+                                    },
                                 ))
                                 .child(
                                     link_row(
@@ -1926,7 +1932,13 @@ impl SettingsScreen {
                                         IconName::Upload,
                                         "Publishing",
                                         "Share templates through the library.",
-                                        crate::ui::publishing::open_publishing,
+                                        |window, cx| {
+                                            crate::app::navigate(
+                                                crate::state::Route::Publishing,
+                                                window,
+                                                cx,
+                                            )
+                                        },
                                     )
                                     .border_t_1()
                                     .border_color(palette.line),

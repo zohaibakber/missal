@@ -19,6 +19,8 @@ pub enum NavEntry {
     Firs,
     Templates,
     Settings,
+    People,
+    Publishing,
     NewFir,
     ImportWord,
     Shortcuts,
@@ -43,6 +45,8 @@ impl NavEntry {
             NavEntry::Firs => "FIRs",
             NavEntry::Templates => "Templates",
             NavEntry::Settings => "Settings",
+            NavEntry::People => "People",
+            NavEntry::Publishing => "Publishing",
             NavEntry::NewFir => "New FIR",
             NavEntry::ImportWord => "Import Word file",
             NavEntry::Shortcuts => "Keyboard shortcuts",
@@ -56,6 +60,8 @@ impl NavEntry {
             NavEntry::Firs => "nav-firs",
             NavEntry::Templates => "nav-templates",
             NavEntry::Settings => "nav-settings",
+            NavEntry::People => "nav-people",
+            NavEntry::Publishing => "nav-publishing",
             NavEntry::NewFir => "nav-new-fir",
             NavEntry::ImportWord => "nav-import-word",
             NavEntry::Shortcuts => "nav-shortcuts",
@@ -69,6 +75,8 @@ impl NavEntry {
             NavEntry::Firs => IconName::Folder,
             NavEntry::Templates => IconName::FileText,
             NavEntry::Settings => IconName::Settings,
+            NavEntry::People => IconName::Users,
+            NavEntry::Publishing => IconName::CloudUpload,
             NavEntry::NewFir => IconName::Plus,
             NavEntry::ImportWord => IconName::FileUp,
             NavEntry::Shortcuts => IconName::Keyboard,
@@ -85,7 +93,7 @@ impl NavEntry {
             NavEntry::NewFir => Some("N"),
             NavEntry::ImportWord => Some("Mod+O"),
             NavEntry::Shortcuts => Some("?"),
-            NavEntry::Theme | NavEntry::About => None,
+            NavEntry::Theme | NavEntry::About | NavEntry::People | NavEntry::Publishing => None,
         }
     }
 
@@ -100,6 +108,8 @@ impl NavEntry {
             }
             Route::Templates | Route::Template(_) | Route::NewTemplate => NavEntry::Templates,
             Route::Settings => NavEntry::Settings,
+            Route::People => NavEntry::People,
+            Route::Publishing => NavEntry::Publishing,
         }
     }
 }
@@ -201,6 +211,8 @@ impl NavMenu {
             NavEntry::Firs => navigate(Route::Firs, window, cx),
             NavEntry::Templates => navigate(Route::Templates, window, cx),
             NavEntry::Settings => navigate(Route::Settings, window, cx),
+            NavEntry::People => navigate(Route::People, window, cx),
+            NavEntry::Publishing => navigate(Route::Publishing, window, cx),
             NavEntry::NewFir => navigate(Route::NewFir, window, cx),
             NavEntry::ImportWord => import_word_file(window, cx),
             NavEntry::Shortcuts => show_shortcuts(window, cx),

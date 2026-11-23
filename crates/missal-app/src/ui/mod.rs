@@ -1,4 +1,5 @@
 pub mod account;
+pub mod admin;
 pub mod autocomplete;
 pub mod cheatsheet;
 pub mod controls;
@@ -10,10 +11,8 @@ pub mod nav_menu;
 pub mod palette;
 pub mod part;
 pub mod parts;
-pub mod people;
 pub mod popup_menu;
 pub mod print_preview;
-pub mod publishing;
 pub mod sidebar;
 pub mod status;
 pub mod titlebar;

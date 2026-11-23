@@ -120,8 +120,8 @@ fn command(
     }
 }
 
-fn actions() -> Vec<Entry> {
-    vec![
+fn actions(admin: bool) -> Vec<Entry> {
+    let mut entries = vec![
         command(
             "New FIR",
             IconName::Plus,
@@ -165,7 +165,22 @@ fn actions() -> Vec<Entry> {
             Some("G then S"),
             Command::Go(Route::Settings),
         ),
-    ]
+    ];
+    if admin {
+        entries.push(command(
+            "Go to People",
+            IconName::Users,
+            None,
+            Command::Go(Route::People),
+        ));
+        entries.push(command(
+            "Go to Publishing",
+            IconName::CloudUpload,
+            None,
+            Command::Go(Route::Publishing),
+        ));
+    }
+    entries
 }
 
 impl CommandPalette {
@@ -257,7 +272,7 @@ impl CommandPalette {
                         command: Command::Go(Route::Fir(row.id)),
                     }),
             );
-            results.extend(actions());
+            results.extend(actions(crate::ui::admin::is_admin(cx)));
         } else {
             let firs = self.models.firs.read(cx);
             results.extend(
@@ -291,8 +306,9 @@ impl CommandPalette {
                         command: Command::Go(Route::Template(item.id)),
                     }),
             );
+            let admin = crate::ui::admin::is_admin(cx);
             results.extend(
-                actions()
+                actions(admin)
                     .into_iter()
                     .filter(|entry| {
                         let haystack = fold_for_search(&entry.title());

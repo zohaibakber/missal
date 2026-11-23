@@ -12,6 +12,8 @@ use gpui_kit::{
 use crate::auth::AuthModel;
 use crate::screens::fir_form::NewFirScreen;
 use crate::screens::fir_list::FirListScreen;
+use crate::screens::people::PeopleScreen;
+use crate::screens::publishing::PublishingScreen;
 use crate::screens::settings::SettingsScreen;
 use crate::screens::templates::TemplatesScreen;
 use crate::screens::workspace::WorkspaceScreen;
@@ -50,6 +52,8 @@ enum Screen {
     Workspace(Entity<WorkspaceScreen>),
     Settings(Entity<SettingsScreen>),
     Templates(Entity<TemplatesScreen>),
+    People(Entity<PeopleScreen>),
+    Publishing(Entity<PublishingScreen>),
     Print(Entity<PrintPreview>),
 }
 
@@ -69,6 +73,8 @@ impl Screen {
             Screen::Workspace(view) => view.clone().into(),
             Screen::Settings(view) => view.clone().into(),
             Screen::Templates(view) => view.clone().into(),
+            Screen::People(view) => view.clone().into(),
+            Screen::Publishing(view) => view.clone().into(),
             Screen::Print(view) => view.clone().into(),
         }
     }
@@ -80,6 +86,8 @@ impl Screen {
             Screen::Workspace(view) => header_of(view, window, cx),
             Screen::Settings(view) => header_of(view, window, cx),
             Screen::Templates(view) => header_of(view, window, cx),
+            Screen::People(view) => header_of(view, window, cx),
+            Screen::Publishing(view) => header_of(view, window, cx),
             Screen::Print(view) => header_of(view, window, cx),
         }
     }
@@ -91,13 +99,17 @@ impl Screen {
             Screen::Workspace(view) => cx.observe(view, |_, _, cx| cx.notify()),
             Screen::Settings(view) => cx.observe(view, |_, _, cx| cx.notify()),
             Screen::Templates(view) => cx.observe(view, |_, _, cx| cx.notify()),
+            Screen::People(view) => cx.observe(view, |_, _, cx| cx.notify()),
+            Screen::Publishing(view) => cx.observe(view, |_, _, cx| cx.notify()),
             Screen::Print(view) => cx.observe(view, |_, _, cx| cx.notify()),
         }
     }
 
     fn guard(&self) -> crate::state::nav::Guard {
         match self {
-            Screen::Firs(_) | Screen::Print(_) => Rc::new(|_| false),
+            Screen::Firs(_) | Screen::Print(_) | Screen::People(_) | Screen::Publishing(_) => {
+                Rc::new(|_| false)
+            }
             Screen::NewFir(view) => {
                 let view = view.clone();
                 Rc::new(move |cx| view.read(cx).is_dirty(cx))
@@ -154,6 +166,8 @@ impl Screen {
             Screen::Workspace(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
             Screen::Settings(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
             Screen::Templates(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
+            Screen::People(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
+            Screen::Publishing(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
             Screen::Print(view) => view.update(cx, |screen, cx| screen.focus(window, cx)),
         }
     }
@@ -287,6 +301,20 @@ impl AppShell {
     pub fn settings(&self) -> Option<Entity<SettingsScreen>> {
         match &self.screen {
             Screen::Settings(view) => Some(view.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn people(&self) -> Option<Entity<PeopleScreen>> {
+        match &self.screen {
+            Screen::People(view) => Some(view.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn publishing(&self) -> Option<Entity<PublishingScreen>> {
+        match &self.screen {
+            Screen::Publishing(view) => Some(view.clone()),
             _ => None,
         }
     }
@@ -516,6 +544,8 @@ impl AppShell {
             Route::Settings => {
                 Screen::Settings(cx.new(|cx| SettingsScreen::new(models.clone(), window, cx)))
             }
+            Route::People => Screen::People(cx.new(|cx| PeopleScreen::new(window, cx))),
+            Route::Publishing => Screen::Publishing(cx.new(PublishingScreen::new)),
             Route::Templates | Route::NewTemplate | Route::Template(_) => Screen::Templates(
                 cx.new(|cx| TemplatesScreen::new(models.clone(), route, window, cx)),
             ),
