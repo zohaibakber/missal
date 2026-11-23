@@ -705,19 +705,65 @@ impl RenderOnce for IconButton {
 /// over its trailing edge whenever the content is taller than the area. The
 /// thumb can be dragged, and clicking the track pages to that point.
 ///
+/// Call it last in the element's chain: it wraps the element in a frame that
+/// takes over the element's outer size and flex settings, and lays the
+/// scrollbar over that frame. The scrollbar must sit outside the scrolled
+/// element, or it scrolls away with the content.
+///
 /// Keep the handle on the view (a `ScrollHandle` is cheap to clone) so the
 /// position survives re-renders.
-pub trait ScrollArea:
-    gpui_kit::component::scroll::ScrollableElement + StatefulInteractiveElement
-{
-    fn scroll_area_y(self, handle: &gpui_kit::ScrollHandle) -> Self {
-        self.overflow_y_scroll()
-            .track_scroll(handle)
-            .vertical_scrollbar(handle)
+pub trait ScrollArea: StatefulInteractiveElement + Styled + IntoElement + 'static {
+    fn scroll_area_y(
+        mut self,
+        handle: &gpui_kit::ScrollHandle,
+    ) -> gpui_kit::Stateful<gpui_kit::Div> {
+        use gpui_kit::component::scroll::Scrollbar;
+        use gpui_kit::{Overflow, PointRefinement, StyleRefinement, relative};
+
+        let id = self
+            .interactivity()
+            .element_id
+            .clone()
+            .unwrap_or_else(|| ElementId::from("scroll-area"));
+        let style = self.style();
+        let mut frame = StyleRefinement {
+            size: style.size.clone(),
+            min_size: style.min_size.clone(),
+            max_size: style.max_size.clone(),
+            flex_grow: style.flex_grow,
+            flex_shrink: style.flex_shrink,
+            flex_basis: style.flex_basis,
+            align_self: style.align_self,
+            ..Default::default()
+        };
+        frame.overflow = PointRefinement {
+            x: None,
+            y: Some(Overflow::Hidden),
+        };
+        // The element fills the frame and shrinks to it, so it scrolls
+        // instead of growing past a frame whose height is capped.
+        style.max_size.height = None;
+        style.min_size.height = Some(px(0.).into());
+        style.flex_grow = Some(0.);
+        style.flex_shrink = Some(1.);
+        style.flex_basis = None;
+        style.align_self = None;
+        let content = self
+            .w_full()
+            .h(relative(1.))
+            .overflow_y_scroll()
+            .track_scroll(handle);
+
+        let mut root = div().id((id.clone(), "frame"));
+        root.style().refine(&frame);
+        root.relative().flex().flex_col().child(content).child(
+            div().absolute().inset_0().child(
+                Scrollbar::vertical(handle)
+                    .id((id, "scrollbar"))
+                    .viewport_from_layout(),
+            ),
+        )
     }
 }
 
-impl<E> ScrollArea for E where
-    E: gpui_kit::component::scroll::ScrollableElement + StatefulInteractiveElement
-{
-}
+impl<E> ScrollArea for E where E: StatefulInteractiveElement + Styled + IntoElement + 'static {}

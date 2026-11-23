@@ -1200,7 +1200,6 @@ impl Render for AuthGate {
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .scroll_area_y(&self.form_scroll)
                     .child(
                         v_flex()
                             .min_h_full()
@@ -1208,7 +1207,8 @@ impl Render for AuthGate {
                             .justify_center()
                             .p(px(16.))
                             .child(form),
-                    ),
+                    )
+                    .scroll_area_y(&self.form_scroll),
             )
             .into_any_element()
     }

@@ -1360,7 +1360,6 @@ impl Render for FirForm {
             .id("fir-form-scroll")
             .key_context(FIR_FORM)
             .size_full()
-            .scroll_area_y(&self.scroll)
             .on_action(cx.listener(|this, _: &Save, window, cx| this.submit(window, cx)))
             .child(
                 v_flex()
@@ -1373,6 +1372,7 @@ impl Render for FirForm {
                     .pb(px(32.))
                     .children(sections),
             )
+            .scroll_area_y(&self.scroll)
     }
 }
 

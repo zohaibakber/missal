@@ -823,7 +823,6 @@ impl UsersPanel {
             .flex_1()
             .min_w_0()
             .h_full()
-            .scroll_area_y(&self.details_scroll)
             .pl(px(20.))
             .gap(px(16.))
             .child(
@@ -889,6 +888,7 @@ impl UsersPanel {
                         },
                     )),
             )
+            .scroll_area_y(&self.details_scroll)
             .into_any_element()
     }
 
@@ -958,12 +958,12 @@ impl UsersPanel {
                             .w(px(LIST_WIDTH))
                             .flex_none()
                             .h_full()
-                            .scroll_area_y(&self.list_scroll)
                             .pr(px(10.))
                             .gap(px(2.))
                             .border_r_1()
                             .border_color(palette.line)
-                            .children(items),
+                            .children(items)
+                            .scroll_area_y(&self.list_scroll),
                     )
                     .child(details)
                     .into_any_element()

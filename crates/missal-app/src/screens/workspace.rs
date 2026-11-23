@@ -1246,9 +1246,9 @@ impl WorkspaceScreen {
                         .id("workspace-rail-scroll")
                         .flex_1()
                         .min_h_0()
-                        .scroll_area_y(&self.rail_scroll)
                         .child(v_flex().gap(px(4.)).children(rows))
-                        .child(add),
+                        .child(add)
+                        .scroll_area_y(&self.rail_scroll),
                 )
             })
             .into_any_element()
@@ -1399,7 +1399,6 @@ impl WorkspaceScreen {
                         v_flex()
                             .id("add-template-list")
                             .max_h(px(280.))
-                            .scroll_area_y(&list_scroll)
                             .p(px(4.))
                             .children(available.iter().enumerate().map(
                                 |(row, (id, name, added))| {
@@ -1471,7 +1470,8 @@ impl WorkspaceScreen {
                                             "No templates match."
                                         }),
                                 )
-                            }),
+                            })
+                            .scroll_area_y(&list_scroll),
                     )
                     .child(
                         h_flex()

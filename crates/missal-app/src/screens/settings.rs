@@ -2233,7 +2233,6 @@ impl Render for SettingsScreen {
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .scroll_area_y(&self.scroll)
                     .items_center()
                     .child(
                         v_flex()
@@ -2246,7 +2245,8 @@ impl Render for SettingsScreen {
                             .pb(px(96.))
                             .child(header)
                             .child(body),
-                    ),
+                    )
+                    .scroll_area_y(&self.scroll),
             )
     }
 }

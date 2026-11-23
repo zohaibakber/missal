@@ -607,7 +607,6 @@ impl Render for CommandPalette {
                             .rounded_t(px(RADIUS_XL))
                             .bg(palette.raised)
                             .shadow(palette.ring_only())
-                            .scroll_area_y(&self.scroll)
                             .children(rows)
                             .when(empty, |this| {
                                 this.child(
@@ -618,7 +617,8 @@ impl Render for CommandPalette {
                                         .text_color(palette.ink_muted)
                                         .child("Nothing matches. Try a FIR number, an offence or a name."),
                                 )
-                            }),
+                            })
+                            .scroll_area_y(&self.scroll),
                     )
                     .child({
                         h_flex()

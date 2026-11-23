@@ -1029,9 +1029,9 @@ impl Render for FieldsPanel {
                     .id("fields-panel-scroll")
                     .flex_1()
                     .min_h_0()
-                    .scroll_area_y(&self.body_scroll)
                     .pb(px(16.))
-                    .children(body),
+                    .children(body)
+                    .scroll_area_y(&self.body_scroll),
             )
     }
 }
