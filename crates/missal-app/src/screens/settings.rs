@@ -21,7 +21,7 @@ use crate::app::{AppPaths, check_for_updates, set_theme};
 use crate::prefs::ThemeChoice;
 use crate::shortcuts::*;
 use crate::state::{Load, Models, run_db_in, toast_error, toast_warning};
-use crate::theme::{Palette, RADIUS, RADIUS_LG, RADIUS_SM, RADIUS_XL};
+use crate::theme::{Palette, RADIUS, RADIUS_LG, RADIUS_SM};
 use crate::ui::dialogs::confirm_delete;
 use crate::ui::input::{Kind, field, field_input, search_field};
 use crate::ui::titlebar::{HeaderContent, HeaderSource};
@@ -1525,32 +1525,30 @@ impl SettingsScreen {
                 .test_support()
                 .flex_1()
                 .min_w_0()
-                .gap(px(10.))
+                .gap(px(12.))
+                .p(px(12.))
+                .rounded(px(RADIUS_LG))
+                .border_1()
+                .border_color(if selected {
+                    palette.ink.opacity(0.48)
+                } else {
+                    palette.line
+                })
+                .when(selected, |this| this.bg(palette.hover))
                 .cursor_pointer()
+                .hover(move |style| style.bg(palette.hover))
                 .on_click(move |_, window, cx| set_theme(choice, window, cx))
                 .child(
                     div()
-                        .p(px(3.))
-                        .rounded(px(RADIUS_XL))
-                        .border_2()
-                        .border_color(if selected {
-                            palette.ink
-                        } else {
-                            gpui_kit::transparent_black()
-                        })
-                        .child(
-                            div()
-                                .h(px(96.))
-                                .rounded(px(RADIUS_LG))
-                                .overflow_hidden()
-                                .border_1()
-                                .border_color(palette.line_strong)
-                                .child(theme_preview(choice)),
-                        ),
+                        .h(px(88.))
+                        .rounded(px(RADIUS))
+                        .overflow_hidden()
+                        .border_1()
+                        .border_color(palette.line_strong)
+                        .child(theme_preview(choice)),
                 )
                 .child(
                     h_flex()
-                        .px(px(4.))
                         .gap(px(8.))
                         .items_center()
                         .child(radio_dot(&palette, selected))
@@ -1570,7 +1568,7 @@ impl SettingsScreen {
                 frame().child(frame_label(&palette, "Theme")).child(
                     frame_panel()
                         .p(px(16.))
-                        .child(h_flex().gap(px(16.)).children(cards))
+                        .child(h_flex().gap(px(12.)).children(cards))
                         .child(
                             div()
                                 .pt(px(14.))
