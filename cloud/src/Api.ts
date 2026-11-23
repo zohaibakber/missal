@@ -91,6 +91,11 @@ export class PublishConflict extends Schema.TaggedError<PublishConflict>()(
   { error: Schema.String },
   { httpApiStatus: 409 },
 ) {}
+export class EmailTaken extends Schema.TaggedError<EmailTaken>()(
+  "EmailTaken",
+  { error: Schema.String },
+  { httpApiStatus: 409 },
+) {}
 export class OwnAccess extends Schema.TaggedError<OwnAccess>()(
   "OwnAccess",
   { error: Schema.String },
@@ -151,10 +156,18 @@ export const Account = Schema.Struct({
   name: Name,
   role: Role,
   disabled: Schema.Boolean,
+  emailVerified: Schema.Boolean,
   createdAt: Schema.DateTimeUtcFromMillis,
   licence: Licence,
 });
 export type Account = typeof Account.Type;
+
+export const ManagedAccount = Schema.Struct({
+  ...Account.fields,
+  sessions: Schema.Int,
+  lastSeenAt: Schema.NullOr(Schema.DateTimeUtcFromMillis),
+});
+export type ManagedAccount = typeof ManagedAccount.Type;
 
 export const Session = Schema.Struct({
   accessToken: Schema.String,
@@ -228,6 +241,18 @@ export const UserChanges = Schema.Struct({
   disabled: Schema.optional(Schema.Boolean),
 });
 export type UserChanges = typeof UserChanges.Type;
+
+export const NewUser = Schema.Struct({
+  email: Email,
+  name: Name,
+  role: Role,
+  password: NewPassword,
+  months: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 60 })),
+});
+export type NewUser = typeof NewUser.Type;
+
+const Months = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 60 }));
+const Days = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 90 }));
 
 const TemplateContent = HttpApiSchema.WithHeaders(
   Schema.Uint8Array.pipe(HttpApiSchema.asUint8Array({ contentType: "application/octet-stream" })),
@@ -373,26 +398,82 @@ export class TemplateAdminGroup extends HttpApiGroup.make("templateAdmin")
 export class UsersGroup extends HttpApiGroup.make("users")
   .add(
     HttpApiEndpoint.get("list", "/v1/users", {
-      success: Schema.Array(Account),
+      success: Schema.Array(ManagedAccount),
       error: StorageFailure,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("create", "/v1/users", {
+      payload: NewUser,
+      success: ManagedAccount.pipe(HttpApiSchema.status(201)),
+      error: [EmailTaken, StorageFailure],
     }),
   )
   .add(
     HttpApiEndpoint.patch("update", "/v1/users/:id", {
       params: { id: RouteId },
       payload: UserChanges,
-      success: Account,
+      success: ManagedAccount,
       error: [UserNotFound, OwnAccess, StorageFailure],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.delete("remove", "/v1/users/:id", {
+      params: { id: RouteId },
+      success: HttpApiSchema.NoContent,
+      error: [UserNotFound, OwnAccess, StorageFailure],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("verifyEmail", "/v1/users/:id/verify", {
+      params: { id: RouteId },
+      success: ManagedAccount,
+      error: [UserNotFound, StorageFailure],
     }),
   )
   .add(
     HttpApiEndpoint.post("grantLicence", "/v1/users/:id/licence", {
       params: { id: RouteId },
-      payload: Schema.Struct({
-        years: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5 })),
-      }),
-      success: Account,
+      payload: Schema.Struct({ months: Months }),
+      success: ManagedAccount,
       error: [UserNotFound, StorageFailure],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.delete("endLicence", "/v1/users/:id/licence", {
+      params: { id: RouteId },
+      success: ManagedAccount,
+      error: [UserNotFound, StorageFailure],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("extendTrial", "/v1/users/:id/trial", {
+      params: { id: RouteId },
+      payload: Schema.Struct({ days: Days }),
+      success: ManagedAccount,
+      error: [UserNotFound, StorageFailure],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("setPassword", "/v1/users/:id/password", {
+      params: { id: RouteId },
+      payload: Schema.Struct({ password: NewPassword }),
+      success: ManagedAccount,
+      error: [UserNotFound, OwnAccess, StorageFailure],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("sendReset", "/v1/users/:id/reset-email", {
+      params: { id: RouteId },
+      success: HttpApiSchema.Accepted,
+      error: [UserNotFound, StorageFailure],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("signOut", "/v1/users/:id/sign-out", {
+      params: { id: RouteId },
+      success: ManagedAccount,
+      error: [UserNotFound, OwnAccess, StorageFailure],
     }),
   )
   .middleware(AdminsOnly)

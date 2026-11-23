@@ -87,9 +87,26 @@ pub struct Account {
     pub role: Role,
     #[serde(default)]
     pub disabled: bool,
+    #[serde(default = "verified_by_default")]
+    pub email_verified: bool,
     #[serde(default)]
     pub created_at: i64,
     pub licence: Licence,
+}
+
+fn verified_by_default() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManagedAccount {
+    #[serde(flatten)]
+    pub account: Account,
+    #[serde(default)]
+    pub sessions: u32,
+    #[serde(default)]
+    pub last_seen_at: Option<i64>,
 }
 
 impl Account {
@@ -186,6 +203,7 @@ mod tests {
             name: String::new(),
             role: Role::Member,
             disabled: false,
+            email_verified: true,
             created_at: 0,
             licence,
         }

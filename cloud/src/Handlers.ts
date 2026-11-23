@@ -119,9 +119,22 @@ const UsersHandlers = HttpApiBuilder.group(
     const accounts = yield* Accounts;
     return handlers.handleAll({
       list: () => accounts.list,
+      create: ({ payload }) => accounts.create(payload),
       update: ({ params, payload }) =>
         Effect.flatMap(Viewer, (viewer) => accounts.update(viewer, params.id, payload)),
-      grantLicence: ({ params, payload }) => accounts.grantLicence(params.id, payload.years),
+      remove: ({ params }) =>
+        Effect.flatMap(Viewer, (viewer) => accounts.remove(viewer, params.id)),
+      verifyEmail: ({ params }) => accounts.confirmEmail(params.id),
+      grantLicence: ({ params, payload }) => accounts.grantLicence(params.id, payload.months),
+      endLicence: ({ params }) => accounts.endLicence(params.id),
+      extendTrial: ({ params, payload }) => accounts.extendTrial(params.id, payload.days),
+      setPassword: ({ params, payload }) =>
+        Effect.flatMap(Viewer, (viewer) =>
+          accounts.setPassword(viewer, params.id, payload.password),
+        ),
+      sendReset: ({ params }) => accounts.sendReset(params.id),
+      signOut: ({ params }) =>
+        Effect.flatMap(Viewer, (viewer) => accounts.endSessions(viewer, params.id)),
     });
   }),
 );

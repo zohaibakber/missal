@@ -14,7 +14,8 @@ use crate::auth::{AuthModel, open_purchase, sign_out, trial_days_left, trial_lab
 use crate::prefs::ThemeChoice;
 use crate::state::{Models, Route};
 use crate::theme::Palette;
-use crate::ui::account::{open_change_password, open_users};
+use crate::ui::account::open_change_password;
+use crate::ui::people::open_users;
 use crate::ui::popup_menu::{MenuContent, MenuEntry, MenuSwitchOption, MenuTrigger, menu};
 use crate::ui::publishing::open_publishing;
 use crate::ui::{ClickHandler, IconButton, icon_button, sidebar_menu_button};

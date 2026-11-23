@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::SystemTime;
 
-use crate::client::{Api, CodePurpose, UserChanges};
+use crate::client::{Api, CodePurpose, NewUser, UserChanges};
 use crate::config::Config;
 use crate::error::AuthError;
-use crate::session::{Account, Session};
+use crate::session::{ManagedAccount, Session};
 use crate::store::SessionStore;
 
 pub struct SessionKeeper {
@@ -111,19 +111,63 @@ impl SessionKeeper {
         Ok(session)
     }
 
-    pub fn users(&self) -> Result<Vec<Account>, AuthError> {
+    pub fn users(&self) -> Result<Vec<ManagedAccount>, AuthError> {
         let token = self.access_token()?;
         self.api.users(&token)
     }
 
-    pub fn update_user(&self, id: &str, changes: &UserChanges) -> Result<Account, AuthError> {
+    pub fn create_user(&self, user: &NewUser) -> Result<ManagedAccount, AuthError> {
+        let token = self.access_token()?;
+        self.api.create_user(&token, user)
+    }
+
+    pub fn update_user(
+        &self,
+        id: &str,
+        changes: &UserChanges,
+    ) -> Result<ManagedAccount, AuthError> {
         let token = self.access_token()?;
         self.api.update_user(&token, id, changes)
     }
 
-    pub fn grant_licence(&self, id: &str, years: u8) -> Result<Account, AuthError> {
+    pub fn delete_user(&self, id: &str) -> Result<(), AuthError> {
         let token = self.access_token()?;
-        self.api.grant_licence(&token, id, years)
+        self.api.delete_user(&token, id)
+    }
+
+    pub fn verify_user(&self, id: &str) -> Result<ManagedAccount, AuthError> {
+        let token = self.access_token()?;
+        self.api.verify_user(&token, id)
+    }
+
+    pub fn grant_licence(&self, id: &str, months: u8) -> Result<ManagedAccount, AuthError> {
+        let token = self.access_token()?;
+        self.api.grant_licence(&token, id, months)
+    }
+
+    pub fn end_licence(&self, id: &str) -> Result<ManagedAccount, AuthError> {
+        let token = self.access_token()?;
+        self.api.end_licence(&token, id)
+    }
+
+    pub fn extend_trial(&self, id: &str, days: u8) -> Result<ManagedAccount, AuthError> {
+        let token = self.access_token()?;
+        self.api.extend_trial(&token, id, days)
+    }
+
+    pub fn set_password(&self, id: &str, password: &str) -> Result<ManagedAccount, AuthError> {
+        let token = self.access_token()?;
+        self.api.set_password(&token, id, password)
+    }
+
+    pub fn send_reset(&self, id: &str) -> Result<(), AuthError> {
+        let token = self.access_token()?;
+        self.api.send_reset(&token, id)
+    }
+
+    pub fn sign_out_user(&self, id: &str) -> Result<ManagedAccount, AuthError> {
+        let token = self.access_token()?;
+        self.api.sign_out_user(&token, id)
     }
 
     fn token_held(&self, held: &mut Option<Session>) -> Result<String, AuthError> {

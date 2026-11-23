@@ -1,6 +1,10 @@
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
+import * as SqlClient from "effect/sql/SqlClient";
+import * as SqlSchema from "effect/sql/SqlSchema";
 import {
   AdminsOnly,
   Authentication,
@@ -53,17 +57,35 @@ export const PublishersOnlyLive = Layer.succeed(
   ),
 );
 
-export const AdminsOnlyLive = Layer.succeed(
+const AdminRow = Schema.Struct({ role: Schema.String, disabled: Schema.Number });
+
+export const AdminsOnlyLive = Layer.effect(
   AdminsOnly,
-  AdminsOnly.of(
-    Effect.fn("AdminsOnly")(function* (httpEffect) {
-      const viewer = yield* Viewer;
-      if (viewer.role !== "admin") {
-        return yield* new NotAdmin({ error: "only administrators can manage accounts" });
-      }
-      return yield* httpEffect;
-    }),
-  ),
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const current = SqlSchema.findOneOption({
+      Request: Schema.String,
+      Result: AdminRow,
+      execute: (id) => sql`SELECT role, disabled FROM users WHERE id = ${id}`,
+    });
+    const refused = () => new NotAdmin({ error: "only administrators can manage accounts" });
+    return AdminsOnly.of(
+      Effect.fn("AdminsOnly")(function* (httpEffect) {
+        const viewer = yield* Viewer;
+        if (viewer.role !== "admin") return yield* refused();
+        const row = yield* current(viewer.id).pipe(
+          Effect.tapError((cause) => Effect.logError("check the administrator failed", cause)),
+          Effect.orElseSucceed(() => Option.none()),
+        );
+        const stillAdmin = Option.exists(
+          row,
+          (user) => user.role === "admin" && user.disabled === 0,
+        );
+        if (!stillAdmin) return yield* refused();
+        return yield* httpEffect;
+      }),
+    );
+  }),
 );
 
 export const AuthorizationLive = Layer.mergeAll(

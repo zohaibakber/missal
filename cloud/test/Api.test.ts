@@ -301,7 +301,7 @@ describe("accounts", () => {
       const now = yield* DateTime.now;
       const granted = yield* api.users.grantLicence({
         params: { id: reader.account.id },
-        payload: { years: 1 },
+        payload: { months: 12 },
       });
       expect(granted.licence).toEqual({
         status: "licensed",
@@ -309,7 +309,7 @@ describe("accounts", () => {
       });
       const again = yield* api.users.grantLicence({
         params: { id: reader.account.id },
-        payload: { years: 1 },
+        payload: { months: 12 },
       });
       expect(again.licence.until).toEqual(DateTime.add(now, { years: 2 }));
       const listed = (yield* api.users.list()).find((account) => account.email === READER);
@@ -340,7 +340,12 @@ describe("accounts", () => {
       );
 
       yield* useToken(admin.accessToken);
-      expect((yield* api.users.list()).map((account) => account.email)).toEqual([ADMIN, READER]);
+      const listed = yield* api.users.list();
+      expect(listed.map((account) => [account.email, account.emailVerified])).toEqual([
+        [ADMIN, true],
+        ["pending@example.test", false],
+        [READER, true],
+      ]);
       yield* api.users.update({
         params: { id: reader.account.id },
         payload: { role: "publisher" },
@@ -351,6 +356,91 @@ describe("accounts", () => {
       yield* api.users.update({ params: { id: reader.account.id }, payload: { disabled: true } });
       expect((yield* refresh(promoted.refreshToken).pipe(Effect.flip))._tag).toBe("SessionExpired");
       expect((yield* signIn(READER).pipe(Effect.flip))._tag).toBe("InvalidCredentials");
+    }).pipe(Effect.provide(testLayer())),
+  );
+
+  it.effect("administrators create, verify, renew and remove accounts", () =>
+    Effect.gen(function* () {
+      const api = yield* client;
+      const admin = yield* registerAdmin();
+      const now = yield* DateTime.now;
+      const created = yield* api.users.create({
+        payload: {
+          email: READER,
+          name: "Reader",
+          role: "member",
+          password: Redacted.make(PASSWORD),
+          months: 6,
+        },
+      });
+      expect(created.emailVerified).toBe(true);
+      expect(created.licence).toEqual({
+        status: "licensed",
+        until: DateTime.add(now, { months: 6 }),
+      });
+      const taken = yield* api.users
+        .create({
+          payload: {
+            email: READER,
+            name: "",
+            role: "member",
+            password: Redacted.make(PASSWORD),
+            months: 0,
+          },
+        })
+        .pipe(Effect.flip);
+      expect(taken._tag).toBe("EmailTaken");
+
+      const reader = yield* signIn(READER);
+      yield* useToken(admin.accessToken);
+      expect((yield* api.users.list()).find((user) => user.id === created.id)?.sessions).toBe(1);
+
+      const ended = yield* api.users.endLicence({ params: { id: created.id } });
+      expect(ended.licence.status).toBe("expired");
+      const trial = yield* api.users.extendTrial({
+        params: { id: created.id },
+        payload: { days: 14 },
+      });
+      expect(trial.licence).toEqual({ status: "trial", until: DateTime.add(now, { days: 14 }) });
+
+      const reset = yield* api.users.setPassword({
+        params: { id: created.id },
+        payload: { password: Redacted.make("second-secret-456") },
+      });
+      expect(reset.sessions).toBe(0);
+      expect((yield* refresh(reader.refreshToken).pipe(Effect.flip))._tag).toBe("SessionExpired");
+      yield* signIn(READER, "second-secret-456");
+
+      yield* useToken(undefined);
+      yield* signUp("pending@example.test");
+      yield* useToken(admin.accessToken);
+      const pending = (yield* api.users.list()).find(
+        (user) => user.email === "pending@example.test",
+      );
+      expect(pending?.emailVerified).toBe(false);
+      const confirmed = yield* api.users.verifyEmail({ params: { id: pending?.id ?? "" } });
+      expect(confirmed.emailVerified).toBe(true);
+      expect(confirmed.licence.status).toBe("trial");
+      yield* signIn("pending@example.test");
+
+      yield* useToken(admin.accessToken);
+      const self = yield* api.users.remove({ params: { id: admin.account.id } }).pipe(Effect.flip);
+      expect(self._tag).toBe("OwnAccess");
+      yield* api.users.remove({ params: { id: created.id } });
+      expect((yield* signIn(READER, "second-secret-456").pipe(Effect.flip))._tag).toBe(
+        "InvalidCredentials",
+      );
+    }).pipe(Effect.provide(testLayer())),
+  );
+
+  it.effect("a demoted administrator loses access before the access token expires", () =>
+    Effect.gen(function* () {
+      const api = yield* client;
+      const admin = yield* registerAdmin();
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`UPDATE users SET role = 'member' WHERE email = ${ADMIN}`;
+      yield* useToken(admin.accessToken);
+      expect((yield* api.users.list().pipe(Effect.flip))._tag).toBe("NotAdmin");
     }).pipe(Effect.provide(testLayer())),
   );
 
