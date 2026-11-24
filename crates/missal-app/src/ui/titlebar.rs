@@ -307,10 +307,13 @@ impl RenderOnce for Header {
             } else {
                 palette.canvas
             })
+            .when(self.navigation, |this| {
+                this.border_b_1().border_color(palette.line)
+            })
             .font_family(missal_text::UI_FAMILY)
             .child(content)
             .when_some(controls, |this, controls| {
-                this.child(div().flex_none().ml(px(8.)).child(controls))
+                this.child(div().flex_none().h_full().ml(px(8.)).child(controls))
             })
     }
 }

@@ -7,7 +7,7 @@ use gpui_kit::{
     ParentElement, Pixels, StatefulInteractiveElement, Styled, Window, WindowControlArea, div, px,
 };
 
-use crate::theme::{HEADER_HEIGHT, ICON_SM, Palette, hex};
+use crate::theme::{ICON_SM, Palette, hex};
 use crate::ui::sized_icon;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -178,7 +178,7 @@ fn windows_controls(window: &mut Window, cx: &mut App) -> impl IntoElement {
     h_flex()
         .id("window-controls")
         .flex_none()
-        .h(px(HEADER_HEIGHT))
+        .h_full()
         .items_start()
         .children(controls.into_iter().map(move |control| {
             let close = control == Control::Close;
@@ -201,7 +201,7 @@ fn windows_controls(window: &mut Window, cx: &mut App) -> impl IntoElement {
                 .id(control.id())
                 .flex_none()
                 .w(px(CAPTION_BUTTON_WIDTH))
-                .h(px(HEADER_HEIGHT - 1.))
+                .h_full()
                 .flex()
                 .items_center()
                 .justify_center()
@@ -242,7 +242,7 @@ fn linux_controls(window: &mut Window, cx: &mut App) -> impl IntoElement {
     h_flex()
         .id("window-controls")
         .flex_none()
-        .h(px(HEADER_HEIGHT))
+        .h_full()
         .items_center()
         .gap(px(2.))
         .pl(px(8.))
