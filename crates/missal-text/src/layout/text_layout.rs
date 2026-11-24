@@ -332,13 +332,12 @@ impl TextLayout {
         let alignment = parley_alignment(self.paragraph.align);
         let inner = self.inner.clone();
         let mut inner = lock(&inner);
+        inner.set_alignment(alignment, options);
         let dx = if self.paragraph.wrap && max_width.is_some() {
             inner.break_all_lines(max_width);
-            inner.align(alignment, options);
             0.0
         } else {
             inner.break_all_lines(None);
-            inner.align(alignment, options);
             match max_width {
                 Some(width) => {
                     alignment_factor(self.paragraph.align, self.rtl) * (width - inner.width())
