@@ -238,10 +238,14 @@ pub struct PopupList {
     focus: FocusHandle,
     rows: Vec<Row>,
     highlighted: Option<usize>,
+    typed: String,
+    typed_at: Option<std::time::Instant>,
     position: Point<Pixels>,
     corner: Anchor,
     width: f32,
 }
+
+const TYPEAHEAD_RESET: std::time::Duration = std::time::Duration::from_millis(700);
 
 impl EventEmitter<Dismissed> for PopupList {}
 
@@ -271,6 +275,8 @@ impl PopupList {
                 focus: cx.focus_handle(),
                 rows: content.into_rows(),
                 highlighted: None,
+                typed: String::new(),
+                typed_at: None,
                 position,
                 corner,
                 width,
@@ -434,6 +440,11 @@ impl PopupList {
                 self.highlighted = None;
                 self.step(-1, cx);
             }
+            "space" if self.typeahead_active() => {
+                if !self.typeahead(' ', cx) {
+                    return;
+                }
+            }
             "enter" | "space" => {
                 if let Some(row) = self.highlighted {
                     self.run(row, window, cx);
@@ -446,34 +457,65 @@ impl PopupList {
                 }) else {
                     return;
                 };
-                let entries: Vec<usize> = self.entries().collect();
-                let start = self
-                    .highlighted
-                    .and_then(|row| entries.iter().position(|entry| *entry == row))
-                    .map_or(0, |position| position + 1);
-                let found = (0..entries.len())
-                    .map(|step| entries[(start + step) % entries.len()])
-                    .find(|row| match &self.rows[*row] {
-                        Row::Entry(entry) => match &entry.label {
-                            Label::Text(text) | Label::Urdu(text) => {
-                                text.chars().next().is_some_and(|first| {
-                                    first.to_lowercase().eq(letter.to_lowercase())
-                                })
-                            }
-                        },
-                        Row::Label(..) | Row::Header(..) | Row::Switch { .. } | Row::Separator => {
-                            false
-                        }
-                    });
-                if let Some(row) = found {
-                    self.highlighted = Some(row);
-                    cx.notify();
-                } else {
+                if !self.typeahead(letter, cx) {
                     return;
                 }
             }
         }
         cx.stop_propagation();
+    }
+
+    fn typeahead_active(&self) -> bool {
+        !self.typed.is_empty()
+            && self
+                .typed_at
+                .is_some_and(|at| at.elapsed() <= TYPEAHEAD_RESET)
+    }
+
+    fn typeahead(&mut self, letter: char, cx: &mut Context<Self>) -> bool {
+        if self
+            .typed_at
+            .is_none_or(|at| at.elapsed() > TYPEAHEAD_RESET)
+        {
+            self.typed.clear();
+        }
+        self.typed_at = Some(std::time::Instant::now());
+        self.typed.extend(letter.to_lowercase());
+        let first = self.typed.chars().next();
+        let repeated = self.typed.chars().all(|typed| Some(typed) == first);
+        let query = if repeated {
+            self.typed.chars().take(1).collect::<String>()
+        } else {
+            self.typed.clone()
+        };
+        let entries: Vec<usize> = self.entries().collect();
+        if entries.is_empty() {
+            return false;
+        }
+        let position = self
+            .highlighted
+            .and_then(|row| entries.iter().position(|entry| *entry == row));
+        let start = match position {
+            Some(position) if repeated => position + 1,
+            Some(position) => position,
+            None => 0,
+        };
+        let found = (0..entries.len())
+            .map(|step| entries[(start + step) % entries.len()])
+            .find(|row| match &self.rows[*row] {
+                Row::Entry(entry) => match &entry.label {
+                    Label::Text(text) | Label::Urdu(text) => {
+                        text.to_lowercase().starts_with(&query)
+                    }
+                },
+                Row::Label(..) | Row::Header(..) | Row::Switch { .. } | Row::Separator => false,
+            });
+        let Some(row) = found else {
+            return false;
+        };
+        self.highlighted = Some(row);
+        cx.notify();
+        true
     }
 
     fn item(&self, index: usize, entry: &MenuEntry, cx: &mut Context<Self>) -> AnyElement {

@@ -968,7 +968,7 @@ impl PeopleScreen {
             .position(|role| *role == current)
             .unwrap_or(0);
         h_flex()
-            .child(segmented(items, selected))
+            .child(segmented("person-role", items, selected).manual())
             .into_any_element()
     }
 
@@ -1547,12 +1547,12 @@ impl Render for NewPerson {
                             .child(
                                 form_field()
                                     .child(field_label("Role"))
-                                    .child(h_flex().child(segmented(roles, role_index))),
+                                    .child(h_flex().child(segmented("new-person-role", roles, role_index))),
                             )
                             .child(
                                 form_field()
                                     .child(field_label("Licence"))
-                                    .child(h_flex().child(segmented(terms, self.term)))
+                                    .child(h_flex().child(segmented("new-person-licence", terms, self.term)))
                                     .child(field_description(licence_hint))
                                     .children(self.problem.clone().map(field_error)),
                             ),

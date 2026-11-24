@@ -279,6 +279,9 @@ fn run(dark: bool, out: &Path, only_wp0: bool) {
         window.right_click(("fir-row", 1usize), cx);
     });
     h.shot("06-row-context-menu");
+    h.press("e");
+    h.press("d");
+    h.shot("06b-row-menu-typeahead");
     h.press("escape");
 
     h.go(Route::NewFir);
@@ -719,6 +722,10 @@ fn run_gate(dark: bool, out: &Path, api: &str) {
     h.fill("new-person-password", "temporary-pass-1");
     h.with_window(|window, cx| window.click(("new-person-term", 3usize), cx));
     h.shot("49f-people-add");
+    h.press("tab");
+    h.press("right");
+    h.shot("49f2-people-add-arrow-keys");
+    h.press("left");
     h.click("new-person-save");
     h.idle();
     h.shot("49g-people-added");
