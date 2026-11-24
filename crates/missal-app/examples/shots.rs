@@ -117,6 +117,17 @@ fn build(
             ],
         )
         .expect("values");
+    let mut record = store.fir(fir).expect("fir");
+    record.fir.accused = vec![
+        "منیر احمد سکنہ بھائی گیٹ لاہور".to_owned(),
+        "سلیمان ولد ارشد سکنہ مرغزار کالونی لاہور".to_owned(),
+    ];
+    record.fir.witness = vec![
+        "محمد اسلم 1234/C".to_owned(),
+        "طارق محمود 5678/C".to_owned(),
+        "عمران علی 9012/C".to_owned(),
+    ];
+    store.update_fir(&record).expect("update");
     let text_system = Arc::new(gpui_wgpu::CosmicTextSystem::new("sans-serif"));
     let mut cx = HeadlessAppContext::with_platform(
         text_system,
@@ -247,6 +258,27 @@ fn run_wp0(h: &mut Harness) {
     h.go(Route::Template(template));
     h.shot("29-template-header");
     h.go(Route::Firs);
+}
+
+fn run_lists(dark: bool, out: &Path) {
+    let (mut h, _directory) = build(dark, out, 1280.0, 800.0, None);
+    h.go(Route::Fir(FirId::new(3).expect("id")));
+    h.shot("70-accused-inline");
+    h.with_window(|window, cx| {
+        let workspace = shell(cx).read(cx).workspace().expect("workspace");
+        let editor = workspace.read(cx).editor().clone();
+        let handle = editor.read(cx).focus_handle_ref().clone();
+        window.focus(&handle, cx);
+    });
+    h.press("ctrl-end");
+    h.press("enter");
+    h.with_window(|window, cx| window.input("/گواہان", cx));
+    h.shot("71-slash-witnesses");
+    h.with_window(|window, cx| window.input(" 3", cx));
+    h.shot("72-slash-witness-3");
+    h.press("down");
+    h.press("enter");
+    h.shot("73-witness-3-filled");
 }
 
 fn run(dark: bool, out: &Path, only_wp0: bool) {
@@ -469,9 +501,14 @@ fn main() {
     let skip_gate = args.iter().any(|argument| argument == "--no-gate");
     let only_settings = args.iter().any(|argument| argument == "--settings");
     let only_scroll = args.iter().any(|argument| argument == "--scroll");
+    let only_lists = args.iter().any(|argument| argument == "--lists");
     let api = fake_api::start();
     for dark in [false, true] {
         if only.as_deref().is_some_and(|only| (only == "dark") != dark) {
+            continue;
+        }
+        if only_lists {
+            run_lists(dark, &out);
             continue;
         }
         if only_scroll {

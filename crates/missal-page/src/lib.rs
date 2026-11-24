@@ -64,7 +64,7 @@ impl FieldSource for TokenFields {
                 unresolved: true,
             },
             FieldReference::Fir(field) => FieldDisplayText {
-                text: missal_core::field::fir_field_label(*field).to_owned(),
+                text: missal_core::field::fir_field_label(*field).into_owned(),
                 unresolved: false,
             },
         }

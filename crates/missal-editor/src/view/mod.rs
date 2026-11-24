@@ -1292,11 +1292,22 @@ impl Editor {
     pub fn field_choices(&self) -> Vec<(&'static str, Vec<(String, FieldReference)>)> {
         let query = self.field_query.trim().to_lowercase();
         let matches = |label: &str| query.is_empty() || label.to_lowercase().contains(&query);
-        let fir: Vec<(String, FieldReference)> = missal_core::FIR_FIELDS
-            .iter()
-            .filter(|f| matches(f.label))
-            .map(|f| (f.label.to_owned(), FieldReference::Fir(f.field)))
-            .collect();
+        let mut fir: Vec<(String, FieldReference)> =
+            missal_core::fir_field_choices(&self.document().field_references())
+                .into_iter()
+                .filter(|(label, _)| matches(label))
+                .map(|(label, field)| (label.into_owned(), FieldReference::Fir(field)))
+                .collect();
+        if let Some(field) = missal_core::fir_field_by_key(&missal_core::field_lookup_key(&query))
+            .filter(|field| field.index.is_some())
+            .filter(|&field| {
+                !fir.iter()
+                    .any(|(_, reference)| *reference == FieldReference::Fir(field))
+            })
+        {
+            let label = missal_core::field::fir_field_label(field).into_owned();
+            fir.push((label, FieldReference::Fir(field)));
+        }
         let mut global = Vec::new();
         let mut custom = Vec::new();
         for placeholder in self.fields.catalog.placeholders() {

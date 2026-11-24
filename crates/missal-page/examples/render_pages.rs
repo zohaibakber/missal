@@ -45,8 +45,41 @@ fn main() {
         .into_iter()
         .find(|(template, _)| template.starts_with(name.as_str()))
         .expect("template");
+    let catalog = missal_core::FieldCatalog::default();
+    let values = missal_core::FirValues {
+        fir: missal_core::FirRecord {
+            id: missal_core::FirId::new(1).unwrap(),
+            fir: missal_core::Fir {
+                fir_no: "887/26".into(),
+                date: "28-10-2026".into(),
+                offence: "489F".into(),
+                accused: vec![
+                    "منیر احمد سکنہ بھائی گیٹ لاہور".into(),
+                    "سلیمان ولد ارشد سکنہ مرغزار کالونی لاہور".into(),
+                ],
+                witness: vec![
+                    "محمد اسلم 1234/C".into(),
+                    "طارق محمود 5678/C".into(),
+                    "عمران علی 9012/C".into(),
+                ],
+                ..missal_core::Fir::default()
+            },
+        },
+        overrides: Vec::new(),
+        shared_values: Default::default(),
+    };
+    let filled = missal_core::FieldPresentation::for_fir(
+        &catalog,
+        &values,
+        missal_core::DisplayMode::Values,
+    );
+    let source = if args.iter().any(|a| a == "--fir") {
+        DocSource::new(&document, &filled)
+    } else {
+        DocSource::new(&document, &TokenFields)
+    };
     let mut engine = PageEngine::new();
-    let packet = engine.layout(&[DocSource::new(&document, &TokenFields)]);
+    let packet = engine.layout(&[source]);
     let text_system = Arc::new(gpui_wgpu::CosmicTextSystem::new("sans-serif"));
     let mut cx = gpui_kit::HeadlessAppContext::with_platform(
         text_system,
