@@ -439,9 +439,14 @@ impl FieldsPanel {
         }
     }
 
-    fn tabs(&self, empty: usize, cx: &mut Context<Self>) -> AnyElement {
+    fn tabs(&self, empty: usize, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        const ORDER: [FieldsTab; 2] = [FieldsTab::Fields, FieldsTab::Details];
+        let handles = crate::ui::roving_focus("fields-tabs", ORDER.len(), window, cx);
+        let current = ORDER.iter().position(|tab| *tab == self.tab).unwrap_or(0);
         let tab = |id: &'static str, text: &'static str, which: FieldsTab, badge: Option<usize>| {
+            let index = ORDER.iter().position(|tab| *tab == which).unwrap_or(0);
             crate::ui::tab(id, self.tab == which)
+                .track_focus(&handles[index].clone().tab_stop(index == current))
                 .flex_1()
                 .when_some(badge.filter(|count| *count > 0), |this, count| {
                     this.tooltip(crate::ui::tooltip(
@@ -472,6 +477,18 @@ impl FieldsPanel {
             .child(
                 crate::ui::tab_list()
                     .flex_1()
+                    .on_key_down(cx.listener({
+                        let handles = handles.clone();
+                        move |this, event, window, cx| {
+                            let at = ORDER.iter().position(|tab| *tab == this.tab).unwrap_or(0);
+                            let Some(next) = crate::ui::roving_step(event, at, ORDER.len()) else {
+                                return;
+                            };
+                            cx.stop_propagation();
+                            this.set_tab(ORDER[next], cx);
+                            window.focus(&handles[next], cx);
+                        }
+                    }))
                     .child(tab("fields-tab", "Fields", FieldsTab::Fields, Some(empty)))
                     .child(tab("details-tab", "Case details", FieldsTab::Details, None)),
             )
@@ -1023,7 +1040,7 @@ impl Render for FieldsPanel {
             .flex_none()
             .h_full()
             .bg(palette.surface)
-            .child(self.tabs(empty, cx))
+            .child(self.tabs(empty, window, cx))
             .child(
                 v_flex()
                     .id("fields-panel-scroll")

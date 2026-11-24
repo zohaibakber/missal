@@ -5,9 +5,9 @@ use gpui_kit::base::{Button as BaseButton, Checkbox as BaseCheckbox, Switch as B
 use gpui_kit::component::StyledExt as _;
 use gpui_kit::prelude::*;
 use gpui_kit::{
-    AnyElement, App, ClickEvent, ElementId, FontWeight, InteractiveElement, Interactivity,
-    IntoElement, ParentElement, RenderOnce, SharedString, StatefulInteractiveElement,
-    StyleRefinement, Styled, Window, px,
+    AnyElement, App, ClickEvent, ElementId, FocusHandle, FontWeight, InteractiveElement,
+    Interactivity, IntoElement, KeyDownEvent, ParentElement, RenderOnce, SharedString,
+    StatefulInteractiveElement, StyleRefinement, Styled, Window, px,
 };
 
 use crate::theme::{
@@ -295,13 +295,106 @@ impl SegmentItem {
     }
 }
 
-pub fn segmented(items: Vec<SegmentItem>, selected: usize) -> Part {
-    tab_list().children(items.into_iter().enumerate().map(|(index, item)| {
-        let handler = item.on_select.clone();
-        tab(item.id, index == selected)
-            .on_click(move |event, window, cx| handler(event, window, cx))
-            .child(item.label)
-    }))
+pub fn roving_focus(
+    id: impl Into<ElementId>,
+    count: usize,
+    window: &mut Window,
+    cx: &mut App,
+) -> Rc<[FocusHandle]> {
+    let state = window.use_keyed_state(id, cx, |_, _| Vec::<FocusHandle>::new());
+    state.update(cx, |handles, cx| {
+        while handles.len() < count {
+            handles.push(cx.focus_handle());
+        }
+        handles.truncate(count);
+    });
+    state.read(cx).as_slice().into()
+}
+
+pub fn roving_step(event: &KeyDownEvent, current: usize, count: usize) -> Option<usize> {
+    if count == 0 || event.keystroke.modifiers.modified() {
+        return None;
+    }
+    let last = count - 1;
+    match event.keystroke.key.as_str() {
+        "right" | "down" => Some((current + 1).min(last)),
+        "left" | "up" => Some(current.saturating_sub(1)),
+        "home" => Some(0),
+        "end" => Some(last),
+        _ => None,
+    }
+}
+
+pub fn keyboard_click() -> ClickEvent {
+    ClickEvent::Keyboard(gpui_kit::KeyboardClickEvent {
+        button: gpui_kit::KeyboardButton::Enter,
+        bounds: gpui_kit::Bounds::default(),
+    })
+}
+
+#[derive(IntoElement)]
+pub struct Segmented {
+    id: ElementId,
+    items: Vec<SegmentItem>,
+    selected: usize,
+    manual: bool,
+}
+
+pub fn segmented(id: impl Into<ElementId>, items: Vec<SegmentItem>, selected: usize) -> Segmented {
+    Segmented {
+        id: id.into(),
+        items,
+        selected,
+        manual: false,
+    }
+}
+
+impl Segmented {
+    pub fn manual(mut self) -> Self {
+        self.manual = true;
+        self
+    }
+}
+
+impl RenderOnce for Segmented {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let count = self.items.len();
+        let selected = self.selected.min(count.saturating_sub(1));
+        let handles = roving_focus(self.id, count, window, cx);
+        let handlers: Vec<ClickHandler> = self
+            .items
+            .iter()
+            .map(|item| item.on_select.clone())
+            .collect();
+        let keys = handles.clone();
+        let manual = self.manual;
+        let stop = handles
+            .iter()
+            .position(|handle| handle.is_focused(window))
+            .unwrap_or(selected);
+        tab_list()
+            .on_key_down(move |event, window, cx| {
+                let current = keys
+                    .iter()
+                    .position(|handle| handle.is_focused(window))
+                    .unwrap_or(selected);
+                let Some(next) = roving_step(event, current, count) else {
+                    return;
+                };
+                cx.stop_propagation();
+                if next != current && !manual {
+                    handlers[next](&keyboard_click(), window, cx);
+                }
+                window.focus(&keys[next], cx);
+            })
+            .children(self.items.into_iter().enumerate().map(|(index, item)| {
+                let handler = item.on_select.clone();
+                tab(item.id, index == selected)
+                    .track_focus(&handles[index].clone().tab_stop(index == stop))
+                    .on_click(move |event, window, cx| handler(event, window, cx))
+                    .child(item.label)
+            }))
+    }
 }
 
 pub struct IconSegment {
