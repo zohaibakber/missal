@@ -7,6 +7,8 @@ import { Api, Viewer } from "./Api.ts";
 import { Accounts } from "./Accounts.ts";
 import { Library } from "./Library.ts";
 import { canPublish } from "./Models.ts";
+import { People } from "./People.ts";
+import { Sessions } from "./Sessions.ts";
 
 const clientAddress = Effect.map(
   HttpServerRequest.HttpServerRequest,
@@ -18,6 +20,7 @@ const AuthHandlers = HttpApiBuilder.group(
   "auth",
   Effect.fn(function* (handlers) {
     const accounts = yield* Accounts;
+    const sessions = yield* Sessions;
     return handlers.handleAll({
       signUp: ({ payload }) =>
         Effect.flatMap(clientAddress, (client) => accounts.signUp(client, payload)),
@@ -37,8 +40,8 @@ const AuthHandlers = HttpApiBuilder.group(
         Effect.flatMap(clientAddress, (client) =>
           accounts.signIn(client, payload.email, payload.password),
         ),
-      refresh: ({ payload }) => accounts.refresh(payload.refreshToken),
-      signOut: ({ payload }) => accounts.signOut(payload.refreshToken),
+      refresh: ({ payload }) => sessions.refresh(payload.refreshToken),
+      signOut: ({ payload }) => sessions.revoke(payload.refreshToken),
     });
   }),
 );
@@ -116,25 +119,22 @@ const UsersHandlers = HttpApiBuilder.group(
   Api,
   "users",
   Effect.fn(function* (handlers) {
-    const accounts = yield* Accounts;
+    const people = yield* People;
     return handlers.handleAll({
-      list: () => accounts.list,
-      create: ({ payload }) => accounts.create(payload),
+      list: () => people.list,
+      create: ({ payload }) => people.create(payload),
       update: ({ params, payload }) =>
-        Effect.flatMap(Viewer, (viewer) => accounts.update(viewer, params.id, payload)),
-      remove: ({ params }) =>
-        Effect.flatMap(Viewer, (viewer) => accounts.remove(viewer, params.id)),
-      verifyEmail: ({ params }) => accounts.confirmEmail(params.id),
-      grantLicence: ({ params, payload }) => accounts.grantLicence(params.id, payload.months),
-      endLicence: ({ params }) => accounts.endLicence(params.id),
-      extendTrial: ({ params, payload }) => accounts.extendTrial(params.id, payload.days),
+        Effect.flatMap(Viewer, (viewer) => people.update(viewer, params.id, payload)),
+      remove: ({ params }) => Effect.flatMap(Viewer, (viewer) => people.remove(viewer, params.id)),
+      verifyEmail: ({ params }) => people.confirmEmail(params.id),
+      grantLicence: ({ params, payload }) => people.grantLicence(params.id, payload.months),
+      endLicence: ({ params }) => people.endLicence(params.id),
+      extendTrial: ({ params, payload }) => people.extendTrial(params.id, payload.days),
       setPassword: ({ params, payload }) =>
-        Effect.flatMap(Viewer, (viewer) =>
-          accounts.setPassword(viewer, params.id, payload.password),
-        ),
-      sendReset: ({ params }) => accounts.sendReset(params.id),
+        Effect.flatMap(Viewer, (viewer) => people.setPassword(viewer, params.id, payload.password)),
+      sendReset: ({ params }) => people.sendReset(params.id),
       signOut: ({ params }) =>
-        Effect.flatMap(Viewer, (viewer) => accounts.endSessions(viewer, params.id)),
+        Effect.flatMap(Viewer, (viewer) => people.endSessions(viewer, params.id)),
     });
   }),
 );

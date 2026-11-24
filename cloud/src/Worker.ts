@@ -48,7 +48,6 @@ export default Cloudflare.Worker(
 
     const Infrastructure = Layer.mergeAll(
       Atomic.layerD1.pipe(Layer.provideMerge(SQL.D1Layer(database, columnNames))),
-      CryptoLive,
       AuthThrottle.layer(limiter),
       Blobs.layerR2(bucket),
       Option.isSome(resendKey) && Option.isSome(mailFrom)
@@ -56,7 +55,7 @@ export default Cloudflare.Worker(
             Layer.provide(FetchHttpClient.layer),
           )
         : Mailer.layerLog,
-    );
+    ).pipe(Layer.provideMerge(CryptoLive));
 
     yield* Cloudflare.Workers.cron("17 3 * * *", () =>
       Effect.gen(function* () {
@@ -82,6 +81,7 @@ export default Cloudflare.Worker(
         Cloudflare.R2.ReadWriteBucketBinding,
         Cloudflare.Workers.RateLimitBinding,
         Cloudflare.Workers.CronEventSourceLive,
+        Cloudflare.Workers.Telemetry(),
       ),
     ),
   ),

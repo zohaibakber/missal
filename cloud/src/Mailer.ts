@@ -1,4 +1,5 @@
 import * as Context from "effect/Context";
+import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as HttpClient from "effect/http/HttpClient";
@@ -6,6 +7,7 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as Layer from "effect/Layer";
 import type * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
+import * as Schedule from "effect/Schedule";
 
 const RESEND_URL = "https://api.resend.com/emails";
 
@@ -34,12 +36,18 @@ export class Mailer extends Context.Service<
   static readonly layerResend = (options: ResendOptions) =>
     Layer.effect(
       Mailer,
-      Effect.map(HttpClient.HttpClient, (http) => {
-        const client = HttpClient.filterStatusOk(http);
+      Effect.gen(function* () {
+        const random = yield* SecureRandom.SecureRandom;
+        const client = (yield* HttpClient.HttpClient).pipe(
+          HttpClient.timeout("10 seconds"),
+          HttpClient.retryTransient({ schedule: Schedule.exponential("250 millis"), times: 3 }),
+          HttpClient.filterStatusOk,
+        );
         return Mailer.of({
           send: Effect.fn("Mailer.send")(function* (message: MailMessage) {
             const request = HttpClientRequest.post(RESEND_URL).pipe(
               HttpClientRequest.bearerToken(options.apiKey),
+              HttpClientRequest.setHeader("idempotency-key", yield* random.uuidV4()),
               HttpClientRequest.bodyJsonUnsafe({
                 from: options.from,
                 to: [message.to],

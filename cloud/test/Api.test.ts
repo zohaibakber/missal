@@ -1,7 +1,9 @@
-import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
+import * as Migrations from "@alchemy.run/sql/Migrations";
+import { splitSqliteStatements } from "@alchemy.run/sql/SqlFile";
 import * as Http from "alchemy/Http";
 import { RuntimeContext } from "alchemy/RuntimeContext";
 import * as ConfigProvider from "effect/ConfigProvider";
@@ -14,6 +16,7 @@ import * as HttpApiTest from "effect/http-api/HttpApiTest";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpRouter from "effect/http/HttpRouter";
 import * as Layer from "effect/Layer";
+import * as RateLimiter from "effect/persistence/RateLimiter";
 import * as Redacted from "effect/Redacted";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -28,7 +31,7 @@ import { Atomic, columnNames } from "../src/Database.ts";
 import { HandlersLive } from "../src/Handlers.ts";
 import { Mailer, Outbox } from "../src/Mailer.ts";
 import { Email } from "../src/Models.ts";
-import { AuthThrottle } from "../src/Throttle.ts";
+import { AuthThrottle, tooManyAttempts, WINDOW } from "../src/Throttle.ts";
 
 const ADMIN = "admin@example.test";
 const READER = "reader@example.test";
@@ -52,17 +55,51 @@ const AuthenticationClient = HttpApiMiddleware.layerClient(
 
 const migrate = Layer.effectDiscard(
   Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const directory = join(import.meta.dirname, "..", "migrations");
-    for (const file of readdirSync(directory).sort()) {
-      const statements = readFileSync(join(directory, file), "utf8")
-        .split(";")
-        .map((statement) => statement.trim())
-        .filter((statement) => statement.length > 0);
-      for (const statement of statements) yield* sql.unsafe(statement);
-    }
-  }),
+    const sql = (yield* SqlClient.SqlClient).withoutTransforms();
+    const failed = (cause: unknown) =>
+      new Migrations.MigrationError({ message: String(cause), cause });
+    yield* Migrations.applyMigrations({
+      resolved: {
+        dir: join(import.meta.dirname, "..", "migrations"),
+        table: Migrations.ALCHEMY_DEFAULT_TABLE,
+      },
+      executor: {
+        dialect: "sqlite",
+        query: (text, params) =>
+          sql.unsafe<Record<string, unknown>>(text, params).pipe(
+            Effect.map((rows) => [...rows]),
+            Effect.mapError(failed),
+          ),
+        batch: (scripts) =>
+          sql
+            .withTransaction(
+              Effect.forEach(scripts.flatMap(splitSqliteStatements), (statement) =>
+                sql.unsafe(statement),
+              ),
+            )
+            .pipe(Effect.asVoid, Effect.mapError(failed)),
+      },
+    });
+  }).pipe(Effect.provide(NodeServices.layer), Effect.orDie),
 );
+
+const networkThrottle = (limit: number) =>
+  Layer.effect(
+    AuthThrottle,
+    Effect.map(RateLimiter.RateLimiter, (limiter) =>
+      AuthThrottle.of({
+        check: (client) =>
+          limiter.consume({ key: client, limit, window: WINDOW }).pipe(
+            Effect.asVoid,
+            Effect.catch((error) =>
+              error.reason._tag === "RateLimitExceeded"
+                ? Effect.fail(tooManyAttempts(error.reason.retryAfter))
+                : Effect.die(error),
+            ),
+          ),
+      }),
+    ),
+  ).pipe(Layer.provide(RateLimiter.layer), Layer.provide(RateLimiter.layerStoreMemory));
 
 const testLayer = (throttleLimit = 1_000, verifyEmails = true) => {
   const database = Layer.mergeAll(Atomic.layerTransaction, migrate).pipe(
@@ -71,7 +108,7 @@ const testLayer = (throttleLimit = 1_000, verifyEmails = true) => {
   const infrastructure = Layer.mergeAll(
     database,
     CryptoLive,
-    AuthThrottle.layerMemory(throttleLimit),
+    networkThrottle(throttleLimit),
     Blobs.layerMemory,
     Mailer.layerMemory,
   );
