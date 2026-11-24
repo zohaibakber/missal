@@ -9,7 +9,8 @@ use gpui_kit::{
 use crate::{
     fonts::{FontFamily, UI_FAMILY_ALIASES, URDU_FAMILY_ALIASES},
     layout::{
-        Align, Attr, AttributedText, Direction, LineHeight, ParagraphStyle, TextLayout, TextStyle,
+        Align, Attr, AttributedText, Direction, Indent, LineHeight, ParagraphStyle, TextLayout,
+        TextStyle,
     },
     paint::{TextPaint, paint_text},
     system::{TextSystem, to_rgba},
@@ -224,6 +225,7 @@ impl Label {
                 align,
                 line_height,
                 wrap,
+                indent: Indent::default(),
             },
             truncate: matches!(text_style.text_overflow, Some(TextOverflow::Truncate(_)))
                 || truncate,

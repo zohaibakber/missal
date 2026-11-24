@@ -11,7 +11,7 @@ pub use navigation::{
     previous_char_boundary, previous_word_start, word_range_at,
 };
 pub use style::{
-    Align, Attr, AttributedText, Direction, InlineObject, LineHeight, ParagraphStyle, Rgba,
+    Align, Attr, AttributedText, Direction, Indent, InlineObject, LineHeight, ParagraphStyle, Rgba,
     TextStyle, first_strong_is_rtl,
 };
 pub use text_layout::{

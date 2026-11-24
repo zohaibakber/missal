@@ -17,7 +17,7 @@ use history::{EditKind, History, Snapshot};
 use crate::{
     fonts::FontFamily,
     layout::{
-        Affinity, Align, AttributedText, Direction, HorizontalDirection, LineHeight,
+        Affinity, Align, AttributedText, Direction, HorizontalDirection, Indent, LineHeight,
         ParagraphStyle, TextLayout, TextPosition, TextStyle, next_cluster_boundary, next_word_end,
         paragraph_range_at, previous_char_boundary, previous_word_start, word_range_at,
     },
@@ -546,6 +546,7 @@ impl TextInput {
             align: self.align,
             line_height: LineHeight::Px(row_height),
             wrap: self.multiline,
+            indent: Indent::default(),
         }
     }
 

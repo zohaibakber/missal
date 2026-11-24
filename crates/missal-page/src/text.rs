@@ -5,8 +5,8 @@ use std::sync::Arc;
 use missal_core::FieldReference;
 use missal_core::document::{Inline, Style, Text};
 use missal_text::{
-    Affinity, Attr, AttributedText, FaceId, FontFamily, InlineObject, LineHeight, ParagraphStyle,
-    Rgba, TextEngine, TextLayout, TextPosition, TextStyle,
+    Affinity, Attr, AttributedText, FaceId, FontFamily, Indent, InlineObject, LineHeight,
+    ParagraphStyle, Rgba, TextEngine, TextLayout, TextPosition, TextStyle,
 };
 
 use crate::FieldSource;
@@ -27,8 +27,6 @@ const LRE: char = '\u{202A}';
 const RLO: char = '\u{202E}';
 const LRO: char = '\u{202D}';
 const PDF: char = '\u{202C}';
-
-const INDENT_OBJECT: u64 = u64::MAX;
 
 pub fn logical_text(inlines: &[Inline]) -> String {
     let mut out = String::new();
@@ -569,7 +567,6 @@ pub(crate) fn build_inline(
     inlines: &[Inline],
     fields: &dyn FieldSource,
     styles: &mut StyleCache,
-    indent: f32,
 ) -> InlineContent {
     let mut builder = Builder {
         base: &block.text,
@@ -593,15 +590,6 @@ pub(crate) fn build_inline(
     };
     builder.inlines(inlines, &block.text, &inherited);
     builder.apply_spaces();
-    if indent > 0.0 {
-        builder.objects.push(InlineObject {
-            id: INDENT_OBJECT,
-            index: 0,
-            width: indent,
-            height: 0.0,
-            baseline: Some(0.0),
-        });
-    }
     let layout_len = builder.text.len();
     let base = &block.text;
     let mut style = TextStyle::new(base.family.clone(), base.size);
@@ -677,7 +665,6 @@ pub struct TextBox {
     pub(crate) break_inside: style::BreakValue,
     pub(crate) orphans: usize,
     pub(crate) widows: usize,
-    pub(crate) layout_dx: f32,
 }
 
 impl TextBox {
@@ -699,10 +686,6 @@ impl TextBox {
 
     pub fn fields(&self) -> &[FieldSpan] {
         &self.fields
-    }
-
-    pub(crate) fn layout_dx(&self) -> f32 {
-        self.layout_dx
     }
 
     pub(crate) fn caret_local(&self, position: TextPosition) -> (usize, Rect) {
@@ -733,7 +716,7 @@ impl TextBox {
         let caret = self.layout.caret(position);
         let line = caret.line.min(self.lines.len() - 1);
         let lb = self.lines[line];
-        let x = self.content.x + caret.x + self.layout_dx();
+        let x = self.content.x + caret.x;
         (
             line,
             Rect::new(x, lb.content_top, 0.0, lb.content_bottom - lb.content_top),
@@ -775,7 +758,7 @@ impl TextBox {
             rects.push((
                 line,
                 Rect::new(
-                    self.content.x + rect.x + self.layout_dx(),
+                    self.content.x + rect.x,
                     lb.top,
                     rect.width,
                     lb.bottom - lb.top,
@@ -813,8 +796,7 @@ impl TextBox {
             return TextPosition::downstream(0);
         }
         let line = line.min(self.layout.lines().len() - 1);
-        self.layout
-            .hit_test_line(line, x - self.content.x - self.layout_dx())
+        self.layout.hit_test_line(line, x - self.content.x)
     }
 }
 
@@ -934,6 +916,7 @@ fn layout_paragraph(
     text: &AttributedText,
     props: &TextProps,
     width: f32,
+    indent: f32,
 ) -> Arc<TextLayout> {
     let paragraph = ParagraphStyle {
         direction: if props.direction.is_rtl() {
@@ -944,6 +927,7 @@ fn layout_paragraph(
         align: props.align,
         line_height: LineHeight::Normal,
         wrap: props.white_space.wraps(),
+        indent: Indent(indent),
     };
     engine.layout(text, &paragraph, Some(width.max(0.0)))
 }
@@ -978,44 +962,8 @@ pub(crate) fn measure_text_block(
     let content_width =
         (border_width - paddings.horizontal() - border_widths.horizontal()).max(0.0);
     let indent = text_props.indent.resolve(text_props.size, content_width);
-    let mut content = build_inline(computed, input.inlines, fields, styles, indent.max(0.0));
-    let mut layout = layout_paragraph(engine, &content.text, text_props, content_width);
-    let mut layout_dx = 0.0;
-    if indent < 0.0 {
-        let hang = -indent;
-        let wide = content_width + hang;
-        let base_objects = content.text.objects.clone();
-        let mut starts: Vec<usize> = Vec::new();
-        for _ in 0..6 {
-            let mut text = content.text.clone();
-            text.objects = base_objects.clone();
-            for (k, start) in starts.iter().enumerate() {
-                text.objects.push(InlineObject {
-                    id: INDENT_OBJECT - 1 - k as u64,
-                    index: *start,
-                    width: hang,
-                    height: 0.0,
-                    baseline: Some(0.0),
-                });
-            }
-            let candidate = layout_paragraph(engine, &text, text_props, wide);
-            let next: Vec<usize> = candidate
-                .lines()
-                .iter()
-                .skip(1)
-                .map(|l| l.text_range.start)
-                .collect();
-            layout = candidate;
-            content.text = text;
-            if next == starts {
-                break;
-            }
-            starts = next;
-        }
-        if !text_props.direction.is_rtl() {
-            layout_dx = -hang;
-        }
-    }
+    let content = build_inline(computed, input.inlines, fields, styles);
+    let layout = layout_paragraph(engine, &content.text, text_props, content_width, indent);
     let strut = InlineBox::of(text_props);
     let mut lines = Vec::with_capacity(layout.lines().len().max(1));
     let content_top = border_widths.top + paddings.top;
@@ -1048,7 +996,7 @@ pub(crate) fn measure_text_block(
                 }
             }
             for object in layout.objects() {
-                if object.line == index && object.id < INDENT_OBJECT - 64 {
+                if object.line == index {
                     above = above.max(object.rect.height);
                     content_above = content_above.max(object.rect.height);
                 }
@@ -1103,6 +1051,7 @@ pub(crate) fn measure_text_block(
             align: missal_text::Align::Start,
             line_height: LineHeight::Normal,
             wrap: false,
+            indent: Indent::default(),
         };
         let marker_layout = engine.layout(&attributed, &paragraph, None);
         let width = marker_layout.natural_width().max(marker_layout.width());
@@ -1136,6 +1085,5 @@ pub(crate) fn measure_text_block(
         break_inside: boxp.break_inside,
         orphans: text_props.orphans as usize,
         widows: text_props.widows as usize,
-        layout_dx,
     }
 }

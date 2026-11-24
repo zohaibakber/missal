@@ -246,12 +246,24 @@ impl Hash for LineHeight {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct Indent(pub f32);
+
+impl Eq for Indent {}
+
+impl Hash for Indent {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.to_bits().hash(state);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ParagraphStyle {
     pub direction: Direction,
     pub align: Align,
     pub line_height: LineHeight,
     pub wrap: bool,
+    pub indent: Indent,
 }
 
 impl Default for ParagraphStyle {
@@ -261,6 +273,7 @@ impl Default for ParagraphStyle {
             align: Align::Start,
             line_height: LineHeight::Normal,
             wrap: true,
+            indent: Indent::default(),
         }
     }
 }
