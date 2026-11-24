@@ -1,15 +1,15 @@
+import { and, eq, isNull, lte, sql } from "drizzle-orm";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/sql/SqlClient";
-import * as SqlModel from "effect/sql/SqlModel";
-import * as SqlSchema from "effect/sql/SqlSchema";
 import { type Account, UserNotFound } from "./Api.ts";
+import { Db } from "./Database.ts";
 import { storage } from "./Failures.ts";
-import { licenceOf, TRIAL_LENGTH, User, UserId } from "./Models.ts";
+import { licenceOf, TRIAL_LENGTH, User } from "./Models.ts";
+import { users } from "./Schema.ts";
 
 export const millis = DateTime.toEpochMillis;
 
@@ -27,91 +27,115 @@ export const toAccount = (user: User, now: DateTime.Utc): Account => ({
 });
 
 export interface UserFields {
-  readonly name?: string;
-  readonly role?: User["role"];
-  readonly disabled?: boolean;
-  readonly password?: string;
-  readonly paidUntil?: DateTime.Utc;
-  readonly trialEndsAt?: DateTime.Utc;
+  readonly name?: string | undefined;
+  readonly role?: User["role"] | undefined;
+  readonly disabled?: boolean | undefined;
+  readonly password?: string | undefined;
+  readonly paidUntil?: DateTime.Utc | undefined;
+  readonly trialEndsAt?: DateTime.Utc | undefined;
 }
 
 const missing = () => new UserNotFound({ error: "no such user" });
 
+const decodeUser = Schema.decodeUnknownEffect(User);
+const decodeUsers = Schema.decodeUnknownEffect(Schema.Array(User));
+const encodeInsert = Schema.encodeEffect(User.insert);
+
+const optionalMillis = (time: DateTime.Utc | undefined) =>
+  time === undefined ? undefined : millis(time);
+
 export class Users extends Context.Service<Users>()("Users", {
   make: Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const repository = yield* SqlModel.makeRepository(User, {
-      tableName: "users",
-      spanPrefix: "Users",
-      idColumn: "id",
-    });
-    const encodeInsert = Schema.encodeEffect(User.insert);
+    const db = yield* Db;
 
-    const findByEmail = SqlSchema.findOneOption({
-      Request: Schema.String,
-      Result: User,
-      execute: (email) => sql`SELECT * FROM users WHERE email = ${email}`,
-    });
-    const findAll = SqlSchema.findAll({
-      Request: Schema.Void,
-      Result: User,
-      execute: () => sql`SELECT * FROM users ORDER BY email`,
-    });
+    const first = (rows: ReadonlyArray<unknown>) =>
+      rows[0] === undefined ? Effect.succeedNone : Effect.asSome(decodeUser(rows[0]));
 
     const find = (id: string) =>
-      repository
-        .findById(UserId.make(id))
-        .pipe(Effect.catchNoSuchElement, storage("read the user"));
+      db
+        .select()
+        .from(users)
+        .where(eq(users.id, id))
+        .pipe(Effect.flatMap(first), storage("read the user"));
 
     const existing = (id: string) =>
       Effect.flatMap(find(id), (user) =>
         Option.isSome(user) ? Effect.succeed(user.value) : Effect.fail(missing()),
       );
 
-    const byEmail = (email: string) => findByEmail(email).pipe(storage("read the user"));
+    const byEmail = (email: string) =>
+      db
+        .select()
+        .from(users)
+        .where(eq(users.email, email))
+        .pipe(Effect.flatMap(first), storage("read the user"));
 
-    const all = findAll(undefined).pipe(storage("list users"));
+    const all = db
+      .select()
+      .from(users)
+      .orderBy(users.email)
+      .pipe(Effect.flatMap(decodeUsers), storage("list users"));
 
     const insert = Effect.fnUntraced(function* (user: typeof User.insert.Type) {
       const row = yield* encodeInsert(user).pipe(Effect.orDie);
-      const inserted = yield* sql`INSERT INTO users ${sql.insert(row)}
-        ON CONFLICT (email) DO NOTHING RETURNING id`.pipe(storage("create the account"));
+      const inserted = yield* db
+        .insert(users)
+        .values(row)
+        .onConflictDoNothing({ target: users.email })
+        .returning({ id: users.id })
+        .pipe(storage("create the account"));
       return inserted.length > 0;
     });
 
     const update = (id: string, fields: UserFields, now: DateTime.Utc) =>
-      sql`UPDATE users SET ${sql.update({
-        ...(fields.name === undefined ? {} : { name: fields.name }),
-        ...(fields.role === undefined ? {} : { role: fields.role }),
-        ...(fields.disabled === undefined ? {} : { disabled: fields.disabled ? 1 : 0 }),
-        ...(fields.password === undefined ? {} : { password: fields.password }),
-        ...(fields.paidUntil === undefined ? {} : { paidUntil: millis(fields.paidUntil) }),
-        ...(fields.trialEndsAt === undefined ? {} : { trialEndsAt: millis(fields.trialEndsAt) }),
-        updatedAt: millis(now),
-      })} WHERE id = ${id}`;
+      db
+        .update(users)
+        .set({
+          name: fields.name,
+          role: fields.role,
+          disabled: fields.disabled === undefined ? undefined : fields.disabled ? 1 : 0,
+          password: fields.password,
+          paidUntil: optionalMillis(fields.paidUntil),
+          trialEndsAt: optionalMillis(fields.trialEndsAt),
+          updatedAt: millis(now),
+        })
+        .where(eq(users.id, id));
 
     const replaceUnverified = (id: string, name: string, password: string, now: DateTime.Utc) =>
-      sql`UPDATE users SET ${sql.update({ name, password, updatedAt: millis(now) })}
-        WHERE id = ${id} AND email_verified_at IS NULL`.pipe(storage("sign up"));
+      db
+        .update(users)
+        .set({ name, password, updatedAt: millis(now) })
+        .where(and(eq(users.id, id), isNull(users.emailVerifiedAt)))
+        .pipe(storage("sign up"));
 
     const confirm = (id: string, now: DateTime.Utc) =>
-      sql`UPDATE users SET
-          email_verified_at = COALESCE(email_verified_at, ${millis(now)}),
-          trial_ends_at = COALESCE(trial_ends_at, ${millis(DateTime.add(now, TRIAL_LENGTH))}),
-          updated_at = ${millis(now)}
-        WHERE id = ${id}`;
+      db
+        .update(users)
+        .set({
+          emailVerifiedAt: sql`COALESCE(${users.emailVerifiedAt}, ${millis(now)})`,
+          trialEndsAt: sql`COALESCE(${users.trialEndsAt}, ${millis(DateTime.add(now, TRIAL_LENGTH))})`,
+          updatedAt: millis(now),
+        })
+        .where(eq(users.id, id));
 
-    const endLicence = (id: string, now: DateTime.Utc) =>
-      sql`UPDATE users SET
-          paid_until = CASE WHEN paid_until > ${millis(now)} THEN ${millis(now)} ELSE paid_until END,
-          trial_ends_at = CASE WHEN trial_ends_at > ${millis(now)} THEN ${millis(now)} ELSE trial_ends_at END,
-          updated_at = ${millis(now)}
-        WHERE id = ${id}`;
+    const endLicence = (id: string, now: DateTime.Utc) => {
+      const at = millis(now);
+      return db
+        .update(users)
+        .set({
+          paidUntil: sql`CASE WHEN ${users.paidUntil} > ${at} THEN ${at} ELSE ${users.paidUntil} END`,
+          trialEndsAt: sql`CASE WHEN ${users.trialEndsAt} > ${at} THEN ${at} ELSE ${users.trialEndsAt} END`,
+          updatedAt: at,
+        })
+        .where(eq(users.id, id));
+    };
 
-    const remove = (id: string) => sql`DELETE FROM users WHERE id = ${id}`;
+    const remove = (id: string) => db.delete(users).where(eq(users.id, id));
 
     const purgeUnverified = (createdBefore: DateTime.Utc) =>
-      sql`DELETE FROM users WHERE email_verified_at IS NULL AND created_at <= ${millis(createdBefore)}`;
+      db
+        .delete(users)
+        .where(and(isNull(users.emailVerifiedAt), lte(users.createdAt, millis(createdBefore))));
 
     return {
       find,

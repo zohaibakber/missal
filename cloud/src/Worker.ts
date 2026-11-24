@@ -17,7 +17,7 @@ import * as Result from "effect/Result";
 import { Accounts } from "./Accounts.ts";
 import { ApiLive, CryptoLive, ServicesLive } from "./App.ts";
 import { Blobs } from "./Blobs.ts";
-import { Atomic, columnNames } from "./Database.ts";
+import { Atomic, Db } from "./Database.ts";
 import { Mailer } from "./Mailer.ts";
 import { AuthThrottle } from "./Throttle.ts";
 import { SigningKey } from "./Tokens.ts";
@@ -64,7 +64,7 @@ export default Cloudflare.Worker(
     });
 
     const Infrastructure = Layer.mergeAll(
-      Atomic.layerD1.pipe(Layer.provideMerge(SQL.D1Layer(database, columnNames))),
+      Layer.mergeAll(Db.layerD1, Atomic.layerD1).pipe(Layer.provideMerge(SQL.D1Layer(database))),
       AuthThrottle.layer(limiter),
       Blobs.layerR2(bucket),
       Layer.succeed(SigningKey, Effect.provide(tokenKey, RuntimeContext.phantom)),

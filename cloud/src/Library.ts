@@ -1,3 +1,4 @@
+import { and, desc, eq, sql } from "drizzle-orm";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
@@ -5,9 +6,6 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/sql/SqlClient";
-import * as SqlModel from "effect/sql/SqlModel";
-import * as SqlSchema from "effect/sql/SqlSchema";
 import {
   type Entry,
   ManagedTemplate,
@@ -17,9 +15,10 @@ import {
   type Upload,
 } from "./Api.ts";
 import { Blobs } from "./Blobs.ts";
-import { Atomic } from "./Database.ts";
+import { Atomic, Db } from "./Database.ts";
 import { storage } from "./Failures.ts";
 import { Template, TemplateId, type UserId } from "./Models.ts";
+import { templates, templateVersions, users } from "./Schema.ts";
 
 const objectKey = (id: string, version: number, unique: string) =>
   `templates/${id}/${version}-${unique}.msb`;
@@ -33,109 +32,128 @@ const conflict = () =>
 
 const toEntry = (template: Template): Entry => template;
 
-const StoredVersion = Schema.Struct({
-  name: Schema.String,
-  fieldCount: Schema.Int,
-  preview: Schema.String,
-  size: Schema.Int,
-  objectKey: Schema.String,
-});
+interface NextVersion {
+  readonly name: string;
+  readonly fieldCount: number;
+  readonly preview: string;
+  readonly size: number;
+  readonly objectKey: string;
+  readonly restoredFrom: number | null;
+}
 
-const CurrentObject = Schema.Struct({ version: Schema.Int, objectKey: Schema.String });
+const decodeTemplate = Schema.decodeUnknownEffect(Template);
+const decodeTemplates = Schema.decodeUnknownEffect(Schema.Array(Template));
+const decodeManaged = Schema.decodeUnknownEffect(Schema.Array(ManagedTemplate));
+const decodeVersions = Schema.decodeUnknownEffect(Schema.Array(TemplateVersion));
 
-const VersionKey = Schema.Struct({ id: Schema.String, version: Schema.Int });
-
-type NextVersion = typeof StoredVersion.Type & { readonly restoredFrom: number | null };
+const versionKey = (id: string, version: number) =>
+  and(eq(templateVersions.templateId, id), eq(templateVersions.version, version));
 
 export class Library extends Context.Service<Library>()("Library", {
   make: Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
+    const db = yield* Db;
     const atomic = yield* Atomic;
     const blobs = yield* Blobs;
     const random = yield* SecureRandom.SecureRandom;
-    const templates = yield* SqlModel.makeRepository(Template, {
-      tableName: "templates",
-      spanPrefix: "Templates",
-      idColumn: "id",
-    });
-    const all = SqlSchema.findAll({
-      Request: Schema.Void,
-      Result: Template,
-      execute: () => sql`SELECT * FROM templates ORDER BY name`,
-    });
-    const managedRows = SqlSchema.findAll({
-      Request: Schema.Void,
-      Result: ManagedTemplate,
-      execute: () => sql`
-          SELECT t.id, t.name, t.version, t.field_count, t.preview, t.size, t.created_at,
-            t.updated_at, u.name AS publisher_name, u.email AS publisher_email,
-            (SELECT COUNT(*) FROM template_versions v WHERE v.template_id = t.id) AS version_count
-          FROM templates t
-          LEFT JOIN users u ON u.id = t.published_by
-          ORDER BY t.name`,
-    });
-    const versionRows = SqlSchema.findAll({
-      Request: Schema.String,
-      Result: TemplateVersion,
-      execute: (id) => sql`
-          SELECT v.version, v.name, v.field_count, v.size, v.published_at, v.restored_from,
-            u.name AS publisher_name, u.email AS publisher_email
-          FROM template_versions v
-          LEFT JOIN users u ON u.id = v.published_by
-          WHERE v.template_id = ${id}
-          ORDER BY v.version DESC`,
-    });
-    const storedVersion = SqlSchema.findOneOption({
-      Request: VersionKey,
-      Result: StoredVersion,
-      execute: ({ id, version }) => sql`
-          SELECT name, field_count, preview, size, object_key
-          FROM template_versions
-          WHERE template_id = ${id} AND version = ${version}`,
-    });
-    const currentObject = SqlSchema.findOneOption({
-      Request: Schema.String,
-      Result: CurrentObject,
-      execute: (id) => sql`
-          SELECT v.version, v.object_key
-          FROM templates t
-          JOIN template_versions v ON v.template_id = t.id AND v.version = t.version
-          WHERE t.id = ${id}`,
-    });
-    const writtenKey = SqlSchema.findOneOption({
-      Request: VersionKey,
-      Result: Schema.Struct({ objectKey: Schema.String }),
-      execute: ({ id, version }) => sql`
-          SELECT object_key FROM template_versions
-          WHERE template_id = ${id} AND version = ${version}`,
-    });
+
+    const storedVersion = (id: string, version: number) =>
+      db
+        .select({
+          name: templateVersions.name,
+          fieldCount: templateVersions.fieldCount,
+          preview: templateVersions.preview,
+          size: templateVersions.size,
+          objectKey: templateVersions.objectKey,
+        })
+        .from(templateVersions)
+        .where(versionKey(id, version))
+        .pipe(
+          Effect.map((rows) => Option.fromNullishOr(rows[0])),
+          storage("read the version history"),
+        );
 
     const find = (id: string) =>
-      templates
-        .findById(TemplateId.make(id))
-        .pipe(Effect.catchNoSuchElement, storage("read the template"));
+      db
+        .select()
+        .from(templates)
+        .where(eq(templates.id, id))
+        .pipe(
+          Effect.flatMap((rows) =>
+            rows[0] === undefined ? Effect.succeedNone : Effect.asSome(decodeTemplate(rows[0])),
+          ),
+          storage("read the template"),
+        );
 
-    const list = all(undefined).pipe(
-      Effect.map((rows) => rows.map(toEntry)),
-      storage("list the templates"),
-      Effect.withSpan("Library.list"),
-    );
+    const list = db
+      .select()
+      .from(templates)
+      .orderBy(templates.name)
+      .pipe(
+        Effect.flatMap(decodeTemplates),
+        Effect.map((rows) => rows.map(toEntry)),
+        storage("list the templates"),
+        Effect.withSpan("Library.list"),
+      );
 
-    const managed = managedRows(undefined).pipe(
-      storage("list the templates"),
-      Effect.withSpan("Library.managed"),
-    );
+    const managed = db
+      .select({
+        id: templates.id,
+        name: templates.name,
+        version: templates.version,
+        fieldCount: templates.fieldCount,
+        preview: templates.preview,
+        size: templates.size,
+        createdAt: templates.createdAt,
+        updatedAt: templates.updatedAt,
+        publisherName: users.name,
+        publisherEmail: users.email,
+        versionCount: db.$count(templateVersions, eq(templateVersions.templateId, templates.id)),
+      })
+      .from(templates)
+      .leftJoin(users, eq(users.id, templates.publishedBy))
+      .orderBy(templates.name)
+      .pipe(
+        Effect.flatMap(decodeManaged),
+        storage("list the templates"),
+        Effect.withSpan("Library.managed"),
+      );
 
     const versions = Effect.fn("Library.versions")(function* (id: string) {
       const template = yield* find(id);
       if (Option.isNone(template)) return yield* notFound();
-      return yield* versionRows(id).pipe(storage("read the version history"));
+      return yield* db
+        .select({
+          version: templateVersions.version,
+          name: templateVersions.name,
+          fieldCount: templateVersions.fieldCount,
+          size: templateVersions.size,
+          publishedAt: templateVersions.publishedAt,
+          restoredFrom: templateVersions.restoredFrom,
+          publisherName: users.name,
+          publisherEmail: users.email,
+        })
+        .from(templateVersions)
+        .leftJoin(users, eq(users.id, templateVersions.publishedBy))
+        .where(eq(templateVersions.templateId, id))
+        .orderBy(desc(templateVersions.version))
+        .pipe(Effect.flatMap(decodeVersions), storage("read the version history"));
     });
 
     const download = Effect.fn("Library.download")(function* (id: string) {
-      const current = yield* currentObject(id).pipe(storage("read the template"));
-      if (Option.isNone(current)) return yield* notFound();
-      const { version, objectKey: key } = current.value;
+      const [current] = yield* db
+        .select({ version: templateVersions.version, objectKey: templateVersions.objectKey })
+        .from(templates)
+        .innerJoin(
+          templateVersions,
+          and(
+            eq(templateVersions.templateId, templates.id),
+            eq(templateVersions.version, templates.version),
+          ),
+        )
+        .where(eq(templates.id, id))
+        .pipe(storage("read the template"));
+      if (current === undefined) return yield* notFound();
+      const { version, objectKey: key } = current;
       const content = yield* blobs.get(key).pipe(storage("read the template"));
       if (Option.isNone(content)) return yield* notFound();
       return { version, content: content.value };
@@ -145,34 +163,38 @@ export class Library extends Context.Service<Library>()("Library", {
       const version = current.version + 1;
       const now = DateTime.toEpochMillis(yield* DateTime.now);
       const { objectKey: key, restoredFrom, name, fieldCount, preview, size } = next;
-      const fields = {
-        name,
-        version,
-        fieldCount,
-        preview,
-        size,
-        publishedBy: by,
-        updatedAt: now,
-      };
+      const unchanged = and(eq(templates.id, current.id), eq(templates.version, current.version));
       yield* atomic
         .run([
-          sql`INSERT INTO template_versions (
-                template_id, version, name, field_count, preview, size, object_key,
-                published_by, published_at, restored_from
-              )
-              SELECT ${current.id}, ${version}, ${name}, ${fieldCount}, ${preview}, ${size},
-                ${key}, ${by}, ${now}, ${restoredFrom}
-              WHERE EXISTS (
-                SELECT 1 FROM templates WHERE id = ${current.id} AND version = ${current.version}
-              )`,
-          sql`UPDATE templates SET ${sql.update(fields)}
-              WHERE id = ${current.id} AND version = ${current.version}`,
+          db.insert(templateVersions).select(
+            db
+              .select({
+                templateId: templates.id,
+                version: sql<number>`${version}`.as("version"),
+                name: sql<string>`${name}`.as("name"),
+                fieldCount: sql<number>`${fieldCount}`.as("field_count"),
+                preview: sql<string>`${preview}`.as("preview"),
+                size: sql<number>`${size}`.as("size"),
+                objectKey: sql<string>`${key}`.as("object_key"),
+                publishedBy: sql<string>`${by}`.as("published_by"),
+                publishedAt: sql<number>`${now}`.as("published_at"),
+                restoredFrom: sql<number | null>`${restoredFrom}`.as("restored_from"),
+              })
+              .from(templates)
+              .where(unchanged),
+          ),
+          db
+            .update(templates)
+            .set({ name, version, fieldCount, preview, size, publishedBy: by, updatedAt: now })
+            .where(unchanged),
         ])
         .pipe(storage("publish the template"));
-      const written = yield* writtenKey({ id: current.id, version }).pipe(
-        storage("publish the template"),
-      );
-      return Option.isSome(written) && written.value.objectKey === key;
+      const [written] = yield* db
+        .select({ objectKey: templateVersions.objectKey })
+        .from(templateVersions)
+        .where(versionKey(current.id, version))
+        .pipe(storage("publish the template"));
+      return written?.objectKey === key;
     });
 
     const create = Effect.fn("Library.create")(function* (upload: Upload, by: UserId) {
@@ -190,13 +212,10 @@ export class Library extends Context.Service<Library>()("Library", {
       };
       yield* atomic
         .run([
-          sql`INSERT INTO templates ${sql.insert({ id, ...shared, createdAt: now, updatedAt: now })}`,
-          sql`INSERT INTO template_versions ${sql.insert({
-            templateId: id,
-            ...shared,
-            objectKey: key,
-            publishedAt: now,
-          })}`,
+          db.insert(templates).values({ id, ...shared, createdAt: now, updatedAt: now }),
+          db
+            .insert(templateVersions)
+            .values({ templateId: id, ...shared, objectKey: key, publishedAt: now }),
         ])
         .pipe(storage("publish the template"));
       return { id, version: 1 };
@@ -237,9 +256,7 @@ export class Library extends Context.Service<Library>()("Library", {
       if (version === current.value.version) {
         return { id: current.value.id, version };
       }
-      const target = yield* storedVersion({ id, version }).pipe(
-        storage("read the version history"),
-      );
+      const target = yield* storedVersion(id, version);
       if (Option.isNone(target)) return yield* notFound();
       const written = yield* advance(current.value, { ...target.value, restoredFrom: version }, by);
       if (!written) return yield* conflict();
@@ -251,8 +268,8 @@ export class Library extends Context.Service<Library>()("Library", {
       if (Option.isNone(template)) return yield* notFound();
       yield* atomic
         .run([
-          sql`DELETE FROM template_versions WHERE template_id = ${id}`,
-          sql`DELETE FROM templates WHERE id = ${id}`,
+          db.delete(templateVersions).where(eq(templateVersions.templateId, id)),
+          db.delete(templates).where(eq(templates.id, id)),
         ])
         .pipe(storage("remove the template"));
       yield* blobs.removePrefix(`templates/${id}/`).pipe(storage("remove the template"));

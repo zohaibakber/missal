@@ -1,16 +1,15 @@
 import type { RateLimitClient } from "@alchemy.run/cloudflare/Workers/RateLimit";
 import type { RuntimeContext } from "alchemy/RuntimeContext";
+import { eq, lte, sql } from "drizzle-orm";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/sql/SqlClient";
-import * as SqlSchema from "effect/sql/SqlSchema";
 import { AccountLocked } from "./Api.ts";
+import { Db } from "./Database.ts";
 import { storage } from "./Failures.ts";
+import { signInFailures } from "./Schema.ts";
 
 export const WINDOW = Duration.seconds(60);
 const LOCK_LIFETIME = Duration.minutes(15);
@@ -41,43 +40,49 @@ export class AuthThrottle extends Context.Service<
     );
 }
 
-const FailureRow = Schema.Struct({ failures: Schema.Int, lockedUntil: Schema.Number });
-
 const millis = DateTime.toEpochMillis;
 
 export class SignInLockout extends Context.Service<SignInLockout>()("SignInLockout", {
   make: Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-
-    const findFailures = SqlSchema.findOneOption({
-      Request: Schema.String,
-      Result: FailureRow,
-      execute: (email) =>
-        sql`SELECT failures, locked_until FROM sign_in_failures WHERE email = ${email}`,
-    });
+    const db = yield* Db;
 
     const check = Effect.fnUntraced(function* (email: string, now: DateTime.Utc) {
-      const lock = yield* findFailures(email).pipe(storage("check sign-in attempts"));
-      if (Option.isSome(lock) && lock.value.lockedUntil > millis(now)) {
+      const [lock] = yield* db
+        .select({ lockedUntil: signInFailures.lockedUntil })
+        .from(signInFailures)
+        .where(eq(signInFailures.email, email))
+        .pipe(storage("check sign-in attempts"));
+      if (lock !== undefined && lock.lockedUntil > millis(now)) {
         return yield* new AccountLocked({
           error: "too many failed sign-ins; try again later",
-          retryAfter: Math.ceil((lock.value.lockedUntil - millis(now)) / 1000),
+          retryAfter: Math.ceil((lock.lockedUntil - millis(now)) / 1000),
         });
       }
     });
 
-    const recordFailure = (email: string, now: DateTime.Utc) =>
-      sql`INSERT INTO sign_in_failures (email, failures, locked_until) VALUES (${email}, 1, 0)
-          ON CONFLICT (email) DO UPDATE SET
-            failures = CASE WHEN failures + 1 >= ${MAX_FAILURES} THEN 0 ELSE failures + 1 END,
-            locked_until = CASE WHEN failures + 1 >= ${MAX_FAILURES} THEN ${millis(now) + Duration.toMillis(LOCK_LIFETIME)} ELSE locked_until END`.pipe(
-        storage("record a failed sign-in"),
-      );
+    const recordFailure = (email: string, now: DateTime.Utc) => {
+      const lockedUntil = millis(now) + Duration.toMillis(LOCK_LIFETIME);
+      const reachesLimit = sql`${signInFailures.failures} + 1 >= ${MAX_FAILURES}`;
+      return db
+        .insert(signInFailures)
+        .values({ email, failures: 1, lockedUntil: 0 })
+        .onConflictDoUpdate({
+          target: signInFailures.email,
+          set: {
+            failures: sql`CASE WHEN ${reachesLimit} THEN 0 ELSE ${signInFailures.failures} + 1 END`,
+            lockedUntil: sql`CASE WHEN ${reachesLimit} THEN ${lockedUntil} ELSE ${signInFailures.lockedUntil} END`,
+          },
+        })
+        .pipe(storage("record a failed sign-in"));
+    };
 
-    const clear = (email: string) => sql`DELETE FROM sign_in_failures WHERE email = ${email}`;
+    const clear = (email: string) =>
+      db.delete(signInFailures).where(eq(signInFailures.email, email));
 
     const purge = (now: DateTime.Utc) =>
-      sql`DELETE FROM sign_in_failures WHERE locked_until <= ${millis(DateTime.subtract(now, { days: 1 }))}`;
+      db
+        .delete(signInFailures)
+        .where(lte(signInFailures.lockedUntil, millis(DateTime.subtract(now, { days: 1 }))));
 
     return { check, recordFailure, clear, purge };
   }),

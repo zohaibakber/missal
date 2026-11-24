@@ -1,3 +1,4 @@
+import { and, count, eq, gt, lte, max } from "drizzle-orm";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
 import * as Mac from "effect/crypto/Mac";
@@ -9,12 +10,11 @@ import * as Base64Url from "effect/encoding/Base64Url";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/sql/SqlClient";
-import * as SqlModel from "effect/sql/SqlModel";
-import * as SqlSchema from "effect/sql/SqlSchema";
 import { SessionExpired, type Session as SessionTokens } from "./Api.ts";
+import { Db } from "./Database.ts";
 import { storage } from "./Failures.ts";
 import { Session, SessionId, type User } from "./Models.ts";
+import { sessions } from "./Schema.ts";
 import { ACCESS_SECONDS, Tokens } from "./Tokens.ts";
 import { millis, toAccount, Users } from "./Users.ts";
 
@@ -30,6 +30,10 @@ export type Activity = typeof Activity.Type;
 
 const encoder = new TextEncoder();
 
+const decodeSession = Schema.decodeUnknownEffect(Session);
+const decodeActivity = Schema.decodeUnknownEffect(Schema.Array(Activity));
+const encodeInsert = Schema.encodeEffect(Session.insert);
+
 const sameText = (left: string, right: string) =>
   Mac.timingSafeEqual(encoder.encode(left), encoder.encode(right));
 
@@ -44,27 +48,23 @@ const expired = () => new SessionExpired({ error: "your session has ended; sign 
 
 export class Sessions extends Context.Service<Sessions>()("Sessions", {
   make: Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
+    const db = yield* Db;
     const random = yield* SecureRandom.SecureRandom;
     const digest = yield* Digest.Digest;
     const tokens = yield* Tokens;
     const users = yield* Users;
-    const repository = yield* SqlModel.makeRepository(Session, {
-      tableName: "sessions",
-      spanPrefix: "Sessions",
-      idColumn: "id",
-    });
-    const encodeInsert = Schema.encodeEffect(Session.insert);
 
-    const findActivity = SqlSchema.findAll({
-      Request: Schema.Struct({ now: Schema.Number, id: Schema.NullOr(Schema.String) }),
-      Result: Activity,
-      execute: ({ now, id }) =>
-        sql`SELECT user_id, COUNT(*) AS sessions, MAX(last_used_at) AS last_seen_at
-          FROM sessions
-          WHERE expires_at > ${now} ${id === null ? sql`` : sql`AND user_id = ${id}`}
-          GROUP BY user_id`,
-    });
+    const findSession = (id: SessionId) =>
+      db
+        .select()
+        .from(sessions)
+        .where(eq(sessions.id, id))
+        .pipe(
+          Effect.flatMap((rows) =>
+            rows[0] === undefined ? Effect.succeedNone : Effect.asSome(decodeSession(rows[0])),
+          ),
+          storage("refresh the session"),
+        );
 
     const hashSecret = (secret: string) =>
       digest.digest(Digest.sha256, encoder.encode(secret)).pipe(Effect.map(Base64Url.encode));
@@ -97,7 +97,7 @@ export class Sessions extends Context.Service<Sessions>()("Sessions", {
         expiresAt: DateTime.addDuration(now, LIFETIME),
       });
       const row = yield* encodeInsert(session).pipe(Effect.orDie);
-      return { id: session.id, secret, insert: sql`INSERT INTO sessions ${sql.insert(row)}` };
+      return { id: session.id, secret, insert: db.insert(sessions).values(row) };
     });
 
     const open = Effect.fnUntraced(function* (user: User) {
@@ -111,9 +111,7 @@ export class Sessions extends Context.Service<Sessions>()("Sessions", {
       if (Option.isNone(parts)) return yield* expired();
       const { sessionId, secret } = parts.value;
       const now = yield* DateTime.now;
-      const session = yield* repository
-        .findById(sessionId)
-        .pipe(Effect.catchNoSuchElement, storage("refresh the session"));
+      const session = yield* findSession(sessionId);
       if (Option.isNone(session)) return yield* expired();
       const user = yield* users.find(session.value.userId);
       const presented = yield* hashSecret(secret);
@@ -123,17 +121,23 @@ export class Sessions extends Context.Service<Sessions>()("Sessions", {
         DateTime.isGreaterThan(session.value.expiresAt, now) &&
         sameText(presented, session.value.refreshHash);
       if (!valid || Option.isNone(user)) {
-        yield* repository.delete(sessionId).pipe(storage("end the session"));
+        yield* db
+          .delete(sessions)
+          .where(eq(sessions.id, sessionId))
+          .pipe(storage("end the session"));
         return yield* expired();
       }
       const next = yield* newSecret;
-      const rotated = yield* sql`UPDATE sessions SET ${sql.update({
-        refreshHash: yield* hashSecret(next),
-        lastUsedAt: millis(now),
-        expiresAt: millis(DateTime.addDuration(now, LIFETIME)),
-      })} WHERE id = ${sessionId} AND refresh_hash = ${session.value.refreshHash} RETURNING id`.pipe(
-        storage("refresh the session"),
-      );
+      const rotated = yield* db
+        .update(sessions)
+        .set({
+          refreshHash: yield* hashSecret(next),
+          lastUsedAt: millis(now),
+          expiresAt: millis(DateTime.addDuration(now, LIFETIME)),
+        })
+        .where(and(eq(sessions.id, sessionId), eq(sessions.refreshHash, session.value.refreshHash)))
+        .returning({ id: sessions.id })
+        .pipe(storage("refresh the session"));
       if (rotated.length === 0) return yield* expired();
       return yield* issue(user.value, sessionId, next);
     });
@@ -142,18 +146,33 @@ export class Sessions extends Context.Service<Sessions>()("Sessions", {
       const parts = splitToken(token);
       if (Option.isNone(parts)) return;
       const presented = yield* hashSecret(parts.value.secret);
-      yield* sql`DELETE FROM sessions WHERE id = ${parts.value.sessionId} AND refresh_hash = ${presented}`.pipe(
-        storage("sign out"),
-      );
+      yield* db
+        .delete(sessions)
+        .where(and(eq(sessions.id, parts.value.sessionId), eq(sessions.refreshHash, presented)))
+        .pipe(storage("sign out"));
     });
 
-    const endAll = (userId: string) => sql`DELETE FROM sessions WHERE user_id = ${userId}`;
+    const endAll = (userId: string) => db.delete(sessions).where(eq(sessions.userId, userId));
 
     const activity = (now: DateTime.Utc, userId: string | null) =>
-      findActivity({ now: millis(now), id: userId }).pipe(storage("read the sessions"));
+      db
+        .select({
+          userId: sessions.userId,
+          sessions: count(),
+          lastSeenAt: max(sessions.lastUsedAt),
+        })
+        .from(sessions)
+        .where(
+          and(
+            gt(sessions.expiresAt, millis(now)),
+            userId === null ? undefined : eq(sessions.userId, userId),
+          ),
+        )
+        .groupBy(sessions.userId)
+        .pipe(Effect.flatMap(decodeActivity), storage("read the sessions"));
 
     const purge = (now: DateTime.Utc) =>
-      sql`DELETE FROM sessions WHERE expires_at <= ${millis(now)}`;
+      db.delete(sessions).where(lte(sessions.expiresAt, millis(now)));
 
     return { issue, prepare, open, refresh, revoke, endAll, activity, purge };
   }),

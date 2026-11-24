@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
+import * as SqliteDrizzle from "drizzle-orm/effect-sqlite-node";
 import * as Migrations from "@alchemy.run/sql/Migrations";
 import { splitSqliteStatements } from "@alchemy.run/sql/SqlFile";
 import * as Http from "alchemy/Http";
@@ -27,7 +28,7 @@ import { Authentication, Api } from "../src/Api.ts";
 import { CryptoLive, ServicesLive } from "../src/App.ts";
 import { AuthorizationLive } from "../src/Auth.ts";
 import { Blobs } from "../src/Blobs.ts";
-import { Atomic, columnNames } from "../src/Database.ts";
+import { Atomic, Db } from "../src/Database.ts";
 import { HandlersLive } from "../src/Handlers.ts";
 import { Mailer, Outbox } from "../src/Mailer.ts";
 import { Email } from "../src/Models.ts";
@@ -56,7 +57,7 @@ const AuthenticationClient = HttpApiMiddleware.layerClient(
 
 const migrate = Layer.effectDiscard(
   Effect.gen(function* () {
-    const sql = (yield* SqlClient.SqlClient).withoutTransforms();
+    const sql = yield* SqlClient.SqlClient;
     const failed = (cause: unknown) =>
       new Migrations.MigrationError({ message: String(cause), cause });
     yield* Migrations.applyMigrations({
@@ -116,9 +117,11 @@ const networkThrottle = (limit: number) =>
   ).pipe(Layer.provide(RateLimiter.layer), Layer.provide(RateLimiter.layerStoreMemory));
 
 const testLayer = (throttleLimit = 1_000, verifyEmails = true) => {
-  const database = Layer.mergeAll(Atomic.layerTransaction, migrate).pipe(
-    Layer.provideMerge(SqliteClient.layer({ filename: ":memory:", ...columnNames })),
-  );
+  const database = Layer.mergeAll(
+    Atomic.layerTransaction,
+    Layer.effect(Db, SqliteDrizzle.makeWithDefaults()),
+    migrate,
+  ).pipe(Layer.provideMerge(SqliteClient.layer({ filename: ":memory:" })));
   const infrastructure = Layer.mergeAll(
     database,
     CryptoLive,

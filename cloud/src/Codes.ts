@@ -1,3 +1,4 @@
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import * as Context from "effect/Context";
 import * as Digest from "effect/crypto/Digest";
 import * as Mac from "effect/crypto/Mac";
@@ -6,22 +7,16 @@ import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/sql/SqlClient";
-import * as SqlSchema from "effect/sql/SqlSchema";
 import { InvalidCode } from "./Api.ts";
-import { Atomic } from "./Database.ts";
+import { Atomic, Db } from "./Database.ts";
 import { storage } from "./Failures.ts";
 import { type MailMessage, Mailer } from "./Mailer.ts";
 import type { CodePurpose, Email } from "./Models.ts";
+import { emailCodes } from "./Schema.ts";
 
 const LIFETIME = Duration.minutes(10);
 const COOLDOWN = Duration.seconds(60);
 const MAX_ATTEMPTS = 5;
-
-const CodeRow = Schema.Struct({ codeHash: Schema.String, expiresAt: Schema.Number });
-const CodeKey = Schema.Struct({ email: Schema.String, purpose: Schema.String });
 
 const encoder = new TextEncoder();
 
@@ -53,18 +48,14 @@ const accountExistsMessage = (to: Email): MailMessage => ({
 
 export class Codes extends Context.Service<Codes>()("Codes", {
   make: Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
+    const db = yield* Db;
     const atomic = yield* Atomic;
     const mailer = yield* Mailer;
     const random = yield* SecureRandom.SecureRandom;
     const digest = yield* Digest.Digest;
 
-    const findCode = SqlSchema.findOneOption({
-      Request: CodeKey,
-      Result: CodeRow,
-      execute: ({ email, purpose }) =>
-        sql`SELECT code_hash, expires_at FROM email_codes WHERE email = ${email} AND purpose = ${purpose}`,
-    });
+    const keyOf = (email: string, purpose: CodePurpose | "notice") =>
+      and(eq(emailCodes.email, email), eq(emailCodes.purpose, purpose));
 
     const hashCode = (email: Email, purpose: CodePurpose, code: string) =>
       digest.digestHex(Digest.sha256, encoder.encode(`${purpose}:${email}:${code}`));
@@ -78,21 +69,28 @@ export class Codes extends Context.Service<Codes>()("Codes", {
       lifetime: Duration.Duration,
     ) {
       const now = millis(yield* DateTime.now);
-      const claimed = yield* sql`INSERT INTO email_codes ${sql.insert({
-        email,
-        purpose,
-        codeHash,
-        expiresAt: now + Duration.toMillis(lifetime),
-        attempts: 0,
-        sentAt: now,
-      })}
-        ON CONFLICT (email, purpose) DO UPDATE SET
-          code_hash = excluded.code_hash,
-          expires_at = excluded.expires_at,
-          attempts = 0,
-          sent_at = excluded.sent_at
-        WHERE email_codes.sent_at <= ${now - Duration.toMillis(COOLDOWN)}
-        RETURNING email`.pipe(storage("store the code"));
+      const claimed = yield* db
+        .insert(emailCodes)
+        .values({
+          email,
+          purpose,
+          codeHash,
+          expiresAt: now + Duration.toMillis(lifetime),
+          attempts: 0,
+          sentAt: now,
+        })
+        .onConflictDoUpdate({
+          target: [emailCodes.email, emailCodes.purpose],
+          set: {
+            codeHash: sql`excluded.code_hash`,
+            expiresAt: sql`excluded.expires_at`,
+            attempts: 0,
+            sentAt: sql`excluded.sent_at`,
+          },
+          setWhere: lte(emailCodes.sentAt, now - Duration.toMillis(COOLDOWN)),
+        })
+        .returning({ email: emailCodes.email })
+        .pipe(storage("store the code"));
       return claimed.length > 0;
     });
 
@@ -107,47 +105,57 @@ export class Codes extends Context.Service<Codes>()("Codes", {
       if (!(yield* claim(email, purpose, codeHash, LIFETIME))) return;
       yield* sendMail(codeMessage(email, purpose, code)).pipe(
         Effect.tapError(() =>
-          sql`DELETE FROM email_codes WHERE email = ${email} AND purpose = ${purpose} AND code_hash = ${codeHash}`.pipe(
-            Effect.ignore,
-          ),
+          db
+            .delete(emailCodes)
+            .where(and(keyOf(email, purpose), eq(emailCodes.codeHash, codeHash)))
+            .pipe(Effect.ignore),
         ),
       );
     });
 
     const redeem = Effect.fnUntraced(function* (email: Email, purpose: CodePurpose, code: string) {
       const now = millis(yield* DateTime.now);
-      const row = yield* findCode({ email, purpose }).pipe(storage("check the code"));
-      if (Option.isNone(row)) return yield* wrongCode();
-      const { codeHash, expiresAt } = row.value;
-      const key = sql`email = ${email} AND purpose = ${purpose} AND code_hash = ${codeHash}`;
+      const [row] = yield* db
+        .select({ codeHash: emailCodes.codeHash, expiresAt: emailCodes.expiresAt })
+        .from(emailCodes)
+        .where(keyOf(email, purpose))
+        .pipe(storage("check the code"));
+      if (row === undefined) return yield* wrongCode();
+      const { codeHash, expiresAt } = row;
+      const key = and(keyOf(email, purpose), eq(emailCodes.codeHash, codeHash));
       if (expiresAt <= now) {
-        yield* sql`DELETE FROM email_codes WHERE ${key}`.pipe(storage("check the code"));
+        yield* db.delete(emailCodes).where(key).pipe(storage("check the code"));
         return yield* wrongCode();
       }
       const presented = encoder.encode(yield* hashCode(email, purpose, code));
       if (Mac.timingSafeEqual(presented, encoder.encode(codeHash))) {
-        const used = yield* sql`DELETE FROM email_codes WHERE ${key} RETURNING email`.pipe(
-          storage("use the code"),
-        );
+        const used = yield* db
+          .delete(emailCodes)
+          .where(key)
+          .returning({ email: emailCodes.email })
+          .pipe(storage("use the code"));
         if (used.length === 0) return yield* wrongCode();
         return;
       }
       yield* atomic
         .run([
-          sql`UPDATE email_codes SET attempts = attempts + 1 WHERE ${key}`,
-          sql`DELETE FROM email_codes WHERE ${key} AND attempts >= ${MAX_ATTEMPTS}`,
+          db
+            .update(emailCodes)
+            .set({ attempts: sql`${emailCodes.attempts} + 1` })
+            .where(key),
+          db.delete(emailCodes).where(and(key, gte(emailCodes.attempts, MAX_ATTEMPTS))),
         ])
         .pipe(storage("check the code"));
       return yield* wrongCode();
     });
 
     const discard = (email: string, purpose?: CodePurpose) =>
-      purpose === undefined
-        ? sql`DELETE FROM email_codes WHERE email = ${email}`
-        : sql`DELETE FROM email_codes WHERE email = ${email} AND purpose = ${purpose}`;
+      db
+        .delete(emailCodes)
+        .where(purpose === undefined ? eq(emailCodes.email, email) : keyOf(email, purpose));
 
     const purge = (now: DateTime.Utc) =>
-      sql`DELETE FROM email_codes WHERE expires_at <= ${millis(now)}`;
+      db.delete(emailCodes).where(lte(emailCodes.expiresAt, millis(now)));
 
     return { notice, send, redeem, discard, purge };
   }),
