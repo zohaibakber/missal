@@ -32,6 +32,7 @@ import { HandlersLive } from "../src/Handlers.ts";
 import { Mailer, Outbox } from "../src/Mailer.ts";
 import { Email } from "../src/Models.ts";
 import { AuthThrottle, tooManyAttempts, WINDOW } from "../src/Throttle.ts";
+import { SigningKey } from "../src/Tokens.ts";
 
 const ADMIN = "admin@example.test";
 const READER = "reader@example.test";
@@ -83,6 +84,19 @@ const migrate = Layer.effectDiscard(
   }).pipe(Effect.provide(NodeServices.layer), Effect.orDie),
 );
 
+const signingKey = Layer.effect(
+  SigningKey,
+  Effect.promise(() =>
+    crypto.subtle.importKey(
+      "raw",
+      new Uint8Array(32).fill(0xab),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign", "verify"],
+    ),
+  ).pipe(Effect.map(Effect.succeed)),
+);
+
 const networkThrottle = (limit: number) =>
   Layer.effect(
     AuthThrottle,
@@ -111,6 +125,7 @@ const testLayer = (throttleLimit = 1_000, verifyEmails = true) => {
     networkThrottle(throttleLimit),
     Blobs.layerMemory,
     Mailer.layerMemory,
+    signingKey,
   );
   const app = HandlersLive.pipe(
     HttpRouter.provideRequest(RuntimeContext.phantom),
@@ -124,7 +139,6 @@ const testLayer = (throttleLimit = 1_000, verifyEmails = true) => {
     Layer.provideMerge(
       ConfigProvider.layer(
         ConfigProvider.fromUnknown({
-          TOKEN_SECRET: "ab".repeat(32),
           VERIFY_EMAILS: String(verifyEmails),
         }),
       ),
