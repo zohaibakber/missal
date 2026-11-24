@@ -6,7 +6,6 @@ import * as SqliteDrizzle from "drizzle-orm/effect-sqlite-node";
 import * as Migrations from "@alchemy.run/sql/Migrations";
 import { splitSqliteStatements } from "@alchemy.run/sql/SqlFile";
 import * as Http from "alchemy/Http";
-import { RuntimeContext } from "alchemy/RuntimeContext";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -15,7 +14,6 @@ import * as Effect from "effect/Effect";
 import * as HttpApiMiddleware from "effect/http-api/HttpApiMiddleware";
 import * as HttpApiTest from "effect/http-api/HttpApiTest";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as HttpRouter from "effect/http/HttpRouter";
 import * as Layer from "effect/Layer";
 import * as RateLimiter from "effect/persistence/RateLimiter";
 import * as Redacted from "effect/Redacted";
@@ -131,7 +129,6 @@ const testLayer = (throttleLimit = 1_000, verifyEmails = true) => {
     signingKey,
   );
   const app = HandlersLive.pipe(
-    HttpRouter.provideRequest(RuntimeContext.phantom),
     Layer.provideMerge(AuthorizationLive),
     Layer.provideMerge(ServicesLive),
   );
@@ -146,7 +143,6 @@ const testLayer = (throttleLimit = 1_000, verifyEmails = true) => {
         }),
       ),
     ),
-    Layer.provide(RuntimeContext.phantom),
   );
 };
 
@@ -551,7 +547,7 @@ describe("accounts", () => {
       yield* sql`UPDATE sessions SET expires_at = 0`;
       yield* TestClock.adjust(Duration.days(8));
       const accounts = yield* Accounts;
-      yield* accounts.purgeExpired.pipe(Effect.provide(RuntimeContext.phantom));
+      yield* accounts.purgeExpired;
       const counts = yield* sql<{ sessions: number; codes: number; users: number }>`SELECT
         (SELECT COUNT(*) FROM sessions) AS sessions,
         (SELECT COUNT(*) FROM email_codes) AS codes,

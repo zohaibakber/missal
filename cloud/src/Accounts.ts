@@ -8,30 +8,24 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import type * as Redacted from "effect/Redacted";
 import * as Model from "effect/schema/Model";
-import {
-  EmailNotVerified,
-  InvalidCredentials,
-  type SignUp,
-  type Viewer,
-  WrongPassword,
-} from "./Api.ts";
+import { EmailNotVerified, InvalidCredentials, type SignUp, Viewer, WrongPassword } from "./Api.ts";
 import { Codes, wrongCode } from "./Codes.ts";
 import { Atomic } from "./Database.ts";
 import { storage } from "./Failures.ts";
 import { type CodePurpose, type Email, TRIAL_LENGTH, User, UserId } from "./Models.ts";
 import { DECOY } from "./Passwords.ts";
 import { Sessions } from "./Sessions.ts";
-import { AuthThrottle, SignInLockout } from "./Throttle.ts";
+import { SignInLockout } from "./Throttle.ts";
 import { isVerified, toAccount, Users } from "./Users.ts";
 
 const UNVERIFIED_LIFETIME = { days: 7 } as const;
 
 export const VERIFY_EMAILS_VARIABLE = "VERIFY_EMAILS";
 
-const emailVerification = Effect.gen(function* () {
-  const value = yield* Config.option(Config.String(VERIFY_EMAILS_VARIABLE));
-  return Option.exists(value, (text) => text.trim().toLowerCase() === "true");
-}).pipe(Effect.orDie);
+const emailVerification = Config.Boolean(VERIFY_EMAILS_VARIABLE).pipe(
+  Config.withDefault(false),
+  Effect.orDie,
+);
 
 const invalid = () => new InvalidCredentials({ error: "wrong email or password" });
 
@@ -40,7 +34,6 @@ export class Accounts extends Context.Service<Accounts>()("Accounts", {
     const atomic = yield* Atomic;
     const passwords = yield* Password.Password;
     const random = yield* SecureRandom.SecureRandom;
-    const throttle = yield* AuthThrottle;
     const lockout = yield* SignInLockout;
     const users = yield* Users;
     const sessions = yield* Sessions;
@@ -70,8 +63,7 @@ export class Accounts extends Context.Service<Accounts>()("Accounts", {
       return yield* sessions.issue(yield* users.existing(user.id), session.id, session.secret);
     });
 
-    const signUp = Effect.fn("Accounts.signUp")(function* (client: string, request: SignUp) {
-      yield* throttle.check(client);
+    const signUp = Effect.fn("Accounts.signUp")(function* (request: SignUp) {
       const verifyEmails = yield* emailVerification;
       const password = yield* hash(request.password);
       const found = yield* users.byEmail(request.email);
@@ -105,11 +97,9 @@ export class Accounts extends Context.Service<Accounts>()("Accounts", {
     });
 
     const requestCode = Effect.fn("Accounts.requestCode")(function* (
-      client: string,
       email: Email,
       purpose: CodePurpose,
     ) {
-      yield* throttle.check(client);
       const found = yield* users.byEmail(email);
       if (Option.isNone(found)) return;
       const user = found.value;
@@ -118,12 +108,7 @@ export class Accounts extends Context.Service<Accounts>()("Accounts", {
       if (eligible) yield* codes.send(email, purpose);
     });
 
-    const verifyEmail = Effect.fn("Accounts.verifyEmail")(function* (
-      client: string,
-      email: Email,
-      code: string,
-    ) {
-      yield* throttle.check(client);
+    const verifyEmail = Effect.fn("Accounts.verifyEmail")(function* (email: Email, code: string) {
       yield* codes.redeem(email, "verify", code);
       const found = yield* users.byEmail(email);
       if (Option.isNone(found) || found.value.disabled) return yield* wrongCode();
@@ -135,12 +120,10 @@ export class Accounts extends Context.Service<Accounts>()("Accounts", {
     });
 
     const resetPassword = Effect.fn("Accounts.resetPassword")(function* (
-      client: string,
       email: Email,
       code: string,
       password: Redacted.Redacted<string>,
     ) {
-      yield* throttle.check(client);
       yield* codes.redeem(email, "reset", code);
       const found = yield* users.byEmail(email);
       if (Option.isNone(found) || !isVerified(found.value) || found.value.disabled) {
@@ -152,11 +135,9 @@ export class Accounts extends Context.Service<Accounts>()("Accounts", {
     });
 
     const signIn = Effect.fn("Accounts.signIn")(function* (
-      client: string,
       email: Email,
       password: Redacted.Redacted<string>,
     ) {
-      yield* throttle.check(client);
       const now = yield* DateTime.now;
       yield* lockout.check(email, now);
       const found = yield* users.byEmail(email);
@@ -180,15 +161,16 @@ export class Accounts extends Context.Service<Accounts>()("Accounts", {
       return yield* sessions.open(user);
     });
 
-    const me = Effect.fn("Accounts.me")(function* (viewer: Viewer["Service"]) {
+    const me = Effect.gen(function* () {
+      const viewer = yield* Viewer;
       return toAccount(yield* users.existing(viewer.id), yield* DateTime.now);
-    });
+    }).pipe(Effect.withSpan("Accounts.me"));
 
     const changePassword = Effect.fn("Accounts.changePassword")(function* (
-      viewer: Viewer["Service"],
       current: Redacted.Redacted<string>,
       next: Redacted.Redacted<string>,
     ) {
+      const viewer = yield* Viewer;
       const user = yield* users.existing(viewer.id);
       if (!(yield* matches(current, user.password))) {
         return yield* new WrongPassword({ error: "the current password is wrong" });

@@ -7,13 +7,13 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import {
-  type Entry,
   ManagedTemplate,
   PublishConflict,
   TemplateNotFound,
   TemplateVersion,
   type Upload,
 } from "./Api.ts";
+import { Viewer } from "./Api.ts";
 import { Blobs } from "./Blobs.ts";
 import { Atomic, Db } from "./Database.ts";
 import { storage } from "./Failures.ts";
@@ -29,8 +29,6 @@ const conflict = () =>
   new PublishConflict({
     error: "someone else published this template at the same time; try again",
   });
-
-const toEntry = (template: Template): Entry => template;
 
 interface NextVersion {
   readonly name: string;
@@ -90,7 +88,6 @@ export class Library extends Context.Service<Library>()("Library", {
       .orderBy(templates.name)
       .pipe(
         Effect.flatMap(decodeTemplates),
-        Effect.map((rows) => rows.map(toEntry)),
         storage("list the templates"),
         Effect.withSpan("Library.list"),
       );
@@ -197,7 +194,8 @@ export class Library extends Context.Service<Library>()("Library", {
       return written?.objectKey === key;
     });
 
-    const create = Effect.fn("Library.create")(function* (upload: Upload, by: UserId) {
+    const create = Effect.fn("Library.create")(function* (upload: Upload) {
+      const { id: by } = yield* Viewer;
       const id = TemplateId.make(yield* random.uuidV4());
       const key = objectKey(id, 1, yield* random.uuidV4());
       yield* blobs.put(key, upload.content).pipe(storage("store the template"));
@@ -221,7 +219,8 @@ export class Library extends Context.Service<Library>()("Library", {
       return { id, version: 1 };
     });
 
-    const update = Effect.fn("Library.update")(function* (id: string, upload: Upload, by: UserId) {
+    const update = Effect.fn("Library.update")(function* (id: string, upload: Upload) {
+      const { id: by } = yield* Viewer;
       const current = yield* find(id);
       if (Option.isNone(current)) return yield* notFound();
       const version = current.value.version + 1;
@@ -246,11 +245,8 @@ export class Library extends Context.Service<Library>()("Library", {
       return { id: current.value.id, version };
     });
 
-    const restore = Effect.fn("Library.restore")(function* (
-      id: string,
-      version: number,
-      by: UserId,
-    ) {
+    const restore = Effect.fn("Library.restore")(function* (id: string, version: number) {
+      const { id: by } = yield* Viewer;
       const current = yield* find(id);
       if (Option.isNone(current)) return yield* notFound();
       if (version === current.value.version) {

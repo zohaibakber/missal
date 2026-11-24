@@ -1,7 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import * as HttpApiSchema from "effect/http-api/HttpApiSchema";
-import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as Layer from "effect/Layer";
 import { Api, Viewer } from "./Api.ts";
 import { Accounts } from "./Accounts.ts";
@@ -10,11 +9,6 @@ import { canPublish } from "./Models.ts";
 import { People } from "./People.ts";
 import { Sessions } from "./Sessions.ts";
 
-const clientAddress = Effect.map(
-  HttpServerRequest.HttpServerRequest,
-  (request) => request.headers["cf-connecting-ip"] ?? "unknown",
-);
-
 const AuthHandlers = HttpApiBuilder.group(
   Api,
   "auth",
@@ -22,24 +16,12 @@ const AuthHandlers = HttpApiBuilder.group(
     const accounts = yield* Accounts;
     const sessions = yield* Sessions;
     return handlers.handleAll({
-      signUp: ({ payload }) =>
-        Effect.flatMap(clientAddress, (client) => accounts.signUp(client, payload)),
-      requestCode: ({ payload }) =>
-        Effect.flatMap(clientAddress, (client) =>
-          accounts.requestCode(client, payload.email, payload.purpose),
-        ),
-      verifyEmail: ({ payload }) =>
-        Effect.flatMap(clientAddress, (client) =>
-          accounts.verifyEmail(client, payload.email, payload.code),
-        ),
+      signUp: ({ payload }) => accounts.signUp(payload),
+      requestCode: ({ payload }) => accounts.requestCode(payload.email, payload.purpose),
+      verifyEmail: ({ payload }) => accounts.verifyEmail(payload.email, payload.code),
       resetPassword: ({ payload }) =>
-        Effect.flatMap(clientAddress, (client) =>
-          accounts.resetPassword(client, payload.email, payload.code, payload.password),
-        ),
-      signIn: ({ payload }) =>
-        Effect.flatMap(clientAddress, (client) =>
-          accounts.signIn(client, payload.email, payload.password),
-        ),
+        accounts.resetPassword(payload.email, payload.code, payload.password),
+      signIn: ({ payload }) => accounts.signIn(payload.email, payload.password),
       refresh: ({ payload }) => sessions.refresh(payload.refreshToken),
       signOut: ({ payload }) => sessions.revoke(payload.refreshToken),
     });
@@ -52,11 +34,9 @@ const AccountHandlers = HttpApiBuilder.group(
   Effect.fn(function* (handlers) {
     const accounts = yield* Accounts;
     return handlers.handleAll({
-      me: () => Effect.flatMap(Viewer, accounts.me),
+      me: () => accounts.me,
       changePassword: ({ payload }) =>
-        Effect.flatMap(Viewer, (viewer) =>
-          accounts.changePassword(viewer, payload.currentPassword, payload.newPassword),
-        ),
+        accounts.changePassword(payload.currentPassword, payload.newPassword),
     });
   }),
 );
@@ -92,10 +72,8 @@ const PublishingHandlers = HttpApiBuilder.group(
   Effect.fn(function* (handlers) {
     const library = yield* Library;
     return handlers.handleAll({
-      create: ({ payload }) =>
-        Effect.flatMap(Viewer, (viewer) => library.create(payload, viewer.id)),
-      update: ({ params, payload }) =>
-        Effect.flatMap(Viewer, (viewer) => library.update(params.id, payload, viewer.id)),
+      create: ({ payload }) => library.create(payload),
+      update: ({ params, payload }) => library.update(params.id, payload),
       remove: ({ params }) => library.remove(params.id),
     });
   }),
@@ -109,8 +87,7 @@ const TemplateAdminHandlers = HttpApiBuilder.group(
     return handlers.handleAll({
       list: () => library.managed,
       versions: ({ params }) => library.versions(params.id),
-      restore: ({ params, payload }) =>
-        Effect.flatMap(Viewer, (viewer) => library.restore(params.id, payload.version, viewer.id)),
+      restore: ({ params, payload }) => library.restore(params.id, payload.version),
     });
   }),
 );
@@ -123,18 +100,15 @@ const UsersHandlers = HttpApiBuilder.group(
     return handlers.handleAll({
       list: () => people.list,
       create: ({ payload }) => people.create(payload),
-      update: ({ params, payload }) =>
-        Effect.flatMap(Viewer, (viewer) => people.update(viewer, params.id, payload)),
-      remove: ({ params }) => Effect.flatMap(Viewer, (viewer) => people.remove(viewer, params.id)),
+      update: ({ params, payload }) => people.update(params.id, payload),
+      remove: ({ params }) => people.remove(params.id),
       verifyEmail: ({ params }) => people.confirmEmail(params.id),
       grantLicence: ({ params, payload }) => people.grantLicence(params.id, payload.months),
       endLicence: ({ params }) => people.endLicence(params.id),
       extendTrial: ({ params, payload }) => people.extendTrial(params.id, payload.days),
-      setPassword: ({ params, payload }) =>
-        Effect.flatMap(Viewer, (viewer) => people.setPassword(viewer, params.id, payload.password)),
+      setPassword: ({ params, payload }) => people.setPassword(params.id, payload.password),
       sendReset: ({ params }) => people.sendReset(params.id),
-      signOut: ({ params }) =>
-        Effect.flatMap(Viewer, (viewer) => people.endSessions(viewer, params.id)),
+      signOut: ({ params }) => people.endSessions(params.id),
     });
   }),
 );

@@ -1,5 +1,5 @@
 import type { RateLimitClient } from "@alchemy.run/cloudflare/Workers/RateLimit";
-import type { RuntimeContext } from "alchemy/RuntimeContext";
+import { RuntimeContext } from "alchemy/RuntimeContext";
 import { eq, lte, sql } from "drizzle-orm";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
@@ -23,7 +23,7 @@ export const tooManyAttempts = (retryAfter: Duration.Duration) =>
 
 export class AuthThrottle extends Context.Service<
   AuthThrottle,
-  { readonly check: (client: string) => Effect.Effect<void, AccountLocked, RuntimeContext> }
+  { readonly check: (client: string) => Effect.Effect<void, AccountLocked> }
 >()("AuthThrottle") {
   static readonly layer = (limiter: RateLimitClient) =>
     Layer.succeed(
@@ -31,6 +31,7 @@ export class AuthThrottle extends Context.Service<
       AuthThrottle.of({
         check: Effect.fn("AuthThrottle.check")(function* (client: string) {
           const outcome = yield* limiter.limit({ key: `auth:${client}` }).pipe(
+            Effect.provide(RuntimeContext.phantom),
             Effect.tapError((cause) => Effect.logWarning("rate limiter unavailable", cause)),
             Effect.orElseSucceed(() => ({ success: true })),
           );

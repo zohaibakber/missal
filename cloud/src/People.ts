@@ -13,7 +13,7 @@ import {
   type NewUser,
   OwnAccess,
   type UserChanges,
-  type Viewer,
+  Viewer,
 } from "./Api.ts";
 import { Codes } from "./Codes.ts";
 import { Atomic } from "./Database.ts";
@@ -88,11 +88,8 @@ export class People extends Context.Service<People>()("People", {
       return yield* managed(id).pipe(Effect.catchTag("UserNotFound", Effect.die));
     });
 
-    const update = Effect.fn("People.update")(function* (
-      viewer: Viewer["Service"],
-      id: string,
-      changes: UserChanges,
-    ) {
+    const update = Effect.fn("People.update")(function* (id: string, changes: UserChanges) {
+      const viewer = yield* Viewer;
       const demotesSelf =
         id === viewer.id &&
         ((changes.role !== undefined && changes.role !== "admin") || changes.disabled === true);
@@ -109,7 +106,8 @@ export class People extends Context.Service<People>()("People", {
       return yield* managed(user.id);
     });
 
-    const remove = Effect.fn("People.remove")(function* (viewer: Viewer["Service"], id: string) {
+    const remove = Effect.fn("People.remove")(function* (id: string) {
+      const viewer = yield* Viewer;
       if (id === viewer.id) return yield* ownAccess("you cannot delete your own account");
       const user = yield* users.existing(id);
       yield* atomic
@@ -153,10 +151,10 @@ export class People extends Context.Service<People>()("People", {
     });
 
     const setPassword = Effect.fn("People.setPassword")(function* (
-      viewer: Viewer["Service"],
       id: string,
       password: Redacted.Redacted<string>,
     ) {
+      const viewer = yield* Viewer;
       if (id === viewer.id) {
         return yield* ownAccess("change your own password from your account menu");
       }
@@ -177,10 +175,8 @@ export class People extends Context.Service<People>()("People", {
       if (isVerified(user) && !user.disabled) yield* codes.send(user.email, "reset");
     });
 
-    const endSessions = Effect.fn("People.endSessions")(function* (
-      viewer: Viewer["Service"],
-      id: string,
-    ) {
+    const endSessions = Effect.fn("People.endSessions")(function* (id: string) {
+      const viewer = yield* Viewer;
       if (id === viewer.id) return yield* ownAccess("sign out from your account menu");
       const user = yield* users.existing(id);
       yield* sessions.endAll(user.id).pipe(storage("sign out"));

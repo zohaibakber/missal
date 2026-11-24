@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import {
@@ -11,11 +12,13 @@ import {
   Licensed,
   NotPublisher,
   PublishersOnly,
+  Throttled,
   Viewer,
 } from "./Api.ts";
 import { Db } from "./Database.ts";
 import { canPublish } from "./Models.ts";
 import { users } from "./Schema.ts";
+import { AuthThrottle } from "./Throttle.ts";
 import { Tokens } from "./Tokens.ts";
 
 export const AuthenticationLive = Layer.effect(
@@ -87,7 +90,22 @@ export const AdminsOnlyLive = Layer.effect(
   }),
 );
 
+export const ThrottledLive = Layer.effect(
+  Throttled,
+  Effect.gen(function* () {
+    const throttle = yield* AuthThrottle;
+    return Throttled.of(
+      Effect.fn("Throttled")(function* (httpEffect) {
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        yield* throttle.check(request.headers["cf-connecting-ip"] ?? "unknown");
+        return yield* httpEffect;
+      }),
+    );
+  }),
+);
+
 export const AuthorizationLive = Layer.mergeAll(
+  ThrottledLive,
   AuthenticationLive,
   LicensedLive,
   PublishersOnlyLive,
