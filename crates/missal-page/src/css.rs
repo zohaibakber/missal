@@ -32,8 +32,7 @@ pub fn clean(value: &str) -> &str {
     let value = value.trim();
     value
         .strip_suffix("!important")
-        .map(str::trim_end)
-        .unwrap_or(value)
+        .map_or(value, str::trim_end)
 }
 
 pub fn unit_factor(unit: &str) -> Option<f32> {

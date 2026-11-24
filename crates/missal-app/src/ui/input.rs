@@ -325,7 +325,7 @@ impl RenderOnce for Field {
                     .flex_1()
                     .min_w_0()
                     .when(self.kind.holds_urdu(), |this| this.mt(px(-1.)))
-                    .child(self.input.clone()),
+                    .child(self.input),
             )
             .children(end)
     }

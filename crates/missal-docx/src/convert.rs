@@ -354,14 +354,13 @@ impl<'p, 'b> Converter<'p, 'b> {
     }
 
     fn para_props(&mut self, ppr: Option<Node>) -> (Rc<ParaProps>, Option<String>) {
-        let source = ppr
-            .map(|node| node.document().input_text()[node.range()].to_owned())
-            .unwrap_or_default();
+        let source =
+            ppr.map_or_default(|node| node.document().input_text()[node.range()].to_owned());
         let key = (self.table_key.clone(), source);
         if let Some(found) = self.para_cache.get(&key) {
             return found.clone();
         }
-        let direct = ppr.map(ParaProps::parse).unwrap_or_default();
+        let direct = ppr.map_or_default(ParaProps::parse);
         let mut props = self.styles.default_ppr.clone();
         let style = self.styles.paragraph(direct.style.as_deref());
         if self.styles.is_default_paragraph(direct.style.as_deref()) {
@@ -408,14 +407,13 @@ impl<'p, 'b> Converter<'p, 'b> {
     }
 
     fn run_style(&mut self, base: &(usize, Rc<RunProps>), rpr: Option<Node>) -> Rc<RunStyle> {
-        let source = rpr
-            .map(|node| node.document().input_text()[node.range()].to_owned())
-            .unwrap_or_default();
+        let source =
+            rpr.map_or_default(|node| node.document().input_text()[node.range()].to_owned());
         let key = (base.0, source);
         if let Some(found) = self.run_cache.get(&key) {
             return found.clone();
         }
-        let direct = rpr.map(RunProps::parse).unwrap_or_default();
+        let direct = rpr.map_or_default(RunProps::parse);
         let mut props = (*base.1).clone();
         props.toggle_overlay(&self.styles.character(direct.style.as_deref()).rpr);
         props.overlay(&direct);
@@ -572,7 +570,7 @@ impl<'p, 'b> Converter<'p, 'b> {
             .to_owned();
         let restart = !self.seen_nums.contains(&(id.clone(), level_index))
             && self.numbering.has_start_override(&id, level_index);
-        self.seen_nums.insert((id.clone(), level_index));
+        self.seen_nums.insert((id, level_index));
         let counters = self.counters.entry(group.clone()).or_insert([None; 9]);
         let index = usize::from(level_index);
         let value = match counters[index] {
@@ -995,13 +993,11 @@ impl<'p, 'b> Converter<'p, 'b> {
         while stack.len() > 1 {
             close_link(&mut stack);
         }
-        stack.pop().map(|(_, inlines)| inlines).unwrap_or_default()
+        stack.pop().map_or_default(|(_, inlines)| inlines)
     }
 
     fn table(&mut self, node: Node) -> Table {
-        let direct = child(node, "tblPr")
-            .map(TableProps::parse)
-            .unwrap_or_default();
+        let direct = child(node, "tblPr").map_or_default(TableProps::parse);
         let style = self.styles.table(direct.style.as_deref());
         let mut props = style.tblpr.clone();
         props.overlay(&direct);
@@ -1009,14 +1005,12 @@ impl<'p, 'b> Converter<'p, 'b> {
             self.notice(Notice::FloatingFlattened);
         }
         let rtl = props.bidi.unwrap_or(false);
-        let grid: Vec<f64> = child(node, "tblGrid")
-            .map(|grid| {
-                grid.children()
-                    .filter(|column| is_w(*column, "gridCol"))
-                    .map(|column| twips(column, "w").unwrap_or(0.0))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let grid: Vec<f64> = child(node, "tblGrid").map_or_default(|grid| {
+            grid.children()
+                .filter(|column| is_w(*column, "gridCol"))
+                .map(|column| twips(column, "w").unwrap_or(0.0))
+                .collect()
+        });
         let saved_key = std::mem::replace(
             &mut self.table_key,
             direct
@@ -1301,14 +1295,9 @@ impl<'p, 'b> Converter<'p, 'b> {
         let indent = px(props.indent.unwrap_or(0.0) / 15.0);
         let zero = "0px".to_owned();
         let margin = match props.jc {
-            Some(Jc::Center) => vec![
-                zero.clone(),
-                "auto".to_owned(),
-                zero.clone(),
-                "auto".to_owned(),
-            ],
-            _ if rtl => vec![zero.clone(), indent, zero.clone(), zero.clone()],
-            _ => vec![zero.clone(), zero.clone(), zero.clone(), indent],
+            Some(Jc::Center) => vec![zero.clone(), "auto".to_owned(), zero, "auto".to_owned()],
+            _ if rtl => vec![zero.clone(), indent, zero.clone(), zero],
+            _ => vec![zero.clone(), zero.clone(), zero, indent],
         };
         css.push("margin", &four(&margin));
         css.push("border-collapse", "collapse");
@@ -1494,7 +1483,7 @@ impl<'p, 'b> Converter<'p, 'b> {
         while stack.len() > 1 {
             close(&mut stack);
         }
-        stack.pop().map(|(_, list)| list).unwrap_or_default()
+        stack.pop().map_or_default(|(_, list)| list)
     }
 }
 

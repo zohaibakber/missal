@@ -119,7 +119,7 @@ impl Packet {
 
     pub fn document_pages(&self, document: usize) -> std::ops::Range<usize> {
         let start = self.page_offsets.get(document).copied().unwrap_or(0);
-        let len = self.docs.get(document).map(|d| d.pages.len()).unwrap_or(0);
+        let len = self.docs.get(document).map_or(0, |d| d.pages.len());
         start..start + len
     }
 
@@ -547,7 +547,7 @@ impl PageEngine {
                 }
                 let doc = &packet.docs[document];
                 let range = doc.block_starts[k]..doc.block_starts[k + 1];
-                let previous: Vec<FlowItem> = doc.items[range.clone()].to_vec();
+                let previous: Vec<FlowItem> = doc.items[range].to_vec();
                 let tail: Vec<u32> = path.steps()[1..].to_vec();
                 let width = doc.content.width;
                 let items = self.measure_top(source, width, k, Some((&previous, &tail)));
@@ -664,14 +664,13 @@ impl PageEngine {
                     || (page.start.token.item == first_item && page.start.token.inner.is_none())
             })
             .unwrap_or(0);
-        let start = doc
-            .pages
-            .get(p)
-            .map(|page| page.start.clone())
-            .unwrap_or(PageStart {
+        let start = doc.pages.get(p).map_or(
+            PageStart {
                 token: FlowToken::start(),
                 forced: false,
-            });
+            },
+            |page| page.start.clone(),
+        );
         let old_tail: Vec<Page> = doc.pages.split_off(p);
         let realign = Realign {
             old_pages: &old_tail[1.min(old_tail.len())..],

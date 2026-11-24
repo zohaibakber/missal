@@ -839,7 +839,7 @@ impl EditorCore {
                         pos(at.path.clone(), base + b),
                     )
                 }
-                None => Selection::caret(end.clone()),
+                None => Selection::caret(end),
             };
             Some((caret, Touch::Hosts(vec![at.path.clone()])))
         });
@@ -901,7 +901,7 @@ impl EditorCore {
         self.history.break_coalescing();
         let k = marked.path.top_index();
         let caret = (self.selection.head.path == marked.path).then_some(self.selection.head.offset);
-        let path = marked.path.clone();
+        let path = marked.path;
         let target = path.clone();
         let change = self.merge_into_last(k..k + 1, path, move |doc, catalog, markers| {
             edit::convert_tokens(doc, &target, catalog, markers, caret)
@@ -1108,7 +1108,7 @@ impl EditorCore {
     }
 
     pub fn inlines_at(&self, path: &BlockPath) -> Option<Vec<Inline>> {
-        inlines(&self.doc, path).map(|c| c.into_owned())
+        inlines(&self.doc, path).map(std::borrow::Cow::into_owned)
     }
 }
 

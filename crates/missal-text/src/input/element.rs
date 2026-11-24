@@ -197,8 +197,7 @@ impl Element for TextInputElement {
             .layout
             .lines()
             .first()
-            .map(|l| l.bottom - l.top)
-            .unwrap_or(f32::from(bounds.size.height));
+            .map_or(f32::from(bounds.size.height), |l| l.bottom - l.top);
         let mask = if multiline {
             Bounds::new(
                 point(bounds.origin.x - px(10.), bounds.origin.y - px(4.)),

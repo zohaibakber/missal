@@ -85,8 +85,7 @@ pub fn import_folder(source: &Path) -> Result<Folder, String> {
                 .map_err(|error| format!("{}: {error}", path.display()))?;
             let name = path
                 .file_stem()
-                .map(|stem| stem.to_string_lossy().trim().to_owned())
-                .unwrap_or_default();
+                .map_or_default(|stem| stem.to_string_lossy().trim().to_owned());
             let used: BTreeSet<usize> = imported
                 .document
                 .field_references()

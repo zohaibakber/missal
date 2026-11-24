@@ -204,7 +204,7 @@ fn authored() -> (Document, FieldCatalog) {
             Direction::Rtl,
             vec![
                 text("ملزم "),
-                Inline::Field(Field::new(accused.clone())),
+                Inline::Field(Field::new(accused)),
                 text(" بمقام "),
                 Inline::Field(Field::new(FieldReference::Catalog(station))),
                 Inline::LineBreak(Leaf::default()),

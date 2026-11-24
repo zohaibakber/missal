@@ -776,7 +776,7 @@ impl TextLayout {
     }
 
     pub fn first_baseline(&self) -> f32 {
-        self.geo.lines.first().map(|l| l.baseline).unwrap_or(0.0)
+        self.geo.lines.first().map_or(0.0, |l| l.baseline)
     }
 
     pub fn glyph_runs(&self) -> &[GlyphRun] {
@@ -916,12 +916,7 @@ impl TextLayout {
             }
             None => {
                 let line = self.empty_line_for(pos.index);
-                let x = self
-                    .geo
-                    .lines
-                    .get(line)
-                    .map(|l| l.start_x)
-                    .unwrap_or_default();
+                let x = self.geo.lines.get(line).map_or_default(|l| l.start_x);
                 (line, x, self.rtl)
             }
         };
@@ -1058,13 +1053,12 @@ pub struct Caret {
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn shift_for(shifts: &[(f32, f32, f32)], x: f32) -> f32 {
     shifts
         .iter()
         .find(|(x0, x1, _)| x >= *x0 - 1e-3 && x <= *x1 + 1e-3)
-        .map(|(_, _, d)| *d)
-        .unwrap_or(0.0)
+        .map_or(0.0, |(_, _, d)| *d)
 }

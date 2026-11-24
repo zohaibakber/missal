@@ -251,7 +251,7 @@ fn random_editing_keeps_invariants_on_a_mixed_document() {
 #[test]
 fn random_editing_keeps_invariants_on_a_bundled_template() {
     let (_, template) = largest_template();
-    let mut head = template.clone();
+    let mut head = template;
     head.blocks.truncate(40);
     for seed in 1..=12u64 {
         episode(head.clone(), seed * 104_729, 80, seed % 3 == 0);

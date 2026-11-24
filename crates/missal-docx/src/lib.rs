@@ -134,8 +134,10 @@ pub fn import(
     let core_target = package
         .relationships("")
         .of_kind("/core-properties")
-        .map(|relationship| relationship.target.clone())
-        .unwrap_or_else(|| "docProps/core.xml".to_owned());
+        .map_or_else(
+            || "docProps/core.xml".to_owned(),
+            |relationship| relationship.target.clone(),
+        );
     let core_text = package.read_text(&core_target);
 
     let styles_xml = styles_text.as_deref().map(parse);
@@ -148,17 +150,15 @@ pub fn import(
         .as_ref()
         .and_then(|xml| xml.as_ref().ok())
         .map(XmlDocument::root_element);
-    let styles = styles_root.map(Styles::parse).unwrap_or_default();
+    let styles = styles_root.map_or_default(Styles::parse);
     let numbering = numbering_xml
         .as_ref()
         .and_then(|xml| xml.as_ref().ok())
-        .map(|xml| Numbering::parse(xml.root_element(), styles_root))
-        .unwrap_or_default();
+        .map_or_default(|xml| Numbering::parse(xml.root_element(), styles_root));
     let theme = theme_xml
         .as_ref()
         .and_then(|xml| xml.as_ref().ok())
-        .map(|xml| Theme::parse(xml.root_element()))
-        .unwrap_or_default();
+        .map_or_default(|xml| Theme::parse(xml.root_element()));
 
     let sections: Vec<Section> = body
         .descendants()
@@ -191,12 +191,8 @@ pub fn import(
     );
     converter.notices = notices;
     let body_blocks = converter.body(body);
-    let header_blocks = header
-        .map(|id| decorations(&mut converter, &rels, &id))
-        .unwrap_or_default();
-    let footer_blocks = footer
-        .map(|id| decorations(&mut converter, &rels, &id))
-        .unwrap_or_default();
+    let header_blocks = header.map_or_default(|id| decorations(&mut converter, &rels, &id));
+    let footer_blocks = footer.map_or_default(|id| decorations(&mut converter, &rels, &id));
     if has_content(&header_blocks) || has_content(&footer_blocks) {
         converter.notice(Notice::HeadersFootersAsContent);
     }

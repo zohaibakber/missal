@@ -587,8 +587,7 @@ pub fn fir_value(fir: &Fir, field: FirField) -> String {
             None => join_inline(entries.iter().map(|entry| entry.part(part))),
             Some(index) => entries
                 .get(index as usize - 1)
-                .map(|entry| entry.part(part).to_owned())
-                .unwrap_or_default(),
+                .map_or_default(|entry| entry.part(part).to_owned()),
         },
     }
 }

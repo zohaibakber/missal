@@ -1038,7 +1038,7 @@ impl SettingsScreen {
                 .into_any_element(),
             Load::Failed(message) => alert(Intent::Danger)
                 .child(alert_title().child("Could not load global values"))
-                .child(alert_description().child(message.clone()))
+                .child(alert_description().child(message))
                 .child(
                     h_flex().mt(px(8.)).child(
                         button("retry-settings", "Try again")
@@ -1649,10 +1649,10 @@ impl SettingsScreen {
                 .on_click(|_, window, cx| check_for_updates(window, cx))
                 .into_any_element(),
         };
-        let path_text = folder
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|| "Unavailable".to_owned());
+        let path_text = folder.as_ref().map_or_else(
+            || "Unavailable".to_owned(),
+            |path| path.display().to_string(),
+        );
         let identity = h_flex()
             .gap(px(12.))
             .items_center()
@@ -1731,7 +1731,7 @@ impl SettingsScreen {
                                             label(path_text).ltr().truncate(),
                                         )
                                     })
-                                    .children(folder.clone().map(|path| {
+                                    .children(folder.map(|path| {
                                         button("open-data-folder", "Open")
                                             .outline()
                                             .sm()

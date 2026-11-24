@@ -1106,8 +1106,6 @@ mod fake_api {
     }
 }
 
-/// Scrolls and drags the scrollbars of the long forms and panels, so a
-/// screenshot shows where the thumb sits after each move.
 fn run_scroll(dark: bool, out: &Path) {
     fn wheel(h: &mut Harness, x: f32, y: f32, dy: f32) {
         use gpui_kit::InputEvent as _;

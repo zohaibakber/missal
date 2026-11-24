@@ -307,9 +307,9 @@ fn write_font(pdf: &mut Pdf, alloc: &mut Alloc, plan: &FontPlan, file: &FontFile
     }
     let head = fonts::table(data, b"head").unwrap_or_default();
     let read = |at: usize| -> f32 {
-        head.get(at..at + 2)
-            .map(|b| i16::from_be_bytes([b[0], b[1]]) as f32 * 1000.0 / units)
-            .unwrap_or(0.0)
+        head.get(at..at + 2).map_or(0.0, |b| {
+            i16::from_be_bytes([b[0], b[1]]) as f32 * 1000.0 / units
+        })
     };
     let bbox = PdfRect::new(read(36), read(38), read(40), read(42));
     let face = missal_text::face(plan.face);
@@ -386,8 +386,7 @@ fn page_content(page: &Page, plans: &[FontPlan], font_index: &HashMap<u16, usize
                     let text = list
                         .lines
                         .get(run.line as usize)
-                        .map(|l| l.text.clone())
-                        .unwrap_or_default();
+                        .map_or_default(|l| l.text.clone());
                     content
                         .begin_marked_content_with_properties(Name(b"Span"))
                         .properties()

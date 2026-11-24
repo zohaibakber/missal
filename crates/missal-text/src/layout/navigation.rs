@@ -312,11 +312,8 @@ pub fn word_range_at(text: &str, index: usize) -> Range<usize> {
 
 pub fn paragraph_range_at(text: &str, index: usize) -> Range<usize> {
     let index = floor_char(text, index);
-    let start = text[..index].rfind('\n').map(|i| i + 1).unwrap_or(0);
-    let end = text[index..]
-        .find('\n')
-        .map(|i| index + i)
-        .unwrap_or(text.len());
+    let start = text[..index].rfind('\n').map_or(0, |i| i + 1);
+    let end = text[index..].find('\n').map_or(text.len(), |i| index + i);
     start..end
 }
 
@@ -325,8 +322,7 @@ pub fn previous_char_boundary(text: &str, index: usize) -> usize {
     text[..index]
         .char_indices()
         .next_back()
-        .map(|(i, _)| i)
-        .unwrap_or(0)
+        .map_or(0, |(i, _)| i)
 }
 
 pub fn next_cluster_boundary(layout: &TextLayout, index: usize) -> usize {

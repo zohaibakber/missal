@@ -98,9 +98,8 @@ pub fn current_route() -> Route {
             .map(PathBuf::from)
     };
     let exists = |path: &Path| path.is_file();
-    let search_path = std::env::var_os("PATH")
-        .map(|paths| std::env::split_paths(&paths).collect())
-        .unwrap_or_default();
+    let search_path =
+        std::env::var_os("PATH").map_or_default(|paths| std::env::split_paths(&paths).collect());
     let executable_directory = std::env::current_exe()
         .ok()
         .and_then(|path| path.parent().map(Path::to_path_buf));
@@ -144,8 +143,7 @@ pub fn spool(directory: &Path, title: &str, bytes: &[u8], now: SystemTime) -> io
     remove_stale(directory, now);
     let stamp = now
         .duration_since(SystemTime::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_millis())
-        .unwrap_or_default();
+        .map_or_default(|elapsed| elapsed.as_millis());
     let name = file_name_for(title);
     let stem = name.strip_suffix(".pdf").unwrap_or(&name);
     let path = directory.join(format!("{stem} {stamp}.pdf"));

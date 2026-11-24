@@ -810,18 +810,6 @@ impl RenderOnce for IconButton {
     }
 }
 
-/// A vertical scroll area with a visible, draggable scrollbar, in the shape of
-/// shadcn's ScrollArea: the element itself scrolls, and a thin pill thumb sits
-/// over its trailing edge whenever the content is taller than the area. The
-/// thumb can be dragged, and clicking the track pages to that point.
-///
-/// Call it last in the element's chain: it wraps the element in a frame that
-/// takes over the element's outer size and flex settings, and lays the
-/// scrollbar over that frame. The scrollbar must sit outside the scrolled
-/// element, or it scrolls away with the content.
-///
-/// Keep the handle on the view (a `ScrollHandle` is cheap to clone) so the
-/// position survives re-renders.
 pub trait ScrollArea: StatefulInteractiveElement + Styled + IntoElement + 'static {
     fn scroll_area_y(
         mut self,
@@ -850,8 +838,6 @@ pub trait ScrollArea: StatefulInteractiveElement + Styled + IntoElement + 'stati
             x: None,
             y: Some(Overflow::Hidden),
         };
-        // The element fills the frame and shrinks to it, so it scrolls
-        // instead of growing past a frame whose height is capped.
         style.max_size.height = None;
         style.min_size.height = Some(px(0.).into());
         style.flex_grow = Some(0.);

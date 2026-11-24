@@ -639,9 +639,7 @@ impl<'a> Body<'a> {
             .indent
             .filter(|indent| *indent > 0)
             .map_or(0, |indent| twips(f64::from(indent) * 40.0));
-        let [_, start, _, end] = margins
-            .map(|margins| logical(margins, rtl))
-            .unwrap_or([None; 4]);
+        let [_, start, _, end] = margins.map_or([None; 4], |margins| logical(margins, rtl));
         let first = css.length("text-indent", size.unwrap_or(DEFAULT_SIZE_PX));
         let mut indent = String::new();
         if start.is_some() || extra > 0 {
@@ -1065,8 +1063,7 @@ impl<'a> Body<'a> {
         let fallback = cell
             .width
             .filter(|width| *width > 0.0)
-            .map(twips)
-            .unwrap_or_else(|| grid.iter().skip(column).take(span).sum());
+            .map_or_else(|| grid.iter().skip(column).take(span).sum(), twips);
         width_xml(&mut self.out, "tcW", css.get("width"), Some(fallback));
         if span > 1 {
             let _ = write!(self.out, r#"<w:gridSpan w:val="{span}"/>"#);
@@ -1106,18 +1103,15 @@ impl<'a> Body<'a> {
         if let Some(color) = background {
             shading(&mut self.out, color);
         }
-        let padding = css
-            .box_lengths("padding")
-            .map(|sides| {
-                let mut resolved = CELL_PADDING;
-                for (target, side) in resolved.iter_mut().zip(sides) {
-                    if let Some(side) = side {
-                        *target = side;
-                    }
+        let padding = css.box_lengths("padding").map_or(CELL_PADDING, |sides| {
+            let mut resolved = CELL_PADDING;
+            for (target, side) in resolved.iter_mut().zip(sides) {
+                if let Some(side) = side {
+                    *target = side;
                 }
-                resolved
-            })
-            .unwrap_or(CELL_PADDING);
+            }
+            resolved
+        });
         let [top, start, bottom, end] = logical(padding, rtl);
         self.out.push_str("<w:tcMar>");
         for (name, value) in [

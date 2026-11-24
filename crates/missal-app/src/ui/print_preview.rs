@@ -945,8 +945,7 @@ impl PrintPreview {
                     Ok(()) => {
                         let shown = path
                             .file_name()
-                            .map(|name| name.to_string_lossy().into_owned())
-                            .unwrap_or_default();
+                            .map_or_default(|name| name.to_string_lossy().into_owned());
                         let reveal = path.clone();
                         show_toast(
                             window,
@@ -1119,7 +1118,7 @@ impl PrintPreview {
         let name = isolate_urdu(first);
         let text = format!("{lead}{name}.");
         let base = TextStyle::interface(13.).with_color(to_rgba(palette.ink_muted));
-        let rich = AttributedText::new(text.clone(), base)
+        let rich = AttributedText::new(text, base)
             .with(
                 lead.len()..lead.len() + name.len(),
                 Attr::Family(FontFamily::Document),
@@ -1207,11 +1206,7 @@ impl PrintPreview {
         let palette = *palette;
         let current_doc = self.current_document();
         let ranges: Vec<usize> = self.document_pages();
-        let docs: Vec<DocEntry> = self
-            .plan
-            .as_ref()
-            .map(|plan| plan.docs.clone())
-            .unwrap_or_default();
+        let docs: Vec<DocEntry> = self.plan.as_ref().map_or_default(|plan| plan.docs.clone());
         let warning = self.warning(&palette, cx);
         let failed = matches!(self.state, State::Failed(_));
         let total = docs.len();

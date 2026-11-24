@@ -432,9 +432,7 @@ pub fn forward(doc: &Document, at: &Position, word: bool) -> Backward {
 
 pub fn merge_hosts(doc: &mut Document, into: &BlockPath, from: &BlockPath) -> Position {
     let at = block_len(doc, into).unwrap_or(0);
-    let moved = inlines(doc, from)
-        .map(|found| found.into_owned())
-        .unwrap_or_default();
+    let moved = inlines(doc, from).map_or_default(std::borrow::Cow::into_owned);
     let into_empty = at == 0;
     let from_props = props(doc, from).cloned();
     edit_inlines(doc, into, |v| {
