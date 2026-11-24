@@ -6,7 +6,10 @@ use gpui_kit::{
 };
 use missal_core::document::{Direction, HeadingLevel, ListType};
 use missal_core::text::fold_text;
-use missal_core::{FIR_FIELDS, FieldCatalog, FieldReference, PlaceholderSource};
+use missal_core::{
+    FieldCatalog, FieldReference, PlaceholderSource, field_lookup_key, fir_field_by_key,
+    fir_field_choices,
+};
 use missal_page::BlockPath;
 use missal_text::listbox::{self, ListNav, ListboxTheme, listbox, listbox_row, listbox_section};
 use missal_text::{Align, LineHeight, label};
@@ -181,14 +184,14 @@ fn is_urdu(text: &str) -> bool {
     text.chars().any(|c| ('\u{0600}'..='\u{06FF}').contains(&c))
 }
 
-pub fn field_choices(catalog: &FieldCatalog) -> Vec<(String, FieldReference, bool)> {
-    let mut seen = std::collections::HashSet::new();
+pub fn field_choices(
+    catalog: &FieldCatalog,
+    used: &[FieldReference],
+) -> Vec<(String, FieldReference, bool)> {
     let mut out = Vec::new();
-    for field in FIR_FIELDS.iter() {
-        let reference = FieldReference::Fir(field.field);
-        if seen.insert(reference.clone()) {
-            out.push((field.label.to_owned(), reference, is_urdu(field.label)));
-        }
+    for (label, field) in fir_field_choices(used) {
+        let urdu = is_urdu(&label);
+        out.push((label.into_owned(), FieldReference::Fir(field), urdu));
     }
     for source in [PlaceholderSource::Shared, PlaceholderSource::Custom] {
         for placeholder in catalog.placeholders() {
@@ -262,6 +265,28 @@ pub fn slash_items(
                 ));
             }
         }
+        if let Some(field) = fir_field_by_key(&field_lookup_key(query))
+            .filter(|field| field.index.is_some())
+            .filter(|&field| {
+                !fields
+                    .iter()
+                    .any(|(_, reference, _)| *reference == FieldReference::Fir(field))
+            })
+        {
+            let title = missal_core::field::fir_field_label(field);
+            ranked.push((
+                Rank::TitleStart,
+                SPECS.len() + fields.len(),
+                SlashItem {
+                    urdu: is_urdu(&title),
+                    title: title.into_owned().into(),
+                    group: SlashGroup::Fields,
+                    icon: IconName::Braces,
+                    command: BlockCommand::Field(FieldReference::Fir(field)),
+                    detail: None,
+                },
+            ));
+        }
     }
     if needle.is_empty() {
         ranked.sort_by_key(|(_, order, item)| (item.group, *order));
@@ -319,7 +344,7 @@ impl Editor {
     }
 
     fn slash_fields(&self) -> Vec<(String, FieldReference, bool)> {
-        field_choices(&self.fields.catalog)
+        field_choices(&self.fields.catalog, &self.document().field_references())
     }
 
     pub(crate) fn typed_slash(&mut self, typed: &str, cx: &mut Context<Self>) {
@@ -613,7 +638,7 @@ mod tests {
     }
 
     fn fields() -> Vec<(String, FieldReference, bool)> {
-        field_choices(&FieldCatalog::default())
+        field_choices(&FieldCatalog::default(), &[])
     }
 
     #[test]

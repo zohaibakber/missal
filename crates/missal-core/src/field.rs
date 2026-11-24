@@ -1,9 +1,11 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Range;
 use std::sync::LazyLock;
 
 use unicode_general_category::{GeneralCategory, get_general_category};
 
+use crate::date::digit_value;
 use crate::error::Invalid;
 use crate::fir::{Fir, FirProperty, FirRecord, FirValue};
 use crate::ids::{FirId, PlaceholderId};
@@ -83,11 +85,113 @@ pub const FIR_FIELDS: [FirFieldLabel; 41] = [
     fir_field("سم نمبر 2", FirProperty::Sim2, None),
 ];
 
-pub fn fir_field_label(field: FirField) -> &'static str {
-    FIR_FIELDS
-        .iter()
-        .find(|candidate| candidate.field == field)
-        .map_or(field.property.label(), |candidate| candidate.label)
+pub fn fir_field_label(field: FirField) -> Cow<'static, str> {
+    if let Some(candidate) = FIR_FIELDS.iter().find(|candidate| candidate.field == field) {
+        return Cow::Borrowed(candidate.label);
+    }
+    match (list_base_label(field.property), field.index) {
+        (Some(base), Some(index)) => Cow::Owned(format!("{base} {index}")),
+        _ => Cow::Borrowed(field.property.label()),
+    }
+}
+
+fn list_base_label(property: FirProperty) -> Option<&'static str> {
+    match property {
+        FirProperty::Accused => Some("نام ملزم و سکونت"),
+        FirProperty::Witness => Some("گواہان"),
+        FirProperty::Zimni => Some("ضمنی"),
+        FirProperty::ZimniDate => Some("تاریخ ضمنی"),
+        _ => None,
+    }
+}
+
+pub const LIST_FIELD_PROPERTIES: [FirProperty; 4] = [
+    FirProperty::Accused,
+    FirProperty::Witness,
+    FirProperty::Zimni,
+    FirProperty::ZimniDate,
+];
+
+pub fn fir_field_choices<'a>(
+    used: impl IntoIterator<Item = &'a FieldReference>,
+) -> Vec<(Cow<'static, str>, FirField)> {
+    let mut highest: HashMap<FirProperty, u32> = HashMap::new();
+    for reference in used {
+        if let FieldReference::Fir(FirField {
+            property,
+            index: Some(index),
+        }) = reference
+        {
+            let entry = highest.entry(*property).or_default();
+            *entry = (*entry).max(*index);
+        }
+    }
+    let mut out: Vec<(Cow<'static, str>, FirField)> = Vec::new();
+    for (position, field) in FIR_FIELDS.iter().enumerate() {
+        if !out.iter().any(|(_, existing)| *existing == field.field) {
+            out.push((Cow::Borrowed(field.label), field.field));
+        }
+        let property = field.field.property;
+        let last_of_property = !FIR_FIELDS[position + 1..]
+            .iter()
+            .any(|next| next.field.property == property && next.field.index.is_some());
+        if field.field.index.is_none() || !last_of_property {
+            continue;
+        }
+        let listed = out
+            .iter()
+            .filter(|(_, existing)| existing.property == property)
+            .filter_map(|(_, existing)| existing.index)
+            .max()
+            .unwrap_or(0);
+        let wanted = highest.get(&property).copied().unwrap_or(0).max(listed) + 1;
+        for index in listed + 1..=wanted.min(MAX_FIELD_INDEX) {
+            let field = FirField {
+                property,
+                index: Some(index),
+            };
+            out.push((fir_field_label(field), field));
+        }
+    }
+    out
+}
+
+const MAX_FIELD_INDEX: u32 = 999;
+
+fn split_index(key: &str) -> Option<(&str, u32, &str)> {
+    let start = key.find(|c: char| digit_value(c).is_some())?;
+    let digits_len: usize = key[start..]
+        .chars()
+        .take_while(|&c| digit_value(c).is_some())
+        .map(char::len_utf8)
+        .sum();
+    let index = key[start..start + digits_len]
+        .chars()
+        .try_fold(0u32, |total, c| {
+            let next = total * 10 + digit_value(c)?;
+            (next <= MAX_FIELD_INDEX).then_some(next)
+        })?;
+    Some((&key[..start], index, &key[start + digits_len..]))
+}
+
+fn indexed_field_by_key(key: &str) -> Option<FirField> {
+    let (prefix, index, suffix) = split_index(key)?;
+    if index == 0 {
+        return None;
+    }
+    let property = LIST_FIELD_PROPERTIES.into_iter().find(|&property| {
+        let base = field_lookup_key(list_base_label(property).unwrap_or_default());
+        match property {
+            FirProperty::ZimniDate => {
+                (prefix == base && suffix.is_empty()) || (prefix == "ضمنی" && suffix == "تاریخ")
+            }
+            _ => prefix == base && suffix.is_empty(),
+        }
+    })?;
+    Some(FirField {
+        property,
+        index: Some(index),
+    })
 }
 
 static FIR_FIELDS_BY_KEY: LazyLock<HashMap<String, FirField>> = LazyLock::new(|| {
@@ -98,7 +202,10 @@ static FIR_FIELDS_BY_KEY: LazyLock<HashMap<String, FirField>> = LazyLock::new(||
 });
 
 pub fn fir_field_by_key(key: &str) -> Option<FirField> {
-    FIR_FIELDS_BY_KEY.get(key).copied()
+    FIR_FIELDS_BY_KEY
+        .get(key)
+        .copied()
+        .or_else(|| indexed_field_by_key(key))
 }
 
 pub fn field_lookup_key(name: &str) -> String {
@@ -211,7 +318,10 @@ impl FieldCatalog {
         if key.is_empty() {
             return None;
         }
-        self.by_key.get(&key).cloned()
+        self.by_key
+            .get(&key)
+            .cloned()
+            .or_else(|| indexed_field_by_key(&key).map(FieldReference::Fir))
     }
 
     pub fn reference_for(&self, name: &str) -> FieldReference {
@@ -222,7 +332,7 @@ impl FieldCatalog {
     pub fn label(&self, reference: &FieldReference) -> Option<String> {
         match reference {
             FieldReference::Unresolved(text) => Some(text.clone()),
-            FieldReference::Fir(field) => Some(fir_field_label(*field).to_owned()),
+            FieldReference::Fir(field) => Some(fir_field_label(*field).into_owned()),
             FieldReference::Catalog(id) => self.placeholder(*id).map(|field| field.label.clone()),
         }
     }
@@ -417,7 +527,7 @@ impl<'a> FieldPresentation<'a> {
                 text: text.clone(),
                 unresolved: true,
             },
-            FieldReference::Fir(field) => self.present(fir_field_label(*field), |values| {
+            FieldReference::Fir(field) => self.present(&fir_field_label(*field), |values| {
                 fir_value(&values.fir.fir, *field)
             }),
             FieldReference::Catalog(id) => match self.catalog.placeholder(*id) {
@@ -464,25 +574,31 @@ impl<'a> FieldPresentation<'a> {
     }
 }
 
+pub const LIST_SEPARATOR: &str = "، ";
+
 pub fn fir_value(fir: &Fir, field: FirField) -> String {
     match fir.value(field.property) {
         FirValue::Text(text) => text.to_owned(),
         FirValue::List(items) => match field.index {
-            None => items.join("\n"),
+            None => join_inline(items.iter().map(String::as_str)),
             Some(index) => items.get(index as usize - 1).cloned().unwrap_or_default(),
         },
         FirValue::Zimni(entries, part) => match field.index {
-            None => entries
-                .iter()
-                .map(|entry| entry.part(part))
-                .collect::<Vec<_>>()
-                .join("\n"),
+            None => join_inline(entries.iter().map(|entry| entry.part(part))),
             Some(index) => entries
                 .get(index as usize - 1)
                 .map(|entry| entry.part(part).to_owned())
                 .unwrap_or_default(),
         },
     }
+}
+
+fn join_inline<'a>(items: impl Iterator<Item = &'a str>) -> String {
+    items
+        .map(|item| item.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|item| !item.is_empty())
+        .collect::<Vec<_>>()
+        .join(LIST_SEPARATOR)
 }
 
 #[cfg(test)]
@@ -539,6 +655,85 @@ mod tests {
         assert_eq!(
             catalog.reference_for(" نا معلوم  نام "),
             FieldReference::Unresolved("نا معلوم نام".into())
+        );
+    }
+
+    #[test]
+    fn list_fields_take_any_index_and_join_inline() {
+        let catalog = catalog();
+        let field = |property, index| FieldReference::Fir(FirField { property, index });
+        assert_eq!(
+            catalog.resolve("گواہان 7"),
+            Some(field(FirProperty::Witness, Some(7)))
+        );
+        assert_eq!(
+            catalog.resolve("گواہان۳"),
+            Some(field(FirProperty::Witness, Some(3)))
+        );
+        assert_eq!(
+            catalog.resolve("نام ملزم و سکونت 4"),
+            Some(field(FirProperty::Accused, Some(4)))
+        );
+        assert_eq!(
+            catalog.resolve("ضمنی 9 تاریخ"),
+            Some(field(FirProperty::ZimniDate, Some(9)))
+        );
+        assert_eq!(catalog.resolve("گواہان 0"), None);
+        assert_eq!(catalog.resolve("جرم 2"), None);
+        assert_eq!(
+            catalog
+                .label(&field(FirProperty::Witness, Some(7)))
+                .as_deref(),
+            Some("گواہان 7")
+        );
+        assert_eq!(placeholder_name("گواہان 12"), Err(Invalid::FirFieldName));
+
+        let fir = Fir {
+            accused: vec![
+                "منیر احمد سکنہ بھائی گیٹ لاہور".into(),
+                " سلیمان ولد ارشد ".into(),
+            ],
+            witness: (1..=4).map(|n| format!("گواہ {n}")).collect(),
+            ..Fir::default()
+        };
+        assert_eq!(
+            fir_value(
+                &fir,
+                FirField {
+                    property: FirProperty::Accused,
+                    index: None
+                }
+            ),
+            "منیر احمد سکنہ بھائی گیٹ لاہور، سلیمان ولد ارشد"
+        );
+        assert_eq!(
+            fir_value(
+                &fir,
+                FirField {
+                    property: FirProperty::Witness,
+                    index: Some(4)
+                }
+            ),
+            "گواہ 4"
+        );
+
+        let used = [field(FirProperty::Witness, Some(5))];
+        let witnesses: Vec<String> = fir_field_choices(&used)
+            .into_iter()
+            .filter(|(_, field)| field.property == FirProperty::Witness)
+            .map(|(label, _)| label.into_owned())
+            .collect();
+        assert_eq!(
+            witnesses,
+            [
+                "گواہان",
+                "گواہان 1",
+                "گواہان 2",
+                "گواہان 3",
+                "گواہان 4",
+                "گواہان 5",
+                "گواہان 6"
+            ]
         );
     }
 }
