@@ -1595,7 +1595,7 @@ impl Render for NewFirScreen {
             (FormState::Ready, Some(form)) => form.into_any_element(),
             (FormState::Failed(message), _) => crate::ui::empty_state(
                 IconName::TriangleAlert,
-                "Couldn't open this FIR",
+                "Couldn’t open this FIR",
                 Some(message.clone().into()),
                 Some(
                     button("form-retry", "Try again")

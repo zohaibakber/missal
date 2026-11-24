@@ -7,7 +7,7 @@ use gpui_kit::{
 use missal_auth::AuthError;
 use missal_text::{TextInput, TextInputEvent};
 
-use crate::auth::{AuthModel, password_problem};
+use crate::auth::{AuthModel, password_problem, password_too_short};
 use crate::state::toast_success;
 use crate::theme::Palette;
 use crate::ui::dialogs::{
@@ -89,11 +89,18 @@ impl ChangePassword {
         let confirm = self.confirm.read(cx).text().to_owned();
         if current.is_empty() {
             self.problem = Some("Enter your current password.".into());
+            self.current.update(cx, |input, cx| input.focus(window, cx));
             cx.notify();
             return;
         }
         if let Some(problem) = password_problem(&new, &confirm) {
             self.problem = Some(problem.into());
+            let field = if password_too_short(&new) {
+                &self.new
+            } else {
+                &self.confirm
+            };
+            field.update(cx, |input, cx| input.focus(window, cx));
             cx.notify();
             return;
         }

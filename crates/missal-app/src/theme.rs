@@ -443,6 +443,9 @@ pub const MOTION_EXIT: Duration = Duration::from_millis(100);
 pub const MOTION_ENTRANCE: Duration = Duration::from_millis(720);
 pub const MOTION_STAGGER: Duration = Duration::from_millis(70);
 pub const TOOLTIP_DELAY: Duration = Duration::from_millis(400);
+pub const TOOLTIP_SKIP_DELAY: Duration = Duration::from_millis(300);
+pub const SPINNER_SHOW_DELAY: Duration = Duration::from_millis(150);
+pub const SPINNER_MIN_VISIBLE: Duration = Duration::from_millis(400);
 
 pub fn ease_out_cubic(t: f32) -> f32 {
     1.0 - (1.0 - t).powi(3)

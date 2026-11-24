@@ -18,7 +18,7 @@ use missal_auth::{
 };
 use missal_text::{TextInput, TextInputEvent, label};
 
-use crate::auth::{AuthModel, password_problem};
+use crate::auth::{AuthModel, password_problem, password_too_short};
 use crate::shortcuts::BlurFocus;
 use crate::state::{Load, toast_success};
 use crate::theme::{PAGE_GUTTER, Palette};
@@ -242,7 +242,7 @@ pub struct PeopleScreen {
 
 impl PeopleScreen {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let search = field_input(window, cx, Kind::Search, "Search name or email", "");
+        let search = field_input(window, cx, Kind::Search, "Search name or email…", "");
         let mut subscriptions =
             vec![
                 cx.subscribe(&search, |this, input, event: &TextInputEvent, cx| {
@@ -1408,6 +1408,12 @@ impl NewPerson {
         };
         if let Some(problem) = problem {
             self.problem = Some(problem.into());
+            let field = if valid_email {
+                &self.password
+            } else {
+                &self.email
+            };
+            field.update(cx, |input, cx| input.focus(window, cx));
             cx.notify();
             return;
         }
@@ -1639,6 +1645,12 @@ impl SetPassword {
         let confirm = self.confirm.read(cx).text().to_owned();
         if let Some(problem) = password_problem(&new, &confirm) {
             self.problem = Some(problem.into());
+            let field = if password_too_short(&new) {
+                &self.new
+            } else {
+                &self.confirm
+            };
+            field.update(cx, |input, cx| input.focus(window, cx));
             cx.notify();
             return;
         }

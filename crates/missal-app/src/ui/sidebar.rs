@@ -11,7 +11,6 @@ use crate::app::{navigate, show_shortcuts};
 use crate::state::{Models, Route};
 use crate::theme::{
     HEADER_HEIGHT, ICON, Palette, RADIUS, SIDEBAR_COMPACT_WIDTH, SIDEBAR_ITEM, SIDEBAR_WIDTH,
-    TOOLTIP_DELAY,
 };
 use crate::ui::admin::is_admin;
 use crate::ui::nav_menu::NavEntry;
@@ -67,7 +66,7 @@ fn compact_item(
         .px_0()
         .justify_center()
         .tooltip(tooltip(label, keys))
-        .tooltip_show_delay(TOOLTIP_DELAY)
+        .tooltip_show_delay(crate::ui::tooltip_delay())
         .on_click(move |_, window, cx| on_click(window, cx))
         .child(sized_icon(
             icon,

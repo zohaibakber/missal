@@ -204,7 +204,7 @@ fn run_wp0(h: &mut Harness) {
             window,
             cx,
             "Delete FIR 9/2026?",
-            "Its 3 documents are deleted too. This can't be undone.",
+            "Its 3 documents are deleted too. This can’t be undone.",
             "Delete FIR",
             |_, _| {},
         )
@@ -227,7 +227,7 @@ fn run_wp0(h: &mut Harness) {
         show_toast(
             window,
             cx,
-            ToastSpec::new(ToastKind::Error, "Couldn't save. The disk is full.")
+            ToastSpec::new(ToastKind::Error, "Couldn’t save. The disk is full.")
                 .action("Retry", |_, _| {}),
         );
         show_toast(

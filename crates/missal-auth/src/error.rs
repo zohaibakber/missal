@@ -29,7 +29,7 @@ impl fmt::Display for AuthError {
         match self {
             AuthError::Offline(_) => write!(
                 f,
-                "Could not reach Missal's server. Check the internet connection and try again."
+                "Could not reach Missal’s server. Check the internet connection and try again."
             ),
             AuthError::InvalidCredentials => write!(f, "Wrong email or password."),
             AuthError::Locked { retry_after } => {

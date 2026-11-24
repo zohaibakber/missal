@@ -129,7 +129,7 @@ impl Navigator {
                 "Save changes first?",
                 "This page has unsaved changes.",
                 vec![
-                    Choice::new("discard", "Don't save", Tone::Ghost, move |_, cx| {
+                    Choice::new("discard", "Don’t save", Tone::Ghost, move |_, cx| {
                         discard.update(cx, |navigator, cx| {
                             navigator.discard_changes(cx);
                             navigator.guard = None;

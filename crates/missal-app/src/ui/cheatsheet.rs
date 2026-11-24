@@ -24,7 +24,7 @@ pub struct Cheatsheet {
 
 impl Cheatsheet {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Cheatsheet {
-        let filter = field_input(window, cx, Kind::Search, "Filter shortcuts", "");
+        let filter = field_input(window, cx, Kind::Search, "Filter shortcuts…", "");
         let subscription = cx.subscribe(&filter, |_, _, event: &TextInputEvent, cx| {
             if *event == TextInputEvent::Change {
                 cx.notify();
