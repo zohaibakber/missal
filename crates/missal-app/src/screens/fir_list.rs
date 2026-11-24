@@ -707,7 +707,7 @@ impl FirListScreen {
         self.focused = Some(index);
         let weak = cx.entity().downgrade();
         let edit = weak.clone();
-        let delete = weak.clone();
+        let delete = weak;
         let rows = MenuContent::new()
             .item(
                 MenuEntry::new("row-open", "Open", move |window, cx| {

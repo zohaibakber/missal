@@ -46,14 +46,13 @@ pub fn parse_releases(json: &str) -> Result<Vec<Release>, String> {
         let assets = item
             .get("assets")
             .and_then(Value::as_array)
-            .map(|assets| {
+            .map_or_default(|assets| {
                 assets
                     .iter()
                     .filter_map(|asset| asset.get("name").and_then(Value::as_str))
                     .map(str::to_owned)
                     .collect()
-            })
-            .unwrap_or_default();
+            });
         releases.push(Release {
             tag: tag.to_owned(),
             version,

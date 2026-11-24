@@ -1,21 +1,26 @@
 import * as Alchemy from "alchemy";
 import * as Http from "alchemy/Http";
+import { RuntimeContext } from "alchemy/RuntimeContext";
+import * as Output from "alchemy/Output";
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as SQL from "@alchemy.run/cloudflare/D1/SQL";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
+import * as Base64Url from "effect/encoding/Base64Url";
+import * as Hex from "effect/encoding/Hex";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpRouter from "effect/http/HttpRouter";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
 import { Accounts } from "./Accounts.ts";
 import { ApiLive, CryptoLive, ServicesLive } from "./App.ts";
 import { Blobs } from "./Blobs.ts";
-import { Atomic, columnNames } from "./Database.ts";
+import { Atomic, Db } from "./Database.ts";
 import { Mailer } from "./Mailer.ts";
 import { AuthThrottle } from "./Throttle.ts";
-import { SECRET_VARIABLE } from "./Tokens.ts";
+import { SigningKey } from "./Tokens.ts";
 
 export const Catalog = Cloudflare.D1.Database("Catalog", {
   migrations: "./migrations",
@@ -28,7 +33,6 @@ export default Cloudflare.Worker(
   {
     main: import.meta.url,
     compatibility: { date: "2026-11-01" },
-    env: { [SECRET_VARIABLE]: Alchemy.makeRandom("TokenSecret") },
   },
   Effect.gen(function* () {
     const resendKey = Option.filter(
@@ -41,22 +45,35 @@ export default Cloudflare.Worker(
     );
     const database = yield* Cloudflare.D1.QueryDatabase(Catalog);
     const bucket = yield* Cloudflare.R2.ReadWriteBucket(Templates);
+    const tokenSecret = yield* Alchemy.makeRandom("TokenSecret");
+    const tokenKey = yield* Cloudflare.Workers.SecretKey("TOKEN_KEY", {
+      format: "jwk",
+      algorithm: { name: "HMAC", hash: "SHA-256" },
+      usages: ["sign", "verify"],
+      keyJwk: {
+        kty: "oct",
+        alg: "HS256",
+        k: Output.map(tokenSecret, (hex) =>
+          Base64Url.encode(Result.getOrThrow(Hex.decode(Redacted.value(hex)))),
+        ),
+      },
+    });
     const limiter = yield* Cloudflare.RateLimit("SIGN_IN_LIMIT", {
       namespaceId: 4721,
       simple: { limit: 10, period: 60 },
     });
 
     const Infrastructure = Layer.mergeAll(
-      Atomic.layerD1.pipe(Layer.provideMerge(SQL.D1Layer(database, columnNames))),
-      CryptoLive,
+      Layer.mergeAll(Db.layerD1, Atomic.layerD1).pipe(Layer.provideMerge(SQL.D1Layer(database))),
       AuthThrottle.layer(limiter),
       Blobs.layerR2(bucket),
+      Layer.succeed(SigningKey, Effect.provide(tokenKey, RuntimeContext.phantom)),
       Option.isSome(resendKey) && Option.isSome(mailFrom)
         ? Mailer.layerResend({ apiKey: resendKey.value, from: mailFrom.value }).pipe(
             Layer.provide(FetchHttpClient.layer),
           )
         : Mailer.layerLog,
-    );
+    ).pipe(Layer.provideMerge(CryptoLive));
 
     yield* Cloudflare.Workers.cron("17 3 * * *", () =>
       Effect.gen(function* () {
@@ -81,7 +98,9 @@ export default Cloudflare.Worker(
         Cloudflare.D1.QueryDatabaseBinding,
         Cloudflare.R2.ReadWriteBucketBinding,
         Cloudflare.Workers.RateLimitBinding,
+        Cloudflare.Workers.SecretKeyBinding,
         Cloudflare.Workers.CronEventSourceLive,
+        Cloudflare.Workers.Telemetry(),
       ),
     ),
   ),

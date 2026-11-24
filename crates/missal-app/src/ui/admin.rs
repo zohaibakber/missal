@@ -317,10 +317,7 @@ pub struct FilterOption {
 }
 
 pub fn filter_menu(id: &'static str, selected: usize, options: Vec<FilterOption>) -> AnyElement {
-    let current = options
-        .get(selected)
-        .map(|option| option.title)
-        .unwrap_or("All");
+    let current = options.get(selected).map_or("All", |option| option.title);
     let options = Rc::new(options);
     crate::ui::popup_menu::menu(id)
         .trigger(

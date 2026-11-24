@@ -160,8 +160,7 @@ fn licence_cell_text(user: &Account) -> String {
 fn sessions_text(user: &ManagedAccount) -> String {
     let seen = user
         .last_seen_at
-        .map(|at| format!(" · last active {}", date_text(at)))
-        .unwrap_or_default();
+        .map_or_default(|at| format!(" · last active {}", date_text(at)));
     match user.sessions {
         0 => "Not signed in".to_owned(),
         1 => format!("On 1 computer{seen}"),

@@ -380,8 +380,7 @@ impl Packet {
                     0
                 } else {
                     self.text_block(position.document, path)
-                        .map(|n| n.map.logical_len())
-                        .unwrap_or(0)
+                        .map_or(0, |n| n.map.logical_len())
                 };
                 Position::new(position.document, path.clone(), offset)
             }

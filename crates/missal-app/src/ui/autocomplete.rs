@@ -223,8 +223,7 @@ impl Autocomplete {
             .bindings
             .get(&id)
             .and_then(|binding| binding.input.upgrade())
-            .map(|input| input.read(cx).text().to_owned())
-            .unwrap_or_default();
+            .map_or_default(|input| input.read(cx).text().to_owned());
         self.show(id, &text, cx)
     }
 
@@ -236,8 +235,7 @@ impl Autocomplete {
             .bindings
             .get(&open.input)
             .and_then(|binding| binding.input.upgrade())
-            .map(|input| input.read(cx).text().to_owned())
-            .unwrap_or_default();
+            .map_or_default(|input| input.read(cx).text().to_owned());
         self.dismissed = Some((open.input, text));
         cx.notify();
         true

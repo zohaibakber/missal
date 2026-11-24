@@ -25,7 +25,7 @@ impl SessionKeeper {
     fn lock(&self) -> MutexGuard<'_, Option<Session>> {
         self.session
             .lock()
-            .unwrap_or_else(|error| error.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn save(&self, session: &Session) {

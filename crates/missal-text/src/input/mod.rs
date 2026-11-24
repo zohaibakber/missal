@@ -1286,8 +1286,7 @@ impl EntityInputHandler for TextInput {
         let origin = self
             .frame
             .bounds
-            .map(|b| b.origin)
-            .unwrap_or(element_bounds.origin)
+            .map_or(element_bounds.origin, |b| b.origin)
             + gpui_kit::point(px(self.frame.scroll.x), px(self.frame.scroll.y));
         let rect = layout
             .selection_rects(range.clone())

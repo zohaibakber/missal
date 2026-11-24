@@ -265,7 +265,7 @@ fn word_import_into_an_existing_template_asks_before_replacing(cx: &mut TestAppC
     );
 
     fixture.press(cx, "secondary-o");
-    let chosen = docx.clone();
+    let chosen = docx;
     cx.simulate_path_prompt_response(move |_| Some(vec![chosen]));
     fixture.settle(cx);
     fixture.click(cx, "import-replace");

@@ -440,8 +440,6 @@ impl AuthModel {
         cx: &mut Context<Self>,
     ) {
         let address = email.clone();
-        // The service creates the account at once unless it is set to confirm emails first;
-        // then signing in reports EmailNotVerified and the code screen takes over.
         self.attempt(
             move |keeper| {
                 keeper.sign_up(&email, &name, &password)?;

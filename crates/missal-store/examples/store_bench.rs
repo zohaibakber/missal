@@ -27,7 +27,7 @@ fn main() {
     }
     println!("encode x10: {:.1}ms", started.elapsed().as_secs_f64() * 1e3);
     let encoded: Vec<_> = documents.iter().map(|(_, d)| d.encode()).collect();
-    let bytes: usize = encoded.iter().map(|e| e.len()).sum();
+    let bytes: usize = encoded.iter().map(std::vec::Vec::len).sum();
     let started = Instant::now();
     for _ in 0..10 {
         for e in &encoded {

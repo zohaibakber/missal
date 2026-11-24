@@ -294,8 +294,7 @@ impl Preferences {
         std::fs::read_to_string(path)
             .ok()
             .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-            .map(|value| Preferences::from_json(&value))
-            .unwrap_or_default()
+            .map_or_default(|value| Preferences::from_json(&value))
     }
 
     pub fn serialize(&self) -> std::io::Result<String> {

@@ -17,11 +17,7 @@ fn main() {
                 .is_some_and(|extension| extension == "docx")
         })
         .collect();
-    files.sort_by_key(|path| {
-        std::fs::metadata(path)
-            .map(|metadata| metadata.len())
-            .unwrap_or(0)
-    });
+    files.sort_by_key(|path| std::fs::metadata(path).map_or(0, |metadata| metadata.len()));
     let mut total = Duration::ZERO;
     for path in &files {
         let bytes = std::fs::read(path).unwrap();

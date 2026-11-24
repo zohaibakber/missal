@@ -232,7 +232,7 @@ impl RenderOnce for MenuItem {
         let trail: Option<AnyElement> = match self.trail {
             Trail::None => None,
             Trail::Keys(keys) => Some(
-                crate::ui::kbd_group(keys.clone())
+                crate::ui::kbd_group(keys)
                     .tone(KeyTone::Bare)
                     .into_any_element(),
             ),

@@ -82,9 +82,9 @@ impl Styles {
                 StyleDef {
                     kind,
                     based_on: child(style, "basedOn").and_then(val).map(str::to_owned),
-                    ppr: parse("pPr").map(ParaProps::parse).unwrap_or_default(),
-                    rpr: parse("rPr").map(RunProps::parse).unwrap_or_default(),
-                    tblpr: parse("tblPr").map(TableProps::parse).unwrap_or_default(),
+                    ppr: parse("pPr").map_or_default(ParaProps::parse),
+                    rpr: parse("rPr").map_or_default(RunProps::parse),
+                    tblpr: parse("tblPr").map_or_default(TableProps::parse),
                     tcpr: CellProps::parse(parse("tcPr")),
                 },
             );
@@ -192,7 +192,7 @@ fn parse_level(node: Node) -> Option<(u8, Level)> {
                 .and_then(val)
                 .unwrap_or("decimal")
                 .to_owned(),
-            ppr: child(node, "pPr").map(ParaProps::parse).unwrap_or_default(),
+            ppr: child(node, "pPr").map_or_default(ParaProps::parse),
         },
     ))
 }

@@ -239,7 +239,6 @@ impl Editor {
             .trigger(trigger)
             .open(self.field_menu_open)
             .on_open_change({
-                let entity = entity.clone();
                 move |open, window, cx| {
                     let open = *open;
                     entity.update(cx, |editor, cx| editor.open_field_menu(open, window, cx));

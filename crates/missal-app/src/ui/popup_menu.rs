@@ -632,7 +632,6 @@ impl Render for PopupList {
                         ),
                 ),
         )
-        // Above dialogs (10 + layer) so a menu opened inside one is visible.
         .with_priority(100)
     }
 }
@@ -739,7 +738,7 @@ impl<T: MenuTrigger> RenderOnce for Menu<T> {
             width,
         } = self;
         let press = state.clone();
-        let click = state.clone();
+        let click = state;
         let close = |state: &Entity<MenuState>, cx: &mut App| {
             state.update(cx, |state, cx| {
                 state.list = None;

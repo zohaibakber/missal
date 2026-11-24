@@ -129,15 +129,14 @@ pub(crate) struct Region {
 pub(crate) fn token_y(flow_items: &[FlowItem], ys: Option<&[f32]>, token: &FlowToken) -> f32 {
     let Some(ys) = ys else { return 0.0 };
     let Some(&base) = ys.get(token.item) else {
-        return ys.last().copied().unwrap_or(0.0)
-            + flow_items.last().map(FlowItem::height).unwrap_or(0.0);
+        return ys.last().copied().unwrap_or(0.0) + flow_items.last().map_or(0.0, FlowItem::height);
     };
     match (&token.inner, &flow_items[token.item].node) {
         (Some(Inner::Lines(line)), Node::Text(text)) => {
-            base + text.lines.get(*line).map(|l| l.top).unwrap_or(0.0)
+            base + text.lines.get(*line).map_or(0.0, |l| l.top)
         }
         (Some(Inner::Table(t)), Node::Table(table)) => {
-            base + table.rows.get(t.row).map(|r| r.y).unwrap_or(table.height)
+            base + table.rows.get(t.row).map_or(table.height, |r| r.y)
         }
         _ => base,
     }
@@ -261,10 +260,7 @@ pub(crate) fn fragment_flow(
                                 return back;
                             }
                             return Outcome {
-                                next: Some(FlowToken {
-                                    item: index,
-                                    inner: inner.clone(),
-                                }),
+                                next: Some(FlowToken { item: index, inner }),
                                 forced: false,
                                 placed,
                             };
@@ -324,10 +320,7 @@ pub(crate) fn fragment_flow(
                                 return back;
                             }
                             return Outcome {
-                                next: Some(FlowToken {
-                                    item: index,
-                                    inner: inner.clone(),
-                                }),
+                                next: Some(FlowToken { item: index, inner }),
                                 forced: false,
                                 placed,
                             };

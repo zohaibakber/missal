@@ -245,8 +245,7 @@ impl PublishingScreen {
     fn rows(&self, cx: &App) -> Vec<PublishingRow> {
         self.model
             .as_ref()
-            .map(|model| model.read(cx).rows(cx))
-            .unwrap_or_default()
+            .map_or_default(|model| model.read(cx).rows(cx))
     }
 
     fn visible(&self, cx: &App) -> Vec<PublishingRow> {
@@ -348,7 +347,7 @@ impl PublishingScreen {
         let handle = self.model.clone()?;
         let screen = cx.entity().downgrade();
         let selection = Selection::of(row);
-        let key = selection.as_ref().map(key_of).unwrap_or_default();
+        let key = selection.as_ref().map_or_default(key_of);
         let local = row.local.as_ref().map(|local| local.id);
         let remote = row.remote.as_ref().map(|remote| remote.id.clone());
         let name = row.name.clone();
@@ -560,18 +559,15 @@ impl PublishingScreen {
             .as_ref()
             .map(|remote| remote.field_count)
             .or(row.local.as_ref().map(|local| local.field_count))
-            .map(fields_text)
-            .unwrap_or_default();
+            .map_or_default(fields_text);
         let version = row
             .remote
             .as_ref()
-            .map(|remote| format!("v{}", remote.version))
-            .unwrap_or_else(|| "—".to_owned());
+            .map_or_else(|| "—".to_owned(), |remote| format!("v{}", remote.version));
         let updated = row
             .remote
             .as_ref()
-            .map(|remote| date_text(remote.updated_at))
-            .unwrap_or_else(|| "—".to_owned());
+            .map_or_else(|| "—".to_owned(), |remote| date_text(remote.updated_at));
         let menu = self.row_menu(index, row, cx);
         data_row(
             ("publishing-row", index),
@@ -724,7 +720,7 @@ impl PublishingScreen {
         let screen = cx.entity().downgrade();
         let remote = remote.to_owned();
         let name = name.to_owned();
-        let key = selection.as_ref().map(key_of).unwrap_or_default();
+        let key = selection.as_ref().map_or_default(key_of);
         h_flex()
             .id(("publishing-version", number as usize))
             .min_h(px(40.))

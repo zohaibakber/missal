@@ -8,9 +8,14 @@ import { Accounts } from "./Accounts.ts";
 import { Api } from "./Api.ts";
 import { AuthorizationLive } from "./Auth.ts";
 import { HandlersLive } from "./Handlers.ts";
+import { Codes } from "./Codes.ts";
 import { Library } from "./Library.ts";
-import { Passwords } from "./Passwords.ts";
+import { PasswordLive } from "./Passwords.ts";
+import { People } from "./People.ts";
+import { Sessions } from "./Sessions.ts";
+import { SignInLockout } from "./Throttle.ts";
 import { Tokens } from "./Tokens.ts";
+import { Users } from "./Users.ts";
 
 export const CryptoLive = Layer.mergeAll(
   Kdf.layerWebCrypto,
@@ -18,8 +23,9 @@ export const CryptoLive = Layer.mergeAll(
   Mac.layerWebCrypto,
 ).pipe(Layer.provideMerge(SecureRandom.layerWebCrypto));
 
-export const ServicesLive = Layer.mergeAll(Accounts.layer, Library.layer).pipe(
-  Layer.provideMerge(Layer.mergeAll(Passwords.layer, Tokens.layer)),
+export const ServicesLive = Layer.mergeAll(Accounts.layer, People.layer, Library.layer).pipe(
+  Layer.provideMerge(Layer.mergeAll(Sessions.layer, Codes.layer, SignInLockout.layer)),
+  Layer.provideMerge(Layer.mergeAll(Users.layer, Tokens.layer, PasswordLive)),
 );
 
 export const ApiLive = HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(

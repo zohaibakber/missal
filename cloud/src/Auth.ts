@@ -1,10 +1,9 @@
+import { eq } from "drizzle-orm";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as HttpServerRequest from "effect/http/HttpServerRequest";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Schema from "effect/Schema";
-import * as SqlClient from "effect/sql/SqlClient";
-import * as SqlSchema from "effect/sql/SqlSchema";
 import {
   AdminsOnly,
   Authentication,
@@ -13,9 +12,13 @@ import {
   Licensed,
   NotPublisher,
   PublishersOnly,
+  Throttled,
   Viewer,
 } from "./Api.ts";
+import { Db } from "./Database.ts";
 import { canPublish } from "./Models.ts";
+import { users } from "./Schema.ts";
+import { AuthThrottle } from "./Throttle.ts";
 import { Tokens } from "./Tokens.ts";
 
 export const AuthenticationLive = Layer.effect(
@@ -57,17 +60,16 @@ export const PublishersOnlyLive = Layer.succeed(
   ),
 );
 
-const AdminRow = Schema.Struct({ role: Schema.String, disabled: Schema.Number });
-
 export const AdminsOnlyLive = Layer.effect(
   AdminsOnly,
   Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient;
-    const current = SqlSchema.findOneOption({
-      Request: Schema.String,
-      Result: AdminRow,
-      execute: (id) => sql`SELECT role, disabled FROM users WHERE id = ${id}`,
-    });
+    const db = yield* Db;
+    const current = (id: string) =>
+      db
+        .select({ role: users.role, disabled: users.disabled })
+        .from(users)
+        .where(eq(users.id, id))
+        .pipe(Effect.map((rows) => Option.fromNullishOr(rows[0])));
     const refused = () => new NotAdmin({ error: "only administrators can manage accounts" });
     return AdminsOnly.of(
       Effect.fn("AdminsOnly")(function* (httpEffect) {
@@ -88,7 +90,22 @@ export const AdminsOnlyLive = Layer.effect(
   }),
 );
 
+export const ThrottledLive = Layer.effect(
+  Throttled,
+  Effect.gen(function* () {
+    const throttle = yield* AuthThrottle;
+    return Throttled.of(
+      Effect.fn("Throttled")(function* (httpEffect) {
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        yield* throttle.check(request.headers["cf-connecting-ip"] ?? "unknown");
+        return yield* httpEffect;
+      }),
+    );
+  }),
+);
+
 export const AuthorizationLive = Layer.mergeAll(
+  ThrottledLive,
   AuthenticationLive,
   LicensedLive,
   PublishersOnlyLive,

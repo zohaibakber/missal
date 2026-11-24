@@ -70,8 +70,7 @@ pub fn import_file(
         .or_else(|| file_stem(&path));
     let file_name = path
         .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
+        .map_or_default(|name| name.to_string_lossy().into_owned());
     let projections = imported.document.projections();
     let unrecognised = unrecognised_markers(&projections.plain_text, markers);
     Ok(WordImport {

@@ -1290,7 +1290,6 @@ impl WorkspaceScreen {
             .anchor(gpui_kit::Anchor::TopLeft)
             .open(self.add_open)
             .on_open_change({
-                let weak = weak.clone();
                 move |open, window, cx| {
                     let open = *open;
                     weak.update(cx, |this, cx| {
@@ -1512,7 +1511,6 @@ impl WorkspaceScreen {
                                 .keys("Mod+Enter")
                                 .disabled(selected_count == 0)
                                 .on_click({
-                                    let screen = screen.clone();
                                     move |_, window, cx| {
                                         screen
                                             .update(cx, |this, cx| this.add_templates(window, cx));

@@ -140,8 +140,7 @@ impl Library {
             .read_to_string()
             .ok()
             .and_then(|text| serde_json::from_str::<Problem>(&text).ok())
-            .map(|problem| problem.error)
-            .unwrap_or_default();
+            .map_or_default(|problem| problem.error);
         Err(LibraryError::from_status(status, detail))
     }
 

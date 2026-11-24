@@ -878,7 +878,6 @@ impl Render for AppShell {
             }))
             .on_action(cx.listener(|this, _: &HistoryBack, window, cx| this.back(window, cx)))
             .on_action({
-                let nav = nav.clone();
                 cx.listener(move |_, _: &HistoryForward, window, cx| {
                     nav.update(cx, |nav, cx| nav.forward(window, cx))
                 })

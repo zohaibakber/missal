@@ -67,7 +67,6 @@ impl FieldItem {
     }
 }
 
-/// Width of the name column, shared by empty and filled rows so they line up.
 const LABEL_COLUMN: f32 = 104.;
 
 pub fn field_items(
@@ -896,8 +895,7 @@ impl FieldsPanel {
                 .iter()
                 .rev()
                 .find(|value| value.placeholder_id == id)
-                .map(|value| value.value.clone())
-                .unwrap_or_default()
+                .map_or_default(|value| value.value.clone())
         };
         let total = customs.len();
         let with_value = customs

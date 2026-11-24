@@ -159,7 +159,11 @@ impl Label {
         let rem = window.rem_size();
         let font_size: f32 = text_style.font_size.to_pixels(rem).into();
         let family = self.family.clone().unwrap_or_else(|| {
-            match refinement.font_family.as_ref().map(|f| f.as_ref()) {
+            match refinement
+                .font_family
+                .as_ref()
+                .map(std::convert::AsRef::as_ref)
+            {
                 Some(name) if URDU_FAMILY_ALIASES.contains(&name) => FontFamily::Document,
                 Some(name) if UI_FAMILY_ALIASES.contains(&name) => FontFamily::Interface,
                 None => FontFamily::Interface,

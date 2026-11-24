@@ -744,7 +744,7 @@ impl TextBox {
     }
 
     pub(crate) fn selection_local(&self, range: Range<usize>) -> Vec<(usize, Rect)> {
-        let layout_range = self.map.layout_range(range.clone());
+        let layout_range = self.map.layout_range(range);
         let mut rects = Vec::new();
         if self.layout.lines().is_empty() {
             return rects;
@@ -1016,8 +1016,7 @@ pub(crate) fn measure_text_block(
     let lines_height = y - content_top;
     let min_height = boxp
         .min_height
-        .map(|m| m.resolve(text_props.size, 0.0))
-        .unwrap_or(0.0);
+        .map_or(0.0, |m| m.resolve(text_props.size, 0.0));
     let mut content_height = lines_height.max(min_height);
     if let Some(height) = boxp
         .height

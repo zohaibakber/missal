@@ -142,6 +142,10 @@ export class AdminsOnly extends HttpApiMiddleware.Service<AdminsOnly, { requires
   },
 ) {}
 
+export class Throttled extends HttpApiMiddleware.Service<Throttled>()("Throttled", {
+  error: AccountLocked,
+}) {}
+
 export const NewPassword = Schema.RedactedFromValue(
   Schema.String.check(Schema.isMinLength(10), Schema.isMaxLength(256)),
 );
@@ -264,36 +268,36 @@ export class AuthGroup extends HttpApiGroup.make("auth")
     HttpApiEndpoint.post("signUp", "/v1/auth/sign-up", {
       payload: SignUp,
       success: HttpApiSchema.Accepted,
-      error: [AccountLocked, StorageFailure],
-    }),
+      error: StorageFailure,
+    }).middleware(Throttled),
   )
   .add(
     HttpApiEndpoint.post("requestCode", "/v1/auth/codes", {
       payload: Schema.Struct({ email: Email, purpose: CodePurpose }),
       success: HttpApiSchema.Accepted,
-      error: [AccountLocked, StorageFailure],
-    }),
+      error: StorageFailure,
+    }).middleware(Throttled),
   )
   .add(
     HttpApiEndpoint.post("verifyEmail", "/v1/auth/verify-email", {
       payload: Schema.Struct({ email: Email, code: Code }),
       success: Session,
-      error: [InvalidCode, AccountLocked, StorageFailure],
-    }),
+      error: [InvalidCode, StorageFailure],
+    }).middleware(Throttled),
   )
   .add(
     HttpApiEndpoint.post("resetPassword", "/v1/auth/reset-password", {
       payload: Schema.Struct({ email: Email, code: Code, password: NewPassword }),
       success: Session,
-      error: [InvalidCode, AccountLocked, StorageFailure],
-    }),
+      error: [InvalidCode, StorageFailure],
+    }).middleware(Throttled),
   )
   .add(
     HttpApiEndpoint.post("signIn", "/v1/auth/sign-in", {
       payload: Schema.Struct({ email: Email, password: GivenPassword }),
       success: Session,
       error: [InvalidCredentials, EmailNotVerified, AccountLocked, StorageFailure],
-    }),
+    }).middleware(Throttled),
   )
   .add(
     HttpApiEndpoint.post("refresh", "/v1/auth/refresh", {

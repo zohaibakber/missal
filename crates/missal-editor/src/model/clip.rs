@@ -78,9 +78,8 @@ fn host_block(doc: &Document, path: &BlockPath, range: std::ops::Range<usize>) -
 
 pub fn copy(doc: &Document, s: &Position, e: &Position) -> Fragment {
     if s.path == e.path {
-        let children = inlines(doc, &s.path)
-            .map(|found| inline::slice(&found, s.offset..e.offset))
-            .unwrap_or_default();
+        let children =
+            inlines(doc, &s.path).map_or_default(|found| inline::slice(&found, s.offset..e.offset));
         return Fragment {
             blocks: vec![Block::Paragraph(Paragraph::new(children))],
             inline: true,
@@ -97,7 +96,7 @@ pub fn copy(doc: &Document, s: &Position, e: &Position) -> Fragment {
             blocks.push(block.clone());
             continue;
         }
-        for host in tree::text_paths_of_block(block, path.clone()) {
+        for host in tree::text_paths_of_block(block, path) {
             if host < s.path || host > e.path {
                 continue;
             }
@@ -262,7 +261,7 @@ pub fn html_to_text(html: &str) -> String {
             let name: String = lower
                 .trim_start_matches('/')
                 .chars()
-                .take_while(|c| c.is_ascii_alphanumeric())
+                .take_while(char::is_ascii_alphanumeric)
                 .collect();
             let closing = lower.starts_with('/');
             if let Some(skipped) = &skip_depth {
@@ -451,7 +450,7 @@ pub fn paste(doc: &mut Document, at: &Position, fragment: Fragment) -> Position 
         match inline_children(last.clone()) {
             Some(children) => {
                 caret_offset = len(&children);
-                insert_inlines(doc, &pos(tail_path.clone(), 0), children);
+                insert_inlines(doc, &pos(tail_path, 0), children);
             }
             None => {
                 if let Some(container) = container_mut(doc, &found.container) {

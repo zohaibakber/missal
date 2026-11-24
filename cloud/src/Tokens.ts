@@ -1,24 +1,18 @@
-import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Mac from "effect/crypto/Mac";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as Base64Url from "effect/encoding/Base64Url";
-import * as Hex from "effect/encoding/Hex";
-import * as Jwk from "effect/jose/Jwk";
+import type * as Jwk from "effect/jose/Jwk";
 import * as Jwt from "effect/jose/Jwt";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
-import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { Unauthorized, Viewer } from "./Api.ts";
 import { type Licence, Role, SessionId, UserId } from "./Models.ts";
 
 export const ACCESS_SECONDS = 15 * 60;
-export const SECRET_VARIABLE = "TOKEN_SECRET";
 const ISSUER = "missal";
 const TYPE = "at+jwt";
-const MIN_SECRET_BYTES = 32;
 
 const Claims = Schema.Struct({
   iss: Schema.Literal(ISSUER),
@@ -44,71 +38,69 @@ const licensedUntil = (licence: Licence) =>
 
 const unauthorized = () => new Unauthorized({ error: "sign in to use Missal" });
 
-const secretBytes = (secret: Redacted.Redacted<string>) => {
-  const bytes = Hex.decode(Redacted.value(secret).trim());
-  return Result.isSuccess(bytes) && bytes.success.length >= MIN_SECRET_BYTES
-    ? Effect.succeed(bytes.success)
-    : Effect.die(`${SECRET_VARIABLE} must be at least ${MIN_SECRET_BYTES} hex-encoded bytes`);
-};
+export class SigningKey extends Context.Service<SigningKey, Effect.Effect<CryptoKey>>()(
+  "SigningKey",
+) {}
 
-const signingKey = Effect.gen(function* () {
-  const bytes = yield* secretBytes(yield* Config.Redacted(SECRET_VARIABLE));
-  return yield* Jwk.importSecret(
-    Redacted.make({ kty: "oct", k: Base64Url.encode(bytes) } as const),
-    "HS256",
+const isSecret = (key: CryptoKey): key is CryptoKey & { readonly type: "secret" } =>
+  key.type === "secret";
+
+const hs256 = (cryptoKey: CryptoKey) =>
+  (isSecret(cryptoKey)
+    ? Mac.fromCryptoKey(Mac.hmacSha256, cryptoKey)
+    : Effect.die("the token signing key must be a secret HMAC key")
+  ).pipe(
+    Effect.map((key): Jwk.SecretKey<"HS256"> => ({
+      _tag: "SecretKey",
+      algorithm: "HS256",
+      kid: undefined,
+      key,
+    })),
+    Effect.orDie,
   );
-}).pipe(Effect.orDie);
 
-export class Tokens extends Context.Service<
-  Tokens,
-  {
-    readonly issue: (subject: Subject) => Effect.Effect<string>;
-    readonly verify: (
-      token: Redacted.Redacted<string>,
-    ) => Effect.Effect<Viewer["Service"], Unauthorized>;
-  }
->()("Tokens") {
-  static readonly layer = Layer.effect(
-    Tokens,
-    Effect.gen(function* () {
-      const mac = yield* Mac.Mac;
+export class Tokens extends Context.Service<Tokens>()("Tokens", {
+  make: Effect.gen(function* () {
+    const mac = yield* Mac.Mac;
+    const signingKey = Effect.flatMap(yield* SigningKey, hs256);
 
-      const issue = Effect.fn("Tokens.issue")(function* (subject: Subject) {
-        const key = yield* signingKey;
-        const now = DateTime.toEpochSeconds(yield* DateTime.now);
-        const token = yield* Jwt.sign(
-          Claims,
-          {
-            iss: ISSUER,
-            sub: subject.userId,
-            sid: subject.sessionId,
-            iat: now,
-            exp: now + ACCESS_SECONDS,
-            role: subject.role,
-            lic: licensedUntil(subject.licence),
-          },
-          key,
-          { typ: TYPE },
-        ).pipe(Effect.orDie, Effect.provideService(Mac.Mac, mac));
-        return Redacted.value(token);
+    const issue = Effect.fn("Tokens.issue")(function* (subject: Subject) {
+      const key = yield* signingKey;
+      const now = DateTime.toEpochSeconds(yield* DateTime.now);
+      const token = yield* Jwt.sign(
+        Claims,
+        {
+          iss: ISSUER,
+          sub: subject.userId,
+          sid: subject.sessionId,
+          iat: now,
+          exp: now + ACCESS_SECONDS,
+          role: subject.role,
+          lic: licensedUntil(subject.licence),
+        },
+        key,
+        { typ: TYPE },
+      ).pipe(Effect.orDie, Effect.provideService(Mac.Mac, mac));
+      return Redacted.value(token);
+    });
+
+    const verify = Effect.fn("Tokens.verify")(function* (token: Redacted.Redacted<string>) {
+      const key = yield* signingKey;
+      const { claims } = yield* Jwt.verify(Claims, token, key, {
+        issuer: ISSUER,
+        typ: TYPE,
+        requiredClaims: ["sub", "exp", "iat"],
+      }).pipe(Effect.mapError(unauthorized), Effect.provideService(Mac.Mac, mac));
+      return Viewer.of({
+        id: claims.sub,
+        sessionId: claims.sid,
+        role: claims.role,
+        licensedUntil: DateTime.fromEpochSeconds(claims.lic),
       });
+    });
 
-      const verify = Effect.fn("Tokens.verify")(function* (token: Redacted.Redacted<string>) {
-        const key = yield* signingKey;
-        const { claims } = yield* Jwt.verify(Claims, token, key, {
-          issuer: ISSUER,
-          typ: TYPE,
-          requiredClaims: ["sub", "exp", "iat"],
-        }).pipe(Effect.mapError(unauthorized), Effect.provideService(Mac.Mac, mac));
-        return Viewer.of({
-          id: claims.sub,
-          sessionId: claims.sid,
-          role: claims.role,
-          licensedUntil: DateTime.fromEpochSeconds(claims.lic),
-        });
-      });
-
-      return Tokens.of({ issue, verify });
-    }),
-  );
+    return { issue, verify };
+  }),
+}) {
+  static readonly layer = Layer.effect(Tokens, Tokens.make);
 }

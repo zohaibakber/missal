@@ -618,7 +618,7 @@ impl Editor {
     }
 
     pub fn fit_zoom(&self, viewport_width: f32) -> f32 {
-        let page_width = self.packet.page(0).map(|p| p.size.width).unwrap_or(794.0);
+        let page_width = self.packet.page(0).map_or(794.0, |p| p.size.width);
         ((viewport_width - 2.0 * CANVAS_PAD) / page_width).clamp(MIN_ZOOM, MAX_FIT_ZOOM)
     }
 
@@ -780,8 +780,7 @@ impl Editor {
     pub fn set_zoom(&mut self, zoom: Option<f32>, cx: &mut Context<Self>) {
         let anchor = self
             .viewport
-            .map(|b| f32::from(b.size.height) / 2.0)
-            .unwrap_or(0.0);
+            .map_or(0.0, |b| f32::from(b.size.height) / 2.0);
         let fraction = if self.placement.height > 0.0 {
             (self.scroll.y + anchor) / self.placement.height
         } else {
@@ -843,7 +842,7 @@ impl Editor {
             }
             _ => {
                 let a = pos(hit.path.clone(), 0);
-                let b = end_of(self.core.document(), hit.path.clone());
+                let b = end_of(self.core.document(), hit.path);
                 self.select(Selection::new(a.clone(), b.clone()), window, cx);
                 self.drag = Some(Drag {
                     granularity: Granularity::Block,
@@ -889,15 +888,15 @@ impl Editor {
                 } else {
                     (
                         pos(hit.path.clone(), 0),
-                        end_of(self.core.document(), hit.path.clone()),
+                        end_of(self.core.document(), hit.path),
                     )
                 };
                 let before =
                     crate::model::selection::order(&a, &drag.origin.0) == std::cmp::Ordering::Less;
                 if before {
-                    Selection::new(drag.origin.1.clone(), a)
+                    Selection::new(drag.origin.1, a)
                 } else {
-                    Selection::new(drag.origin.0.clone(), b)
+                    Selection::new(drag.origin.0, b)
                 }
             }
         };
@@ -917,7 +916,7 @@ impl Editor {
                 cx.background_executor()
                     .timer(Duration::from_millis(16))
                     .await;
-                let keep = this.update(cx, |this, cx| this.autoscroll_tick(cx));
+                let keep = this.update(cx, Editor::autoscroll_tick);
                 if !matches!(keep, Ok(true)) {
                     break;
                 }
@@ -994,7 +993,7 @@ impl Editor {
         let selection = self.core.selection().clone();
         if !select && !word && !selection.is_collapsed() {
             let (s, e) = effective_range(self.core.document(), &selection);
-            let rtl = self.packet.caret(&s).map(|c| c.rtl).unwrap_or(true);
+            let rtl = self.packet.caret(&s).is_none_or(|c| c.rtl);
             let forward = (direction == HorizontalDirection::Left) == rtl;
             let target = if forward { e } else { s };
             self.collapse_or_move(false, target, window, cx);
@@ -1112,10 +1111,7 @@ impl Editor {
         let Some(rect) = self.caret_canvas_rect(&head) else {
             return;
         };
-        let x = self
-            .goal_x
-            .map(|g| g * self.placement.zoom)
-            .unwrap_or(rect.x);
+        let x = self.goal_x.map_or(rect.x, |g| g * self.placement.zoom);
         let dy = if direction == VerticalDirection::Up {
             -height
         } else {
@@ -1189,7 +1185,7 @@ impl Editor {
                 None => end_of(doc, head.path.clone()),
             }
         } else if head.offset > 0 {
-            pos(head.path.clone(), 0)
+            pos(head.path, 0)
         } else {
             match crate::model::tree::prev_text(doc, &head.path) {
                 Some(path) => pos(path, 0),
@@ -1262,11 +1258,11 @@ impl Editor {
     }
 
     pub fn undo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.edit(window, cx, |core| core.undo());
+        self.edit(window, cx, super::model::core::EditorCore::undo);
     }
 
     pub fn redo(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.edit(window, cx, |core| core.redo());
+        self.edit(window, cx, super::model::core::EditorCore::redo);
     }
 
     pub fn open_field_menu(&mut self, open: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -1407,8 +1403,8 @@ handlers! {
     };
     text_actions::Undo => |this, window, cx| this.undo(window, cx);
     text_actions::Redo => |this, window, cx| this.redo(window, cx);
-    text_actions::Enter => |this, window, cx| this.edit(window, cx, |core| core.split());
-    text_actions::InsertNewline => |this, window, cx| this.edit(window, cx, |core| core.line_break());
+    text_actions::Enter => |this, window, cx| this.edit(window, cx, super::model::core::EditorCore::split);
+    text_actions::InsertNewline => |this, window, cx| this.edit(window, cx, super::model::core::EditorCore::line_break);
     keys::NextCell => |this, window, cx| {
         if this.core.in_list() {
             this.edit(window, cx, |core| core.indent(false));
@@ -1525,7 +1521,7 @@ impl EntityInputHandler for Editor {
                 let change = self.core.commit("");
                 self.apply(change, window, cx);
             }
-            self.edit(window, cx, |core| core.split());
+            self.edit(window, cx, super::model::core::EditorCore::split);
             return;
         }
         if self.core.marked().is_some() {

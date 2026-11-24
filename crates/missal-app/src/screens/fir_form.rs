@@ -913,8 +913,7 @@ impl FirForm {
                 let weak = weak.clone();
                 let current = weak
                     .upgrade()
-                    .map(|form| form.read(cx).status)
-                    .unwrap_or(FirStatus::Open);
+                    .map_or(FirStatus::Open, |form| form.read(cx).status);
                 menu_popup()
                     .w(px(240.))
                     .children(FirStatus::ALL.iter().map(|status| {
@@ -973,7 +972,7 @@ impl FirForm {
                 })
                 .ok();
         });
-        let closer = weak.clone();
+        let closer = weak;
         div()
             .id(("date-control", index))
             .relative()
@@ -1639,13 +1638,10 @@ impl crate::ui::titlebar::HeaderSource for NewFirScreen {
     ) -> crate::ui::titlebar::HeaderContent {
         let title = match (self.edit, self.form.as_ref()) {
             (Some(_), Some(form)) => format!("Edit FIR {}", form.read(cx).initial.fir_no),
-            (Some(id), None) => self
-                .models
-                .firs
-                .read(cx)
-                .get(id)
-                .map(|row| format!("Edit FIR {}", row.no))
-                .unwrap_or_else(|| "Edit FIR".to_owned()),
+            (Some(id), None) => self.models.firs.read(cx).get(id).map_or_else(
+                || "Edit FIR".to_owned(),
+                |row| format!("Edit FIR {}", row.no),
+            ),
             (None, _) => "New FIR".to_owned(),
         };
         crate::ui::titlebar::HeaderContent::new(title)

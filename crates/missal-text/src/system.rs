@@ -150,8 +150,7 @@ impl TextSystem {
                 let actual = cx
                     .text_system()
                     .advance(font_id, px(100.0), ch)
-                    .map(|size| f32::from(size.width))
-                    .unwrap_or(f32::NAN);
+                    .map_or(f32::NAN, |size| f32::from(size.width));
                 if (expected - actual).abs() > 0.05 {
                     problems.push(format!(
                         "{} ({} {}): '{ch}' advance {actual} in GPUI, {expected} in the bundled file",

@@ -102,7 +102,7 @@ impl LayoutCache {
     fn lock(&self) -> MutexGuard<'_, Entries> {
         self.entries
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 }
 

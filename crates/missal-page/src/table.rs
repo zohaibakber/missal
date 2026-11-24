@@ -251,8 +251,7 @@ pub(crate) fn measure_table(
         .boxp
         .width
         .filter(|w| *w != Length::Auto)
-        .map(|w| w.resolve(table_text.size, container))
-        .unwrap_or(container);
+        .map_or(container, |w| w.resolve(table_text.size, container));
     if let Some(max) = computed.boxp.max_width {
         width = width.min(max.resolve(table_text.size, container));
     }

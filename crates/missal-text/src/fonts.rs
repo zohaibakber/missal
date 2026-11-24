@@ -122,7 +122,7 @@ pub(crate) fn font_context() -> FontContext {
     let collection = shared()
         .collection
         .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clone();
     FontContext {
         collection,

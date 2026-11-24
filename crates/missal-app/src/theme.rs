@@ -567,9 +567,6 @@ fn apply_palette(theme: &mut Theme, palette: &Palette) {
     colors.slider_thumb = palette.surface;
     colors.progress_bar = palette.action;
     colors.slider_bar = palette.action;
-    // Scrollbars stay on screen whenever an area can scroll. The library
-    // default fades them out after scrolling, which left long forms with no
-    // sign that there was more below and nothing to drag.
     theme.scrollbar_mode = gpui_kit::component::scroll::ScrollbarMode::Always;
     theme.radius = px(RADIUS_LG);
     theme.radius_lg = px(RADIUS_LG);
