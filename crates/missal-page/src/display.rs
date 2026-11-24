@@ -172,8 +172,7 @@ fn line_rects_by_line(piece: &TextPiece, range: Range<usize>) -> Vec<(usize, f32
         if line < piece.lines.start || line >= piece.lines.end || line >= node.lines.len() {
             continue;
         }
-        let shift = node.layout_dx();
-        let x0 = piece.dx + node.content.x + rect.x + shift;
+        let x0 = piece.dx + node.content.x + rect.x;
         out.push((line, x0, x0 + rect.width));
     }
     out
@@ -271,7 +270,6 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
         let Some(lb) = node.lines.get(run.line) else {
             continue;
         };
-        let shift = node.layout_dx();
         let gy = dy + lb.glyph_dy;
         let line_id = line_base + (run.line - piece.lines.start) as u32;
         let size = run.font_size;
@@ -305,7 +303,7 @@ fn text_piece(piece: &TextPiece, layers: &mut Layers) {
         let run_glyphs = layout.glyphs(run);
         layers.glyphs.reserve(run_glyphs.len());
         for g in run_glyphs {
-            let x = dx + node.content.x + g.x + shift;
+            let x = dx + node.content.x + g.x;
             let y = gy + g.y;
             let center = x + g.advance * 0.5;
             let field = field_rects
