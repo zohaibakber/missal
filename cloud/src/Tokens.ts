@@ -62,7 +62,7 @@ const hs256 = (cryptoKey: CryptoKey) =>
 export class Tokens extends Context.Service<Tokens>()("Tokens", {
   make: Effect.gen(function* () {
     const mac = yield* Mac.Mac;
-    const signingKey = Effect.flatMap(yield* SigningKey, hs256);
+    const signingKey = yield* Effect.cached(Effect.flatMap(yield* SigningKey, hs256));
 
     const issue = Effect.fn("Tokens.issue")(function* (subject: Subject) {
       const key = yield* signingKey;

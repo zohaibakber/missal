@@ -1096,7 +1096,8 @@ impl WorkspaceScreen {
                                 IconName::Ellipsis,
                                 "More actions",
                             )
-                            .dense(),
+                            .dense()
+                            .hover_through(),
                             open: menu_open,
                         })
                         .open(menu_open)

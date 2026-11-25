@@ -432,7 +432,7 @@ export class UsersGroup extends HttpApiGroup.make("users")
     HttpApiEndpoint.post("verifyEmail", "/v1/users/:id/verify", {
       params: { id: RouteId },
       success: ManagedAccount,
-      error: [UserNotFound, StorageFailure],
+      error: [UserNotFound, OwnAccess, StorageFailure],
     }),
   )
   .add(
@@ -440,14 +440,14 @@ export class UsersGroup extends HttpApiGroup.make("users")
       params: { id: RouteId },
       payload: Schema.Struct({ months: Months }),
       success: ManagedAccount,
-      error: [UserNotFound, StorageFailure],
+      error: [UserNotFound, OwnAccess, StorageFailure],
     }),
   )
   .add(
     HttpApiEndpoint.delete("endLicence", "/v1/users/:id/licence", {
       params: { id: RouteId },
       success: ManagedAccount,
-      error: [UserNotFound, StorageFailure],
+      error: [UserNotFound, OwnAccess, StorageFailure],
     }),
   )
   .add(
@@ -455,7 +455,7 @@ export class UsersGroup extends HttpApiGroup.make("users")
       params: { id: RouteId },
       payload: Schema.Struct({ days: Days }),
       success: ManagedAccount,
-      error: [UserNotFound, StorageFailure],
+      error: [UserNotFound, OwnAccess, StorageFailure],
     }),
   )
   .add(
@@ -470,7 +470,7 @@ export class UsersGroup extends HttpApiGroup.make("users")
     HttpApiEndpoint.post("sendReset", "/v1/users/:id/reset-email", {
       params: { id: RouteId },
       success: HttpApiSchema.Accepted,
-      error: [UserNotFound, StorageFailure],
+      error: [UserNotFound, OwnAccess, StorageFailure],
     }),
   )
   .add(

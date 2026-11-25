@@ -20,13 +20,6 @@ import { isVerified, toAccount, Users } from "./Users.ts";
 
 const UNVERIFIED_LIFETIME = { days: 7 } as const;
 
-export const VERIFY_EMAILS_VARIABLE = "VERIFY_EMAILS";
-
-const emailVerification = Config.Boolean(VERIFY_EMAILS_VARIABLE).pipe(
-  Config.withDefault(false),
-  Effect.orDie,
-);
-
 const invalid = () => new InvalidCredentials({ error: "wrong email or password" });
 
 export class Accounts extends Context.Service<Accounts>()("Accounts", {
@@ -38,6 +31,10 @@ export class Accounts extends Context.Service<Accounts>()("Accounts", {
     const users = yield* Users;
     const sessions = yield* Sessions;
     const codes = yield* Codes;
+    const verifyEmails = yield* Config.Boolean("VERIFY_EMAILS").pipe(
+      Config.withDefault(false),
+      Effect.orDie,
+    );
 
     const hash = (password: Redacted.Redacted<string>) =>
       passwords.hash(password).pipe(Effect.orDie);
@@ -64,7 +61,6 @@ export class Accounts extends Context.Service<Accounts>()("Accounts", {
     });
 
     const signUp = Effect.fn("Accounts.signUp")(function* (request: SignUp) {
-      const verifyEmails = yield* emailVerification;
       const password = yield* hash(request.password);
       const found = yield* users.byEmail(request.email);
       const now = yield* DateTime.now;

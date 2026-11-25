@@ -41,8 +41,6 @@ export class AuthThrottle extends Context.Service<
     );
 }
 
-const millis = DateTime.toEpochMillis;
-
 export class SignInLockout extends Context.Service<SignInLockout>()("SignInLockout", {
   make: Effect.gen(function* () {
     const db = yield* Db;
@@ -53,16 +51,16 @@ export class SignInLockout extends Context.Service<SignInLockout>()("SignInLocko
         .from(signInFailures)
         .where(eq(signInFailures.email, email))
         .pipe(storage("check sign-in attempts"));
-      if (lock !== undefined && lock.lockedUntil > millis(now)) {
+      if (lock !== undefined && lock.lockedUntil > DateTime.toEpochMillis(now)) {
         return yield* new AccountLocked({
           error: "too many failed sign-ins; try again later",
-          retryAfter: Math.ceil((lock.lockedUntil - millis(now)) / 1000),
+          retryAfter: Math.ceil((lock.lockedUntil - DateTime.toEpochMillis(now)) / 1000),
         });
       }
     });
 
     const recordFailure = (email: string, now: DateTime.Utc) => {
-      const lockedUntil = millis(now) + Duration.toMillis(LOCK_LIFETIME);
+      const lockedUntil = DateTime.toEpochMillis(now) + Duration.toMillis(LOCK_LIFETIME);
       const reachesLimit = sql`${signInFailures.failures} + 1 >= ${MAX_FAILURES}`;
       return db
         .insert(signInFailures)
@@ -83,7 +81,12 @@ export class SignInLockout extends Context.Service<SignInLockout>()("SignInLocko
     const purge = (now: DateTime.Utc) =>
       db
         .delete(signInFailures)
-        .where(lte(signInFailures.lockedUntil, millis(DateTime.subtract(now, { days: 1 }))));
+        .where(
+          lte(
+            signInFailures.lockedUntil,
+            DateTime.toEpochMillis(DateTime.subtract(now, { days: 1 })),
+          ),
+        );
 
     return { check, recordFailure, clear, purge };
   }),

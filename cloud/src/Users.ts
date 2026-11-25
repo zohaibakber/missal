@@ -11,8 +11,6 @@ import { storage } from "./Failures.ts";
 import { licenceOf, TRIAL_LENGTH, User } from "./Models.ts";
 import { users } from "./Schema.ts";
 
-export const millis = DateTime.toEpochMillis;
-
 export const isVerified = (user: User) => Option.isSome(user.emailVerifiedAt);
 
 export const toAccount = (user: User, now: DateTime.Utc): Account => ({
@@ -37,19 +35,18 @@ export interface UserFields {
 
 const missing = () => new UserNotFound({ error: "no such user" });
 
-const decodeUser = Schema.decodeUnknownEffect(User);
+const decodeUser = Schema.decodeUnknownEffect(Schema.OptionFromUndefinedOr(User));
 const decodeUsers = Schema.decodeUnknownEffect(Schema.Array(User));
 const encodeInsert = Schema.encodeEffect(User.insert);
 
 const optionalMillis = (time: DateTime.Utc | undefined) =>
-  time === undefined ? undefined : millis(time);
+  time === undefined ? undefined : DateTime.toEpochMillis(time);
 
 export class Users extends Context.Service<Users>()("Users", {
   make: Effect.gen(function* () {
     const db = yield* Db;
 
-    const first = (rows: ReadonlyArray<unknown>) =>
-      rows[0] === undefined ? Effect.succeedNone : Effect.asSome(decodeUser(rows[0]));
+    const first = (rows: ReadonlyArray<unknown>) => decodeUser(rows[0]);
 
     const find = (id: string) =>
       db
@@ -97,14 +94,14 @@ export class Users extends Context.Service<Users>()("Users", {
           password: fields.password,
           paidUntil: optionalMillis(fields.paidUntil),
           trialEndsAt: optionalMillis(fields.trialEndsAt),
-          updatedAt: millis(now),
+          updatedAt: DateTime.toEpochMillis(now),
         })
         .where(eq(users.id, id));
 
     const replaceUnverified = (id: string, name: string, password: string, now: DateTime.Utc) =>
       db
         .update(users)
-        .set({ name, password, updatedAt: millis(now) })
+        .set({ name, password, updatedAt: DateTime.toEpochMillis(now) })
         .where(and(eq(users.id, id), isNull(users.emailVerifiedAt)))
         .pipe(storage("sign up"));
 
@@ -112,14 +109,14 @@ export class Users extends Context.Service<Users>()("Users", {
       db
         .update(users)
         .set({
-          emailVerifiedAt: sql`COALESCE(${users.emailVerifiedAt}, ${millis(now)})`,
-          trialEndsAt: sql`COALESCE(${users.trialEndsAt}, ${millis(DateTime.add(now, TRIAL_LENGTH))})`,
-          updatedAt: millis(now),
+          emailVerifiedAt: sql`COALESCE(${users.emailVerifiedAt}, ${DateTime.toEpochMillis(now)})`,
+          trialEndsAt: sql`COALESCE(${users.trialEndsAt}, ${DateTime.toEpochMillis(DateTime.add(now, TRIAL_LENGTH))})`,
+          updatedAt: DateTime.toEpochMillis(now),
         })
         .where(eq(users.id, id));
 
     const endLicence = (id: string, now: DateTime.Utc) => {
-      const at = millis(now);
+      const at = DateTime.toEpochMillis(now);
       return db
         .update(users)
         .set({
@@ -135,7 +132,12 @@ export class Users extends Context.Service<Users>()("Users", {
     const purgeUnverified = (createdBefore: DateTime.Utc) =>
       db
         .delete(users)
-        .where(and(isNull(users.emailVerifiedAt), lte(users.createdAt, millis(createdBefore))));
+        .where(
+          and(
+            isNull(users.emailVerifiedAt),
+            lte(users.createdAt, DateTime.toEpochMillis(createdBefore)),
+          ),
+        );
 
     return {
       find,

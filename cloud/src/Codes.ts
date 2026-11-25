@@ -20,8 +20,6 @@ const MAX_ATTEMPTS = 5;
 
 const encoder = new TextEncoder();
 
-const millis = DateTime.toEpochMillis;
-
 export const wrongCode = () => new InvalidCode({ error: "that code is wrong or has expired" });
 
 const codeMessage = (to: Email, purpose: CodePurpose, code: string): MailMessage => ({
@@ -68,7 +66,7 @@ export class Codes extends Context.Service<Codes>()("Codes", {
       codeHash: string,
       lifetime: Duration.Duration,
     ) {
-      const now = millis(yield* DateTime.now);
+      const now = DateTime.toEpochMillis(yield* DateTime.now);
       const claimed = yield* db
         .insert(emailCodes)
         .values({
@@ -114,7 +112,7 @@ export class Codes extends Context.Service<Codes>()("Codes", {
     });
 
     const redeem = Effect.fnUntraced(function* (email: Email, purpose: CodePurpose, code: string) {
-      const now = millis(yield* DateTime.now);
+      const now = DateTime.toEpochMillis(yield* DateTime.now);
       const [row] = yield* db
         .select({ codeHash: emailCodes.codeHash, expiresAt: emailCodes.expiresAt })
         .from(emailCodes)
@@ -155,7 +153,7 @@ export class Codes extends Context.Service<Codes>()("Codes", {
         .where(purpose === undefined ? eq(emailCodes.email, email) : keyOf(email, purpose));
 
     const purge = (now: DateTime.Utc) =>
-      db.delete(emailCodes).where(lte(emailCodes.expiresAt, millis(now)));
+      db.delete(emailCodes).where(lte(emailCodes.expiresAt, DateTime.toEpochMillis(now)));
 
     return { notice, send, redeem, discard, purge };
   }),

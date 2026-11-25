@@ -44,12 +44,16 @@ export class Blobs extends Context.Service<
             Effect.mapError((cause) => new BlobError({ cause })),
           ),
         removePrefix: (prefix) =>
-          bucket.list({ prefix }).pipe(
-            Effect.flatMap(({ objects }) =>
-              objects.length === 0
-                ? Effect.void
-                : bucket.delete(objects.map((object) => object.key)),
-            ),
+          Effect.gen(function* () {
+            let cursor: string | undefined;
+            do {
+              const page = yield* bucket.list({ prefix, cursor });
+              if (page.objects.length > 0) {
+                yield* bucket.delete(page.objects.map((object) => object.key));
+              }
+              cursor = page.truncated ? page.cursor : undefined;
+            } while (cursor !== undefined);
+          }).pipe(
             perEvent,
             Effect.mapError((cause) => new BlobError({ cause })),
           ),

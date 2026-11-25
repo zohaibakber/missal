@@ -34,6 +34,11 @@ const later = (end: Option.Option<DateTime.Utc>, now: DateTime.Utc) =>
 
 const ownAccess = (error: string) => new OwnAccess({ error });
 
+const notOwn = Effect.fnUntraced(function* (id: string, error: string) {
+  const viewer = yield* Viewer;
+  if (id === viewer.id) return yield* ownAccess(error);
+});
+
 export class People extends Context.Service<People>()("People", {
   make: Effect.gen(function* () {
     const atomic = yield* Atomic;
@@ -107,8 +112,7 @@ export class People extends Context.Service<People>()("People", {
     });
 
     const remove = Effect.fn("People.remove")(function* (id: string) {
-      const viewer = yield* Viewer;
-      if (id === viewer.id) return yield* ownAccess("you cannot delete your own account");
+      yield* notOwn(id, "you cannot delete your own account");
       const user = yield* users.existing(id);
       yield* atomic
         .run([
@@ -121,6 +125,7 @@ export class People extends Context.Service<People>()("People", {
     });
 
     const confirmEmail = Effect.fn("People.confirmEmail")(function* (id: string) {
+      yield* notOwn(id, "you cannot confirm your own email");
       const user = yield* users.existing(id);
       yield* atomic
         .run([users.confirm(user.id, yield* DateTime.now), codes.discard(user.email, "verify")])
@@ -129,6 +134,7 @@ export class People extends Context.Service<People>()("People", {
     });
 
     const grantLicence = Effect.fn("People.grantLicence")(function* (id: string, months: number) {
+      yield* notOwn(id, "you cannot change your own licence");
       const user = yield* users.existing(id);
       const now = yield* DateTime.now;
       const paidUntil = DateTime.add(later(user.paidUntil, now), { months });
@@ -137,12 +143,14 @@ export class People extends Context.Service<People>()("People", {
     });
 
     const endLicence = Effect.fn("People.endLicence")(function* (id: string) {
+      yield* notOwn(id, "you cannot end your own licence");
       const user = yield* users.existing(id);
       yield* users.endLicence(user.id, yield* DateTime.now).pipe(storage("end the licence"));
       return yield* managed(user.id);
     });
 
     const extendTrial = Effect.fn("People.extendTrial")(function* (id: string, days: number) {
+      yield* notOwn(id, "you cannot extend your own trial");
       const user = yield* users.existing(id);
       const now = yield* DateTime.now;
       const trialEndsAt = DateTime.add(later(user.trialEndsAt, now), { days });
@@ -154,10 +162,7 @@ export class People extends Context.Service<People>()("People", {
       id: string,
       password: Redacted.Redacted<string>,
     ) {
-      const viewer = yield* Viewer;
-      if (id === viewer.id) {
-        return yield* ownAccess("change your own password from your account menu");
-      }
+      yield* notOwn(id, "change your own password from your account menu");
       const user = yield* users.existing(id);
       const stored = yield* passwords.hash(password).pipe(Effect.orDie);
       yield* atomic
@@ -171,13 +176,13 @@ export class People extends Context.Service<People>()("People", {
     });
 
     const sendReset = Effect.fn("People.sendReset")(function* (id: string) {
+      yield* notOwn(id, "change your own password from your account menu");
       const user = yield* users.existing(id);
       if (isVerified(user) && !user.disabled) yield* codes.send(user.email, "reset");
     });
 
     const endSessions = Effect.fn("People.endSessions")(function* (id: string) {
-      const viewer = yield* Viewer;
-      if (id === viewer.id) return yield* ownAccess("sign out from your account menu");
+      yield* notOwn(id, "sign out from your account menu");
       const user = yield* users.existing(id);
       yield* sessions.endAll(user.id).pipe(storage("sign out"));
       return yield* managed(user.id);

@@ -1159,6 +1159,7 @@ impl FirListScreen {
                                 )
                                 .keys("Shift+F10")
                                 .dense()
+                                .hover_through()
                                 .on_click(cx.listener(
                                     move |this, _, window, cx| {
                                         let position = window.mouse_position();

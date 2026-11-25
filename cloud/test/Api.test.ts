@@ -56,8 +56,6 @@ const AuthenticationClient = HttpApiMiddleware.layerClient(
 const migrate = Layer.effectDiscard(
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    const failed = (cause: unknown) =>
-      new Migrations.MigrationError({ message: String(cause), cause });
     yield* Migrations.applyMigrations({
       resolved: {
         dir: join(import.meta.dirname, "..", "migrations"),
@@ -68,7 +66,7 @@ const migrate = Layer.effectDiscard(
         query: (text, params) =>
           sql.unsafe<Record<string, unknown>>(text, params).pipe(
             Effect.map((rows) => [...rows]),
-            Effect.mapError(failed),
+            Effect.mapError(Migrations.migrationError("query the test database")),
           ),
         batch: (scripts) =>
           sql
@@ -77,7 +75,10 @@ const migrate = Layer.effectDiscard(
                 sql.unsafe(statement),
               ),
             )
-            .pipe(Effect.asVoid, Effect.mapError(failed)),
+            .pipe(
+              Effect.asVoid,
+              Effect.mapError(Migrations.migrationError("migrate the test database")),
+            ),
       },
     });
   }).pipe(Effect.provide(NodeServices.layer), Effect.orDie),
@@ -203,8 +204,6 @@ const registerAdmin = Effect.fn(function* (email = ADMIN) {
   return session;
 });
 
-const millis = (time: DateTime.Utc) => DateTime.toEpochMillis(time);
-
 describe("accounts", () => {
   it.effect("signing up mails a code, and verifying signs in with a seven-day trial", () =>
     Effect.gen(function* () {
@@ -224,7 +223,9 @@ describe("accounts", () => {
       expect(session.account.email).toBe(READER);
       expect(session.account.role).toBe("member");
       expect(session.account.licence.status).toBe("trial");
-      expect(millis(session.account.licence.until)).toBe(Duration.toMillis(Duration.days(7)));
+      expect(DateTime.toEpochMillis(session.account.licence.until)).toBe(
+        Duration.toMillis(Duration.days(7)),
+      );
       expect((yield* verify(READER, code).pipe(Effect.flip))._tag).toBe("InvalidCode");
 
       yield* useToken(session.accessToken);
@@ -240,7 +241,9 @@ describe("accounts", () => {
       const session = yield* signIn(READER);
       expect(session.account.email).toBe(READER);
       expect(session.account.licence.status).toBe("trial");
-      expect(millis(session.account.licence.until)).toBe(Duration.toMillis(Duration.days(7)));
+      expect(DateTime.toEpochMillis(session.account.licence.until)).toBe(
+        Duration.toMillis(Duration.days(7)),
+      );
 
       yield* signUp(READER, "someone-else-123");
       expect(yield* mailTo(READER)).toHaveLength(0);

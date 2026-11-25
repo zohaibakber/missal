@@ -39,7 +39,7 @@ interface NextVersion {
   readonly restoredFrom: number | null;
 }
 
-const decodeTemplate = Schema.decodeUnknownEffect(Template);
+const decodeTemplate = Schema.decodeUnknownEffect(Schema.OptionFromUndefinedOr(Template));
 const decodeTemplates = Schema.decodeUnknownEffect(Schema.Array(Template));
 const decodeManaged = Schema.decodeUnknownEffect(Schema.Array(ManagedTemplate));
 const decodeVersions = Schema.decodeUnknownEffect(Schema.Array(TemplateVersion));
@@ -76,9 +76,7 @@ export class Library extends Context.Service<Library>()("Library", {
         .from(templates)
         .where(eq(templates.id, id))
         .pipe(
-          Effect.flatMap((rows) =>
-            rows[0] === undefined ? Effect.succeedNone : Effect.asSome(decodeTemplate(rows[0])),
-          ),
+          Effect.flatMap((rows) => decodeTemplate(rows[0])),
           storage("read the template"),
         );
 
@@ -215,7 +213,10 @@ export class Library extends Context.Service<Library>()("Library", {
             .insert(templateVersions)
             .values({ templateId: id, ...shared, objectKey: key, publishedAt: now }),
         ])
-        .pipe(storage("publish the template"));
+        .pipe(
+          storage("publish the template"),
+          Effect.onError(() => blobs.remove(key).pipe(Effect.ignore)),
+        );
       return { id, version: 1 };
     });
 
@@ -226,7 +227,7 @@ export class Library extends Context.Service<Library>()("Library", {
       const version = current.value.version + 1;
       const key = objectKey(id, version, yield* random.uuidV4());
       yield* blobs.put(key, upload.content).pipe(storage("store the template"));
-      const written = yield* advance(
+      yield* advance(
         current.value,
         {
           name: upload.name,
@@ -237,11 +238,10 @@ export class Library extends Context.Service<Library>()("Library", {
           restoredFrom: null,
         },
         by,
+      ).pipe(
+        Effect.flatMap((written) => (written ? Effect.void : Effect.fail(conflict()))),
+        Effect.onError(() => blobs.remove(key).pipe(Effect.ignore)),
       );
-      if (!written) {
-        yield* blobs.remove(key).pipe(Effect.ignore);
-        return yield* conflict();
-      }
       return { id: current.value.id, version };
     });
 

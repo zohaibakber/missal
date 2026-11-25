@@ -16,7 +16,7 @@ import { storage } from "./Failures.ts";
 import { Session, SessionId, type User } from "./Models.ts";
 import { sessions } from "./Schema.ts";
 import { ACCESS_SECONDS, Tokens } from "./Tokens.ts";
-import { millis, toAccount, Users } from "./Users.ts";
+import { toAccount, Users } from "./Users.ts";
 
 const LIFETIME = Duration.days(60);
 const SECRET_BYTES = 32;
@@ -30,7 +30,7 @@ export type Activity = typeof Activity.Type;
 
 const encoder = new TextEncoder();
 
-const decodeSession = Schema.decodeUnknownEffect(Session);
+const decodeSession = Schema.decodeUnknownEffect(Schema.OptionFromUndefinedOr(Session));
 const decodeActivity = Schema.decodeUnknownEffect(Schema.Array(Activity));
 const encodeInsert = Schema.encodeEffect(Session.insert);
 
@@ -60,9 +60,7 @@ export class Sessions extends Context.Service<Sessions>()("Sessions", {
         .from(sessions)
         .where(eq(sessions.id, id))
         .pipe(
-          Effect.flatMap((rows) =>
-            rows[0] === undefined ? Effect.succeedNone : Effect.asSome(decodeSession(rows[0])),
-          ),
+          Effect.flatMap((rows) => decodeSession(rows[0])),
           storage("refresh the session"),
         );
 
@@ -120,7 +118,7 @@ export class Sessions extends Context.Service<Sessions>()("Sessions", {
         !user.value.disabled &&
         DateTime.isGreaterThan(session.value.expiresAt, now) &&
         sameText(presented, session.value.refreshHash);
-      if (!valid || Option.isNone(user)) {
+      if (!valid) {
         yield* db
           .delete(sessions)
           .where(eq(sessions.id, sessionId))
@@ -132,8 +130,8 @@ export class Sessions extends Context.Service<Sessions>()("Sessions", {
         .update(sessions)
         .set({
           refreshHash: yield* hashSecret(next),
-          lastUsedAt: millis(now),
-          expiresAt: millis(DateTime.addDuration(now, LIFETIME)),
+          lastUsedAt: DateTime.toEpochMillis(now),
+          expiresAt: DateTime.toEpochMillis(DateTime.addDuration(now, LIFETIME)),
         })
         .where(and(eq(sessions.id, sessionId), eq(sessions.refreshHash, session.value.refreshHash)))
         .returning({ id: sessions.id })
@@ -164,7 +162,7 @@ export class Sessions extends Context.Service<Sessions>()("Sessions", {
         .from(sessions)
         .where(
           and(
-            gt(sessions.expiresAt, millis(now)),
+            gt(sessions.expiresAt, DateTime.toEpochMillis(now)),
             userId === null ? undefined : eq(sessions.userId, userId),
           ),
         )
@@ -172,7 +170,7 @@ export class Sessions extends Context.Service<Sessions>()("Sessions", {
         .pipe(Effect.flatMap(decodeActivity), storage("read the sessions"));
 
     const purge = (now: DateTime.Utc) =>
-      db.delete(sessions).where(lte(sessions.expiresAt, millis(now)));
+      db.delete(sessions).where(lte(sessions.expiresAt, DateTime.toEpochMillis(now)));
 
     return { issue, prepare, open, refresh, revoke, endAll, activity, purge };
   }),

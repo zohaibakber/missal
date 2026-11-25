@@ -668,6 +668,7 @@ pub struct IconButton {
     disabled: bool,
     show_hover: bool,
     show_focus: bool,
+    hover_through: bool,
     color: Option<Hsla>,
     focus: Option<FocusHandle>,
     on_click: Option<ClickHandler>,
@@ -689,6 +690,7 @@ pub fn icon_button(
         disabled: false,
         show_hover: false,
         show_focus: false,
+        hover_through: false,
         color: None,
         focus: None,
         on_click: None,
@@ -749,6 +751,11 @@ impl IconButton {
         self.show_focus = true;
         self
     }
+
+    pub fn hover_through(mut self) -> Self {
+        self.hover_through = true;
+        self
+    }
 }
 
 impl RenderOnce for IconButton {
@@ -776,7 +783,7 @@ impl RenderOnce for IconButton {
             .rounded(px(if self.dense { RADIUS } else { RADIUS_LG }))
             .text_color(color)
             .cursor_pointer()
-            .occlude()
+            .when(!self.hover_through, |this| this.occlude())
             .when(self.show_hover, |this| this.bg(hover))
             .when(self.show_focus, |this| this.shadow(focus_shadows.clone()))
             .focus_visible(move |style| style.shadow(focus_shadows))
