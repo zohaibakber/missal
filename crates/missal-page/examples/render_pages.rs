@@ -72,7 +72,8 @@ fn main() {
         &catalog,
         &values,
         missal_core::DisplayMode::Values,
-    );
+    )
+    .for_document(&document);
     let source = if args.iter().any(|a| a == "--fir") {
         DocSource::new(&document, &filled)
     } else {

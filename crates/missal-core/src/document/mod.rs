@@ -398,6 +398,10 @@ impl Document {
         project::unbind(self, label_of);
     }
 
+    pub fn for_each_field(&self, visit: &mut dyn FnMut(&Field)) {
+        project::for_each_field(self, visit);
+    }
+
     pub fn for_each_field_mut(&mut self, visit: &mut dyn FnMut(&mut Field)) {
         project::for_each_field_mut(self, visit);
     }
