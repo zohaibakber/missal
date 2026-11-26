@@ -1037,9 +1037,6 @@ impl<'p, 'b> Converter<'p, 'b> {
         let style = self.styles.table(direct.style.as_deref());
         let mut props = style.tblpr.clone();
         props.overlay(&direct);
-        if props.floating {
-            self.notice(Notice::FloatingFlattened);
-        }
         let rtl = props.bidi.unwrap_or(false);
         let grid: Vec<f64> = child(node, "tblGrid").map_or_default(|grid| {
             grid.children()
