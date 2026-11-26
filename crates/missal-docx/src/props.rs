@@ -513,6 +513,36 @@ pub struct TableProps {
     pub cell_margins: Sides<f64>,
     pub shading: Option<Option<Rgb>>,
     pub floating: bool,
+    pub float_x: Option<FloatX>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FloatAnchor {
+    Page,
+    Margin,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FloatX {
+    pub anchor: FloatAnchor,
+    pub offset: f64,
+    pub align: Option<Jc>,
+}
+
+fn float_x(node: Node) -> FloatX {
+    FloatX {
+        anchor: match attr(node, "horzAnchor") {
+            Some("page") => FloatAnchor::Page,
+            _ => FloatAnchor::Margin,
+        },
+        offset: twips(node, "tblpX").unwrap_or(0.0),
+        align: match attr(node, "tblpXSpec") {
+            Some("center") => Some(Jc::Center),
+            Some("right" | "outside") => Some(Jc::End),
+            Some("left" | "inside") => Some(Jc::Start),
+            _ => None,
+        },
+    }
 }
 
 impl TableProps {
@@ -542,7 +572,10 @@ impl TableProps {
                 "tblBorders" => props.borders = borders(element),
                 "tblCellMar" => props.cell_margins = margins(element),
                 "shd" => props.shading = Some(shading(element)),
-                "tblpPr" => props.floating = true,
+                "tblpPr" => {
+                    props.floating = true;
+                    props.float_x = Some(float_x(element));
+                }
                 _ => {}
             }
         }
@@ -554,6 +587,9 @@ impl TableProps {
         self.borders.overlay(&other.borders);
         self.cell_margins.overlay(&other.cell_margins);
         self.floating |= other.floating;
+        if other.float_x.is_some() {
+            self.float_x = other.float_x;
+        }
     }
 }
 

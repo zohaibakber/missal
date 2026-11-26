@@ -191,15 +191,24 @@ pub fn import(
         sections,
     );
     converter.notices = notices;
-    converter.default_tab = settings_text
-        .as_deref()
-        .and_then(|text| parse(text).ok())
-        .and_then(|xml| {
-            child(xml.root_element(), "defaultTabStop")
-                .and_then(|node| crate::xml::twips(node, "val"))
+    let settings = settings_text.as_deref().and_then(|text| parse(text).ok());
+    let settings = settings.as_ref().map(|xml| xml.root_element());
+    converter.default_tab = settings
+        .and_then(|root| {
+            child(root, "defaultTabStop").and_then(|node| crate::xml::twips(node, "val"))
         })
         .filter(|twips| *twips > 0.0)
         .unwrap_or(720.0);
+    converter.compatibility_mode = settings
+        .and_then(|root| child(root, "compat"))
+        .and_then(|compat| {
+            compat.children().find(|setting| {
+                crate::xml::is_w(*setting, "compatSetting")
+                    && crate::xml::attr(*setting, "name") == Some("compatibilityMode")
+            })
+        })
+        .and_then(|setting| crate::xml::attr(setting, "val")?.parse().ok())
+        .unwrap_or(12);
     let body_blocks = converter.body(body);
     let header_blocks = header.map_or_default(|id| decorations(&mut converter, &rels, &id));
     let footer_blocks = footer.map_or_default(|id| decorations(&mut converter, &rels, &id));

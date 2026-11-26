@@ -237,10 +237,9 @@ pub(crate) fn measure_table(
     };
     let mut computed = compute_element(&mut ctx.cache.styles, parent, base, &table.props, &[]);
     if imported {
-        computed.boxp.margin[1] = Length::Px(0.0);
-        computed.boxp.margin[3] = Length::Px(0.0);
-        computed.boxp.margin_inline = [None; 2];
-        computed.boxp.max_width = Some(Length::Percent(100.0));
+        // Word lets a table run into the page margins: a negative tblInd and a
+        // tblW wider than the text column are common in the bundled templates.
+        computed.boxp.max_width = None;
     }
     computed.text.align = missal_text::Align::Start;
     let table_text = computed.text.clone();
@@ -256,7 +255,9 @@ pub(crate) fn measure_table(
         width = width.min(max.resolve(table_text.size, container));
     }
     width = width.max(0.0);
-    let x = if rtl {
+    let x = if rtl && imported {
+        margins.left + container - width
+    } else if rtl {
         margins.left + (container - width).max(0.0)
     } else {
         margins.left
