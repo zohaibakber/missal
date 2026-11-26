@@ -58,15 +58,16 @@ pub enum FirProperty {
     Writer,
     Recovery,
     Body,
-    Imei1,
-    Imei2,
-    Sim1,
-    Sim2,
-    ZimniDate,
+    // Documents store a field's property as this discriminant. 14 and 16 were
+    // the second IMEI and SIM slots before those became lists; the decoder
+    // reads them as index 2 of `Imei` and `Sim`.
+    Imei = 13,
+    Sim = 15,
+    ZimniDate = 17,
 }
 
 impl FirProperty {
-    pub const ALL: [FirProperty; 18] = [
+    pub const ALL: [FirProperty; 16] = [
         FirProperty::FirNo,
         FirProperty::Complainant,
         FirProperty::Date,
@@ -80,12 +81,27 @@ impl FirProperty {
         FirProperty::Writer,
         FirProperty::Recovery,
         FirProperty::Body,
-        FirProperty::Imei1,
-        FirProperty::Imei2,
-        FirProperty::Sim1,
-        FirProperty::Sim2,
+        FirProperty::Imei,
+        FirProperty::Sim,
         FirProperty::ZimniDate,
     ];
+
+    /// Reads a property stored by [`FirProperty`]'s discriminant, with the
+    /// index the old single-value IMEI and SIM slots imply.
+    pub fn decode(code: u8, index: Option<u32>) -> Option<(FirProperty, Option<u32>)> {
+        Some(match code {
+            13 => (FirProperty::Imei, index.or(Some(1))),
+            14 => (FirProperty::Imei, Some(2)),
+            15 => (FirProperty::Sim, index.or(Some(1))),
+            16 => (FirProperty::Sim, Some(2)),
+            _ => (
+                *FirProperty::ALL
+                    .iter()
+                    .find(|property| **property as u8 == code)?,
+                index,
+            ),
+        })
+    }
 
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -102,10 +118,8 @@ impl FirProperty {
             FirProperty::Writer => "writer",
             FirProperty::Recovery => "recovery",
             FirProperty::Body => "body",
-            FirProperty::Imei1 => "imei_1",
-            FirProperty::Imei2 => "imei_2",
-            FirProperty::Sim1 => "sim_1",
-            FirProperty::Sim2 => "sim_2",
+            FirProperty::Imei => "imei",
+            FirProperty::Sim => "sim",
             FirProperty::ZimniDate => "zimni_date",
         }
     }
@@ -125,10 +139,8 @@ impl FirProperty {
             FirProperty::Writer => "تحریر کنندہ",
             FirProperty::Recovery => "برآمدگی",
             FirProperty::Body => "مختصر حالات",
-            FirProperty::Imei1 => "ایمی نمبر 1",
-            FirProperty::Imei2 => "ایمی نمبر 2",
-            FirProperty::Sim1 => "سم نمبر 1",
-            FirProperty::Sim2 => "سم نمبر 2",
+            FirProperty::Imei => "ایمی نمبر",
+            FirProperty::Sim => "سم نمبر",
             FirProperty::ZimniDate => "تاریخ ضمنی",
         }
     }
@@ -146,6 +158,8 @@ impl FirProperty {
                 | FirProperty::Witness
                 | FirProperty::Zimni
                 | FirProperty::ZimniDate
+                | FirProperty::Imei
+                | FirProperty::Sim
         )
     }
 }
@@ -206,10 +220,8 @@ pub struct Fir {
     pub writer: String,
     pub recovery: String,
     pub body: String,
-    pub imei_1: String,
-    pub imei_2: String,
-    pub sim_1: String,
-    pub sim_2: String,
+    pub imei: Vec<String>,
+    pub sim: Vec<String>,
     pub status: FirStatus,
 }
 
@@ -230,10 +242,8 @@ impl Fir {
             FirProperty::Writer => FirValue::Text(&self.writer),
             FirProperty::Recovery => FirValue::Text(&self.recovery),
             FirProperty::Body => FirValue::Text(&self.body),
-            FirProperty::Imei1 => FirValue::Text(&self.imei_1),
-            FirProperty::Imei2 => FirValue::Text(&self.imei_2),
-            FirProperty::Sim1 => FirValue::Text(&self.sim_1),
-            FirProperty::Sim2 => FirValue::Text(&self.sim_2),
+            FirProperty::Imei => FirValue::List(&self.imei),
+            FirProperty::Sim => FirValue::List(&self.sim),
         }
     }
 
@@ -252,6 +262,13 @@ impl Fir {
                 .iter()
                 .map(|value| required(value, field).map_err(|_| Invalid::EmptyEntry(field)))
                 .collect::<Result<Vec<_>, _>>()
+        };
+        let numbers = |values: &[String]| {
+            values
+                .iter()
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty())
+                .collect::<Vec<_>>()
         };
         let accused = entries(&self.accused, "accused")?;
         if accused.is_empty() {
@@ -279,10 +296,8 @@ impl Fir {
             writer: optional(&self.writer),
             recovery: optional(&self.recovery),
             body: optional(&self.body),
-            imei_1: optional(&self.imei_1),
-            imei_2: optional(&self.imei_2),
-            sim_1: optional(&self.sim_1),
-            sim_2: optional(&self.sim_2),
+            imei: numbers(&self.imei),
+            sim: numbers(&self.sim),
             status: self.status,
         })
     }

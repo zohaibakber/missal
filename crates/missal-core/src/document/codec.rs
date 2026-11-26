@@ -651,13 +651,13 @@ impl<'a> Reader<'a> {
                     .ok_or(DocumentError::Corrupt("field id"))?,
             ),
             1 => {
-                let property = *FirProperty::ALL
-                    .get(usize::from(self.byte()?))
-                    .ok_or(DocumentError::Corrupt("field property"))?;
+                let code = self.byte()?;
                 let index = self.opt_u32()?;
                 if index == Some(0) {
                     return Err(DocumentError::Corrupt("field index"));
                 }
+                let (property, index) = FirProperty::decode(code, index)
+                    .ok_or(DocumentError::Corrupt("field property"))?;
                 FieldReference::Fir(FirField { property, index })
             }
             2 => FieldReference::Unresolved(self.string()?),

@@ -839,6 +839,8 @@ impl FieldsPanel {
             ("ملزمان", &fir.accused),
             ("گواہان", &fir.witness),
             ("ضمنی", &zimni),
+            ("ایمی نمبر", &fir.imei),
+            ("سم نمبر", &fir.sim),
         ] {
             let list = if items.iter().all(|item| item.trim().is_empty()) {
                 dash()
@@ -872,10 +874,6 @@ impl FieldsPanel {
             ("تحریر کنندہ", &fir.writer),
             ("برآمدگی", &fir.recovery),
             ("مختصر حالات", &fir.body),
-            ("ایمی نمبر 1", &fir.imei_1),
-            ("سم نمبر 1", &fir.sim_1),
-            ("ایمی نمبر 2", &fir.imei_2),
-            ("سم نمبر 2", &fir.sim_2),
         ] {
             push(&mut out, name, text(value).unwrap_or_else(dash));
         }

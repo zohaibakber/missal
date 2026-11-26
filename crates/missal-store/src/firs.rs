@@ -56,6 +56,13 @@ fn zimni_dates(entries: &[Zimni]) -> String {
     }
 }
 
+fn numbers(list: &str, legacy_second: &str) -> Vec<String> {
+    let mut numbers = split(list);
+    numbers.push(legacy_second.to_owned());
+    numbers.retain(|number| !number.trim().is_empty());
+    numbers
+}
+
 pub(crate) fn split(joined: &str) -> Vec<String> {
     if joined.is_empty() {
         Vec::new()
@@ -105,10 +112,12 @@ fn write_values(fir: &Fir) -> [Box<dyn ToSql + '_>; 19] {
         Box::new(&fir.investigation_officer),
         Box::new(&fir.writer),
         Box::new(&fir.recovery),
-        Box::new(&fir.imei_1),
-        Box::new(&fir.imei_2),
-        Box::new(&fir.sim_1),
-        Box::new(&fir.sim_2),
+        // The imei_1 and sim_1 columns hold the whole list; imei_2 and sim_2
+        // only carry a second number saved before these became lists.
+        Box::new(join(&fir.imei)),
+        Box::new(""),
+        Box::new(join(&fir.sim)),
+        Box::new(""),
         Box::new(&fir.body),
         Box::new(zimni_dates(&fir.zimni)),
     ]
@@ -141,10 +150,8 @@ fn raw_fir(row: &Row<'_>) -> rusqlite::Result<RawFir> {
             investigation_officer: text(11)?,
             writer: text(12)?,
             recovery: text(13)?,
-            imei_1: text(14)?,
-            imei_2: text(15)?,
-            sim_1: text(16)?,
-            sim_2: text(17)?,
+            imei: numbers(row.get_ref(14)?.as_str()?, row.get_ref(15)?.as_str()?),
+            sim: numbers(row.get_ref(16)?.as_str()?, row.get_ref(17)?.as_str()?),
             body: text(18)?,
             status: FirStatus::Open,
         },
@@ -414,5 +421,20 @@ impl Store {
         let saved = overrides(&transaction, fir_id, operation)?;
         transaction.commit().map_err(failed(operation))?;
         Ok(saved)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn second_mobile_number_saved_before_lists_is_kept() {
+        assert_eq!(numbers("", ""), Vec::<String>::new());
+        assert_eq!(numbers("111", ""), vec!["111"]);
+        assert_eq!(numbers("111", "222"), vec!["111", "222"]);
+        assert_eq!(numbers("", "222"), vec!["222"]);
+        let list = vec!["111".to_owned(), "222".to_owned(), "333".to_owned()];
+        assert_eq!(numbers(&join(&list), ""), list);
     }
 }
