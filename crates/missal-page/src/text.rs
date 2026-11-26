@@ -262,6 +262,7 @@ pub struct FieldSpan {
 }
 
 pub(crate) struct InlineContent {
+    pub tabs: Vec<usize>,
     pub text: AttributedText,
     pub map: OffsetMap,
     pub boxes: Vec<(Range<usize>, InlineBox)>,
@@ -285,16 +286,20 @@ struct Builder<'a> {
     backgrounds: Vec<BackgroundSpan>,
     field_spans: Vec<FieldSpan>,
     spaces: Vec<SpaceRun>,
+    tabs: Vec<usize>,
 }
 
 struct SpaceRun {
     range: Range<usize>,
+    run: Range<usize>,
     face: FaceId,
     size: f32,
     word_spacing: f32,
 }
 
 const ARABIC_SPACE_UNITS: f32 = 5.0;
+const URDU_FACE: FaceId = FaceId(0);
+const TAB_FONT_SIZE: f32 = 1.0;
 
 fn script_of(c: char) -> Option<bool> {
     let cp = c as u32;
@@ -372,14 +377,15 @@ impl Builder<'_> {
     }
 
     fn word_spacing(&mut self, start: usize, end: usize, props: &TextProps) {
-        if props.word_spacing == 0.0 {
+        let face = props.primary_face();
+        if props.word_spacing == 0.0 && face != URDU_FACE {
             return;
         }
-        let face = props.primary_face();
         for (i, c) in self.text[start..end].char_indices() {
             if c == ' ' || c == '\u{A0}' {
                 self.spaces.push(SpaceRun {
                     range: start + i..start + i + c.len_utf8(),
+                    run: start..end,
                     face,
                     size: props.size,
                     word_spacing: props.word_spacing,
@@ -393,9 +399,21 @@ impl Builder<'_> {
         let inter_space = inter.space_advance / inter.units_per_em;
         let spaces = std::mem::take(&mut self.spaces);
         for space in spaces {
-            let arabic = arabic_context(&self.text, space.range.clone());
+            let arabic = if space.word_spacing == 0.0 {
+                let local = space.range.start - space.run.start..space.range.end - space.run.start;
+                let run = &self.text[space.run.clone()];
+                if !run.chars().any(|c| script_of(c) == Some(true)) {
+                    continue;
+                }
+                arabic_context(run, local)
+            } else {
+                arabic_context(&self.text, space.range.clone())
+            };
+            if space.word_spacing == 0.0 && !arabic {
+                continue;
+            }
             let metrics = fonts::metrics(space.face);
-            let natural = if arabic && space.face == FaceId(0) {
+            let natural = if arabic && space.face == URDU_FACE {
                 ARABIC_SPACE_UNITS / metrics.units_per_em * space.size
             } else {
                 metrics.space_advance / metrics.units_per_em * space.size
@@ -427,6 +445,13 @@ impl Builder<'_> {
         let outer_end = self.text.len();
         self.style_attrs(start..end, props);
         self.word_spacing(start, end, props);
+        for (index, c) in content.char_indices() {
+            if c == '\t' {
+                self.text
+                    .replace_range(start + index..start + index + 1, " ");
+                self.tabs.push(start + index);
+            }
+        }
         if atomic {
             self.segs.push(Seg {
                 logical: self.logical..self.logical + logical_len,
@@ -583,6 +608,7 @@ pub(crate) fn build_inline(
         backgrounds: Vec::new(),
         field_spans: Vec::new(),
         spaces: Vec::new(),
+        tabs: Vec::new(),
     };
     let inherited = BoxProps {
         decoration: Decoration::default(),
@@ -603,6 +629,7 @@ pub(crate) fn build_inline(
         objects: builder.objects,
     };
     InlineContent {
+        tabs: builder.tabs,
         text,
         map: OffsetMap {
             segs: builder.segs,
@@ -932,6 +959,86 @@ fn layout_paragraph(
     engine.layout(text, &paragraph, Some(width.max(0.0)))
 }
 
+fn with_tab_widths(text: &AttributedText, tabs: &[usize], widths: &[f32]) -> AttributedText {
+    let inter = fonts::metrics(FaceId(1));
+    let natural = inter.space_advance / inter.units_per_em * TAB_FONT_SIZE;
+    let mut text = text.clone();
+    for (offset, width) in tabs.iter().zip(widths) {
+        let range = *offset..offset + 1;
+        text.spans
+            .push((range.clone(), Attr::Family(FontFamily::Interface)));
+        text.spans.push((range.clone(), Attr::Size(TAB_FONT_SIZE)));
+        text.spans
+            .push((range, Attr::WordSpacing((width - natural).max(0.0))));
+    }
+    text
+}
+
+fn tab_widths(layout: &TextLayout, tabs: &[usize], current: &[f32], props: &TextProps) -> Vec<f32> {
+    let rtl = layout.is_rtl();
+    let width = layout.width();
+    let from_start = |x: f32| if rtl { width - x } else { x };
+    let lines = layout.lines();
+    let mut widths = Vec::with_capacity(tabs.len());
+    let mut shift = 0.0;
+    let mut previous_line = usize::MAX;
+    for (index, offset) in tabs.iter().enumerate() {
+        let caret = layout.caret(TextPosition::downstream(*offset));
+        if caret.line != previous_line {
+            shift = 0.0;
+            previous_line = caret.line;
+        }
+        let x = from_start(caret.x) + shift;
+        let after = layout.caret(TextPosition::downstream(offset + 1));
+        let segment_end = match tabs.get(index + 1) {
+            Some(next) if layout.caret(TextPosition::downstream(*next)).line == caret.line => {
+                from_start(layout.caret(TextPosition::downstream(*next)).x)
+            }
+            _ => lines.get(caret.line).map_or(from_start(after.x), |line| {
+                from_start(if rtl { line.left } else { line.right })
+            }),
+        };
+        let segment = (segment_end - from_start(after.x)).max(0.0);
+        let next = props.tabs.next(x, segment);
+        shift += next - current[index];
+        widths.push(next);
+    }
+    widths
+}
+
+fn layout_with_tabs(
+    engine: &mut TextEngine,
+    content: &InlineContent,
+    props: &TextProps,
+    width: f32,
+    indent: f32,
+) -> Arc<TextLayout> {
+    let mut widths = vec![0.0; content.tabs.len()];
+    let mut layout = layout_paragraph(
+        engine,
+        &with_tab_widths(&content.text, &content.tabs, &widths),
+        props,
+        width,
+        indent,
+    );
+    for _ in 0..4 {
+        let next = tab_widths(&layout, &content.tabs, &widths, props);
+        let settled = next.iter().zip(&widths).all(|(a, b)| (a - b).abs() < 0.5);
+        if settled {
+            break;
+        }
+        widths = next;
+        layout = layout_paragraph(
+            engine,
+            &with_tab_widths(&content.text, &content.tabs, &widths),
+            props,
+            width,
+            indent,
+        );
+    }
+    layout
+}
+
 pub(crate) fn measure_text_block(
     engine: &mut TextEngine,
     input: TextBlockInput<'_>,
@@ -963,7 +1070,11 @@ pub(crate) fn measure_text_block(
         (border_width - paddings.horizontal() - border_widths.horizontal()).max(0.0);
     let indent = text_props.indent.resolve(text_props.size, content_width);
     let content = build_inline(computed, input.inlines, fields, styles);
-    let layout = layout_paragraph(engine, &content.text, text_props, content_width, indent);
+    let layout = if content.tabs.is_empty() {
+        layout_paragraph(engine, &content.text, text_props, content_width, indent)
+    } else {
+        layout_with_tabs(engine, &content, text_props, content_width, indent)
+    };
     let strut = InlineBox::of(text_props);
     let mut lines = Vec::with_capacity(layout.lines().len().max(1));
     let content_top = border_widths.top + paddings.top;

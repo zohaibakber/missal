@@ -61,6 +61,7 @@ fn attr_property(attr: &Attr) -> Option<StyleProperty<'_, Rgba>> {
     Some(match attr {
         Attr::Family(family) => family_property(family),
         Attr::Size(size) => StyleProperty::FontSize(*size),
+        Attr::WordSpacing(spacing) => StyleProperty::WordSpacing(*spacing),
         Attr::Weight(weight) => StyleProperty::FontWeight(FontWeight::new(*weight as f32)),
         Attr::Italic(italic) => StyleProperty::FontStyle(if *italic {
             FontStyle::Italic

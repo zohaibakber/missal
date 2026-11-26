@@ -615,9 +615,36 @@ impl<'a> Body<'a> {
         {
             shading(&mut self.out, color);
         }
-        self.bidi(rtl);
         let size = mark_css.font_size();
         let margins = css.box_lengths("margin");
+        if let Some(stops) = css.get("tab-stops") {
+            let [_, start, _, _] = margins.map_or([None; 4], |margins| logical(margins, rtl));
+            let origin = start.unwrap_or(0.0);
+            let mut tabs = String::new();
+            for stop in stops.split(',') {
+                let mut parts = stop.split_whitespace();
+                let Some(position) = parts
+                    .next()
+                    .and_then(|value| value.trim_end_matches("px").parse::<f64>().ok())
+                else {
+                    continue;
+                };
+                let kind = match parts.next() {
+                    Some("center") => "center",
+                    Some("end") => "right",
+                    _ => "left",
+                };
+                let _ = write!(
+                    tabs,
+                    r#"<w:tab w:val="{kind}" w:pos="{}"/>"#,
+                    twips(position + origin)
+                );
+            }
+            if !tabs.is_empty() {
+                let _ = write!(self.out, "<w:tabs>{tabs}</w:tabs>");
+            }
+        }
+        self.bidi(rtl);
         let mut spacing = String::new();
         if para.rule {
             spacing.push_str(r#" w:before="150" w:after="150""#);

@@ -106,6 +106,7 @@ impl Hash for TextStyle {
 pub enum Attr {
     Family(FontFamily),
     Size(f32),
+    WordSpacing(f32),
     Weight(u16),
     Italic(bool),
     Underline(bool),
@@ -121,7 +122,7 @@ impl Hash for Attr {
         std::mem::discriminant(self).hash(state);
         match self {
             Attr::Family(family) => family.hash(state),
-            Attr::Size(size) => size.to_bits().hash(state),
+            Attr::Size(size) | Attr::WordSpacing(size) => size.to_bits().hash(state),
             Attr::Weight(weight) => weight.hash(state),
             Attr::Italic(v) | Attr::Underline(v) | Attr::Strikethrough(v) => v.hash(state),
             Attr::Color(color) | Attr::Background(color) => color.hash(state),

@@ -179,6 +179,7 @@ impl RunFormat {
         if let Some(spacing) = self.letter_spacing_px {
             css.push("letter-spacing", &px(spacing));
         }
+        css.push("word-spacing", "0px");
         if self.rtl {
             css.push("direction", "rtl");
         }

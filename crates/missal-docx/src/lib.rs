@@ -131,6 +131,7 @@ pub fn import(
     let styles_text = load("/styles");
     let numbering_text = load("/numbering");
     let theme_text = load("/theme");
+    let settings_text = load("/settings");
     let core_target = package
         .relationships("")
         .of_kind("/core-properties")
@@ -190,6 +191,15 @@ pub fn import(
         sections,
     );
     converter.notices = notices;
+    converter.default_tab = settings_text
+        .as_deref()
+        .and_then(|text| parse(text).ok())
+        .and_then(|xml| {
+            child(xml.root_element(), "defaultTabStop")
+                .and_then(|node| crate::xml::twips(node, "val"))
+        })
+        .filter(|twips| *twips > 0.0)
+        .unwrap_or(720.0);
     let body_blocks = converter.body(body);
     let header_blocks = header.map_or_default(|id| decorations(&mut converter, &rels, &id));
     let footer_blocks = footer.map_or_default(|id| decorations(&mut converter, &rels, &id));
@@ -260,10 +270,7 @@ fn title(core: &str) -> Option<String> {
 
 fn inline_content(inline: &Inline) -> bool {
     match inline {
-        Inline::Text(text) => text
-            .text
-            .chars()
-            .any(|c| !c.is_whitespace() && c != '\u{2003}'),
+        Inline::Text(text) => text.text.chars().any(|c| !c.is_whitespace()),
         Inline::Field(_) => true,
         Inline::Link(link) => link.children.iter().any(inline_content),
         Inline::LineBreak(_) => false,

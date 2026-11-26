@@ -15,7 +15,8 @@ use crate::format::{
 };
 use crate::package::{Package, Relationships};
 use crate::props::{
-    Border, CellProps, Jc, ParaProps, Rgb, RowProps, RunProps, Sides, TableProps, VMerge, Width,
+    Border, CellProps, Jc, ParaProps, Rgb, RowProps, RunProps, Sides, TabDef, TabKind, TableProps,
+    VMerge, Width,
 };
 use crate::styles::{Numbering, Resolved, Styles, Theme};
 use crate::xml::{
@@ -83,6 +84,7 @@ struct Layout {
     font: RunFormat,
     shading: Option<Rgb>,
     borders: Sides<Option<Border>>,
+    tabs: Vec<TabDef>,
 }
 
 struct ListInfo {
@@ -98,9 +100,20 @@ struct ParaItem {
     list: Option<ListInfo>,
 }
 
+struct FloatBox {
+    x: f64,
+    width: f64,
+    height: f64,
+    offset: f64,
+    border: Option<f64>,
+    padding: [f64; 4],
+    blocks: Vec<Block>,
+}
+
 enum Item {
     Para(Box<ParaItem>),
     Table(Table),
+    Floats(Vec<FloatBox>),
     PageBreak,
     Section(usize),
 }
@@ -223,6 +236,7 @@ pub struct Converter<'p, 'b> {
     css_cache: HashMap<(usize, u64, u8), Option<Style>>,
     pub sections: Vec<Section>,
     section_index: usize,
+    pub default_tab: f64,
 }
 
 impl<'p, 'b> Converter<'p, 'b> {
@@ -259,6 +273,7 @@ impl<'p, 'b> Converter<'p, 'b> {
             css_cache: HashMap::new(),
             sections,
             section_index: 0,
+            default_tab: 720.0,
         }
     }
 
@@ -469,8 +484,22 @@ impl<'p, 'b> Converter<'p, 'b> {
                 list: list.take(),
             })));
         }
+        let mut floats = Vec::new();
         for content in deferred {
-            self.container_into(content, items);
+            match float_geometry(content) {
+                Some(mut float) => {
+                    let inner = self.container(content);
+                    float.blocks = self.finish(inner, false);
+                    floats.push(float);
+                }
+                None => {
+                    self.notice(Notice::FloatingFlattened);
+                    self.container_into(content, items);
+                }
+            }
+        }
+        if !floats.is_empty() {
+            items.push(Item::Floats(floats));
         }
         if ppr.and_then(|ppr| child(ppr, "sectPr")).is_some() {
             items.push(Item::Section(self.section_index));
@@ -551,6 +580,12 @@ impl<'p, 'b> Converter<'p, 'b> {
             font: mark.format(mark.forced || rtl).clone(),
             shading: props.shading.flatten().filter(|color| !color.is_white()),
             borders: props.borders,
+            tabs: props
+                .tabs
+                .iter()
+                .copied()
+                .filter(|tab| tab.kind != TabKind::Clear)
+                .collect(),
         }
     }
 
@@ -688,7 +723,7 @@ impl<'p, 'b> Converter<'p, 'b> {
             }
             match w_name(element) {
                 Some("t") => text(atoms, element.text().unwrap_or_default().to_owned()),
-                Some("tab" | "ptab") => text(atoms, "\u{2003}".to_owned()),
+                Some("tab" | "ptab") => text(atoms, "\t".to_owned()),
                 Some("noBreakHyphen") => text(atoms, "\u{2011}".to_owned()),
                 Some("sym") => {
                     let code = attr(element, "char")
@@ -759,9 +794,6 @@ impl<'p, 'b> Converter<'p, 'b> {
     }
 
     fn drawing<'a, 'i>(&mut self, drawing: Node<'a, 'i>, deferred: &mut Vec<Node<'a, 'i>>) {
-        if drawing.children().any(|node| is_ns(node, WP, "anchor")) {
-            self.notice(Notice::FloatingFlattened);
-        }
         let has_text = self.text_boxes(drawing, deferred);
         let picture = drawing
             .descendants()
@@ -1161,6 +1193,7 @@ impl<'p, 'b> Converter<'p, 'b> {
                         None => {}
                     }
                     css.push("padding", "0px");
+                    css.push("border", "none");
                     let imported_style = self.intern(css.finish());
                     cells.push(TableCell {
                         props: ElementProps {
@@ -1244,12 +1277,17 @@ impl<'p, 'b> Converter<'p, 'b> {
                 css.push("padding", &four(&padding));
                 css.push("vertical-align", v_align.unwrap_or("top"));
                 let [top, right, bottom, left] = physical(&resolved, rtl);
-                css.borders([
+                let sides = [
                     top.flatten(),
                     right.flatten(),
                     bottom.flatten(),
                     left.flatten(),
-                ]);
+                ];
+                if sides.iter().all(Option::is_none) {
+                    css.push("border", "none");
+                } else {
+                    css.borders(sides);
+                }
                 if let Some(shading) = shading {
                     css.push("background-color", &shading.css());
                 }
@@ -1315,6 +1353,168 @@ impl<'p, 'b> Converter<'p, 'b> {
         }
     }
 
+    fn text_width(&self) -> f64 {
+        let layout = self
+            .sections
+            .get(
+                self.section_index
+                    .min(self.sections.len().saturating_sub(1)),
+            )
+            .map_or_else(PageLayout::a4, |section| section.layout.clone());
+        (layout.width_mm - layout.margin_left_mm - layout.margin_right_mm).max(10.0) / 25.4 * 1440.0
+    }
+
+    fn place_floats(&self, items: Vec<Item>) -> Vec<Item> {
+        if !items.iter().any(|item| matches!(item, Item::Floats(_))) {
+            return items;
+        }
+        let width = self.text_width();
+        let mut placed: Vec<Item> = Vec::with_capacity(items.len());
+        let mut waiting: Vec<(f64, Vec<FloatBox>)> = Vec::new();
+        let mut anchor_top = 0.0;
+        let mut y = 0.0;
+        let release = |placed: &mut Vec<Item>, waiting: &mut Vec<(f64, Vec<FloatBox>)>, y: f64| {
+            waiting.retain_mut(|(target, floats)| {
+                if *target <= y {
+                    placed.push(Item::Floats(std::mem::take(floats)));
+                    false
+                } else {
+                    true
+                }
+            });
+        };
+        for item in items {
+            match item {
+                Item::Floats(floats) => {
+                    let offset = floats
+                        .iter()
+                        .map(|float| float.offset)
+                        .fold(f64::INFINITY, f64::min);
+                    waiting.push((anchor_top + offset.max(0.0), floats));
+                    release(&mut placed, &mut waiting, y);
+                }
+                Item::PageBreak | Item::Section(_) => {
+                    release(&mut placed, &mut waiting, f64::INFINITY);
+                    y = 0.0;
+                    anchor_top = 0.0;
+                    placed.push(item);
+                }
+                other => {
+                    release(&mut placed, &mut waiting, y);
+                    anchor_top = y;
+                    y += estimate_height(&other, width);
+                    placed.push(other);
+                }
+            }
+        }
+        release(&mut placed, &mut waiting, f64::INFINITY);
+        placed
+    }
+
+    fn float_table(&mut self, mut floats: Vec<FloatBox>) -> Table {
+        floats.sort_by(|a, b| a.x.total_cmp(&b.x));
+        let mut cells = Vec::new();
+        let mut columns = Vec::new();
+        let mut cursor = 0.0;
+        let mut height: f64 = 0.0;
+        let gap = |this: &mut Self,
+                   width: f64,
+                   like: &[Block],
+                   cells: &mut Vec<TableCell>,
+                   columns: &mut Vec<f64>| {
+            let css = format!(
+                "width: {}; padding: 0px; vertical-align: top; border: none;",
+                pt(width / 20.0)
+            );
+            let paragraph = like
+                .iter()
+                .find_map(|block| match block {
+                    Block::Paragraph(paragraph) => Some(Paragraph {
+                        props: paragraph.props.clone(),
+                        children: Vec::new(),
+                    }),
+                    _ => None,
+                })
+                .unwrap_or_else(|| Paragraph::new(Vec::new()));
+            cells.push(TableCell {
+                props: ElementProps {
+                    direction: Some(Direction::Ltr),
+                    imported_style: this.intern(css),
+                    ..ElementProps::default()
+                },
+                blocks: vec![Block::Paragraph(paragraph)],
+                ..TableCell::default()
+            });
+            columns.push(round2(width / 15.0));
+        };
+        for float in floats {
+            if float.x > cursor + 15.0 {
+                gap(
+                    self,
+                    float.x - cursor,
+                    &float.blocks,
+                    &mut cells,
+                    &mut columns,
+                );
+            }
+            let mut css = Css::default();
+            css.push("width", &pt(float.width / 20.0));
+            let padding: Vec<String> = float.padding.iter().map(|side| px(side / 15.0)).collect();
+            css.push("padding", &four(&padding));
+            css.push("vertical-align", "top");
+            match float.border {
+                Some(width) => {
+                    let side = Some(Border {
+                        width_px: width.max(0.5),
+                        color: Some(Rgb(0, 0, 0)),
+                        style: "solid",
+                    });
+                    css.borders([side; 4]);
+                }
+                None => css.push("border", "none"),
+            }
+            cells.push(TableCell {
+                props: ElementProps {
+                    direction: Some(Direction::Ltr),
+                    imported_style: self.intern(css.finish()),
+                    ..ElementProps::default()
+                },
+                blocks: if float.blocks.is_empty() {
+                    vec![Block::Paragraph(Paragraph::new(Vec::new()))]
+                } else {
+                    float.blocks
+                },
+                ..TableCell::default()
+            });
+            columns.push(round2(float.width / 15.0));
+            cursor = float.x + float.width;
+            height = height.max(float.height);
+        }
+        let row_css = format!("height: {};", pt(height / 20.0));
+        let table_css = format!(
+            "width: {}; margin: 0px; border-collapse: collapse;",
+            pt(cursor.max(1.0) / 20.0)
+        );
+        Table {
+            props: ElementProps {
+                direction: Some(Direction::Ltr),
+                imported_style: self.intern(table_css),
+                ..ElementProps::default()
+            },
+            col_widths: Some(columns),
+            rows: vec![TableRow {
+                props: ElementProps {
+                    direction: Some(Direction::Ltr),
+                    imported_style: self.intern(row_css),
+                    ..ElementProps::default()
+                },
+                cells,
+                ..TableRow::default()
+            }],
+            ..Table::default()
+        }
+    }
+
     fn paragraph_css(&self, layout: &Layout) -> String {
         let mut css = Css::default();
         if let Some(family) = &layout.font.family {
@@ -1348,10 +1548,43 @@ impl<'p, 'b> Converter<'p, 'b> {
             bottom.flatten(),
             left.flatten(),
         ]);
+        let mut stops: Vec<(f64, &str)> = layout
+            .tabs
+            .iter()
+            .map(|tab| {
+                let align = match tab.kind {
+                    TabKind::Center => "center",
+                    TabKind::End => "end",
+                    TabKind::Start | TabKind::Clear => "start",
+                };
+                ((tab.position - layout.start) / 15.0, align)
+            })
+            .collect();
+        if layout.first < 0.0 && !stops.iter().any(|(position, _)| position.abs() < 0.5) {
+            stops.push((0.0, "start"));
+        }
+        stops.retain(|(position, _)| *position > 0.0 || layout.first < 0.0);
+        if !stops.is_empty() {
+            stops.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let list: Vec<String> = stops
+                .iter()
+                .map(|(position, align)| format!("{} {align}", px(round2(*position))))
+                .collect();
+            css.push("tab-stops", &list.join(", "));
+        }
+        css.push(
+            "tab-size",
+            &format!(
+                "{} {}",
+                px(round2(self.default_tab / 15.0)),
+                px(round2(-layout.start / 15.0))
+            ),
+        );
         css.finish()
     }
 
-    fn finish(&mut self, mut items: Vec<Item>, root: bool) -> Vec<Block> {
+    fn finish(&mut self, items: Vec<Item>, root: bool) -> Vec<Block> {
+        let mut items = self.place_floats(items);
         for index in 1..items.len() {
             let (head, tail) = items.split_at_mut(index);
             if let (Item::Para(previous), Item::Para(next)) = (&mut head[index - 1], &mut tail[0])
@@ -1391,6 +1624,7 @@ impl<'p, 'b> Converter<'p, 'b> {
                     blocks.push(Block::Paragraph(paragraph));
                 }
                 Item::Table(table) => blocks.push(Block::Table(table)),
+                Item::Floats(floats) => blocks.push(Block::Table(self.float_table(floats))),
                 Item::PageBreak => {
                     if root {
                         blocks.push(Block::PageBreak(Leaf::default()));
@@ -1594,4 +1828,190 @@ fn row_cells<'a, 'i>(node: Node<'a, 'i>) -> Vec<Node<'a, 'i>> {
         }
     }
     cells
+}
+
+fn emu_twips(value: Option<&str>) -> Option<f64> {
+    value?.trim().parse::<f64>().ok().map(|emu| emu / 635.0)
+}
+
+fn float_geometry(content: Node) -> Option<FloatBox> {
+    let anchor = content
+        .ancestors()
+        .find(|node| is_ns(*node, WP, "anchor"))?;
+    let extent = anchor.children().find(|node| is_ns(*node, WP, "extent"))?;
+    let width = emu_twips(plain_attr(extent, "cx"))?;
+    let height = emu_twips(plain_attr(extent, "cy")).unwrap_or(0.0);
+    let position = |name: &str| anchor.children().find(|node| is_ns(*node, WP, name));
+    let vertical = position("positionV")?;
+    if !matches!(
+        plain_attr(vertical, "relativeFrom"),
+        Some("paragraph" | "line")
+    ) {
+        return None;
+    }
+    let offset = vertical
+        .children()
+        .find(|node| is_ns(*node, WP, "posOffset"))
+        .and_then(|node| emu_twips(node.text()))
+        .unwrap_or(0.0);
+    let horizontal = position("positionH")?;
+    let x = match horizontal
+        .children()
+        .find(|node| is_ns(*node, WP, "align"))
+        .and_then(|node| node.text())
+    {
+        Some("left" | "inside") => 0.0,
+        Some(_) => return None,
+        None => horizontal
+            .children()
+            .find(|node| is_ns(*node, WP, "posOffset"))
+            .and_then(|node| emu_twips(node.text()))?,
+    };
+    if !matches!(
+        plain_attr(horizontal, "relativeFrom"),
+        Some("margin" | "column")
+    ) {
+        return None;
+    }
+    let shape = anchor
+        .descendants()
+        .find(|node| node.is_element() && node.tag_name().name() == "spPr");
+    let line = shape.and_then(|shape| {
+        shape
+            .children()
+            .find(|node| node.is_element() && node.tag_name().name() == "ln")
+    });
+    let border = line.and_then(|line| {
+        let hidden = line
+            .children()
+            .any(|node| node.is_element() && node.tag_name().name() == "noFill");
+        (!hidden).then(|| emu_twips(plain_attr(line, "w")).unwrap_or(9525.0 / 635.0) / 15.0)
+    });
+    let body = anchor
+        .descendants()
+        .find(|node| node.is_element() && node.tag_name().name() == "bodyPr");
+    let inset = |name: &str, fallback: f64| {
+        body.and_then(|body| emu_twips(plain_attr(body, name)))
+            .unwrap_or(fallback / 635.0)
+    };
+    Some(FloatBox {
+        x: x.max(0.0),
+        width,
+        height,
+        offset,
+        border,
+        padding: [
+            inset("tIns", 45720.0),
+            inset("rIns", 91440.0),
+            inset("bIns", 45720.0),
+            inset("lIns", 91440.0),
+        ],
+        blocks: Vec::new(),
+    })
+}
+
+fn css_px(value: &str) -> Option<f64> {
+    let value = value.trim();
+    if let Some(points) = value.strip_suffix("pt") {
+        return points.parse::<f64>().ok().map(|points| points * 4.0 / 3.0);
+    }
+    value.trim_end_matches("px").parse::<f64>().ok()
+}
+
+fn style_px(style: Option<&Style>, property: &str) -> f64 {
+    style
+        .and_then(|style| style.get(property))
+        .and_then(|value| value.split_whitespace().next())
+        .and_then(css_px)
+        .unwrap_or(0.0)
+}
+
+fn style_margins(style: Option<&Style>) -> f64 {
+    let Some(margin) = style.and_then(|style| style.get("margin")) else {
+        return 0.0;
+    };
+    let parts: Vec<f64> = margin
+        .split_whitespace()
+        .map(|value| css_px(value).unwrap_or(0.0))
+        .collect();
+    match parts.as_slice() {
+        [all] | [all, _] => all * 2.0,
+        [top, _, bottom, ..] => top + bottom,
+        [] => 0.0,
+    }
+}
+
+fn inline_chars(inlines: &[Inline]) -> usize {
+    inlines
+        .iter()
+        .map(|inline| match inline {
+            Inline::Text(text) => text.text.chars().count(),
+            Inline::Field(_) => 8,
+            Inline::Link(link) => inline_chars(&link.children),
+            Inline::LineBreak(_) => 0,
+        })
+        .sum()
+}
+
+fn block_height(block: &Block, width: f64) -> f64 {
+    match block {
+        Block::Paragraph(paragraph) => {
+            let style = paragraph.props.imported_style.as_ref();
+            let line = style_px(style, "line-height").max(1.0);
+            let size = style_px(style, "font-size").max(1.0);
+            let breaks = paragraph
+                .children
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak(_)))
+                .count();
+            let text = inline_chars(&paragraph.children) as f64 * size * 0.42;
+            let lines = (text / (width / 15.0).max(1.0)).ceil().max(1.0) + breaks as f64;
+            (lines * line + style_margins(style)) * 15.0
+        }
+        Block::Table(table) => table_height(table, width),
+        Block::List(list) => list.items.len() as f64 * 400.0,
+        _ => 0.0,
+    }
+}
+
+fn table_height(table: &Table, width: f64) -> f64 {
+    table
+        .rows
+        .iter()
+        .map(|row| {
+            let minimum = style_px(row.props.imported_style.as_ref(), "height") * 15.0;
+            row.cells
+                .iter()
+                .map(|cell| {
+                    cell.blocks
+                        .iter()
+                        .map(|block| block_height(block, width / row.cells.len().max(1) as f64))
+                        .sum::<f64>()
+                })
+                .fold(minimum, f64::max)
+        })
+        .sum()
+}
+
+fn estimate_height(item: &Item, width: f64) -> f64 {
+    match item {
+        Item::Para(para) => {
+            let layout = &para.layout;
+            let line = layout
+                .line
+                .height(layout.font.family.as_deref(), layout.font.size_px);
+            let text = inline_chars(&para.paragraph.children) as f64 * layout.font.size_px * 0.42;
+            let available = ((width - layout.start - layout.end) / 15.0).max(1.0);
+            let breaks = para
+                .paragraph
+                .children
+                .iter()
+                .filter(|inline| matches!(inline, Inline::LineBreak(_)))
+                .count();
+            let lines = (text / available).ceil().max(1.0) + breaks as f64;
+            layout.before + layout.after + lines * line * 15.0
+        }
+        Item::Table(table) => table_height(table, width),
+        _ => 0.0,
+    }
 }
