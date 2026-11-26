@@ -3,6 +3,52 @@ use std::path::Path;
 use missal_core::{FirId, FirStatus};
 use serde_json::{Value, json};
 
+/// How big the whole interface is drawn, like a browser's page zoom.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InterfaceSize {
+    /// Fit the interface to the screen: smaller on small or highly scaled
+    /// screens, full size everywhere else.
+    #[default]
+    Auto,
+    /// A fixed zoom, in percent.
+    Percent(u16),
+}
+
+impl InterfaceSize {
+    pub const ALL: [InterfaceSize; 6] = [
+        InterfaceSize::Auto,
+        InterfaceSize::Percent(80),
+        InterfaceSize::Percent(90),
+        InterfaceSize::Percent(100),
+        InterfaceSize::Percent(110),
+        InterfaceSize::Percent(125),
+    ];
+
+    pub fn title(self) -> String {
+        match self {
+            InterfaceSize::Auto => "Auto".to_owned(),
+            InterfaceSize::Percent(percent) => format!("{percent}%"),
+        }
+    }
+
+    pub fn to_json(self) -> Value {
+        match self {
+            InterfaceSize::Auto => json!("auto"),
+            InterfaceSize::Percent(percent) => json!(percent),
+        }
+    }
+
+    pub fn from_json(value: &Value) -> Option<InterfaceSize> {
+        if value.as_str() == Some("auto") {
+            return Some(InterfaceSize::Auto);
+        }
+        let percent = value.as_u64()?;
+        (70..=150)
+            .contains(&percent)
+            .then_some(InterfaceSize::Percent(percent as u16))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ThemeChoice {
     #[default]
@@ -129,7 +175,11 @@ pub struct WindowPrefs {
     pub maximized: bool,
 }
 
+/// The smallest window the layout is designed for, in interface pixels. On
+/// screen it is this times the interface zoom, and never more than the screen.
 pub const MIN_WINDOW: (f32, f32) = (1024.0, 700.0);
+/// A saved window smaller than this is a glitch, not a choice, and is ignored.
+pub const MIN_SAVED_WINDOW: (f32, f32) = (480.0, 360.0);
 pub const RECENT_FIRS: usize = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,6 +196,7 @@ pub struct Preferences {
     pub table: TablePrefs,
     pub recent_firs: Vec<RecentFir>,
     pub sidebar_hidden: bool,
+    pub interface_size: InterfaceSize,
 }
 
 impl Default for Preferences {
@@ -156,6 +207,7 @@ impl Default for Preferences {
             table: TablePrefs::default(),
             recent_firs: Vec::new(),
             sidebar_hidden: false,
+            interface_size: InterfaceSize::Auto,
         }
     }
 }
@@ -188,6 +240,12 @@ impl Preferences {
             .get("sidebar_hidden")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        if let Some(size) = value
+            .get("interface_size")
+            .and_then(InterfaceSize::from_json)
+        {
+            preferences.interface_size = size;
+        }
         if let Some(recent) = value.get("recent_firs").and_then(Value::as_array) {
             preferences.recent_firs = recent
                 .iter()
@@ -206,8 +264,8 @@ impl Preferences {
                 number(window, "width"),
                 number(window, "height"),
             )
-            && width >= MIN_WINDOW.0
-            && height >= MIN_WINDOW.1
+            && width >= MIN_SAVED_WINDOW.0
+            && height >= MIN_SAVED_WINDOW.1
         {
             preferences.window = Some(WindowPrefs {
                 x,
@@ -251,6 +309,7 @@ impl Preferences {
         let mut object = serde_json::Map::new();
         object.insert("theme".into(), json!(self.theme.as_str()));
         object.insert("sidebar_hidden".into(), json!(self.sidebar_hidden));
+        object.insert("interface_size".into(), self.interface_size.to_json());
         object.insert(
             "recent_firs".into(),
             json!(
@@ -315,10 +374,12 @@ mod tests {
     fn rejects_unusable_windows_and_garbage() {
         let preferences = Preferences::from_json(&json!({
             "theme": "purple",
+            "interface_size": 400,
             "window": {"x": 0, "y": 0, "width": 10, "height": 10},
             "fir_table": {"sort_column": "nope", "status": "Closed"}
         }));
         assert_eq!(preferences.theme, ThemeChoice::System);
+        assert_eq!(preferences.interface_size, InterfaceSize::Auto);
         assert_eq!(preferences.window, None);
         assert_eq!(preferences.table.sort, Sort::default());
         assert_eq!(preferences.table.status, Some(FirStatus::Closed));

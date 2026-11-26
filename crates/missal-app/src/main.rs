@@ -90,7 +90,9 @@ fn main() -> ExitCode {
     }
     let check_updates = missal_app::update::controller::enabled(!paths.is_default);
     let preferences = Preferences::load(&paths.preferences);
-    gpui_kit::application()
+    // Every window is zoomed to the interface size (see `zoom`).
+    let platform = missal_app::zoom::ZoomPlatform::new(gpui_kit::platform::current_platform(false));
+    gpui_kit::Application::with_platform(std::rc::Rc::new(platform))
         .with_assets(gpui_kit::assets::AllAssets)
         .run(move |cx| {
             let db = Db::spawn(paths.database.clone());
