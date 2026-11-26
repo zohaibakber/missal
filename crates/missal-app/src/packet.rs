@@ -29,11 +29,16 @@ impl PacketJob {
     }
 
     fn layout_with(&self, engine: &mut PageEngine) -> Packet {
-        let presentation = self.presentation();
+        let presentations: Vec<FieldPresentation<'_>> = self
+            .documents
+            .iter()
+            .map(|document| self.presentation().for_document(document))
+            .collect();
         let sources: Vec<DocSource<'_>> = self
             .documents
             .iter()
-            .map(|document| DocSource::new(document.as_ref(), &presentation))
+            .zip(&presentations)
+            .map(|(document, presentation)| DocSource::new(document.as_ref(), presentation))
             .collect();
         engine.layout(&sources)
     }
@@ -55,10 +60,10 @@ impl PacketJob {
         if self.values.is_none() || self.mode != DisplayMode::Values {
             return vec![Vec::new(); self.documents.len()];
         }
-        let presentation = self.presentation();
         self.documents
             .iter()
             .map(|document| {
+                let presentation = self.presentation().for_document(document);
                 let mut names: Vec<String> = Vec::new();
                 for reference in document.field_references() {
                     let fillable = match &reference {

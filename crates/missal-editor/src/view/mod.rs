@@ -259,7 +259,7 @@ impl Editor {
         );
         let mut engine = PageEngine::new();
         let packet = {
-            let presentation = fields.presentation();
+            let presentation = fields.presentation().for_document(core.document());
             engine.layout(&[DocSource::new(core.document(), &presentation)])
         };
         Editor {
@@ -352,7 +352,10 @@ impl Editor {
     }
 
     fn relayout_all(&mut self) {
-        let presentation = self.fields.presentation();
+        let presentation = self
+            .fields
+            .presentation()
+            .for_document(self.core.document());
         self.packet = self
             .engine
             .layout(&[DocSource::new(self.core.document(), &presentation)]);
@@ -464,7 +467,10 @@ impl Editor {
         self.fields = fields;
         self.core
             .set_fields(self.fields.catalog.clone(), self.fields.markers.clone());
-        let presentation = self.fields.presentation();
+        let presentation = self
+            .fields
+            .presentation()
+            .for_document(self.core.document());
         self.engine.refresh_fields(
             &mut self.packet,
             &[DocSource::new(self.core.document(), &presentation)],
@@ -513,7 +519,10 @@ impl Editor {
     pub fn apply(&mut self, change: Option<Change>, _window: &mut Window, cx: &mut Context<Self>) {
         if let Some(change) = change {
             self.find_after_change(&change.edit);
-            let presentation = self.fields.presentation();
+            let presentation = self
+                .fields
+                .presentation()
+                .for_document(self.core.document());
             let total = self.core.document().blocks.len();
             let edit = match change.edit {
                 missal_page::Edit::Splice { inserted, .. }
@@ -1199,7 +1208,10 @@ impl Editor {
         let Some(fragment) = self.core.copy() else {
             return false;
         };
-        let presentation = self.fields.presentation();
+        let presentation = self
+            .fields
+            .presentation()
+            .for_document(self.core.document());
         let text = clip::plain_text(&fragment, &|reference: &FieldReference| {
             presentation.display_text(reference)
         });

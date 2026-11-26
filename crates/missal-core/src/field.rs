@@ -6,6 +6,7 @@ use std::sync::LazyLock;
 use unicode_general_category::{GeneralCategory, get_general_category};
 
 use crate::date::digit_value;
+use crate::document::Document;
 use crate::error::Invalid;
 use crate::fir::{Fir, FirProperty, FirRecord, FirValue};
 use crate::ids::{FirId, PlaceholderId};
@@ -487,6 +488,44 @@ pub struct FieldPresentation<'a> {
     pub catalog: &'a FieldCatalog,
     pub values: Option<&'a FirValues>,
     pub mode: DisplayMode,
+    pub tails: ListTails,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ListTails {
+    accused: u32,
+    witness: u32,
+}
+
+impl ListTails {
+    pub fn of(document: &Document) -> ListTails {
+        let mut tails = ListTails::default();
+        document.for_each_field(&mut |field| {
+            if let FieldReference::Fir(FirField {
+                property,
+                index: Some(index),
+            }) = field.reference
+                && let Some(tail) = tails.slot(property)
+            {
+                *tail = (*tail).max(index);
+            }
+        });
+        tails
+    }
+
+    fn slot(&mut self, property: FirProperty) -> Option<&mut u32> {
+        match property {
+            FirProperty::Accused => Some(&mut self.accused),
+            FirProperty::Witness => Some(&mut self.witness),
+            _ => None,
+        }
+    }
+
+    fn takes_rest(mut self, field: FirField) -> bool {
+        field.index.is_some_and(|index| {
+            index >= 2 && self.slot(field.property).is_some_and(|tail| *tail == index)
+        })
+    }
 }
 
 impl<'a> FieldPresentation<'a> {
@@ -506,6 +545,7 @@ impl<'a> FieldPresentation<'a> {
             catalog,
             values: None,
             mode: DisplayMode::Labels,
+            tails: ListTails::default(),
         }
     }
 
@@ -518,6 +558,14 @@ impl<'a> FieldPresentation<'a> {
             catalog,
             values: Some(values),
             mode,
+            tails: ListTails::default(),
+        }
+    }
+
+    pub fn for_document(self, document: &Document) -> FieldPresentation<'a> {
+        FieldPresentation {
+            tails: ListTails::of(document),
+            ..self
         }
     }
 
@@ -528,7 +576,11 @@ impl<'a> FieldPresentation<'a> {
                 unresolved: true,
             },
             FieldReference::Fir(field) => self.present(&fir_field_label(*field), |values| {
-                fir_value(&values.fir.fir, *field)
+                if self.tails.takes_rest(*field) {
+                    fir_value_and_rest(&values.fir.fir, *field)
+                } else {
+                    fir_value(&values.fir.fir, *field)
+                }
             }),
             FieldReference::Catalog(id) => match self.catalog.placeholder(*id) {
                 Some(placeholder) => {
@@ -589,6 +641,15 @@ pub fn fir_value(fir: &Fir, field: FirField) -> String {
                 .get(index as usize - 1)
                 .map_or_default(|entry| entry.part(part).to_owned()),
         },
+    }
+}
+
+fn fir_value_and_rest(fir: &Fir, field: FirField) -> String {
+    match (fir.value(field.property), field.index) {
+        (FirValue::List(items), Some(index)) => {
+            join_inline(items.iter().skip(index as usize - 1).map(String::as_str))
+        }
+        _ => fir_value(fir, field),
     }
 }
 
@@ -734,5 +795,54 @@ mod tests {
                 "گواہان 6"
             ]
         );
+    }
+
+    #[test]
+    fn last_numbered_witness_slot_lists_the_rest() {
+        use crate::document::{Block, Field, Inline, Paragraph};
+        let catalog = catalog();
+        let witness = |index| {
+            FieldReference::Fir(FirField {
+                property: FirProperty::Witness,
+                index: Some(index),
+            })
+        };
+        let document = |indices: &[u32]| {
+            let mut document = Document::empty();
+            document.blocks = indices
+                .iter()
+                .map(|&index| {
+                    Block::Paragraph(Paragraph::new(vec![Inline::Field(Field::new(witness(
+                        index,
+                    )))]))
+                })
+                .collect();
+            document
+        };
+        let values = FirValues {
+            fir: FirRecord {
+                id: FirId::new(1).unwrap(),
+                fir: Fir {
+                    witness: vec!["محمد اسلم".into(), "طارق محمود".into(), "عمران علی".into()],
+                    ..Fir::default()
+                },
+            },
+            overrides: Vec::new(),
+            shared_values: BTreeMap::new(),
+        };
+        let shown = |document: &Document, index| {
+            FieldPresentation::for_fir(&catalog, &values, DisplayMode::Values)
+                .for_document(document)
+                .display_text(&witness(index))
+                .text
+        };
+        let pair = document(&[1, 2]);
+        assert_eq!(shown(&pair, 1), "محمد اسلم");
+        assert_eq!(shown(&pair, 2), "طارق محمود، عمران علی");
+        let three = document(&[1, 2, 3]);
+        assert_eq!(shown(&three, 2), "طارق محمود");
+        assert_eq!(shown(&three, 3), "عمران علی");
+        let single = document(&[1]);
+        assert_eq!(shown(&single, 1), "محمد اسلم");
     }
 }

@@ -161,3 +161,47 @@ pub(super) fn unbind(document: &mut Document, label_of: &dyn Fn(PlaceholderId) -
         }
     });
 }
+
+pub(super) fn for_each_field(document: &Document, visit: &mut dyn FnMut(&Field)) {
+    fn visit_inline(inline: &Inline, visit: &mut dyn FnMut(&Field)) {
+        match inline {
+            Inline::Field(field) => visit(field),
+            Inline::Link(link) => link
+                .children
+                .iter()
+                .for_each(|child| visit_inline(child, visit)),
+            Inline::Text(_) | Inline::LineBreak(_) => {}
+        }
+    }
+    fn visit_list(list: &List, visit: &mut dyn FnMut(&Field)) {
+        for child in list.items.iter().flat_map(|item| &item.children) {
+            match child {
+                ListItemChild::Inline(child) => visit_inline(child, visit),
+                ListItemChild::List(child) => visit_list(child, visit),
+            }
+        }
+    }
+    fn visit_block(block: &Block, visit: &mut dyn FnMut(&Field)) {
+        match block {
+            Block::Paragraph(paragraph) => paragraph
+                .children
+                .iter()
+                .for_each(|c| visit_inline(c, visit)),
+            Block::Heading(heading) => heading.children.iter().for_each(|c| visit_inline(c, visit)),
+            Block::Quote(quote) => quote.children.iter().for_each(|c| visit_inline(c, visit)),
+            Block::List(child) => visit_list(child, visit),
+            Block::Table(table) => {
+                for cell in table.rows.iter().flat_map(|row| &row.cells) {
+                    cell.blocks
+                        .iter()
+                        .for_each(|child| visit_block(child, visit));
+                }
+            }
+            Block::PageBreak(_) | Block::HorizontalRule(_) => {}
+        }
+    }
+    document
+        .blocks
+        .iter()
+        .for_each(|child| visit_block(child, visit));
+}
