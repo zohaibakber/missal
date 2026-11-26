@@ -39,13 +39,27 @@ fn main() {
         .unwrap_or_else(|| vec![0]);
     let zoom: f32 = opt("--zoom").map(|z| z.parse().unwrap()).unwrap_or(1.0);
     let editor = args.iter().any(|a| a == "--editor");
-    let (_, document) = missal_docx::import_folder(&missal_docx::repository_templates())
-        .unwrap()
-        .documents()
-        .into_iter()
-        .find(|(template, _)| template.starts_with(name.as_str()))
-        .expect("template");
     let catalog = missal_core::FieldCatalog::default();
+    let document = match opt("--docx") {
+        Some(path) => {
+            missal_docx::import(
+                &std::fs::read(&path).expect("read docx"),
+                &catalog,
+                &missal_core::FieldMarkers::default(),
+            )
+            .expect("import docx")
+            .document
+        }
+        None => {
+            missal_docx::import_folder(&missal_docx::repository_templates())
+                .unwrap()
+                .documents()
+                .into_iter()
+                .find(|(template, _)| template.starts_with(name.as_str()))
+                .expect("template")
+                .1
+        }
+    };
     let values = missal_core::FirValues {
         fir: missal_core::FirRecord {
             id: missal_core::FirId::new(1).unwrap(),
@@ -90,6 +104,11 @@ fn main() {
         gpui_kit::init(cx);
         missal_text::init(cx);
     });
+    let pages = if args.iter().any(|a| a == "--all") {
+        (0..packet.page_count()).collect()
+    } else {
+        pages
+    };
     for index in pages {
         let Some(page) = packet.page(index).cloned() else {
             continue;

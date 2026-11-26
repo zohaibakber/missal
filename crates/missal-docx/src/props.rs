@@ -337,6 +337,40 @@ pub struct ParaProps {
     pub numbering: Option<(Option<String>, Option<u8>)>,
     pub shading: Option<Option<Rgb>>,
     pub borders: Sides<Option<Border>>,
+    pub tabs: Vec<TabDef>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TabKind {
+    Start,
+    Center,
+    End,
+    Clear,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TabDef {
+    pub position: f64,
+    pub kind: TabKind,
+}
+
+fn tab_defs(node: Node) -> Vec<TabDef> {
+    node.children()
+        .filter(|tab| w_name(*tab) == Some("tab"))
+        .filter_map(|tab| {
+            let kind = match val(tab) {
+                Some("center") => TabKind::Center,
+                Some("right" | "end") => TabKind::End,
+                Some("clear") => TabKind::Clear,
+                Some("bar") => return None,
+                _ => TabKind::Start,
+            };
+            Some(TabDef {
+                position: twips(tab, "pos")?,
+                kind,
+            })
+        })
+        .collect()
 }
 
 impl ParaProps {
@@ -401,6 +435,7 @@ impl ParaProps {
                 }
                 "shd" => props.shading = Some(shading(element)),
                 "pBdr" => props.borders = borders(element),
+                "tabs" => props.tabs = tab_defs(element),
                 _ => {}
             }
         }
@@ -436,6 +471,11 @@ impl ParaProps {
             }
         }
         self.borders.overlay(&other.borders);
+        for tab in &other.tabs {
+            self.tabs
+                .retain(|existing| (existing.position - tab.position).abs() >= 1.0);
+            self.tabs.push(*tab);
+        }
     }
 }
 

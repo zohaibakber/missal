@@ -11,6 +11,7 @@ use crate::fonts;
 pub const BODY_FONT_SIZE: f32 = 20.0;
 pub const BODY_LINE_HEIGHT: f32 = 2.4;
 pub const WORD_SPACING_EM: f32 = 0.25;
+pub const DEFAULT_TAB_INTERVAL: f32 = 48.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Dir {
@@ -57,6 +58,84 @@ impl WhiteSpace {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TabAlign {
+    Start,
+    Center,
+    End,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TabStop {
+    pub position: f32,
+    pub align: TabAlign,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Tabs {
+    pub stops: Arc<[TabStop]>,
+    pub interval: f32,
+    pub origin: f32,
+}
+
+impl Default for Tabs {
+    fn default() -> Tabs {
+        Tabs {
+            stops: Arc::from([]),
+            interval: DEFAULT_TAB_INTERVAL,
+            origin: 0.0,
+        }
+    }
+}
+
+impl Tabs {
+    pub fn next(&self, x: f32, segment: f32) -> f32 {
+        for stop in self.stops.iter() {
+            let width = match stop.align {
+                TabAlign::Start => stop.position - x,
+                TabAlign::Center => stop.position - x - segment / 2.0,
+                TabAlign::End => stop.position - x - segment,
+            };
+            if stop.position > x + 0.5 && width >= 0.0 {
+                return width;
+            }
+        }
+        let interval = self.interval.max(1.0);
+        let steps = ((x + 0.5 - self.origin) / interval).floor() + 1.0;
+        (self.origin + steps * interval - x).max(0.0)
+    }
+
+    fn parse_stops(value: &str) -> Option<Arc<[TabStop]>> {
+        if value.trim().eq_ignore_ascii_case("none") {
+            return Some(Arc::from([]));
+        }
+        let mut stops = Vec::new();
+        for item in value.split(',') {
+            let mut parts = item.split_whitespace();
+            let position = css::length(parts.next()?)?.resolve_absolute(16.0)?;
+            let align = match parts.next().map(str::to_ascii_lowercase).as_deref() {
+                None | Some("start") => TabAlign::Start,
+                Some("center") => TabAlign::Center,
+                Some("end") => TabAlign::End,
+                Some(_) => return None,
+            };
+            stops.push(TabStop { position, align });
+        }
+        stops.sort_by(|a, b| a.position.total_cmp(&b.position));
+        Some(Arc::from(stops))
+    }
+
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.stops.len().hash(state);
+        for stop in self.stops.iter() {
+            stop.position.to_bits().hash(state);
+            stop.align.hash(state);
+        }
+        self.interval.to_bits().hash(state);
+        self.origin.to_bits().hash(state);
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextProps {
     pub family: FontFamily,
@@ -74,6 +153,7 @@ pub struct TextProps {
     pub orphans: u32,
     pub widows: u32,
     pub border_collapse: bool,
+    pub tabs: Tabs,
 }
 
 impl TextProps {
@@ -94,6 +174,7 @@ impl TextProps {
             orphans: 2,
             widows: 2,
             border_collapse: true,
+            tabs: Tabs::default(),
         }
     }
 
@@ -134,6 +215,7 @@ impl Hash for TextProps {
         self.orphans.hash(state);
         self.widows.hash(state);
         self.border_collapse.hash(state);
+        self.tabs.hash(state);
     }
 }
 
@@ -764,6 +846,8 @@ pub(crate) enum Op {
     BreakBefore(BreakValue),
     BreakAfter(BreakValue),
     BreakInside(BreakValue),
+    TabStops(Arc<[TabStop]>),
+    TabSize(f32, f32),
 }
 
 impl Op {
@@ -832,6 +916,16 @@ impl Op {
             }),
             "text-align" => Op::Align(align(value)?),
             "text-indent" => Op::Indent(len()?),
+            "tab-stops" => Op::TabStops(Tabs::parse_stops(value)?),
+            "tab-size" => {
+                let mut parts = value.split_whitespace();
+                let interval = css::length(parts.next()?)?.resolve_absolute(16.0)?;
+                let origin = match parts.next() {
+                    Some(origin) => css::length(origin)?.resolve_absolute(16.0)?,
+                    None => 0.0,
+                };
+                Op::TabSize(interval, origin)
+            }
             "orphans" => Op::Orphans(css::number(value)?.max(1.0) as u32),
             "widows" => Op::Widows(css::number(value)?.max(1.0) as u32),
             "border-collapse" => Op::BorderCollapse(lower == "collapse"),
@@ -886,6 +980,11 @@ impl Op {
             Op::Orphans(n) => text.orphans = *n,
             Op::Widows(n) => text.widows = *n,
             Op::BorderCollapse(b) => text.border_collapse = *b,
+            Op::TabStops(stops) => text.tabs.stops = stops.clone(),
+            Op::TabSize(interval, origin) => {
+                text.tabs.interval = *interval;
+                text.tabs.origin = *origin;
+            }
             Op::TableFixed(b) => boxp.table_fixed = *b,
             Op::Width(l) => boxp.width = *l,
             Op::MinWidth(l) => boxp.min_width = *l,
