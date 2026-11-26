@@ -281,6 +281,42 @@ fn run_lists(dark: bool, out: &Path) {
     h.shot("73-witness-3-filled");
 }
 
+/// Small laptop screens, maximized, as the window draws them before the
+/// interface zoom existed ("before-", 100 %) and with Auto ("after-").
+///
+/// A window zoomed by `z` on a screen scaled by `s` is laid out at
+/// `physical / (s × z)` interface pixels and painted at `s × z`, which is what
+/// `zoom::ZoomPlatform` hands GPUI. The headless window has no real platform
+/// under it, so the harness lays it out at that size; it always paints at 2×,
+/// so scale each image to the screen's physical size to see it as shown.
+fn run_small(dark: bool, out: &Path) {
+    // Physical pixels left for the window above the taskbar, and the
+    // screen's scale factor.
+    let screens = [
+        ("1366x768-100", 1366.0, 728.0, 1.0),
+        ("1366x768-125", 1366.0, 720.0, 1.25),
+    ];
+    for (name, width, height, scale) in screens {
+        let room = gpui_kit::size(px(width / scale), px(height / scale));
+        let auto = missal_app::zoom::auto_for(room);
+        for (stage, zoom) in [("before", 1.0), ("after", auto)] {
+            let factor = scale * zoom;
+            let (mut h, _directory) = build(dark, out, width / factor, height / factor, None);
+            missal_app::zoom::set(zoom);
+            let tag = |shot: &str| format!("{stage}-{name}-{shot}");
+            h.go(Route::Firs);
+            h.shot(&tag("01-fir-list"));
+            h.go(Route::NewFir);
+            h.shot(&tag("07-new-fir"));
+            h.go(Route::Fir(FirId::new(3).expect("id")));
+            h.shot(&tag("10-workspace"));
+            h.go(Route::Settings);
+            h.click("settings-nav-appearance");
+            h.shot(&tag("15e-settings-appearance"));
+        }
+    }
+}
+
 fn run(dark: bool, out: &Path, only_wp0: bool) {
     let (mut h, _directory) = build(dark, out, 1280.0, 800.0, None);
     run_wp0(&mut h);
@@ -502,9 +538,14 @@ fn main() {
     let only_settings = args.iter().any(|argument| argument == "--settings");
     let only_scroll = args.iter().any(|argument| argument == "--scroll");
     let only_lists = args.iter().any(|argument| argument == "--lists");
+    let only_small = args.iter().any(|argument| argument == "--small");
     let api = fake_api::start();
     for dark in [false, true] {
         if only.as_deref().is_some_and(|only| (only == "dark") != dark) {
+            continue;
+        }
+        if only_small {
+            run_small(dark, &out);
             continue;
         }
         if only_lists {

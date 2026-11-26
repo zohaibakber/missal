@@ -18,3 +18,4 @@ pub mod theme;
 pub mod ui;
 pub mod update;
 pub mod word;
+pub mod zoom;

@@ -4447,7 +4447,10 @@ dependencies = [
 name = "missal-app"
 version = "0.10.0"
 dependencies = [
+ "accesskit",
+ "anyhow",
  "chrono",
+ "futures",
  "gpui-kit",
  "gpui-pre-wgpu",
  "image",
@@ -4459,10 +4462,13 @@ dependencies = [
  "missal-page",
  "missal-store",
  "missal-text",
+ "raw-window-handle",
  "semver",
  "serde_json",
+ "smallvec",
  "tempfile",
  "velopack",
+ "windows 0.62.2",
  "winresource",
 ]
 

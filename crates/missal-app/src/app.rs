@@ -223,7 +223,11 @@ impl AppShell {
             cx.observe(&models.firs, |_, _, cx| cx.notify()),
             cx.observe(&models.templates, |_, _, cx| cx.notify()),
             cx.observe(&models.prefs, |_, _, cx| cx.notify()),
-            cx.observe_window_bounds(window, |this, window, cx| this.remember_bounds(window, cx)),
+            cx.observe_window_bounds(window, |this, window, cx| {
+                this.remember_bounds(window, cx);
+                // Moving to another screen can change what Auto picks.
+                window.defer(cx, crate::zoom::apply);
+            }),
             cx.observe_window_appearance(window, |this, window, cx| {
                 let choice = this.models.prefs.read(cx).read().theme;
                 theme::apply(choice, window, cx);
@@ -803,6 +807,14 @@ pub fn show_about(window: &mut Window, cx: &mut App) {
 
 pub fn check_for_updates(window: &mut Window, cx: &mut App) {
     crate::update::controller::check_now(window, cx);
+}
+
+pub fn set_interface_size(size: crate::prefs::InterfaceSize, window: &mut Window, cx: &mut App) {
+    let prefs = Models::get(cx).prefs;
+    prefs.update(cx, |prefs, cx| {
+        prefs.update(cx, |p| p.interface_size = size)
+    });
+    crate::zoom::apply(window, cx);
 }
 
 pub fn set_theme(choice: crate::prefs::ThemeChoice, window: &mut Window, cx: &mut App) {

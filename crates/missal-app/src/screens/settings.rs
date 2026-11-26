@@ -19,7 +19,7 @@ use missal_core::{
 use missal_text::{Align, Direction, LineHeight, TextInput, TextInputEvent, label};
 
 use crate::app::{AppPaths, check_for_updates, set_theme};
-use crate::prefs::ThemeChoice;
+use crate::prefs::{InterfaceSize, ThemeChoice};
 use crate::shortcuts::*;
 use crate::state::{Load, Models, run_db_in, toast_error, toast_warning};
 use crate::theme::{Palette, RADIUS, RADIUS_LG, RADIUS_SM};
@@ -32,6 +32,7 @@ use crate::ui::{
     kbd_group, primary_sm, save_state, separator_vertical, sidebar_group, sidebar_group_label,
     sidebar_menu_button, sized_icon, skeleton, small_icon, switch, ur_label,
 };
+use crate::ui::{SegmentItem, segmented};
 use crate::update::controller::{self, UpdateState, UpdateStatus};
 
 const NAME_COLUMN: f32 = 180.;
@@ -1514,6 +1515,31 @@ impl SettingsScreen {
         let prefs = self.models.prefs.read(cx).read();
         let theme = prefs.theme;
         let sidebar_shown = !prefs.sidebar_hidden;
+        let interface_size = prefs.interface_size;
+        let size_items = InterfaceSize::ALL
+            .into_iter()
+            .enumerate()
+            .map(|(index, size)| {
+                SegmentItem::new(
+                    ("interface-size", index),
+                    size.title(),
+                    move |_, window, cx| crate::app::set_interface_size(size, window, cx),
+                )
+            })
+            .collect::<Vec<_>>();
+        let size_selected = InterfaceSize::ALL
+            .iter()
+            .position(|size| *size == interface_size)
+            .unwrap_or(0);
+        let size_description = match interface_size {
+            InterfaceSize::Auto => format!(
+                "Auto draws everything smaller on small screens so it all fits. On this screen it’s {}%.",
+                (crate::zoom::current() * 100.0).round()
+            ),
+            InterfaceSize::Percent(_) => {
+                "Makes text, buttons and spacing bigger or smaller everywhere.".to_owned()
+            }
+        };
         let cards = ThemeChoice::ALL.into_iter().map(|choice| {
             let selected = choice == theme;
             let id = match choice {
@@ -1584,19 +1610,25 @@ impl SettingsScreen {
             )
             .child(
                 frame().child(frame_label(&palette, "Layout")).child(
-                    frame_panel().child(
-                        setting_row(
-                            &palette,
-                            "Show sidebar",
-                            Some("Keep the navigation sidebar open beside your work.".into()),
-                        )
-                        .child(kbd_group("Mod+\\").chord())
+                    frame_panel()
                         .child(
-                            switch("sidebar-switch", sidebar_shown)
-                                .accessibility_label("Show sidebar")
-                                .on_click(|_, _, cx| crate::app::toggle_sidebar(cx)),
+                            setting_row(&palette, "Interface size", Some(size_description.into()))
+                                .child(segmented("interface-size", size_items, size_selected)),
+                        )
+                        .child(
+                            setting_row(
+                                &palette,
+                                "Show sidebar",
+                                Some("Keep the navigation sidebar open beside your work.".into()),
+                            )
+                            .top_border()
+                            .child(kbd_group("Mod+\\").chord())
+                            .child(
+                                switch("sidebar-switch", sidebar_shown)
+                                    .accessibility_label("Show sidebar")
+                                    .on_click(|_, _, cx| crate::app::toggle_sidebar(cx)),
+                            ),
                         ),
-                    ),
                 ),
             )
             .into_any_element()

@@ -1,6 +1,6 @@
 use gpui_kit::component::TitleBar;
 use gpui_kit::{
-    AnyWindowHandle, App, AppContext, Bounds, Entity, Size, TitlebarOptions, WindowBounds,
+    AnyWindowHandle, App, AppContext, Bounds, Entity, TitlebarOptions, WindowBounds,
     WindowDecorations, WindowOptions, point, px, size,
 };
 #[cfg(debug_assertions)]
@@ -41,12 +41,41 @@ pub fn init_app(cx: &mut App, db: Db, paths: Option<&Paths>, preferences: Prefer
     models
 }
 
+/// Window options that fit the screen the window opens on.
+///
+/// Also sets the interface zoom for that screen before the window exists, so
+/// the first frame is already drawn at the right size.
 pub fn window_options(preferences: &Preferences, cx: &App) -> WindowOptions {
-    let bounds = match preferences.window {
-        Some(window) => {
+    let saved = preferences.window.map(|window| Bounds {
+        origin: point(px(window.x), px(window.y)),
+        size: size(px(window.width), px(window.height)),
+    });
+    let display = saved
+        .and_then(|saved| {
+            cx.displays()
+                .into_iter()
+                .find(|display| display.bounds().contains(&saved.center()))
+        })
+        .or_else(|| cx.primary_display());
+    let visible = display.as_ref().map(|display| display.visible_bounds());
+    let zoom = crate::zoom::resolve(
+        preferences.interface_size,
+        visible.map(|visible| visible.size),
+    );
+    crate::zoom::set(zoom);
+    let room = visible.map_or(size(px(f32::MAX), px(f32::MAX)), |visible| visible.size);
+    let min = size(
+        px(MIN_WINDOW.0 * zoom).min(room.width),
+        px(MIN_WINDOW.1 * zoom).min(room.height),
+    );
+    let bounds = match (preferences.window, saved) {
+        (Some(window), Some(saved)) => {
             let bounds = Bounds {
-                origin: point(px(window.x), px(window.y)),
-                size: size(px(window.width), px(window.height)),
+                origin: saved.origin,
+                size: size(
+                    saved.size.width.min(room.width),
+                    saved.size.height.min(room.height),
+                ),
             };
             if window.maximized {
                 WindowBounds::Maximized(bounds)
@@ -54,22 +83,34 @@ pub fn window_options(preferences: &Preferences, cx: &App) -> WindowOptions {
                 WindowBounds::Windowed(bounds)
             }
         }
-        None => WindowBounds::Windowed(Bounds::centered(
-            None,
-            size(px(DEFAULT_WINDOW.0), px(DEFAULT_WINDOW.1)),
-            cx,
-        )),
+        _ => {
+            let wanted = size(px(DEFAULT_WINDOW.0 * zoom), px(DEFAULT_WINDOW.1 * zoom));
+            let fitted = size(
+                wanted.width.min(room.width - px(WINDOW_MARGIN)),
+                wanted.height.min(room.height - px(WINDOW_MARGIN)),
+            );
+            let bounds = match visible {
+                Some(visible) => Bounds::centered_at(visible.center(), fitted),
+                None => Bounds::centered(None, fitted, cx),
+            };
+            // A screen with no room around the default window gets all of it.
+            if fitted != wanted {
+                WindowBounds::Maximized(bounds)
+            } else {
+                WindowBounds::Windowed(bounds)
+            }
+        }
     };
     WindowOptions {
         window_bounds: Some(bounds),
         app_id: Some(crate::platform::APP_ID.to_owned()),
-        window_min_size: Some(Size {
-            width: px(MIN_WINDOW.0),
-            height: px(MIN_WINDOW.1),
-        }),
+        window_min_size: Some(min),
         ..chrome_options()
     }
 }
+
+/// Room left around a new window so it never touches the screen's edges.
+const WINDOW_MARGIN: f32 = 48.0;
 
 pub fn chrome_options() -> WindowOptions {
     let (x, y) = MAC_TRAFFIC_LIGHT_POSITION;

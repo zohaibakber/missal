@@ -44,6 +44,14 @@ image = { workspace = true, optional = true }
 chrono.workspace = true
 velopack.workspace = true
 semver.workspace = true
+anyhow.workspace = true
+futures.workspace = true
+smallvec.workspace = true
+raw-window-handle.workspace = true
+accesskit.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
 
 [target.'cfg(windows)'.build-dependencies]
 winresource.workspace = true
