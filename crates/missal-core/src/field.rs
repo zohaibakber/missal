@@ -80,10 +80,10 @@ pub const FIR_FIELDS: [FirFieldLabel; 41] = [
     fir_field("برآمدگی", FirProperty::Recovery, None),
     fir_field("مختصر حالات", FirProperty::Body, None),
     fir_field("متن", FirProperty::Body, None),
-    fir_field("ایمی نمبر 1", FirProperty::Imei1, None),
-    fir_field("ایمی نمبر 2", FirProperty::Imei2, None),
-    fir_field("سم نمبر 1", FirProperty::Sim1, None),
-    fir_field("سم نمبر 2", FirProperty::Sim2, None),
+    fir_field("ایمی نمبر 1", FirProperty::Imei, Some(1)),
+    fir_field("ایمی نمبر 2", FirProperty::Imei, Some(2)),
+    fir_field("سم نمبر 1", FirProperty::Sim, Some(1)),
+    fir_field("سم نمبر 2", FirProperty::Sim, Some(2)),
 ];
 
 pub fn fir_field_label(field: FirField) -> Cow<'static, str> {
@@ -102,15 +102,19 @@ fn list_base_label(property: FirProperty) -> Option<&'static str> {
         FirProperty::Witness => Some("گواہان"),
         FirProperty::Zimni => Some("ضمنی"),
         FirProperty::ZimniDate => Some("تاریخ ضمنی"),
+        FirProperty::Imei => Some("ایمی نمبر"),
+        FirProperty::Sim => Some("سم نمبر"),
         _ => None,
     }
 }
 
-pub const LIST_FIELD_PROPERTIES: [FirProperty; 4] = [
+pub const LIST_FIELD_PROPERTIES: [FirProperty; 6] = [
     FirProperty::Accused,
     FirProperty::Witness,
     FirProperty::Zimni,
     FirProperty::ZimniDate,
+    FirProperty::Imei,
+    FirProperty::Sim,
 ];
 
 pub fn fir_field_choices<'a>(
@@ -495,6 +499,8 @@ pub struct FieldPresentation<'a> {
 pub struct ListTails {
     accused: u32,
     witness: u32,
+    imei: u32,
+    sim: u32,
 }
 
 impl ListTails {
@@ -517,6 +523,8 @@ impl ListTails {
         match property {
             FirProperty::Accused => Some(&mut self.accused),
             FirProperty::Witness => Some(&mut self.witness),
+            FirProperty::Imei => Some(&mut self.imei),
+            FirProperty::Sim => Some(&mut self.sim),
             _ => None,
         }
     }
@@ -844,5 +852,71 @@ mod tests {
         assert_eq!(shown(&three, 3), "عمران علی");
         let single = document(&[1]);
         assert_eq!(shown(&single, 1), "محمد اسلم");
+    }
+
+    #[test]
+    fn mobile_numbers_are_lists_and_old_documents_keep_their_slots() {
+        use crate::document::{Block, Field, Inline, Paragraph};
+        let lookup = |label: &str| fir_field_by_key(&field_lookup_key(label));
+        let sim = |index| FirField {
+            property: FirProperty::Sim,
+            index: Some(index),
+        };
+        assert_eq!(
+            lookup("ایمی نمبر 2"),
+            Some(FirField {
+                property: FirProperty::Imei,
+                index: Some(2)
+            })
+        );
+        assert_eq!(lookup("سم نمبر 3"), Some(sim(3)));
+        assert_eq!(
+            FirProperty::decode(13, None),
+            Some((FirProperty::Imei, Some(1)))
+        );
+        assert_eq!(
+            FirProperty::decode(14, None),
+            Some((FirProperty::Imei, Some(2)))
+        );
+        assert_eq!(
+            FirProperty::decode(16, None),
+            Some((FirProperty::Sim, Some(2)))
+        );
+        assert_eq!(
+            FirProperty::decode(FirProperty::ZimniDate as u8, Some(3)),
+            Some((FirProperty::ZimniDate, Some(3)))
+        );
+        let catalog = catalog();
+        let values = FirValues {
+            fir: FirRecord {
+                id: FirId::new(1).unwrap(),
+                fir: Fir {
+                    sim: vec![
+                        "03001234567".into(),
+                        "03111234567".into(),
+                        "03221234567".into(),
+                    ],
+                    ..Fir::default()
+                },
+            },
+            overrides: Vec::new(),
+            shared_values: BTreeMap::new(),
+        };
+        let mut document = Document::empty();
+        document.blocks = [1, 2]
+            .map(|index| {
+                Block::Paragraph(Paragraph::new(vec![Inline::Field(Field::new(
+                    FieldReference::Fir(sim(index)),
+                ))]))
+            })
+            .into();
+        let shown = |index| {
+            FieldPresentation::for_fir(&catalog, &values, DisplayMode::Values)
+                .for_document(&document)
+                .display_text(&FieldReference::Fir(sim(index)))
+                .text
+        };
+        assert_eq!(shown(1), "03001234567");
+        assert_eq!(shown(2), "03111234567، 03221234567");
     }
 }

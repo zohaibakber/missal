@@ -15,8 +15,8 @@ use crate::format::{
 };
 use crate::package::{Package, Relationships};
 use crate::props::{
-    Border, CellProps, Jc, ParaProps, Rgb, RowProps, RunProps, Sides, TabDef, TabKind, TableProps,
-    VMerge, Width,
+    Border, CellProps, FloatAnchor, FloatX, Jc, ParaProps, Rgb, RowProps, RunProps, Sides, TabDef,
+    TabKind, TableProps, VMerge, Width,
 };
 use crate::styles::{Numbering, Resolved, Styles, Theme};
 use crate::xml::{
@@ -237,6 +237,9 @@ pub struct Converter<'p, 'b> {
     pub sections: Vec<Section>,
     section_index: usize,
     pub default_tab: f64,
+    /// Word's compatibilityMode; below 15 a table's edge sits one cell
+    /// margin outside its indent.
+    pub compatibility_mode: u32,
 }
 
 impl<'p, 'b> Converter<'p, 'b> {
@@ -274,6 +277,7 @@ impl<'p, 'b> Converter<'p, 'b> {
             sections,
             section_index: 0,
             default_tab: 720.0,
+            compatibility_mode: 15,
         }
     }
 
@@ -1033,9 +1037,6 @@ impl<'p, 'b> Converter<'p, 'b> {
         let style = self.styles.table(direct.style.as_deref());
         let mut props = style.tblpr.clone();
         props.overlay(&direct);
-        if props.floating {
-            self.notice(Notice::FloatingFlattened);
-        }
         let rtl = props.bidi.unwrap_or(false);
         let grid: Vec<f64> = child(node, "tblGrid").map_or_default(|grid| {
             grid.children()
@@ -1330,12 +1331,38 @@ impl<'p, 'b> Converter<'p, 'b> {
                 }
             }
         }
-        let indent = px(props.indent.unwrap_or(0.0) / 15.0);
+        let leading_padding = if rtl {
+            props.cell_margins.end
+        } else {
+            props.cell_margins.start
+        }
+        .unwrap_or(108.0);
+        let outdent = if self.compatibility_mode < 15 {
+            leading_padding
+        } else {
+            0.0
+        };
+        let indent = px((props.indent.unwrap_or(0.0) - outdent) / 15.0);
         let zero = "0px".to_owned();
-        let margin = match props.jc {
-            Some(Jc::Center) => vec![zero.clone(), "auto".to_owned(), zero, "auto".to_owned()],
-            _ if rtl => vec![zero.clone(), indent, zero.clone(), zero],
-            _ => vec![zero.clone(), zero.clone(), zero, indent],
+        let floating = props.float_x.zip(match props.width {
+            Some(Some(Width::Twips(width))) => Some(width),
+            Some(Some(Width::Percent(percent))) => Some(self.text_width() * percent / 100.0),
+            _ => None,
+        });
+        let margin = if let Some((float_x, width)) = floating {
+            let left = self.float_left(float_x, width, leading_padding);
+            if rtl {
+                let right = self.text_width() - left - width;
+                vec![zero.clone(), px(right / 15.0), zero.clone(), zero]
+            } else {
+                vec![zero.clone(), zero.clone(), zero, px(left / 15.0)]
+            }
+        } else {
+            match props.jc {
+                Some(Jc::Center) => vec![zero.clone(), "auto".to_owned(), zero, "auto".to_owned()],
+                _ if rtl => vec![zero.clone(), indent, zero.clone(), zero],
+                _ => vec![zero.clone(), zero.clone(), zero, indent],
+            }
         };
         css.push("margin", &four(&margin));
         css.push("border-collapse", "collapse");
@@ -1350,6 +1377,32 @@ impl<'p, 'b> Converter<'p, 'b> {
                 .then(|| grid.iter().map(|width| round2(width / 15.0)).collect()),
             rows: table_rows,
             ..Table::default()
+        }
+    }
+
+    fn page_layout(&self) -> PageLayout {
+        self.sections
+            .get(
+                self.section_index
+                    .min(self.sections.len().saturating_sub(1)),
+            )
+            .map_or_else(PageLayout::a4, |section| section.layout.clone())
+    }
+
+    /// Where a floating table's left edge sits, in twips from the left of the
+    /// text column. Word places it from the left even in a right-to-left table.
+    fn float_left(&self, float_x: FloatX, width: f64, cell_padding: f64) -> f64 {
+        let twips = |mm: f64| mm / 25.4 * 1440.0;
+        let layout = self.page_layout();
+        let (origin, area) = match float_x.anchor {
+            FloatAnchor::Page => (-twips(layout.margin_left_mm), twips(layout.width_mm)),
+            FloatAnchor::Margin => (0.0, self.text_width()),
+        };
+        match float_x.align {
+            Some(Jc::Start | Jc::Justify) => origin,
+            Some(Jc::Center) => origin + (area - width) / 2.0,
+            Some(Jc::End) => origin + area - width,
+            None => origin + float_x.offset - cell_padding,
         }
     }
 

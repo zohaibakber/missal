@@ -37,10 +37,19 @@ pub enum ListKind {
     Accused,
     Witness,
     Zimni,
+    Imei,
+    Sim,
 }
 
 impl ListKind {
-    const ALL: [ListKind; 3] = [ListKind::Accused, ListKind::Witness, ListKind::Zimni];
+    const ALL: [ListKind; 5] = [
+        ListKind::Accused,
+        ListKind::Witness,
+        ListKind::Zimni,
+        ListKind::Imei,
+        ListKind::Sim,
+    ];
+    const PEOPLE: [ListKind; 3] = [ListKind::Accused, ListKind::Witness, ListKind::Zimni];
 
     fn index(self) -> usize {
         self as usize
@@ -51,7 +60,13 @@ impl ListKind {
             ListKind::Accused => "ملزمان",
             ListKind::Witness => "گواہان",
             ListKind::Zimni => "ضمنی",
+            ListKind::Imei => "ایمی نمبر",
+            ListKind::Sim => "سم نمبر",
         }
+    }
+
+    fn is_number(self) -> bool {
+        matches!(self, ListKind::Imei | ListKind::Sim)
     }
 
     fn add_label(self) -> &'static str {
@@ -59,6 +74,8 @@ impl ListKind {
             ListKind::Accused => "Add accused",
             ListKind::Witness => "Add witness",
             ListKind::Zimni => "Add zimni",
+            ListKind::Imei => "Add IMEI",
+            ListKind::Sim => "Add mobile number",
         }
     }
 
@@ -66,7 +83,7 @@ impl ListKind {
         match self {
             ListKind::Accused => SuggestionKey::for_property(FirProperty::Accused),
             ListKind::Witness => SuggestionKey::for_property(FirProperty::Witness),
-            ListKind::Zimni => None,
+            ListKind::Zimni | ListKind::Imei | ListKind::Sim => None,
         }
     }
 
@@ -75,11 +92,16 @@ impl ListKind {
             ListKind::Accused => "accused",
             ListKind::Witness => "witness",
             ListKind::Zimni => "zimni",
+            ListKind::Imei => "imei",
+            ListKind::Sim => "sim",
         }
     }
 
     fn section(self) -> usize {
-        2 + self.index()
+        match self {
+            ListKind::Imei | ListKind::Sim => 6,
+            _ => 2 + self.index(),
+        }
     }
 }
 
@@ -107,11 +129,9 @@ pub struct FirForm {
     writer: Entity<TextInput>,
     recovery: Entity<TextInput>,
     body: Entity<TextInput>,
-    imei: [Entity<TextInput>; 2],
-    sim: [Entity<TextInput>; 2],
     status: FirStatus,
     status_open: bool,
-    lists: [Vec<Entity<TextInput>>; 3],
+    lists: [Vec<Entity<TextInput>>; 5],
     zimni_dates: Vec<Entity<TextInput>>,
     errors: HashMap<&'static str, &'static str>,
     validated: bool,
@@ -178,14 +198,6 @@ impl FirForm {
         let writer = urdu(window, cx, &initial.writer);
         let recovery = urdu(window, cx, &initial.recovery);
         let body = body_input(window, cx, &initial.body);
-        let imei = [
-            numeric(window, cx, &initial.imei_1),
-            numeric(window, cx, &initial.imei_2),
-        ];
-        let sim = [
-            numeric(window, cx, &initial.sim_1),
-            numeric(window, cx, &initial.sim_2),
-        ];
         let lists = ListKind::ALL.map(|kind| match kind {
             ListKind::Accused => initial
                 .accused
@@ -201,6 +213,16 @@ impl FirForm {
                 .zimni
                 .iter()
                 .map(|entry| zimni_number_input(window, cx, &entry.number))
+                .collect::<Vec<_>>(),
+            ListKind::Imei => initial
+                .imei
+                .iter()
+                .map(|text| numeric(window, cx, text))
+                .collect::<Vec<_>>(),
+            ListKind::Sim => initial
+                .sim
+                .iter()
+                .map(|text| numeric(window, cx, text))
                 .collect::<Vec<_>>(),
         });
         let zimni_dates = initial
@@ -225,8 +247,6 @@ impl FirForm {
             writer,
             recovery,
             body,
-            imei,
-            sim,
             status_open: false,
             lists,
             zimni_dates,
@@ -253,8 +273,6 @@ impl FirForm {
             self.body.clone(),
         ];
         inputs.extend(self.dates.iter().cloned());
-        inputs.extend(self.imei.iter().cloned());
-        inputs.extend(self.sim.iter().cloned());
         inputs
     }
 
@@ -275,7 +293,7 @@ impl FirForm {
         cx: &mut Context<Self>,
     ) {
         self.watch(input, cx);
-        if kind == ListKind::Zimni {
+        if kind == ListKind::Zimni || kind.is_number() {
             self.fold_on_blur(input, false, cx);
         }
         if let Some(key) = kind.suggestions() {
@@ -374,14 +392,8 @@ impl FirForm {
         for input in self.dates.clone() {
             self.fold_on_blur(&input, true, cx);
         }
-        let numbers: Vec<_> = [self.fir_no.clone()]
-            .into_iter()
-            .chain(self.imei.iter().cloned())
-            .chain(self.sim.iter().cloned())
-            .collect();
-        for input in numbers {
-            self.fold_on_blur(&input, false, cx);
-        }
+        let fir_no = self.fir_no.clone();
+        self.fold_on_blur(&fir_no, false, cx);
         for (index, calendar) in self.calendars.clone().into_iter().enumerate() {
             let subscription = cx.subscribe_in(
                 &calendar,
@@ -429,10 +441,8 @@ impl FirForm {
             writer: text(&self.writer),
             recovery: text(&self.recovery),
             body: text(&self.body),
-            imei_1: text(&self.imei[0]),
-            imei_2: text(&self.imei[1]),
-            sim_1: text(&self.sim[0]),
-            sim_2: text(&self.sim[1]),
+            imei: list(ListKind::Imei),
+            sim: list(ListKind::Sim),
             status: self.status,
         }
     }
@@ -540,14 +550,17 @@ impl FirForm {
         set(&self.writer, &fir.writer, cx);
         set(&self.recovery, &fir.recovery, cx);
         set(&self.body, &fir.body, cx);
-        set(&self.imei[0], &fir.imei_1, cx);
-        set(&self.imei[1], &fir.imei_2, cx);
-        set(&self.sim[0], &fir.sim_1, cx);
-        set(&self.sim[1], &fir.sim_2, cx);
         self.status = fir.status;
-        for kind in [ListKind::Accused, ListKind::Witness] {
+        for kind in [
+            ListKind::Accused,
+            ListKind::Witness,
+            ListKind::Imei,
+            ListKind::Sim,
+        ] {
             let wanted = match kind {
                 ListKind::Accused => &fir.accused,
+                ListKind::Imei => &fir.imei,
+                ListKind::Sim => &fir.sim,
                 _ => &fir.witness,
             };
             self.lists[kind.index()].truncate(wanted.len());
@@ -575,6 +588,8 @@ impl FirForm {
             self.watch_zimni_date(&date, window, cx);
             self.zimni_dates.push(date);
             zimni_number_input(window, cx, "")
+        } else if kind.is_number() {
+            field_input(window, cx, Kind::LatinNumeric, "", "")
         } else {
             field_input(window, cx, Kind::Urdu, "", "")
         };
@@ -625,9 +640,16 @@ impl FirForm {
         if fir.zimni.iter().any(|entry| bad_date(&entry.date)) {
             errors.insert("zimni", "Use the format DD-MM-YYYY.");
         }
-        for kind in [ListKind::Accused, ListKind::Witness] {
+        for kind in [
+            ListKind::Accused,
+            ListKind::Witness,
+            ListKind::Imei,
+            ListKind::Sim,
+        ] {
             let items = match kind {
                 ListKind::Accused => &fir.accused,
+                ListKind::Imei => &fir.imei,
+                ListKind::Sim => &fir.sim,
                 _ => &fir.witness,
             };
             if kind == ListKind::Accused && items.len() == 1 && blank(&items[0]) {
@@ -640,7 +662,7 @@ impl FirForm {
     }
 
     fn first_error(&self, cx: &App) -> Option<(usize, Entity<TextInput>)> {
-        let order: [(&str, usize, Option<Entity<TextInput>>); 8] = [
+        let order: [(&str, usize, Option<Entity<TextInput>>); 10] = [
             ("fir_no", 0, Some(self.fir_no.clone())),
             ("offence", 0, Some(self.offence.clone())),
             ("date", 1, Some(self.dates[0].clone())),
@@ -649,6 +671,8 @@ impl FirForm {
             ("accused", 2, None),
             ("witness", 3, None),
             ("zimni", 4, None),
+            ("imei", 6, None),
+            ("sim", 6, None),
         ];
         for (key, section, input) in order {
             if !self.errors.contains_key(key) {
@@ -690,13 +714,8 @@ impl FirForm {
             entry.number = fold_digits(entry.number.trim());
             entry.date = format_date(&entry.date);
         }
-        for value in [
-            &mut fir.imei_1,
-            &mut fir.imei_2,
-            &mut fir.sim_1,
-            &mut fir.sim_2,
-        ] {
-            *value = fold_digits(value);
+        for value in fir.imei.iter_mut().chain(fir.sim.iter_mut()) {
+            *value = fold_digits(value.trim());
         }
         self.validated = true;
         let errors = Self::validate(&fir);
@@ -1057,7 +1076,19 @@ impl FirForm {
                             .text_center()
                             .child((position + 1).to_string()),
                     )
-                    .when(kind != ListKind::Zimni, |row| {
+                    .when(kind.is_number(), |row| {
+                        row.child(
+                            div().flex_1().min_w_0().child(
+                                field(
+                                    ("entry-field", kind.index() * 1000 + position),
+                                    input,
+                                    Kind::LatinNumeric,
+                                )
+                                .error(error.is_some() && blank),
+                            ),
+                        )
+                    })
+                    .when(kind != ListKind::Zimni && !kind.is_number(), |row| {
                         let control = field(
                             ("entry-field", kind.index() * 1000 + position),
                             input,
@@ -1265,7 +1296,7 @@ impl Render for FirForm {
             })
             .collect();
         let second = Self::section(&palette, 1, "تاریخیں", Self::row(dates));
-        let lists: Vec<AnyElement> = ListKind::ALL
+        let lists: Vec<AnyElement> = ListKind::PEOPLE
             .iter()
             .map(|kind| {
                 let body = self.list_section(&palette, *kind, cx);
@@ -1299,50 +1330,19 @@ impl Render for FirForm {
                 ))
                 .into_any_element(),
         );
-        let mobile = Self::section(
-            &palette,
-            6,
-            "موبائل",
-            v_flex()
-                .gap(px(24.))
-                .child(Self::row(vec![
-                    self.input_cell(
-                        "ایمی نمبر 1",
-                        false,
-                        "imei_1",
-                        &self.imei[0],
-                        Kind::LatinNumeric,
-                        cx,
-                    ),
-                    self.input_cell(
-                        "سم نمبر 1",
-                        false,
-                        "sim_1",
-                        &self.sim[0],
-                        Kind::LatinNumeric,
-                        cx,
-                    ),
-                ]))
-                .child(Self::row(vec![
-                    self.input_cell(
-                        "ایمی نمبر 2",
-                        false,
-                        "imei_2",
-                        &self.imei[1],
-                        Kind::LatinNumeric,
-                        cx,
-                    ),
-                    self.input_cell(
-                        "سم نمبر 2",
-                        false,
-                        "sim_2",
-                        &self.sim[1],
-                        Kind::LatinNumeric,
-                        cx,
-                    ),
-                ]))
-                .into_any_element(),
-        );
+        let numbers: Vec<AnyElement> = [ListKind::Imei, ListKind::Sim]
+            .into_iter()
+            .map(|kind| {
+                v_flex()
+                    .flex_1()
+                    .min_w_0()
+                    .gap(px(4.))
+                    .child(Self::label_row(&palette, kind.title(), false))
+                    .child(self.list_section(&palette, kind, cx))
+                    .into_any_element()
+            })
+            .collect();
+        let mobile = Self::section(&palette, 6, "موبائل", Self::row(numbers));
         let body = self.body_control(&palette, window, cx);
         let text = Self::section(
             &palette,

@@ -105,18 +105,16 @@ fn sample_fir(index: usize, random: &mut Random) -> Fir {
         },
         body: "مدعی نے تھانہ میں درخواست دی کہ نامعلوم ملزمان رات کے وقت گھر میں داخل ہو کر قیمتی سامان لے گئے۔"
             .to_owned(),
-        imei_1: if random.below(5) == 0 {
-            format!("35{:013}", random.next() % 10_000_000_000_000)
+        imei: if random.below(5) == 0 {
+            vec![format!("35{:013}", random.next() % 10_000_000_000_000)]
         } else {
-            String::new()
+            Vec::new()
         },
-        imei_2: String::new(),
-        sim_1: if random.below(5) == 0 {
-            format!("03{:09}", random.next() % 1_000_000_000)
+        sim: if random.below(5) == 0 {
+            vec![format!("03{:09}", random.next() % 1_000_000_000)]
         } else {
-            String::new()
+            Vec::new()
         },
-        sim_2: String::new(),
         status,
     }
 }

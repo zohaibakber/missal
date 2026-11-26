@@ -1169,6 +1169,20 @@ fn run_scroll(dark: bool, out: &Path) {
     h.shot("61-new-fir-wheel");
     wheel(&mut h, 760., 400., -4000.);
     h.shot("61b-new-fir-bottom");
+    for (list, number) in [
+        (3usize, "356789012345678"),
+        (3, "356789012345686"),
+        (4, "03001234567"),
+        (4, "03111234567"),
+        (4, "03221234567"),
+    ] {
+        h.with_window(|window, cx| {
+            window.click(("add-entry", list), cx);
+            window.input(number, cx);
+        });
+    }
+    wheel(&mut h, 760., 400., -4000.);
+    h.shot("61c-new-fir-mobile-numbers");
     wheel(&mut h, 760., 400., 4000.);
     h.with_window(|window, cx| {
         window.drag(point(px(1271.), px(80.)), point(px(1271.), px(400.)), cx)
