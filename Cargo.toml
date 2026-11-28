@@ -32,7 +32,7 @@ anyhow = "1.0.104"
 futures = { version = "0.3.34", default-features = false, features = ["std"] }
 smallvec = "1.16.5"
 raw-window-handle = "0.6.2"
-accesskit = "0.24.1"
+accesskit = "0.25.2"
 windows = { version = "0.62.2", default-features = false, features = ["Win32_Foundation"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 zip = { version = "9.5.1", default-features = false, features = ["deflate-flate2"] }
